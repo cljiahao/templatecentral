@@ -88,7 +88,8 @@ jobs:
               ;;
           esac
         displayName: Require a valid shard count (a positive integer from the plan job)
-      - bash: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob="blob/shard-$(shard).json" --shard="$(shard)/$(shardCount)"
+      # One shard sees a fraction of the code; the 80% floor is enforced on the merged report in the coverage job.
+      - bash: pnpm exec vitest run --coverage --coverage.thresholds.lines=0 --reporter=default --reporter=blob --outputFile.blob="blob/shard-$(shard).json" --shard="$(shard)/$(shardCount)"
         displayName: Tests (this shard, coverage in the blob report)
       - task: PublishPipelineArtifact@1
         inputs: { targetPath: blob, artifact: "vitest-blob-$(shard)" }
@@ -157,5 +158,7 @@ jobs:
       - bash: |
           set -euo pipefail
           target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}
-          pipx run "diff-cover==$(diffCoverVersion)" coverage/cobertura-coverage.xml --compare-branch="origin/${target#refs/heads/}" --fail-under=80
+          pipx run "diff-cover==$(diffCoverVersion)" coverage/cobertura-coverage.xml --compare-branch="origin/${target#refs/heads/}" --fail-under=80 | tee diff-cover.txt
         displayName: Changed-line coverage (>= 80%)
+      - bash: bash .claude/ci-gates.sh diffcover "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
+        displayName: Changed source has covered lines (fails closed on an empty report)

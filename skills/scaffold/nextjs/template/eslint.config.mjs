@@ -65,7 +65,7 @@ const config = [
       'sonarjs/no-clear-text-protocols': 'off',
     },
   },
-  { ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts', '.claude/**'] },
+  { ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts', 'coverage/**', '.claude/**'] },
 ];
 
 export default config;

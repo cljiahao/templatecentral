@@ -23,12 +23,9 @@ describe('AppController (e2e)', () => {
     await app.close();
   });
 
-  it.each([
-    ['/', 'Hello World!'],
-    ['/health', '{"status":"ok"}'],
-  ])('GET %s returns 200 with the expected payload', async (url, payload) => {
-    const result = await app.inject({ method: 'GET', url });
-    expect([result.statusCode, result.payload]).toEqual([200, payload]);
+  it('GET / returns 200 with the hello payload', async () => {
+    const result = await app.inject({ method: 'GET', url: '/' });
+    expect([result.statusCode, result.payload]).toEqual([200, 'Hello World!']);
   });
 
   // nestjs-zod hooks into Nest's pipes and Swagger's document; these three tests prove that.

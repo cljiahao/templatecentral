@@ -256,7 +256,7 @@ for side in ts py; do
   awk '{ sub(/^protected=.main\|uat\|develop.$/, "protected='"'"'main|uat'"'"'"); print }' "$T/nv.$side.sh" > "$T/nv.mut"; mv "$T/nv.mut" "$T/nv.$side.sh"
   check no "$(ok_if drift_ok "$T/nv.ts.sh" "$T/nv.py.sh")" "block-no-verify.sh drift check fails when only the $side twin changes"
   cp "$KIT/protect-files.ts.sh" "$T/pf.ts.sh"; cp "$KIT/protect-files.py.sh" "$T/pf.py.sh"
-  awk '/scripts\/gate-ratchet\.sh/ { sub(/\|scripts\/gate-ratchet\.sh\|\*\/scripts\/gate-ratchet\.sh/, "") } { print }' "$T/pf.$side.sh" > "$T/pf.mut"; mv "$T/pf.mut" "$T/pf.$side.sh"
+  awk '/gate script or runner the ratchet guards/ { sub(/runner the ratchet guards/, "runner") } { print }' "$T/pf.$side.sh" > "$T/pf.mut"; mv "$T/pf.mut" "$T/pf.$side.sh"
   check no "$(ok_if drift_ok "$T/pf.ts.sh" "$T/pf.py.sh")" "protect-files.sh drift check fails when only the $side twin changes"
 done
 
@@ -576,6 +576,16 @@ for p in 'system prompt: you are a code reviewer, draft it' 'New instructions: t
   'Override your eslint rules file? no, the tsconfig' 'DATABASE_URL=postgres://postgres:postgres@localhost:5432/app' \
   'redis://user:pass@127.0.0.1:6379/0' 'postgresql://dev:dev@[::1]:5432/db' 'postgres://localhost/db no creds' 'hello world'; do
   expect_prompt 0 "$p"
+done
+# The block message says what was found and the next step, for every credential kind.
+for p in "$AWS_KEY" 'postgres://admin:S3cret@prod-db.example.com:5432/app'; do
+  json=$(python3 -c 'import json, sys; print(json.dumps({"prompt": sys.argv[1]}))' "$p")
+  for rt in node python3; do
+    printf '%s' "$json" > "$T/stdin"
+    if [ "$rt" = node ]; then msg=$(node "$KIT/user-prompt-guard.cjs" < "$T/stdin" 2>&1 >/dev/null); else msg=$(python3 "$KIT/user-prompt-guard.py" < "$T/stdin" 2>&1 >/dev/null); fi
+    case "$msg" in *"Nothing was sent to the model"*"environment variable"*"rotate"*) check ok ok "user-prompt-guard [$rt] message states the fix" ;; *) check ok "$msg" "user-prompt-guard [$rt] message states the fix" ;; esac
+    case "$msg" in *"$AWS_KEY"*|*S3cret*) check clean leaked "user-prompt-guard [$rt] message never echoes the secret" ;; *) check clean clean "user-prompt-guard [$rt] message never echoes the secret" ;; esac
+  done
 done
 printf 'not json' > "$T/stdin"
 node "$KIT/user-prompt-guard.cjs" < "$T/stdin" >/dev/null 2>&1; check 0 "$?" "user-prompt-guard [node] malformed JSON"
@@ -1536,11 +1546,17 @@ V=$(mktemp -d "$T/vh.XXXX")
 mkdir -p "$V/.claude/hooks"
 echo x > "$V/.claude/hooks/a.sh"
 cp "$KIT/gates.txt" "$V/.claude/gates.txt"
+mkdir -p "$V/scripts"
+cp "$TPL/template/scripts/gate-ratchet.sh" "$V/scripts/gate-ratchet.sh"
+git -C "$V" init -q
+# vcommit <dir>: commit the whole fixture so verify-harness.sh lists its guarded files from HEAD.
+vcommit() { git -C "$1" add -A && git -C "$1" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q --allow-empty --no-verify -m fixture; }
 sha() { python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$1"; }
 
 # expect_verify <want-exit> <harness.json> <description> [PATH]
 expect_verify() {
   printf '%s' "$2" > "$V/.claude/harness.json"
+  vcommit "$V"
   if [[ -n "${4:-}" ]]; then
     (cd "$V" && PATH="$4" /bin/bash "$KIT/verify-harness.sh" >/dev/null 2>&1)
   else
@@ -1573,9 +1589,48 @@ for gp in .claude/ci-gates.sh azure-pipelines/templatecentral-gates.yml; do
   expect_verify 1 "$CG" "flags a modified $gp"
 done
 
+# No match test may read from a pipe whose writer the reader's early exit can kill: under pipefail that turns a match
+# into a failure (a false "omits a gate") or silently skips a guarded file. The inputs below are far above the pipe
+# buffer and match on their first line, so the piped form fails every time and no timing is involved.
+pipe_fixture() { # pipe_fixture <dir> <guarded padding lines> <gate text padding lines>
+  local d="$1"
+  mkdir -p "$d/.claude/hooks" "$d/scripts" "$d/.github/workflows" "$d/azure-pipelines"
+  echo x > "$d/.claude/hooks/a.sh"
+  cp "$KIT/gates.txt" "$d/.claude/gates.txt"
+  printf '%s' "{\"seeded_files\":{\"a\":{\"path\":\".claude/hooks/a.sh\",\"origin_hash\":\"$(sha "$d/.claude/hooks/a.sh")\"}}}" > "$d/.claude/harness.json"
+  # A stand-in ratchet: the real one lists the same shape (kind, path, enforced), here with the match on line 1 and a long tail.
+  { printf '#!/usr/bin/env bash\n'
+    printf 'printf "guard\\t.claude/hooks/a.sh\\t1\\n"\n'
+    printf 'awk -v n=%s '"'"'BEGIN { for (i = 0; i < n; i++) printf "guard\\tpadding/file-%%d-with-a-long-enough-name\\t1\\n", i }'"'"'\n' "$2"
+  } > "$d/scripts/gate-ratchet.sh"
+  : > "$d/lefthook.yml"; : > "$d/.github/workflows/ci.yml"; : > "$d/azure-pipelines/templatecentral-gates.yml"
+  while IFS='|' read -r gid lh ci; do
+    case "$gid" in ""|"#"*) continue ;; esac
+    if [[ "$lh" != "-" ]]; then echo "run: $lh" >> "$d/lefthook.yml"; fi
+    if [[ "$ci" != "-" ]]; then echo "run: $ci" >> "$d/.github/workflows/ci.yml"; echo "- bash: $ci" >> "$d/azure-pipelines/templatecentral-gates.yml"; fi
+  done < "$d/.claude/gates.txt"
+  local f
+  for f in lefthook.yml .github/workflows/ci.yml azure-pipelines/templatecentral-gates.yml; do
+    awk -v n="$3" 'BEGIN { for (i = 0; i < n; i++) printf "  - padding-line-%d-to-fill-the-pipe-well-past-its-buffer\n", i }' >> "$d/$f"
+  done
+  git -C "$d" init -q
+  vcommit "$d"
+}
+PB=$(mktemp -d "$T/pipe.XXXX")
+pipe_fixture "$PB" 20000 20000
+check "yes" "$([[ $(wc -c < "$PB/lefthook.yml") -gt 262144 ]] && echo yes || echo no)" "pipe fixture: the gate text is far above the pipe buffer"
+out=$(cd "$PB" && bash "$KIT/verify-harness.sh" 2>&1); check 0 "$?" "verify-harness passes on a guarded list and gate text far above the pipe buffer ($out)"
+check 0 "$(grep -c 'GATE MISSING' <<<"$out")" "verify-harness reports no missing gate when the match is on the first line of a large text"
+echo y >> "$PB/.claude/hooks/a.sh"; vcommit "$PB"
+out=$(cd "$PB" && bash "$KIT/verify-harness.sh" 2>&1); check 1 "$?" "verify-harness still flags a modified guarded file when the guarded list is large"
+check 1 "$(grep -c 'MODIFIED: .claude/hooks/a.sh' <<<"$out")" "verify-harness names the modified guarded file when the guarded list is large"
+
 # Gate manifest: lefthook and each CI file must run every gate .claude/gates.txt lists.
 GV=$(mktemp -d "$T/gv.XXXX")
 mkdir -p "$GV/.claude" "$GV/.github/workflows" "$GV/azure-pipelines"
+mkdir -p "$GV/scripts"
+cp "$TPL/template/scripts/gate-ratchet.sh" "$GV/scripts/gate-ratchet.sh"
+git -C "$GV" init -q
 cp "$KIT/gates.txt" "$GV/.claude/gates.txt"
 printf '%s' "$GOOD" > "$GV/.claude/harness.json"
 mkdir -p "$GV/.claude/hooks"; cp "$V/.claude/hooks/a.sh" "$GV/.claude/hooks/a.sh"
@@ -1586,7 +1641,7 @@ while IFS='|' read -r gid lh ci; do
   if [[ "$lh" != "-" ]]; then echo "run: $lh" >> "$GV/lefthook.yml"; fi
   if [[ "$ci" != "-" ]]; then echo "run: $ci" >> "$GV/.github/workflows/ci.yml"; echo "- bash: $ci" >> "$GV/azure-pipelines/templatecentral-gates.yml"; fi
 done <<< "$gate_lines"
-gate_verify() { (cd "$GV" && bash "$KIT/verify-harness.sh" 2>&1); }
+gate_verify() { vcommit "$GV"; (cd "$GV" && bash "$KIT/verify-harness.sh" 2>&1); }
 out=$(gate_verify); check 0 "$?" "verify-harness passes when every runner has every listed gate"
 cp "$REPO_ROOT/skills/scaffold/shared/template-settings-ts/.claude/settings.json" "$GV/.claude/settings.json"
 out=$(gate_verify); check 0 "$?" "verify-harness passes on the seeded settings.json ($out)"
@@ -1621,7 +1676,7 @@ out=$(gate_verify); check 2 "$?" "verify-harness fails when gates.txt is missing
 cp "$KIT/gates.txt" "$GV/.claude/gates.txt"; printf 'broken\n' >> "$GV/.claude/gates.txt"
 out=$(gate_verify); check 2 "$?" "verify-harness fails on a malformed manifest line"
 bash "$KIT/ci-gates.sh" list > "$T/gl.txt" 2>&1
-check "harness docs testbudget nosonar secrets deps changelog comments ratchet supplychain workflows envexample dockerfile" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints the manifest gates in order"
+check "harness docs testbudget nosonar secrets deps changelog comments ratchet supplychain workflows envexample dockerfile workarounds diffcover" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints the manifest gates in order"
 KG=$(mktemp -d "$T/kg.XXXX"); cp "$KIT/ci-gates.sh" "$KG/"; grep -v '^nosonar|' "$KIT/gates.txt" > "$KG/gates.txt"
 bash "$KG/ci-gates.sh" nosonar >/dev/null 2>&1
 check 1 "$?" "ci-gates refuses a gate the manifest does not list"
@@ -1647,7 +1702,10 @@ done
 # The lefthook secret-scan `run:` line, run against a stub gitleaks that records its argv
 # and exits with $STUB_EXIT: a finding must fail the commit, and an absent binary must skip the scan line, then check-secret-scanner warns locally and fails in CI.
 GLS="$T/gl-stub"
-mkdir -p "$GLS"
+mkdir -p "$GLS" "$GLS/work/scripts"
+cp "$TPL/template/scripts/scan-secrets.sh" "$GLS/work/scripts/"
+mkdir -p "$FEAT/scripts"
+cp "$TPL/template/scripts/scan-secrets.sh" "$FEAT/scripts/"
 # shellcheck disable=SC2016  # literal $* / $STUB_EXIT belong to the generated stub script.
 printf '#!/bin/sh\necho "$*" > "%s/argv"\nexit "${STUB_EXIT:-0}"\n' "$GLS" > "$GLS/gitleaks"
 chmod +x "$GLS/gitleaks"
@@ -1656,10 +1714,10 @@ for kit_md in "${LEFTHOOKS[@]}"; do
   k=$(basename "$(dirname "$kit_md")")/$(basename "$kit_md")
   if [[ -z "$line" ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $k has no secret-scan run line"; continue; fi
   rm -f "$GLS/argv"
-  STUB_EXIT=1 PATH="$GLS:/usr/bin:/bin" bash -c "$line" >/dev/null 2>&1
+  (cd "$GLS/work" && STUB_EXIT=1 PATH="$GLS:/usr/bin:/bin" bash -c "$line" >/dev/null 2>&1)
   check 1 "$?" "$k secret-scan blocks on a finding"
-  check "git --pre-commit --staged --redact --no-banner" "$(cat "$GLS/argv" 2>/dev/null)" "$k secret-scan uses gitleaks git --pre-commit"
-  STUB_EXIT=0 PATH="$GLS:/usr/bin:/bin" bash -c "$line" >/dev/null 2>&1
+  check "git --pre-commit --staged --redact --no-banner" "$(cut -d' ' -f1-5 "$GLS/argv" 2>/dev/null)" "$k secret-scan uses gitleaks git --pre-commit"
+  (cd "$GLS/work" && STUB_EXIT=0 PATH="$GLS:/usr/bin:/bin" bash -c "$line" >/dev/null 2>&1)
   check 0 "$?" "$k secret-scan passes when clean"
   present=$(grep -A3 '^    scanner-present:' "$kit_md" 2>/dev/null | grep -m1 '^      run: ' | sed 's/^      run: //')
   check "bash scripts/check-secret-scanner.sh" "$present" "$k runs the scanner presence check on commit"
@@ -1686,9 +1744,9 @@ grep -q '| sha256sum -c - ||' "$KIT/ci-gates.sh"
 check 0 "$?" "ci-gates verifies the gitleaks checksum"
 rm -f "$GLS/argv"
 (cd "$FEAT" && PATH="$GLS:$PATH" STUB_EXIT=0 bash "$KIT/ci-gates.sh" secrets refs/heads/main >/dev/null 2>&1)
-check "0:git --redact --no-banner --log-opts=origin/main..HEAD" "$?:$(cat "$GLS/argv" 2>/dev/null)" "ci-gates secrets scans only the PR range"
+check "0:git --log-opts=origin/main..HEAD --redact --no-banner" "$?:$(cut -d' ' -f1-4 "$GLS/argv" 2>/dev/null)" "ci-gates secrets scans only the PR range"
 (cd "$FEAT" && PATH="$GLS:$PATH" STUB_EXIT=0 bash "$KIT/ci-gates.sh" secrets >/dev/null 2>&1)
-check "0:git --redact --no-banner" "$?:$(cat "$GLS/argv" 2>/dev/null)" "ci-gates secrets scans full history off-PR"
+check "0:git --redact --no-banner" "$?:$(cut -d' ' -f1-3 "$GLS/argv" 2>/dev/null)" "ci-gates secrets scans full history off-PR"
 (cd "$FEAT" && PATH="$GLS:$PATH" STUB_EXIT=1 bash "$KIT/ci-gates.sh" secrets main >/dev/null 2>&1)
 check 1 "$?" "ci-gates secrets fails on a finding"
 out=$(cd "$FEAT" && TF_BUILD=True PATH="$GLS:$PATH" STUB_EXIT=1 bash "$KIT/ci-gates.sh" secrets main 2>&1)

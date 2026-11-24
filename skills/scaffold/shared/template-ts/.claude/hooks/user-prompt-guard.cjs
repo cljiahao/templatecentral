@@ -29,7 +29,7 @@ const credentials = [
 ];
 for (const [re, label] of credentials) {
   if (re.test(prompt)) {
-    process.stderr.write(`Blocked: prompt may contain a real credential — ${label} (OWASP LLM02). Do not paste secrets; use env vars.\n`);
+    process.stderr.write(`Blocked: your prompt looks like it contains a ${label}. Nothing was sent to the model. Remove the value and send it again; refer to it by the environment variable name (the value lives only in your own untracked .env). If it is a live credential, rotate it.\n`);
     process.exit(2);
   }
 }
@@ -38,7 +38,7 @@ const dbUrl = /(mongodb(\+srv)?|postgres(ql)?|mysql|redis|amqp):\/\/[^:\/\s@]*:[
 const loopback = new Set(['localhost', '127.0.0.1', '[::1]']);
 for (const m of prompt.matchAll(dbUrl)) {
   if (!loopback.has(m[4].toLowerCase())) {
-    process.stderr.write('Blocked: prompt may contain a real credential — database/broker URL with embedded credentials (OWASP LLM02). Do not paste secrets; use env vars.\n');
+    process.stderr.write('Blocked: your prompt looks like it contains a database or broker URL with an embedded password. Nothing was sent to the model. Replace the URL with the environment variable name (DATABASE_URL) and send it again; if it is a live credential, rotate it.\n');
     process.exit(2);
   }
 }

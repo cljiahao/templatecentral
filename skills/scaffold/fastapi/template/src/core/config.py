@@ -16,9 +16,6 @@ class CommonSettings(BaseSettings):
         default="""
         A FastAPI application built with
         [FastAPI](https://fastapi.tiangolo.com/)
-
-        - [Source Code](https://www.github.com)
-        - [Issues](https://www.github.com/issues)
         """
     )
     # Closed set: an unknown value must fail at boot, not slip past main.py's prod/uat check and run with auto-reload.

@@ -30,11 +30,18 @@ seed() {
   cp "$SH/template/scripts/test-budget.sh" "$R/scripts/test-budget.sh"
   cp "$SH/template/.gitleaks.toml" "$R/.gitleaks.toml"
   cp "$RATCHET" "$R/scripts/gate-ratchet.sh"
+  cp "$SH/template/scripts/check-docs.sh" "$R/scripts/check-docs.sh"
+  cp "$SH/template/.claude/comment-hygiene-patterns.txt" "$R/.claude/comment-hygiene-patterns.txt"
+  printf '# advisory allow-list\nGHSA-aaaa-bbbb-cccc 2099-01-01 reason\n' > "$R/.claude/dep-audit-allow.txt"
+  printf '{}\n' > "$R/.claude/settings.json"
   cp "$SH/template/.claude/ci-gates.sh" "$SH/template/.claude/verify-harness.sh" "$R/.claude/"
   cp "$SH/template-$1/lefthook.yml" "$R/lefthook.yml"
   if [[ "$1" == ts ]]; then
-    cp "$SH/../nestjs/template/eslint.config.mjs" "$SH/../nestjs/template/vitest.config.ts" "$R/"
+    cp "$SH/../nestjs/template/eslint.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
     cp "$SH/template-ts/.jscpd.json" "$R/.jscpd.json"
+    cp "$SH/template-ts/sonar-project.properties" "$R/sonar-project.properties"
+    cp "$SH/../nestjs/template/package.json" "$R/package.json"
+    cp "$SH/../nestjs/template/tsconfig.json" "$R/tsconfig.json"
     cp "$SH/../nestjs/template/pnpm-workspace.yaml" "$R/pnpm-workspace.yaml"
     cp "$SH/template/.claude/registry-hosts.txt" "$R/.claude/registry-hosts.txt"
     mkdir -p "$R/.github"
@@ -51,12 +58,14 @@ seed() {
 import sys
 p = sys.argv[1]
 s = open(p).read()
-s = s.replace("      include: ['src/**/*.ts'],", "      include: ['src/**/*.ts'],\n      thresholds: { lines: 80, branches: 70 },", 1)
+s = s.replace("thresholds: { lines: 80 },", "thresholds: { lines: 80, branches: 70 },", 1)
 open(p, "w").write(s)
 PY
   else
     cp "$SH/../fastapi/template/pyproject.toml" "$R/pyproject.toml"
+    cp "$SH/../fastapi/template/pyrightconfig.json" "$R/pyrightconfig.json"
     cp "$SH/template-py/.jscpd.json" "$R/.jscpd.json"
+    cp "$SH/template-py/sonar-project.properties" "$R/sonar-project.properties"
     cp "$SH/template-ci/github-py/.github/workflows/ci.yml" "$R/.github/workflows/ci.yml"
     printf '\n[tool.coverage.report]\nfail_under = 80\n' >> "$R/pyproject.toml"
   fi
@@ -124,6 +133,13 @@ weakens() {
   check 1 "$EC" "$label: exits 1 ($OUT)"
   has "$file" "$OUT" "$label: names the file"
   for frag in "$@"; do has "$frag" "$OUT" "$label: reports $frag"; done
+}
+
+# drop <file>: delete a tracked file on a branch off main.
+drop() {
+  git_ checkout -q -B work main
+  git_ rm -q "$1"
+  git_ commit -q -m drop
 }
 
 # passes <file> <old> <new> <label>: a tightening or unrelated edit must exit 0.
@@ -236,7 +252,7 @@ weakens .github/workflows/ci.yml "runs-on: ubuntu-latest" "runs-on: ubuntu-lates
     if: false" "CI job disabled" "gate script, runner or manifest changed"
 weakens .github/workflows/ci.yml "runs-on: ubuntu-latest" "runs-on: ubuntu-latest
     continue-on-error: true" "CI job may fail" "gate script, runner or manifest changed"
-weakens .claude/gates.txt "ratchet|-|ci-gates.sh ratchet" "ratchet|-|ratchet" "gate needle rewritten" "gate script, runner or manifest changed"
+weakens .claude/gates.txt "ratchet|scripts/gate-ratchet.sh|ci-gates.sh ratchet" "ratchet|scripts/gate-ratchet.sh|ratchet" "gate needle rewritten" "gate script, runner or manifest changed"
 weakens .claude/ci-gates.sh "set -uo pipefail" "set -uo pipefail
 exit 0" "ci-gates changed" "gate script, runner or manifest changed"
 weakens .claude/verify-harness.sh "set -euo pipefail" "set -euo pipefail
@@ -419,8 +435,7 @@ regex = '''zzz-never'''
 weakens vitest.config.ts "include: ['src/**/*.ts']," "include: ['src/**/*.ts'],
       all: false," "vitest coverage all: false" "coverage.all"
 weakens vitest.config.ts "thresholds: { lines: 80, branches: 70 }," "thresholds: { lines: 80, branches: 70, perFile: false }," "vitest perFile false" "perFile"
-passes vitest.config.ts "include: ['src/**/*.ts']," "include: ['src/**/*.ts'],
-      reporter: ['text']," "vitest coverage reporter edit"
+passes vitest.config.ts "reporter: ['text', 'cobertura', 'lcov']," "reporter: ['text']," "vitest coverage reporter edit"
 weakens eslint.config.mjs "  eslint.configs.recommended,
 " "" "eslint entry removed (M4)" "eslint.configs.recommended"
 passes eslint.config.mjs "// @ts-check" "// @ts-check
@@ -433,6 +448,7 @@ R="$T/next"
 rm -rf "$R"
 mkdir -p "$R/.claude" "$R/scripts"
 cp "$SH/template/.claude/gates.txt" "$R/.claude/gates.txt"
+cp "$RATCHET" "$R/scripts/gate-ratchet.sh"
 cp "$SH/../nextjs/template/eslint.config.mjs" "$R/"
 git -C "$R" init -q -b main
 git_ add -A
@@ -443,13 +459,29 @@ weakens eslint.config.mjs "  ...typescript,
 " "" "nextjs: typescript preset spread removed" "typescript"
 weakens eslint.config.mjs "  ...coreWebVitals,
 " "" "nextjs: coreWebVitals preset spread removed" "coreWebVitals"
+for UI in next:nextjs/template/vitest.config.ts vite:vite-react/template/vite.config.ts; do
+  R="$T/ui-${UI%%:*}"
+  CFG=$(basename "${UI#*:}")
+  rm -rf "$R"
+  mkdir -p "$R/.claude" "$R/scripts"
+  cp "$SH/template/.claude/gates.txt" "$R/.claude/gates.txt"
+  cp "$RATCHET" "$R/scripts/gate-ratchet.sh"
+  cp "$SH/../${UI#*:}" "$R/$CFG"
+  git -C "$R" init -q -b main
+  git_ add -A
+  git_ commit -q -m base
+  ratchet
+  check 0 "$EC" "${UI%%:*}: seeded coverage exclude with src/components/ui/** passes ($OUT)"
+  weakens "$CFG" "'src/components/ui/**']" "'src/components/ui/**', 'src/lib/**']" "${UI%%:*}: src/lib/** added to the coverage exclude" "src/lib/**" "new ignore or exclude"
+  passes "$CFG" "'src/components/ui/**']" "]" "${UI%%:*}: dropping the ui exclude is a tightening"
+done
 R=$R_TS
 
 R="$T/adopt"
 rm -rf "$R"
 mkdir -p "$R/src"
 echo 'export const a = 1;' > "$R/src/a.ts"
-cp "$SH/../nestjs/template/eslint.config.mjs" "$SH/../nestjs/template/vitest.config.ts" "$R/"
+cp "$SH/../nestjs/template/eslint.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
 git -C "$R" init -q -b main
 git_ add -A
 git_ commit -q -m "plain project"
@@ -566,6 +598,112 @@ check 2 "$?" "missing argument: exits 2 ($OUT)"
 OUT=$(cd "$T" && bash "$RATCHET" main 2>&1)
 check 2 "$?" "outside a git repository: exits 2 ($OUT)"
 
+seed ts
+# Sonar scope: exclusions may only shrink, inclusions only grow, the file may not go or be shadowed.
+weakens sonar-project.properties "**/*.d.ts,src/components/ui/**" "**/*.d.ts,src/components/ui/**,src/**" "sonar exclusions widened" "src/**" "sonar.exclusions"
+passes sonar-project.properties "**/*.d.ts,src/components/ui/**" "**/*.d.ts" "sonar exclusions shrunk"
+weakens sonar-project.properties "sonar.exclusions=" "sonar.coverage.exclusions=src/**
+sonar.exclusions=" "sonar coverage exclusions added" "src/**" "sonar.coverage.exclusions"
+weakens sonar-project.properties "sonar.exclusions=" "sonar.cpd.exclusions=src/**
+sonar.exclusions=" "sonar cpd exclusions added" "sonar.cpd.exclusions"
+weakens sonar-project.properties "sonar.exclusions=" "sonar.issue.ignore.multicriteria=e1
+sonar.exclusions=" "sonar issue ignore added" "sonar.issue.ignore.multicriteria"
+weakens sonar-project.properties "sonar.exclusions=" "sonar.inclusions=src/only/**
+sonar.exclusions=" "sonar inclusions added narrows the scan" "sonar-inclusions"
+weakens sonar-project.properties "**/*.test.ts,**/*.test.tsx" "**/*.test.ts,**/*.test.tsx,**" "sonar test inclusions widened" "sonar.test.inclusions"
+weakens sonar-project.properties "sonar.exclusions=" "sonar.projectBaseDir=src
+sonar.exclusions=" "sonar unknown key added" "sonar.projectBaseDir"
+passes sonar-project.properties "sonar.exclusions=" "sonar.projectKey=demo
+sonar.exclusions=" "sonar neutral key added"
+weakens sonar-project.properties "sonar.exclusions=**/node_modules/**,**/.next/**," "sonar.exclusions=**/node_modules/**,\
+  **/.next/**,\
+  src/**,\
+  " "sonar widened through a continuation line" "src/**"
+passes sonar-project.properties "sonar.exclusions=**/node_modules/**,**/.next/**," "sonar.exclusions=**/node_modules/**,\
+  **/.next/**,\
+  " "sonar same items re-flowed through a continuation line"
+drop sonar-project.properties
+expect 1 "sonar file deleted" "sonar-project.properties" "now removed"
+add_file a/sonar-project.properties "sonar.exclusions=**"
+expect 1 "nested sonar file shadows the root one" "a/sonar-project.properties" "competes"
+add_file .sonarcloud.properties "sonar.exclusions=**"
+expect 1 ".sonarcloud.properties shadows sonar-project.properties" ".sonarcloud.properties" "competes"
+edit sonar-project.properties "sonar.exclusions=" "sonar.exclusions=src/**
+sonar.exclusions="
+expect 2 "sonar repeated key cannot be read" "given twice"
+edit sonar-project.properties "sonar.exclusions=**/node_modules/**" "sonar.exclusions=**/node_modules/**,\\,x"
+expect 2 "sonar value with an escape cannot be read" "escape sequence"
+edit sonar-project.properties "sonar.exclusions=**/node_modules/**" "sonar.exclusions=\${EXTRA},**/node_modules/**"
+expect 2 "sonar value with interpolation cannot be read" "interpolation"
+add_file docs/sonar-project.properties.md "not a sonar file"
+expect 0 "a file that only starts like the sonar file is not a shadow"
+
+# Coverage arrays: bare literals of strings, nothing chained, no repeated key; anything else is unreadable.
+EXC="exclude: ['**/*.{test,spec}.ts', '**/*.d.ts'],"
+weakens vitest.config.ts "$EXC" "'exclude': ['**/*.{test,spec}.ts', '**/*.d.ts', 'src/**']," "quoted exclude key with a new item" "src/**"
+passes vitest.config.ts "$EXC" "'exclude': ['**/*.{test,spec}.ts', '**/*.d.ts']," "quoted exclude key with the same items"
+passes vitest.config.ts "$EXC" "exclude: [ '**/*.{test,spec}.ts', '**/*.d.ts', ]," "exclude array with a trailing comma"
+edit vitest.config.ts "$EXC" "exclude: ['**/*.{test,spec}.ts', '**/*.d.ts'].concat(['src/**']),"
+expect 2 "exclude with .concat" "has something chained after it"
+edit vitest.config.ts "$EXC" "exclude: ['**/*.{test,spec}.ts', '**/*.d.ts'].filter(Boolean).concat(process.env.X ? ['src/**'] : []),"
+expect 2 "exclude with filter and a conditional concat" "has something chained after it"
+edit vitest.config.ts "$EXC" "exclude: EXCL,"
+expect 2 "exclude through a constant" "not a bare array literal"
+edit vitest.config.ts "$EXC" "exclude: [...BASE, '**/*.d.ts'],"
+expect 2 "exclude with a spread" "other than a string literal"
+edit vitest.config.ts "$EXC" "exclude: ['a', \`src/\${X}\`],"
+expect 2 "exclude with a template expression" "template string"
+edit vitest.config.ts "$EXC" "exclude,"
+expect 1 "exclude as a shorthand property" "new setting"
+edit vitest.config.ts "include: ['src/**/*.ts']," "include: ['src/**/*.ts'].slice(1),"
+expect 2 "include with .slice" "has something chained after it"
+edit vitest.config.ts "include: ['src/**/*.ts']," "include: ['src/**/*.ts'],
+      include: ['x'],"
+expect 2 "include given twice" "given twice"
+edit vitest.config.ts "include: ['src/**/*.ts']," "'include': ['src/**/*.ts'],"
+expect 0 "quoted include key with the same items"
+edit vitest.config.ts "include: ['src/**/*.ts']," "'include': ['x'],"
+expect 1 "quoted include key that drops the item" "required include 'src/**/*.ts'"
+
+# Thresholds: a quoted key is read, and a repeated key is unreadable.
+edit vitest.config.ts "thresholds: { lines: 80, branches: 70 }," "thresholds: { lines: 80, branches: 70, 'lines': 1 },"
+expect 2 "quoted duplicate threshold key" "given twice"
+edit vitest.config.ts "thresholds: { lines: 80, branches: 70 }," "thresholds: { lines: 80, branches: 70, lines: 1 },"
+expect 2 "plain duplicate threshold key" "given twice"
+weakens vitest.config.ts "thresholds: { lines: 80, branches: 70 }," "thresholds: { 'lines': 60, branches: 70 }," "quoted threshold key lowered" "was 80" "now 60"
+passes vitest.config.ts "thresholds: { lines: 80, branches: 70 }," "thresholds: { 'lines': 90, branches: 70 }," "quoted threshold key raised"
+edit vitest.config.ts "thresholds: { lines: 80, branches: 70 }," "thresholds: { lines: 80x, branches: 70 },"
+expect 2 "threshold that is not a plain number" "plain decimal"
+edit vitest.config.ts "coverage: {" "coverage: COV, xcoverage: {"
+expect 2 "coverage that is not an object" "not an object literal"
+weakens vitest.config.ts "reporter: ['text', 'cobertura', 'lcov']," "passWithNoTests: true," "passWithNoTests added" "passWithNoTests"
+weakens vitest.config.ts "reporter: ['text', 'cobertura', 'lcov']," "'passWithNoTests': !!1," "passWithNoTests as a quoted truthy expression" "passWithNoTests"
+passes vitest.config.ts "globals: false," "globals: false, passWithNoTests: false," "passWithNoTests set to false"
+add_file vitest.workspace.ts "export default ['packages/*'];"
+expect 1 "workspace file competes with the vitest config" "vitest.workspace.ts" "competes"
+
+# package.json scripts: flags that override the coverage config, and a dropped --coverage, are findings; forms the base had stay allowed.
+TCI='"test:ci": "vitest --run --coverage",'
+for flag in '--coverage.thresholds.lines=0' '--coverage.exclude=src/**' '--coverage.include=nothing/**' '--coverage.all=false' '--coverage.enabled=false' '--coverage=false' '--no-coverage' '--passWithNoTests' '--pass-with-no-tests' '--config=weak.config.ts' '--coverage.thresholds.autoUpdate=true'; do
+  weakens package.json "$TCI" "\"test:ci\": \"vitest --run --coverage $flag\"," "script flag $flag" "$flag" "script-flag"
+done
+weakens package.json "$TCI" '"test:ci": "vitest --run --coverage --config weak.config.ts",' "script --config added" "weak.config.ts"
+weakens package.json "$TCI" '"test:ci": "pnpm test -- --coverage.thresholds.lines=0",' "flag passed through pnpm" "--coverage.thresholds.lines=0"
+weakens package.json "$TCI" '"test:ci": "vitest --run",' "--coverage dropped from the CI script" "coverage-flag" "test:ci"
+weakens package.json "$TCI" '"test:ci": "vitest --run --coverage",
+    "test:cheat": "vitest --run --no-coverage",' "flag in a new script" "test:cheat: --no-coverage"
+passes package.json "$TCI" '"test:ci": "vitest --run --coverage --coverage.reporter=text --reporter=dot",' "benign coverage reporter flag"
+passes package.json "$TCI" '"test:ci": "vitest --run --coverage",
+    "test:more": "vitest --run src/x.test.ts",' "new script without flags"
+passes package.json '"name":' '"name":' "package.json untouched"
+edit package.json "$TCI" '"test:ci": "vitest --run --coverage",
+    "test:ci": "vitest --run",'
+expect 2 "repeated script name" "duplicate JSON key"
+edit package.json "$TCI" '"test:ci": "vitest --run --no-cover\u0061ge",'
+expect 2 "script hidden behind a \u escape" "escape"
+edit package.json "$TCI" '"test:ci": 3,'
+expect 2 "script that is not a string" "not a string"
+
 seed py
 git_ checkout -q -B work main
 ratchet
@@ -625,14 +763,687 @@ source = [\"x\"]
 passes pyproject.toml "[tool.coverage.report]" "[tool.ruff.format]
 quote-style = \"single\"
 [tool.coverage.report]" "ruff format quote-style"
-passes pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+weakens pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
 addopts = \"-q\"
-[tool.coverage.report]" "pytest options edit"
+[tool.coverage.report]" "pytest options edit" "addopts"
 git_ checkout -q -B work main
 sed -i.bak 's/tool[.]ruff/tool.rff/g' "$R/pyproject.toml" && rm -f "$R/pyproject.toml.bak"
 git_ commit -q -am rename
 ratchet
 check 2 "$EC" "pyproject without [tool.ruff]: exits 2 ($OUT)"
+
+# Python: coverage and pytest bypasses, Sonar scope, and shadow config files.
+weakens pyproject.toml "[tool.coverage.report]" "[tool.coverage.run]
+'omit' = [\"src/**\"]
+[tool.coverage.report]" "single-quoted omit key" "src/**"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.coverage.run]
+\"omit\" = [\"src/**\"]
+[tool.coverage.report]" "double-quoted omit key" "src/**"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.coverage.run]
+omit = [\"src/**\"]
+[tool.coverage.report]" "plain omit key" "src/**"
+weakens pyproject.toml "[tool.coverage.report]" "[ tool . coverage . run ]
+omit = [\"src/**\"]
+[tool.coverage.report]" "omit under a spaced header" "src/**"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.\"coverage\".run]
+omit = [\"src/**\"]
+[tool.coverage.report]" "omit under a quoted header" "src/**"
+weakens pyproject.toml "[tool.coverage.report]" "[tool]
+coverage = { run = { omit = [\"src/**\"] } }
+[tool.coverage.report]" "coverage inside an inline table of [tool]" "new setting"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.coverage]
+run = { omit = [\"src/**\"] }
+[tool.coverage.report]" "run as an inline table" "new setting"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.coverage.report]
+exclude_also = [\"def \"]" "coverage exclude_also" "exclude_also"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.coverage.run]
+source = [\"x\"]
+[tool.coverage.report]" "coverage source" "source"
+passes pyproject.toml "[tool.coverage.report]" "[tool.coverage.report]
+precision = 1" "neutral coverage key"
+for fl in '--no-cov' '--cov-config=weak.rc' '-p no:cov' '-p no:pytest_cov' '-c weak.ini'; do
+  weakens pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = \"$fl\"
+[tool.coverage.report]" "addopts $fl" "pytest-flag"
+done
+weakens pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = [\"-q\", \"-p\", \"no:cov\"]
+[tool.coverage.report]" "addopts split -p no:cov" "pytest-flag"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = \"--cov-fail-under=1\"
+[tool.coverage.report]" "addopts --cov-fail-under=1" "pytest-cov-fail-under" "was 80" "now 1"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = [\"--cov-fail-under\", \"0\"]
+[tool.coverage.report]" "addopts split --cov-fail-under 0" "pytest-cov-fail-under" "now 0"
+passes pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = \"--cov-fail-under=90\"
+[tool.coverage.report]" "addopts --cov-fail-under raised"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = \"--no-cov-on-fail\"
+[tool.coverage.report]" "addopts --no-cov-on-fail is no longer a known-safe edit" "addopts"
+edit pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = \"--cov-fail-under=abc\"
+[tool.coverage.report]"
+expect 2 "addopts --cov-fail-under not a number" "--cov-fail-under"
+weakens sonar-project.properties "sonar.sources=src" "sonar.sources=" "sonar sources emptied" "sonar.sources" "was present"
+passes sonar-project.properties "sonar.sources=src" "sonar.sources=src,lib" "sonar sources grown"
+for f in pytest.ini tox.ini setup.cfg; do
+  add_file "$f" "[pytest]"
+  expect 1 "$f shadows pyproject" "$f" "competes"
+done
+
+
+# Round 3: test-script words are an allow-list.
+seed ts
+for fl in '--dir test/x' '--exclude **/*' '--changed' '-t nothing' '--bail=1' '--shard=1/2' '--testNamePattern=none'; do
+  weakens package.json '"test:ci": "vitest --run --coverage"' "\"test:ci\": \"vitest --run --coverage $fl\"" "test:ci word $fl" "known-safe words" "test:ci"
+done
+weakens package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run"' "test:ci loses --coverage" "known-safe words" "test:ci"
+weakens package.json '"test:cov": "vitest --run --coverage"' '"test:cov": "vitest --run --coverage --changed"' "test:cov word added" "test:cov"
+passes package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --reporter=verbose"' "test:ci --reporter=verbose is known-safe"
+passes package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --silent"' "test:ci --silent is known-safe"
+passes package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --coverage.reporter=text"' "test:ci --coverage.reporter is known-safe"
+
+# Round 3: pytest keys.
+seed py
+for fl in '--cov=src/narrow' '-m unit' '--ignore=test' '--deselect=test/a' '-k nothing' '-o addopts=' '--lf' '--co'; do
+  weakens pyproject.toml '"--import-mode=importlib",' "\"--import-mode=importlib\", \"$fl\"," "addopts adds $fl" "addopts"
+done
+for key in 'testpaths = ["test/x"]' 'python_files = ["nomatch_*.py"]' 'python_classes = ["Nothing"]' 'python_functions = ["nothing_*"]' 'norecursedirs = ["test"]' 'filterwarnings = ["ignore"]'; do
+  weakens pyproject.toml 'asyncio_mode = "auto"' "$key
+asyncio_mode = \"auto\"" "pytest key $key" "new setting" "${key%% =*}"
+done
+passes pyproject.toml '"--import-mode=importlib",' '"--import-mode=importlib", "--cov-fail-under=90",' "pytest --cov-fail-under raised from nothing"
+passes pyproject.toml '"--import-mode=importlib",' '"--import-mode=importlib", "--cov-fail-under", "90",' "pytest --cov-fail-under split form raised"
+passes pyproject.toml '  "integration: needs a running service",' '  "integration: needs a running service",
+  "slow: takes a while",' "pytest new marker"
+
+# Round 3: gate-bearing files that were never compared.
+seed ts
+weakens scripts/check-docs.sh "" "exit 0
+" "gate script gets an early exit" "scripts/check-docs.sh" "content differs"
+weakens .claude/settings.json "{}" '{"hooks": {}}' "settings.json edited" ".claude/settings.json" "content differs"
+weakens .claude/hooks/protect-files.sh "#!/usr/bin/env bash" "#!/usr/bin/env bash
+exit 0" "hook edited" ".claude/hooks/protect-files.sh" "content differs"
+edit .claude/dep-audit-allow.txt "reason
+" "reason
+GHSA-dddd-eeee-ffff 2099-01-01 new
+"
+expect 1 "allow-list gains a line" ".claude/dep-audit-allow.txt" "advisory allow-list gained a line"
+passes .claude/dep-audit-allow.txt "GHSA-aaaa-bbbb-cccc 2099-01-01 reason
+" "" "allow-list loses a line"
+passes .claude/dep-audit-allow.txt "# advisory allow-list" "# advisory allow-list, reviewed" "allow-list comment edit"
+git_ checkout -q -B work main
+: > "$R/.claude/comment-hygiene-patterns.txt"
+git_ commit -q -am "empty patterns"
+expect 1 "patterns emptied" ".claude/comment-hygiene-patterns.txt" "patterns were removed"
+git_ checkout -q -B work main
+printf '^[Nn]ote[[:space:]]\n' >> "$R/.claude/comment-hygiene-patterns.txt"
+git_ commit -q -am "append pattern"
+expect 0 "patterns appended"
+weakens tsconfig.json '"strict": true' '"strict": false' "tsconfig strict off" "tsconfig.json" "strictness option strict was on, now off"
+weakens tsconfig.json '"strict": true' '"strict": true, "noImplicitAny": false' "tsconfig noImplicitAny off" "noImplicitAny"
+passes tsconfig.json '"strictPropertyInitialization": false' '"strictPropertyInitialization": true' "tsconfig tightened"
+add_file tsconfig.spec.json '{"extends": "./tsconfig.json", "compilerOptions": {"strict": false}}'
+expect 1 "new tsconfig with strict off" "tsconfig.spec.json" "strictness option strict is off"
+add_file tsconfig.spec.json '{"extends": "./tsconfig.json", "compilerOptions": {"strict": true}}'
+expect 0 "new tsconfig with strict on"
+seed py
+weakens pyrightconfig.json '"venvPath": "."' '"typeCheckingMode": "off", "venvPath": "."' "pyright mode off" "pyrightconfig.json" "typeCheckingMode"
+passes pyrightconfig.json '"venvPath": "."' '"typeCheckingMode": "strict", "venvPath": "."' "pyright mode strict"
+weakens pyrightconfig.json '"venvPath": "."' '"reportMissingImports": "none", "venvPath": "."' "pyright rule none" "reportMissingImports"
+
+# Round 3: the guarded set is derived from the tree.
+seed ts
+printf '#!/usr/bin/env bash\necho gate\n' > "$R/scripts/check-extra.sh"
+printf '# runs scripts/check-extra.sh\n' >> "$R/.claude/gates.txt"
+git_ add -A
+git_ commit -q -m "gate script named by gates.txt"
+git_ checkout -q -B work main
+printf 'exit 0\n' >> "$R/scripts/check-extra.sh"
+git_ commit -q -am "sabotage"
+expect 1 "a script named by the manifest is guarded" "scripts/check-extra.sh" "content differs"
+LISTED=$(cd "$R" && bash scripts/gate-ratchet.sh --list-guarded HEAD)
+for g in scripts/check-extra.sh scripts/check-docs.sh .claude/settings.json .claude/hooks/protect-files.sh .claude/dep-audit-allow.txt .claude/comment-hygiene-patterns.txt tsconfig.json; do
+  has "$g" "$LISTED" "list-guarded names $g"
+done
+
+# Round 3: auto base with nothing to compare against.
+seed ts
+git_ checkout -q -B work main
+OUT=$(cd "$R" && env -u CI -u GITHUB_ACTIONS -u TF_BUILD bash scripts/gate-ratchet.sh auto 2>&1)
+EC=$?
+check 0 "$EC" "auto base without upstream exits 0 outside CI ($OUT)"
+has "DID NOT RUN" "$OUT" "auto base without upstream says it did not run"
+OUT=$(cd "$R" && env -u TF_BUILD -u GITHUB_ACTIONS CI=true bash scripts/gate-ratchet.sh auto 2>&1)
+EC=$?
+check 2 "$EC" "auto base without upstream fails closed in CI ($OUT)"
+has "no base branch found" "$OUT" "auto base in CI names the cause"
+OUT=$(cd "$R" && env -u CI -u TF_BUILD GITHUB_ACTIONS=true bash scripts/gate-ratchet.sh auto 2>&1)
+check 2 "$?" "auto base without upstream fails closed under GITHUB_ACTIONS ($OUT)"
+
+# Round 3: the merge base must carry the ratchet script.
+seed ts
+git_ rm -q scripts/gate-ratchet.sh
+git_ commit -q -m "base without ratchet script"
+git_ update-ref refs/remotes/origin/main main
+git_ checkout -q -B work main
+cp "$RATCHET" "$R/scripts/gate-ratchet.sh"
+git_ add -A
+git_ commit -q -m "head brings its own judge"
+OUT=$(cd "$R" && LABELS="" bash .claude/ci-gates.sh ratchet main 2>&1)
+EC=$?
+check 1 "$EC" "ci ratchet fails when the base has no ratchet script ($OUT)"
+has "would judge itself" "$OUT" "ci ratchet names the missing base script"
+OUT=$(cd "$R" && bash scripts/gate-ratchet.sh main 2>&1)
+check 2 "$?" "ratchet fails when the base has no ratchet script ($OUT)"
+has "would judge itself" "$OUT" "ratchet names the missing base script"
+
+# Round 4: wl_norm skips the word after --reporter and friends only when it is a plain value.
+seed ts
+weakens package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --reporter --changed"' "reporter swallows --changed" "known-safe words" "test:ci"
+weakens package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --outputFile --bail=1"' "outputFile swallows --bail=1" "known-safe words" "test:ci"
+weakens package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --coverage.reporter --dir test/x"' "coverage.reporter swallows --dir" "known-safe words" "test:ci"
+passes package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --reporter json"' "reporter with a value"
+passes package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --outputFile out.xml"' "outputFile with a value"
+
+# Round 4: every key under test: is a fact unless it is on the neutral list.
+for kv in 'changed: true,' "dir: 'test/nothing'," "testNamePattern: 'zzz'," "root: './test/x'," 'bail: 1,' "projects: ['a']," 'allowOnly: true,' "exclude: ['**/*.spec.ts']," ; do
+  key=${kv%%:*}
+  case "$key" in
+    exclude) continue ;;
+  esac
+  weakens vitest.config.ts "globals: false," "globals: false,
+    $kv" "vitest test.$key added" "new setting test.$key"
+done
+passes vitest.config.ts "globals: false," "globals: false,
+    clearMocks: true," "vitest neutral test key"
+passes vitest.config.ts "environment: 'node'," "environment: 'jsdom'," "vitest environment"
+
+# Round 4: pytest collection hooks in conftest files.
+seed py
+mkdir -p "$R/test" "$R/src"
+printf 'import pytest\n\n\n@pytest.fixture\ndef one():\n    return 1\n\n\ndef pytest_collection_modifyitems(config, items):\n    pass\n' > "$R/test/conftest.py"
+git_ add -A
+git_ commit -q -m "conftest at base"
+git_ checkout -q -B work main
+python3 - "$R/test/conftest.py" <<'PY2'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+open(p, "w").write(s.replace("    pass\n", "    items.clear()\n", 1))
+PY2
+git_ commit -q -am "edit hook body"
+expect 1 "existing conftest hook body edited" "test/conftest.py" "collection hook"
+git_ checkout -q -B work main
+printf '\n\n@pytest.fixture\ndef two():\n    return 2\n' >> "$R/test/conftest.py"
+git_ commit -q -am "add fixture"
+expect 0 "existing conftest gains a fixture"
+git_ checkout -q -B work main
+printf 'collect_ignore_glob = ["*"]\n' >> "$R/test/conftest.py"
+git_ commit -q -am "ignore all"
+expect 1 "existing conftest gains collect_ignore_glob" "test/conftest.py" "collection hook"
+add_file conftest.py 'def pytest_collection_modifyitems(config, items):
+    items[:] = []'
+expect 1 "new root conftest with a hook" "conftest.py" "collection hook"
+add_file test/unit/conftest.py 'collect_ignore_glob = ["*.py"]'
+expect 1 "new nested conftest with collect_ignore_glob" "test/unit/conftest.py" "collection hook"
+add_file test/unit/conftest.py 'collect_ignore = ["a.py"]'
+expect 1 "new nested conftest with collect_ignore" "test/unit/conftest.py" "collection hook"
+add_file test/unit/conftest.py 'def pytest_configure(config):
+    config.option.keyword = "zzz"'
+expect 1 "new conftest with pytest_configure" "test/unit/conftest.py" "collection hook"
+add_file test/unit/conftest.py 'pytest_plugins = ["x"]'
+expect 1 "new conftest with pytest_plugins" "test/unit/conftest.py" "collection hook"
+add_file test/unit/conftest.py 'import pytest
+
+
+@pytest.fixture
+def three():
+    return 3
+
+
+def helper():
+    return 4'
+expect 0 "new fixture-only conftest"
+
+# Round 4: a shadow config file at any depth.
+seed py
+add_file src/pytest.ini '[pytest]
+addopts = --no-cov'
+expect 1 "new src/pytest.ini beside pyproject settings" "src/pytest.ini" "may read it instead"
+add_file tox.ini '[pytest]
+addopts = -k none'
+expect 1 "new tox.ini beside pyproject settings" "tox.ini" "may read it instead"
+add_file pkg/.coveragerc '[report]
+fail_under = 0'
+expect 1 "new nested .coveragerc beside pyproject settings" "pkg/.coveragerc" "may read it instead"
+seed ts
+add_file src/pytest.ini '[pytest]
+addopts = --no-cov'
+expect 0 "pytest.ini with no pyproject settings at base"
+
+# Round 4: install-time package.json scripts are guarded.
+seed ts
+weakens package.json '"prepare": "lefthook install || true"' '"prepare": "echo skip"' "prepare changed" "prepare"
+weakens package.json '"test:ci": "vitest --run --coverage",' '"test:ci": "vitest --run --coverage",
+    "postinstall": "echo skip",' "postinstall added" "postinstall"
+weakens package.json '"test:ci": "vitest --run --coverage",' '"test:ci": "vitest --run --coverage",
+    "install": "echo skip",' "install added" "install"
+
+# Round 4: --config on a new script passes, on an existing one fails.
+seed ts
+passes package.json '"test:ci": "vitest --run --coverage",' '"test:ci": "vitest --run --coverage",
+    "test:integration": "vitest --run --config vitest.config.integration.mts",' "new script with --config"
+weakens package.json '"test:e2e": "vitest --run --config vitest.config.e2e.mts"' '"test:e2e": "vitest --run --config vitest.config.other.mts"' "--config changed on an existing script" "script-flag"
+weakens package.json '"test:watch": "vitest"' '"test:watch": "vitest --config vitest.config.other.mts"' "--config added to an existing script" "script-flag"
+weakens package.json '"test:ci": "vitest --run --coverage",' '"test:ci": "vitest --run --coverage",
+    "test:cheat": "vitest --run --no-coverage",' "--no-coverage on a new script" "script-flag"
+
+# Round 4: a new pyproject.toml needs [tool.ruff] only when the base has one.
+seed py
+add_file sub/pyproject.toml '[project]
+name = "sub"'
+expect 0 "new sub/pyproject.toml without [tool.ruff]"
+edit pyproject.toml "[tool.ruff]" "[tool.rufff]"
+edit_more pyproject.toml "[tool.ruff.lint]" "[tool.rufff.lint]"
+expect 2 "existing pyproject.toml loses [tool.ruff]" "no [tool.ruff] section"
+
+# Round 4: an empty coverage value is neutral in every awk, a filled one is a finding.
+seed py
+passes pyproject.toml "fail_under = 80" "fail_under = 80
+plugins = ['']" "coverage setting with only quotes"
+weakens pyproject.toml "fail_under = 80" "fail_under = 80
+plugins = ['x']" "coverage setting with a value" "new setting"
+
+# Round 4: --list-guarded rejects a bad ref and ci-gates fails when the list is empty.
+seed ts
+OUT=$(cd "$R" && bash scripts/gate-ratchet.sh --list-guarded no-such-ref 2>&1)
+check 2 "$?" "list-guarded with a bad ref exits 2 ($OUT)"
+has "is not a commit" "$OUT" "list-guarded bad ref names the cause"
+OUT=$(cd "$R" && bash scripts/gate-ratchet.sh --list-guarded HEAD 2>&1)
+check 0 "$?" "list-guarded with a good ref exits 0"
+git_ checkout -q -B work main
+printf '#!/usr/bin/env bash\nexit 0\n' > "$R/scripts/gate-ratchet.sh"
+git_ commit -q -am "ratchet that lists nothing"
+git_ checkout -q -B main work
+git_ checkout -q -B work main
+printf 'x\n' >> "$R/scripts/check-docs.sh"
+git_ commit -q -am "change"
+ci_gate ""
+check 1 "$EC" "ci ratchet fails when the guarded list is empty ($OUT)"
+has "failed or listed nothing" "$OUT" "ci ratchet names the empty list"
+
+# Round 4: the waiver and the ratchet read one derived set.
+seed ts
+printf '#!/usr/bin/env bash\necho gate\n' > "$R/scripts/check-extra.sh"
+printf '# runs scripts/check-extra.sh\n' >> "$R/.claude/gates.txt"
+git_ add -A
+git_ commit -q -m "gate script named by gates.txt"
+git_ checkout -q -B work main
+printf 'exit 0\n' >> "$R/scripts/check-extra.sh"
+git_ commit -q -am "sabotage"
+ci_gate "allow-gate-change"
+check 1 "$EC" "waiver does not cover a derived gate script ($OUT)"
+has "scripts/check-extra.sh" "$OUT" "waiver refusal names the derived script"
+seed ts
+git_ checkout -q -B work main
+printf 'GHSA-dddd-eeee-ffff 2099-01-01 new\n' >> "$R/.claude/dep-audit-allow.txt"
+git_ commit -q -am "allow-list line"
+ci_gate "allow-gate-change"
+check 0 "$EC" "waiver still covers a label-waivable file ($OUT)"
+
+# Round 5: a base_edit helper puts an edit on main itself.
+base_edit() {
+  edit "$@"
+  git_ checkout -q -B main work
+}
+
+# listed <path>: the list-guarded line for a path at HEAD of the current repo, or nothing.
+listed() {
+  (cd "$R" && bash scripts/gate-ratchet.sh --list-guarded HEAD 2>/dev/null) | awk -F'\t' -v p="$1" '$2 == p { print }'
+}
+
+# Round 5: a path named only in a project skill document is not a guard.
+seed ts
+printf '#!/usr/bin/env bash\necho helper\n' > "$R/scripts/helper.sh"
+mkdir -p "$R/.claude/skills/demo"
+printf '# demo\nRun scripts/helper.sh before you start.\n' > "$R/.claude/skills/demo/SKILL.md"
+git_ add -A
+git_ commit -q -m "script named by a skill document"
+check "" "$(listed scripts/helper.sh)" "skill document mention does not list the script as guarded"
+git_ checkout -q -B work main
+printf 'echo more\n' >> "$R/scripts/helper.sh"
+printf 'Also run it twice.\n' >> "$R/.claude/skills/demo/SKILL.md"
+git_ commit -q -am "touch both"
+expect 0 "change touching a script and the skill document that names it"
+printf '#!/usr/bin/env bash\necho helper2\n' > "$R/scripts/helper2.sh"
+printf '# runs scripts/helper2.sh\n' >> "$R/.claude/gates.txt"
+git_ add -A
+git_ commit -q -m "script named by the manifest"
+git_ checkout -q -B main work
+git_ checkout -q -B work main
+printf 'exit 0\n' >> "$R/scripts/helper2.sh"
+git_ commit -q -am "edit manifest script"
+expect 1 "control: a script named by gates.txt stays guarded" "scripts/helper2.sh" "gate script, runner or manifest changed"
+
+# Round 5: a runner named only by package.json, the Makefile or .husky is guarded.
+seed ts
+printf '#!/usr/bin/env bash\necho run\n' > "$R/scripts/run-tests.sh"
+printf '#!/usr/bin/env bash\necho dev\n' > "$R/scripts/run-dev.sh"
+printf '#!/usr/bin/env bash\necho mk\n' > "$R/scripts/mk-step.sh"
+printf '#!/usr/bin/env bash\necho hk\n' > "$R/scripts/hk-step.sh"
+printf 'check:\n\tbash scripts/mk-step.sh\n' > "$R/Makefile"
+mkdir -p "$R/.husky"
+printf '#!/usr/bin/env sh\nbash scripts/hk-step.sh\n' > "$R/.husky/pre-commit"
+git_ add -A
+git_ commit -q -m "runners"
+base_edit package.json '"test:ci": "vitest --run --coverage",' '"test:ci": "vitest --run --coverage",
+    "test:unit": "bash scripts/run-tests.sh",
+    "dev": "bash scripts/run-dev.sh",'
+for r in run-tests mk-step hk-step; do
+  git_ checkout -q -B work main
+  printf 'exit 0\n' >> "$R/scripts/$r.sh"
+  git_ commit -q -am "gut $r"
+  expect 1 "runner $r named only by its caller" "scripts/$r.sh" "gate script, runner or manifest changed"
+done
+git_ checkout -q -B work main
+printf 'exit 0\n' >> "$R/scripts/run-dev.sh"
+git_ commit -q -am "edit dev script"
+expect 0 "control: a script named only by a dev script"
+check "" "$(listed scripts/run-dev.sh)" "dev-only script is not listed as guarded"
+
+# Round 5: conftest code that can hide tests is a finding, the rest is not.
+conftest_cases() {
+  local tag=$1
+  seed py
+  add_file test/unit/conftest.py 'import pytest
+
+
+@pytest.fixture(autouse=True)
+def _gate():
+    pytest.skip("always")'
+  expect 1 "$tag autouse fixture that skips" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'import pytest
+
+
+@pytest.fixture(autouse=True)
+def _quiet():
+    return 1'
+  expect 1 "$tag autouse fixture with no skip" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'import pytest
+
+pytestmark = pytest.mark.skip'
+  expect 1 "$tag pytestmark" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'import pytest
+
+
+def check():
+    pytest.xfail("x")'
+  expect 1 "$tag pytest.xfail" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'import pytest
+
+dep = pytest.importorskip("nothing_here")'
+  expect 1 "$tag importorskip" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'import pytest
+
+
+def check():
+    pytest.exit("stop")'
+  expect 1 "$tag pytest.exit" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'import sys
+
+sys.exit(0)'
+  expect 1 "$tag sys.exit" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'import os
+
+os._exit(0)'
+  expect 1 "$tag os._exit" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'pytest_plugins = ["pytest_asyncio", "evil_plugin"]'
+  expect 1 "$tag pytest_plugins with a plugin outside the list" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'def pytest_configure(config):
+    config.option.keyword = "zzz"'
+  expect 1 "$tag pytest_configure that sets an option" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py '"""Notes on pytest_collection_modifyitems and autouse fixtures."""
+import pytest
+
+
+@pytest.fixture
+def one():
+    # pytest_collection_modifyitems is not used here
+    return 1'
+  expect 0 "$tag hook name inside a docstring and a comment"
+  add_file test/unit/conftest.py 'pytest_plugins = ["pytest_asyncio"]'
+  expect 0 "$tag pytest_plugins with a neutral plugin"
+  add_file test/unit/conftest.py 'def pytest_configure(config):
+    config.addinivalue_line("markers", "slow: slow tests")'
+  expect 0 "$tag pytest_configure that only registers a marker"
+  add_file test/unit/conftest.py 'def pytest_addoption(parser):
+    parser.addoption("--runslow", action="store_true", default=False)'
+  expect 0 "$tag pytest_addoption that only adds an option"
+  add_file test/unit/conftest.py 'import pytest
+
+
+@pytest.fixture
+def client():
+    return object()
+
+
+def build(n):
+    return [n, n]'
+  expect 0 "$tag plain fixtures and helpers"
+}
+conftest_cases "[awk]"
+MAWK=$(command -v mawk || true)
+if [[ -n "$MAWK" ]]; then
+  mkdir -p "$T/mawkbin"
+  ln -sf "$MAWK" "$T/mawkbin/awk"
+  OLDPATH=$PATH
+  PATH="$T/mawkbin:$PATH"
+  conftest_cases "[mawk]"
+  seed py
+  passes pyproject.toml "fail_under = 80" "fail_under = 80
+plugins = ['']" "[mawk] coverage setting with only quotes"
+  weakens pyproject.toml "fail_under = 80" "fail_under = 80
+plugins = ['x']" "[mawk] coverage setting with a value" "new setting"
+  PATH=$OLDPATH
+fi
+
+# Round 5: the list carries an enforced column, one spaced guarded path, and the scan fails closed.
+seed ts
+check "1" "$(listed .claude/gates.txt | cut -f3)" "gates manifest is enforced"
+check "1" "$(listed scripts/test-budget.sh | cut -f3)" "budget script is enforced"
+check "1" "$(listed .github/workflows/ci.yml | cut -f3)" "ci workflow is enforced"
+check "0" "$(listed eslint.config.mjs | cut -f3)" "eslint config is label-waivable"
+check "0" "$(listed .claude/dep-audit-allow.txt | cut -f3)" "dependency allow-list is label-waivable"
+printf '#!/usr/bin/env bash\necho a\n' > "$R/.claude/hooks/my hook.sh"
+git_ add -A
+git_ commit -q -m "hook with a space"
+git_ checkout -q -B work main
+printf 'exit 0\n' >> "$R/.claude/hooks/my hook.sh"
+git_ commit -q -am "sabotage the spaced hook"
+ci_gate "allow-gate-change"
+check 1 "$EC" "waiver does not cover a hook with a space in its path ($OUT)"
+has "my hook.sh" "$OUT" "waiver refusal names the whole spaced path"
+seed ts
+printf '#!/usr/bin/env bash\necho a\n' > "$R/.claude/hooks/uniq.sh"
+printf 'unique-content-%s\n' "$$" >> "$R/.claude/hooks/uniq.sh"
+git_ add -A
+git_ commit -q -m "unique hook"
+BLOB=$(git_ rev-parse "HEAD:.claude/hooks/uniq.sh")
+git_ checkout -q -B work main
+git_ rm -q .claude/hooks/uniq.sh
+printf 'x\n' >> "$R/scripts/check-docs.sh"
+git_ commit -q -am "drop the hook"
+rm -f "$R/.git/objects/${BLOB:0:2}/${BLOB:2}"
+expect 2 "unreadable tracked file at the merge base" "cannot derive the guarded set"
+
+# Round 5: classification runs in one pass, with a CPU bound that scales with the runner.
+KOF=$(cat "$RATCHET")
+check 0 "$(printf '%s\n' "$KOF" | grep -c 'list_kinds\|kind_full')" "no per-path helper survives in the ratchet"
+check 0 "$(printf '%s\n' "$KOF" | awk '/^classify\(\)/,/^}/' | grep -c '[$][(]')" "classify has no command substitution per path"
+
+# cpu_cs: CPU time in centiseconds that one --list-guarded run of the current repo costs, user plus system.
+cpu_cs() {
+  (cd "$R" && python3 - <<'PY'
+import resource, subprocess
+subprocess.run(["bash", "scripts/gate-ratchet.sh", "--list-guarded", "HEAD"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+r = resource.getrusage(resource.RUSAGE_CHILDREN)
+print(int((r.ru_utime + r.ru_stime) * 100))
+PY
+  )
+}
+
+# The limit is four times the cost on 300 files, never below 300 centiseconds, so a slower runner raises it; a linear scan stays far under it and a quadratic scan does not.
+seed ts
+mkdir -p "$R/src/a" "$R/src/b" "$R/src/c"
+for i in $(seq 1 100); do
+  printf 'x\n' > "$R/src/a/f$i.ts"
+  printf 'x\n' > "$R/src/b/f$i.ts"
+  printf 'x\n' > "$R/src/c/f$i.ts"
+done
+git_ add -A
+git_ commit -q -m "300 files"
+CPU_SMALL=$(cpu_cs)
+for i in $(seq 101 1000); do
+  printf 'x\n' > "$R/src/a/f$i.ts"
+  printf 'x\n' > "$R/src/b/f$i.ts"
+  printf 'x\n' > "$R/src/c/f$i.ts"
+done
+git_ add -A
+git_ commit -q -m "3000 files"
+CPU=$(cpu_cs)
+CPU_LIMIT=$((CPU_SMALL * 4))
+if [[ "$CPU_LIMIT" -lt 300 ]]; then CPU_LIMIT=300; fi
+if [[ "$CPU" -le "$CPU_LIMIT" ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: list-guarded on 3000 files used ${CPU} centiseconds of CPU, limit ${CPU_LIMIT} (300 files used ${CPU_SMALL})"; fi
+echo "list-guarded CPU: 300 files ${CPU_SMALL} cs, 3000 files ${CPU} cs, limit ${CPU_LIMIT} cs"
+
+# Round 6: a base package.json that cannot be parsed fails the scan, it never shrinks the guarded set.
+seed ts
+printf '#!/usr/bin/env bash\necho run\n' > "$R/scripts/run-tests.sh"
+git_ add -A
+git_ commit -q -m "runner"
+base_edit package.json '"test:ci": "vitest --run --coverage",' '"test:ci": "vitest --run --coverage",
+    "x\\y": "1",
+    "test:unit": "bash scripts/run-tests.sh",'
+git_ checkout -q -B work main
+python3 - "$R/package.json" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+s = s.replace('    "x\\\\y": "1",\n', '', 1)
+open(p, "w").write(s)
+PY
+printf 'exit 0\n' >> "$R/scripts/run-tests.sh"
+git_ commit -q -am "fix package.json and gut the runner"
+expect 2 "unparseable base package.json" "cannot derive the guarded set"
+LISTRC=$(cd "$R" && git checkout -q main && bash scripts/gate-ratchet.sh --list-guarded HEAD >/dev/null 2>&1; echo $?)
+check 2 "$LISTRC" "--list-guarded on an unparseable package.json exits 2"
+seed ts
+printf '#!/usr/bin/env bash\necho run\n' > "$R/scripts/run-tests.sh"
+git_ add -A
+git_ commit -q -m "runner"
+base_edit package.json '"test:ci": "vitest --run --coverage",' '"test:ci": "vitest --run --coverage",
+    "test:unit": "bash scripts/run-tests.sh",'
+git_ checkout -q -B work main
+printf 'exit 0\n' >> "$R/scripts/run-tests.sh"
+git_ commit -q -am "gut the runner"
+expect 1 "control: parseable package.json keeps the runner guarded" "scripts/run-tests.sh" "gate script, runner or manifest changed"
+
+# Round 6: a grep that fails with a status above 1 fails the scan with exit 2.
+seed ts
+git_ checkout -q -B work main
+printf 'x\n' >> "$R/scripts/check-docs.sh"
+git_ commit -q -am "touch a script"
+mkdir -p "$T/grepshim"
+REALGREP=$(command -v grep)
+printf '#!/bin/sh\ncase "$*" in *"[.]md$"*) exit 2 ;; esac\nexec %s "$@"\n' "$REALGREP" > "$T/grepshim/grep"
+chmod +x "$T/grepshim/grep"
+OLDPATH=$PATH
+PATH="$T/grepshim:$PATH"
+ratchet
+PATH=$OLDPATH
+check 2 "$EC" "a grep that fails with status 2 fails the scan ($OUT)"
+has "cannot derive the guarded set" "$OUT" "grep failure message"
+printf '#!/bin/sh\nexec %s "$@"\n' "$REALGREP" > "$T/grepshim/grep"
+PATH="$T/grepshim:$PATH"
+ratchet
+PATH=$OLDPATH
+check 1 "$EC" "control: a pass-through grep shim leaves the scan working ($OUT)"
+has "scripts/check-docs.sh" "$OUT" "control: the touched gate script is still found"
+
+# Round 6: gitleaks and comment-hygiene files are enforced, so the label never waives them.
+seed ts
+check "1" "$(listed .gitleaks.toml | cut -f3)" "gitleaks config is enforced"
+check "1" "$(listed .claude/comment-hygiene-patterns.txt | cut -f3)" "comment-hygiene patterns are enforced"
+git_ checkout -q -B work main
+python3 - "$R/.gitleaks.toml" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+open(p, "w").write(s.replace("useDefault = true", "useDefault = false", 1))
+PY
+git_ commit -q -am "gitleaks default rules off"
+ci_gate "allow-gate-change"
+check 1 "$EC" "waiver does not clear a gitleaks finding ($OUT)"
+has "cannot waive a change to the files that enforce the gates" "$OUT" "gitleaks waiver refusal"
+git_ checkout -q -B work main
+: > "$R/.claude/comment-hygiene-patterns.txt"
+git_ commit -q -am "patterns emptied"
+ci_gate "allow-gate-change"
+check 1 "$EC" "waiver does not clear a comment-hygiene finding ($OUT)"
+has "cannot waive a change to the files that enforce the gates" "$OUT" "patterns waiver refusal"
+
+# Round 6: a listing row with fewer than three fields fails closed.
+seed ts
+git_ checkout -q -B work main
+cat > "$R/scripts/gate-ratchet.sh" <<'STUB'
+#!/usr/bin/env bash
+if [ "${1:-}" = --list-guarded ]; then printf 'guard\t.claude/gates.txt\n'; exit 0; fi
+echo "WEAKENED .claude/gates.txt: x"
+exit 1
+STUB
+git_ commit -q -am "two column runner"
+git_ checkout -q -B main work
+git_ checkout -q -B work main
+printf '# note\n' >> "$R/.claude/gates.txt"
+git_ commit -q -am "touch manifest"
+ci_gate "allow-gate-change"
+check 1 "$EC" "a two-column listing fails closed ($OUT)"
+has "fewer than three fields" "$OUT" "short row message"
+
+# Round 6: a guarded path that holds a colon and a space is matched whole.
+seed ts
+printf '#!/usr/bin/env bash\necho a\n' > "$R/.claude/hooks/a: b.sh"
+git_ add -A
+git_ commit -q -m "hook with a colon and a space"
+git_ checkout -q -B work main
+printf 'exit 0\n' >> "$R/.claude/hooks/a: b.sh"
+git_ commit -q -am "sabotage the hook"
+ci_gate "allow-gate-change"
+check 1 "$EC" "waiver does not cover a hook with a colon and a space ($OUT)"
+has "cannot waive a change to the files that enforce the gates" "$OUT" "colon path waiver refusal"
+
+# Round 6: a Node hook-manager file is guarded content, so rewriting it is a finding.
+seed ts
+mkdir -p "$R/.husky"
+printf '#!/usr/bin/env sh\nbash scripts/check-docs.sh\n' > "$R/.husky/pre-commit"
+git_ add -A
+git_ commit -q -m "hook manager file"
+check "1" "$(listed .husky/pre-commit | cut -f3)" "hook-manager file is enforced"
+check "guard" "$(listed .husky/pre-commit | cut -f1)" "hook-manager file is kind guard"
+git_ checkout -q -B work main
+printf 'exit 0\n' > "$R/.husky/pre-commit"
+git_ commit -q -am "gut the hook"
+expect 1 "hook-manager file rewritten" ".husky/pre-commit" "gate script, runner or manifest changed"
+ci_gate "allow-gate-change"
+check 1 "$EC" "waiver does not cover the hook-manager file ($OUT)"
+seed ts
+check "" "$(listed .husky/pre-commit)" "a project without the folder lists nothing"
+git_ checkout -q -B work main
+printf 'x\n' >> "$R/scripts/check-docs.sh"
+git_ commit -q -am "touch"
+expect 1 "control: a project without the folder still guards its scripts" "scripts/check-docs.sh"
 
 echo "gate-ratchet.test: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

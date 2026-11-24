@@ -41,8 +41,10 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'cobertura', 'lcov'],
       include: ['src/**/*.{ts,tsx}'],
-      // Production source only: test files and the test setup file are not measured.
-      exclude: ['**/*.{test,spec}.{ts,tsx}', 'src/test/**', '**/*.d.ts'],
+      // src/components/ui holds vendor-generated shadcn primitives, so it is not measured; hand-written code stays at the floor.
+      exclude: ['**/*.{test,spec}.{ts,tsx}', 'src/test/**', '**/*.d.ts', 'src/components/ui/**'],
+      // Global floor on every run. The ratchet gate blocks lowering it or widening exclude.
+      thresholds: { lines: 80 },
     },
   },
 });

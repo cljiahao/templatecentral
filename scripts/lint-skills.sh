@@ -1410,7 +1410,7 @@ def prop(name):
     m = re.search(rf"^{re.escape(name)}=(.*)$", props, re.M)
     return set(m.group(1).split(",")) if m else set()
 allowed = prop("sonar.test.inclusions") | prop("sonar.exclusions")
-for rel in ("vite-react/template/vite.config.ts", "nextjs/template/vitest.config.ts", "nestjs/template/vitest.config.ts"):
+for rel in ("vite-react/template/vite.config.ts", "nextjs/template/vitest.config.ts", "nestjs/template/vitest.config.mts"):
     cfg = read(rel)
     m = re.search(r"coverage:\s*\{.*?exclude:\s*\[(.*?)\]", cfg, re.S)
     if not m:

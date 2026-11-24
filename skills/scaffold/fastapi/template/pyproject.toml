@@ -42,3 +42,8 @@ markers = [
 addopts = [
     "--import-mode=importlib",
 ]
+
+[tool.coverage.report]
+# Global floor on every --cov run. The ratchet gate blocks lowering it or adding omit entries.
+fail_under = 80
+show_missing = true

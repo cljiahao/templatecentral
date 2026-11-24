@@ -20,7 +20,8 @@ LIVEPATH="$T/bin:$NODEDIR:/usr/bin:/bin"
 # seed <dir>: a fully seeded, wired project
 seed() {
   local d=$1
-  mkdir -p "$d/.claude/hooks" "$d/.lefthook" "$d/.github/workflows"
+  mkdir -p "$d/.claude/hooks" "$d/.lefthook" "$d/.github/workflows" "$d/scripts"
+  cp "$SH/template/scripts/gate-ratchet.sh" "$d/scripts/gate-ratchet.sh"
   cp -p "$SH"/template/.claude/hooks/* "$SH"/template-ts/.claude/hooks/* "$d/.claude/hooks/"
   cp -p "$SH"/template/.claude/ci-gates.sh "$SH"/template/.claude/gates.txt "$SH"/template/.claude/verify-harness.sh "$d/.claude/"
   cp "$SH/template-settings-ts/.claude/settings.json" "$d/.claude/settings.json"
@@ -38,7 +39,8 @@ MAN
   )
   (cd "$d" && git init -q && printf '#!/bin/sh\nlefthook run pre-commit\n' >.git/hooks/pre-commit \
     && printf '#!/bin/sh\nlefthook run commit-msg\n' >.git/hooks/commit-msg && printf '#!/bin/sh\nlefthook run pre-push\n' >.git/hooks/pre-push \
-    && chmod +x .git/hooks/pre-commit .git/hooks/commit-msg .git/hooks/pre-push)
+    && chmod +x .git/hooks/pre-commit .git/hooks/commit-msg .git/hooks/pre-push \
+    && git add -A && git -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q --no-verify -m seeded)
 }
 run() { PATH="$LIVEPATH" bash "$SCRIPT" "$1" 2>&1; }
 

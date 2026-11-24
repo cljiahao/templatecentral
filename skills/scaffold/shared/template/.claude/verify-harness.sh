@@ -8,7 +8,12 @@ manifest=".claude/harness.json"
 [ -f "$manifest" ] || { echo "verify-harness: $manifest missing" >&2; exit 2; }
 
 # Enforcement layer only — AGENTS.md / CLAUDE.md / *-verify skills legitimately evolve.
-guard='^(\.claude/hooks/|\.claude/settings\.json$|\.claude/(verify|regen)-harness\.sh$|\.claude/comment-hygiene-patterns\.txt$|lefthook\.yml$|\.lefthook/|\.gitleaks\.toml$|\.github/workflows/|\.claude/ci-gates\.sh$|scripts/(check-docs|test-budget|gate-ratchet|check-supply-chain|check-workflows|check-env-example|check-dockerfile|check-secret-scanner)\.sh$|\.claude/registry-hosts\.txt$|\.claude/gates\.txt$|azure-pipelines/templatecentral-gates\.yml$|azure-pipelines\.yml$)'
+# Enforcement layer: the files gate-ratchet.sh --list-guarded marks enforced; no list is kept here.
+if ! listing=$(bash scripts/gate-ratchet.sh --list-guarded HEAD 2>/dev/null) || [ -z "$listing" ]; then
+  echo "verify-harness: cannot derive the enforcement layer (scripts/gate-ratchet.sh --list-guarded HEAD failed); run it in a committed project" >&2
+  exit 2
+fi
+guarded=$(printf '%s\n' "$listing" | awk -F'\t' '$3 == 1 { print $2 }')
 
 sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1; else sha256sum "$1" | cut -d' ' -f1; fi; }
 read_manifest() {
@@ -28,7 +33,7 @@ drift=0; checked=0; unfilled=0
 while IFS=$'\t' read -r path origin; do
   [ -n "$path" ] || continue
   case "$origin" in ""|null|undefined|None|"<"*) echo "UNFILLED: $path (origin_hash is a placeholder)" >&2; unfilled=1; continue ;; esac
-  printf '%s' "$path" | grep -qE "$guard" || continue
+  grep -qxF -- "$path" <<< "$guarded" || continue
   checked=$((checked + 1))
   if [ ! -f "$path" ]; then echo "MISSING:  $path" >&2; drift=1; continue; fi
   [ "$(sha "$path")" = "$origin" ] || { echo "MODIFIED: $path" >&2; drift=1; }
@@ -38,7 +43,7 @@ done <<< "$entries"
 gates=".claude/gates.txt"
 [ -f "$gates" ] || { echo "verify-harness: $gates missing" >&2; exit 2; }
 code_of() { for f in "$@"; do if [ -f "$f" ]; then grep -vE '^[[:space:]]*#' "$f" || true; fi; done; }
-has() { printf '%s\n' "$1" | grep -qF -- "$2"; }
+has() { grep -qF -- "$2" <<< "$1"; }
 hook_text=$(code_of lefthook.yml)
 gh_text=$(code_of .github/workflows/ci.yml)
 az_text=$(code_of azure-pipelines.yml azure-pipelines/templatecentral-gates.yml)
@@ -77,7 +82,7 @@ fi
 [ "$unfilled" -eq 0 ] || { echo "❌ $manifest still has unfilled origin_hash placeholders — finish Step E" >&2; exit 2; }
 [ "$checked" -gt 0 ] || { echo "❌ verify-harness checked zero enforcement-layer entries — manifest empty or malformed" >&2; exit 2; }
 if [ "$drift" -ne 0 ]; then
-  echo "❌ harness integrity drift. If intentional, a human runs: bash .claude/regen-harness.sh" >&2
+  echo "❌ harness integrity drift. Restore each file listed above from git (git checkout <merge-base> -- <file>). If the change is intentional, a human runs: bash .claude/regen-harness.sh" >&2
   exit 1
 fi
 echo "✓ harness integrity OK ($checked enforcement files)"

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # PreToolUse(Bash) — block hook-bypass and destructive git/shell commands. Exit 2 = block.
 # Best-effort tripwire, not a security boundary; the lefthook + CI layers are the backstop.
+# A text guard cannot see variable indirection or command substitution (cat "$f", cat $(echo .env)); those stay open.
 # Fallback only: hooks may be spawned from the session's original root, not a worktree.
 orig_dir=$PWD
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || { echo "BLOCKED: block-no-verify.sh cannot cd to the project root — refusing the command." >&2; exit 2; }
@@ -26,6 +27,62 @@ cut200() { S=$1 LC_ALL=C awk 'function ucut(s, n) { if (length(s) <= n) return s
 block() { echo "$(cut200 "BLOCKED: $1")" >&2; exit 2; }
 protected='main|uat|develop'
 root=$PWD
+# Shell access to secret files: Read deny rules gate the Read tool, not cat. A read is blocked when the named file exists; a write or copy that would create one is blocked outright. Env templates stay usable.
+is_secret() {
+  local lc
+  lc=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  case "${lc##*/}" in
+    .env.example|.env.default|.env.sample|.env.template) return 1 ;;
+    .env|.env.*|*.pem|*.key|*.p12|*.pfx|credentials.json|.netrc) return 0 ;;
+  esac
+  case "$lc" in secrets|*/secrets|.secrets|*/.secrets|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) return 0 ;; esac
+  return 1
+}
+secret_block() { block "shell access to secret file '$1' is not allowed. Never read or write it; use .env.example for placeholders and ask the user for real values."; }
+writes_to_secret() {
+  local t=$1 q
+  for q in "" "\"" "'"; do
+    case "$flat" in
+      *">$q$t"*|*"> $q$t"*|*"tee $q$t"*|*"tee -a $q$t"*) return 0 ;;
+    esac
+  done
+  [[ "$flat" =~ (^|[[:space:]])(cp|mv|ln|install|touch)[[:space:]].*[[:space:]\"\']${t}[\"\']?[[:space:]]*($|[;\&\|]) ]]
+}
+secret_guard() {
+  local delim tokens tok d f p b cdt tok_d hits
+  local -a sdirs
+  flat="${cmd//\\/}"
+  flat="${flat//[\"\']/}"
+  delim="[:space:]\"'\`;|&<>()="
+  tokens=$(printf '%s' "$flat" | grep -oiE "[^$delim]*(\\.env|\\.pem|\\.key|\\.p12|\\.pfx|credentials\\.json|\\.netrc|secrets|[*?[])[^$delim]*" || true)
+  [ -n "$tokens" ] || return 0
+  sdirs=("$root")
+  [ "$orig_dir" != "$root" ] && sdirs+=("$orig_dir")
+  while IFS= read -r cdt; do
+    cdt="${cdt##*[[:space:]]}"; cdt="${cdt//[\"\']/}"; cdt="${cdt/#\~/$HOME}"
+    for b in "$root" "$orig_dir"; do
+      case "$cdt" in /*) p="$cdt" ;; *) p="$b/$cdt" ;; esac
+      [ -d "$p" ] && sdirs+=("$p")
+    done
+  done < <(printf '%s\n' "$flat" | grep -oE '(^|[;&|(]|[[:space:]])cd[[:space:]]+[^;&|()[:space:]]+' || true)
+  while IFS= read -r tok; do
+    [ -n "$tok" ] || continue
+    tok="${tok/#\~/$HOME}"
+    tok="${tok//\$\{HOME\}/$HOME}"
+    tok="${tok//\$HOME/$HOME}"
+    for d in "${sdirs[@]}"; do
+      tok_d="${tok//\$\{PWD\}/$d}"
+      tok_d="${tok_d//\$PWD/$d}"
+      hits=$(cd "$d" 2>/dev/null && compgen -G "$tok_d")
+      while IFS= read -r f; do
+        [ -n "$f" ] && is_secret "$f" && secret_block "$f"
+      done <<< "$hits"
+    done
+    if [[ "$tok" != *[*?[]* ]] && is_secret "$tok" && writes_to_secret "$tok"; then secret_block "$tok"; fi
+    if [[ "$tok" == *:* ]] && is_secret "${tok#*:}" && [[ "$flat" =~ (^|[[:space:]\;\&\|\(])git[[:space:]]+([^;&|]*[[:space:]])?(show|cat-file|archive|blame|grep|log|diff)[[:space:]] ]]; then secret_block "${tok#*:}"; fi
+  done <<< "$tokens"
+}
+secret_guard
 # Directories a bare commit/push may land on: the cwd plus literal cd targets; anything unresolved adds the project root.
 cand=("$orig_dir")
 redir=0
@@ -190,7 +247,7 @@ while IFS= read -r seg; do
         if [ -z "$cdir" ] || [[ "$x" == /* ]]; then cdir=$x; else cdir="$cdir/$x"; fi
         i=$((i + 2)); continue ;;
       -c|--config-env)
-        printf '%s' "${t[$((i + 1))]:-}" | grep -qi 'core\.hookspath' && block "'git -c core.hooksPath=…' disables the git-hook layer, the same bypass as --no-verify."
+        printf '%s' "${t[$((i + 1))]:-}" | grep -qi 'core\.hookspath' && block "'git -c core.hooksPath=…' disables the git-hook layer, the same bypass as --no-verify. Fix the failure instead."
         i=$((i + 2)); continue ;;
       --git-dir|--work-tree) redir=1; i=$((i + 2)); continue ;;
       --git-dir=*|--work-tree=*) redir=1 ;;
@@ -230,7 +287,12 @@ while IFS= read -r seg; do
         esac
       done
       branch=$(protected_branch)
-      [ -n "$branch" ] && block "direct commit to protected branch '$branch'. Create a feature branch first."
+      if [ -n "$branch" ]; then
+        if printf '%s' "$scan" | grep -qE 'git[[:space:]]+(checkout[[:space:]]+(-[bB]|--orphan)|switch[[:space:]]+(-[cC]|--create))'; then
+          block "commit chained after a branch switch while '$branch' is checked out. Run 'git checkout -b <name>' alone first, then run 'git commit' as a separate command."
+        fi
+        block "direct commit to protected branch '$branch'. Run 'git checkout -b <feature-branch>' first, then commit again."
+      fi
       ;;
     push)
       force=0; target=0; explicit=0; pos=0

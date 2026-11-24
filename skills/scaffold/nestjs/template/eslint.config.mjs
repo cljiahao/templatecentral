@@ -10,7 +10,7 @@ const sonarjsPlugin = sonarjs.configs.recommended.plugins.sonarjs;
 
 export default tseslint.config(
   {
-    ignores: ['eslint.config.mjs', 'vitest.config.ts', 'vitest.config.e2e.ts', '.claude/**'],
+    ignores: ['eslint.config.mjs', 'vitest.config.mts', 'vitest.config.e2e.mts', 'coverage/**', '.claude/**'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

@@ -142,7 +142,7 @@ GITHUB_TOKEN=your_github_token_here
 
 Do not use a fallback like `?? ''` for tokens; fail fast at startup instead.
 
-Vitest does not load `.env` — add `GITHUB_TOKEN: 'test'` to `test.env` in **both** `vitest.config.ts` and `vitest.config.e2e.ts`, or every suite importing `AppModule` fails the env check.
+Vitest does not load `.env` — add `GITHUB_TOKEN: 'test'` to `test.env` in **both** `vitest.config.mts` and `vitest.config.e2e.mts`, or every suite importing `AppModule` fails the env check.
 
 #### 5. Create the Module
 

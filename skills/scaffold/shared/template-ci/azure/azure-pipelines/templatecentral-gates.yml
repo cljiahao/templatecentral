@@ -20,6 +20,8 @@ steps:
     displayName: .env.example matches the variables the code reads
   - bash: bash .claude/ci-gates.sh dockerfile
     displayName: Dockerfile lint (digest pin, non-root USER, hadolint)
+  - bash: bash .claude/ci-gates.sh workarounds "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
+    displayName: No suppression markers, no removed covering tests
   - bash: bash .claude/ci-gates.sh changelog "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Changelog gate
     env: { LABELS: $(LABELS) }

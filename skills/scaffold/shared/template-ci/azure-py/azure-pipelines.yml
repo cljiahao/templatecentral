@@ -41,5 +41,7 @@ jobs:
       - bash: |
           set -euo pipefail
           target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}
-          pipx run "diff-cover==$(DIFF_COVER_VERSION)" coverage.xml --compare-branch="origin/${target#refs/heads/}" --fail-under=80
+          pipx run "diff-cover==$(DIFF_COVER_VERSION)" coverage.xml --compare-branch="origin/${target#refs/heads/}" --fail-under=80 | tee diff-cover.txt
         displayName: Changed-line coverage (>= 80%)
+      - bash: bash .claude/ci-gates.sh diffcover "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
+        displayName: Changed source has covered lines (fails closed on an empty report)

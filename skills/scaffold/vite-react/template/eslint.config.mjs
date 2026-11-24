@@ -9,7 +9,7 @@ import tseslint from 'typescript-eslint';
 const sonarjsPlugin = sonarjs.configs.recommended.plugins.sonarjs;
 
 export default tseslint.config(
-  { ignores: ['dist', '.claude/**'] },
+  { ignores: ['dist', 'coverage/**', '.claude/**'] },
   {
     linterOptions: {
       reportUnusedDisableDirectives: 'error',

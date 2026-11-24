@@ -65,4 +65,6 @@ template/scripts/check-workflows.sh 755 - -
 template/scripts/check-env-example.sh 755 - -
 template/scripts/check-dockerfile.sh 755 - -
 template/scripts/check-secret-scanner.sh 755 - -
+template/scripts/check-workarounds.sh 755 - -
+template/scripts/scan-secrets.sh 755 - -
 template/.claude/registry-hosts.txt 644 - -
