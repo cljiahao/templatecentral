@@ -179,13 +179,9 @@ export function ErrorFallback({ error, onReset }: ErrorFallbackProps) {
 
 Run `TC_PART=leaf TC_LEAF=add/error-handling/nextjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/error-handling/nextjs/template/` (listed in `<skill-dir>/error-handling/nextjs/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-Class-based `ErrorBoundary` for catching synchronous React render errors:
+Class-based `ErrorBoundary` for catching synchronous React render errors
 
-Copied verbatim from `<skill-dir>/error-handling/nextjs/template/src/components/layout/error-boundary.tsx` by the copy step; do not re-type it.
-
-Functional `AsyncErrorBoundary` for catching unhandled promise rejections:
-
-Copied verbatim from `<skill-dir>/error-handling/nextjs/template/src/components/layout/error-boundary-async.tsx` by the copy step; do not re-type it.
+Functional `AsyncErrorBoundary` for catching unhandled promise rejections
 
 ## Validate
 
@@ -202,5 +198,3 @@ pnpm build
 ### Next.js Error Boundary Tests
 
 > **Deps not in scaffold**: `pnpm add -D @testing-library/react @testing-library/jest-dom jsdom`. The `@vitest-environment jsdom` docblock keeps `node` as the default for API tests.
-
-Copied verbatim from `<skill-dir>/error-handling/nextjs/template/test/error-boundary.test.tsx` by the copy step; do not re-type it.

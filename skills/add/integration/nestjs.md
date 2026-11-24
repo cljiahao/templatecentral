@@ -244,10 +244,6 @@ pnpm check && pnpm build && pnpm test && pnpm test:e2e
 
 ### Rules
 
-- Use `@nestjs/axios` + `HttpModule` — not raw `axios` or `fetch`
 - Validate all external responses with Zod `safeParse` — never bare `.parse()`
 - Convert upstream failures to `BadGatewayException` / `GatewayTimeoutException`; log status and path only, never the raw error
 - Configure `HttpModule.register()` with `baseURL`, auth headers, `timeout`, and `maxRedirects: 0`. No automatic retries — add them only for idempotent GETs, with backoff
-- Export the service from the integration module so other modules can import it
-- Keep API tokens in environment variables; do not hardcode them
-- Integration modules are self-contained — each has its own module, service, and schemas

@@ -22,9 +22,7 @@ This adds `logEvent` beside `logError`, a breadcrumb buffer, and batched deliver
 
 Run `TC_PART=leaf TC_LEAF=add/logging/vite-react bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/logging/vite-react/template/` (listed in `<skill-dir>/logging/vite-react/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-An in-memory ring buffer (last 20 entries) attached to every error report. Labels are **scrubbed on the way in** — a breadcrumb is written once and read by every later report, so entry is the only place redaction holds:
-
-Copied verbatim from `<skill-dir>/logging/vite-react/template/src/lib/logging/breadcrumbs.ts` by the copy step; do not re-type it.
+An in-memory ring buffer (last 20 entries) attached to every error report. Labels are **scrubbed on the way in** — a breadcrumb is written once and read by every later report, so entry is the only place redaction holds
 
 ### 2. Extend `src/lib/errors/error-log-handler.ts`
 
@@ -66,8 +64,6 @@ console.error(`${label}:`, {
 Batched delivery to a backend `/logs` endpoint with console-JSON fallback in dev. The POST goes through `ApiClient` (`src/lib/clients/api-client.ts`, from `templatecentral:standards (full-stack-pairing)`), so it carries the session cookie and `X-CSRF-Token` once `templatecentral:add (auth)` is applied. **No paired backend** (no `api-client.ts`): drop `LogClient` and the `try` block in `flush()` and keep only the console line — logs stay local.
 
 The backend `/logs` endpoint receives attacker-controllable input: validate it with a strict schema (bounded array length and string sizes), rate-limit it, and log entries as structured fields — never interpolate them into a message string, or a crafted `label` with newlines forges log lines.
-
-Copied verbatim from `<skill-dir>/logging/vite-react/template/src/lib/logging/log-batcher.ts` by the copy step; do not re-type it.
 
 Wire `enqueueLog` into `logError` and `logEvent`:
 
@@ -125,8 +121,6 @@ export function NavigationBreadcrumbs() {
 ```
 
 ### 5. Export from `src/lib/logging/index.ts`
-
-Copied verbatim from `<skill-dir>/logging/vite-react/template/src/lib/logging/index.ts` by the copy step; do not re-type it.
 
 Also add to `src/lib/errors/index.ts`:
 

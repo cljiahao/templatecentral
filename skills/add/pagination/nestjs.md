@@ -7,11 +7,7 @@ Run `TC_PART=leaf TC_LEAF=add/pagination/nestjs bash "<skill-dir>/../scaffold/sh
 
 **1. Pagination Query DTO** (shared — every paginated module reuses it)
 
-Copied verbatim from `<skill-dir>/pagination/nestjs/template/src/common/dto/pagination.dto.ts` by the copy step; do not re-type it.
-
 **2. Pagination Service**
-
-Copied verbatim from `<skill-dir>/pagination/nestjs/template/src/common/services/pagination.service.ts` by the copy step; do not re-type it.
 
 `PaginationService` has no module — register it in each feature module that uses it. Export the module from `src/modules/index.ts` and append `ProjectsModule` to the `imports` array in `src/app.module.ts` (never replace the array):
 
@@ -252,5 +248,3 @@ The route is public as written — apply the authorization decision from `templa
 > ```
 
 ## Tests
-
-Copied verbatim from `<skill-dir>/pagination/nestjs/template/test/common/pagination.service.spec.ts` by the copy step; do not re-type it.

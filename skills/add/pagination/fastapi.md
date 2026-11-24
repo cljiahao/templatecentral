@@ -9,17 +9,11 @@ Run `TC_PART=leaf TC_LEAF=add/pagination/fastapi bash "<skill-dir>/../scaffold/s
 
 **1. Request Schema**
 
-Copied verbatim from `<skill-dir>/pagination/fastapi/template/src/api/schemas/request/pagination.py` by the copy step; do not re-type it.
-
 **2. Response Schema**
-
-Copied verbatim from `<skill-dir>/pagination/fastapi/template/src/api/schemas/response/pagination.py` by the copy step; do not re-type it.
 
 `BaseResponseSchema` serializes `has_more` as `hasMore`, matching the other stacks' envelope.
 
 **3. Pagination Helpers**
-
-Copied verbatim from `<skill-dir>/pagination/fastapi/template/src/utils/pagination.py` by the copy step; do not re-type it.
 
 **4. Service + Router**
 

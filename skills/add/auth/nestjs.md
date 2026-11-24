@@ -33,9 +33,7 @@ Run `TC_PART=leaf TC_LEAF=add/auth/nestjs TC_TREE=template bash "<skill-dir>/../
 
 #### 2. Define DTOs
 
-**`src/modules/auth/auth.dto.ts`**:
-
-Copied verbatim from `<skill-dir>/auth/nestjs/template/src/modules/auth/auth.dto.ts` by the copy step; do not re-type it.
+**`src/modules/auth/auth.dto.ts`**
 
 #### 3. Add Config
 
@@ -75,31 +73,21 @@ Do not use a fallback like `?? ''` or `|| 'change-me'` for secrets; a missing se
 
 #### 4. Create JWT Strategy
 
-**`src/modules/auth/jwt.strategy.ts`**:
-
-Copied verbatim from `<skill-dir>/auth/nestjs/template/src/modules/auth/jwt.strategy.ts` by the copy step; do not re-type it.
+**`src/modules/auth/jwt.strategy.ts`**
 
 #### 5. Create Auth Guard
 
-**`src/modules/auth/jwt-auth.guard.ts`**:
-
-Copied verbatim from `<skill-dir>/auth/nestjs/template/src/modules/auth/jwt-auth.guard.ts` by the copy step; do not re-type it.
+**`src/modules/auth/jwt-auth.guard.ts`**
 
 #### 6. Create Authorization Helpers
 
 Deny-by-default role and ownership checks. `JwtAuthGuard` says who the caller is; these decide what the caller may touch.
 
-**`src/modules/auth/roles.decorator.ts`**:
+**`src/modules/auth/roles.decorator.ts`**
 
-Copied verbatim from `<skill-dir>/auth/nestjs/template/src/modules/auth/roles.decorator.ts` by the copy step; do not re-type it.
+**`src/modules/auth/roles.guard.ts`**
 
-**`src/modules/auth/roles.guard.ts`**:
-
-Copied verbatim from `<skill-dir>/auth/nestjs/template/src/modules/auth/roles.guard.ts` by the copy step; do not re-type it.
-
-**`src/modules/auth/ownership.ts`**:
-
-Copied verbatim from `<skill-dir>/auth/nestjs/template/src/modules/auth/ownership.ts` by the copy step; do not re-type it.
+**`src/modules/auth/ownership.ts`**
 
 List `RolesGuard` after `JwtAuthGuard` so `req.user` is set before roles are checked. Use `assertOwner` on record-by-id handlers (see Rules):
 
@@ -123,21 +111,15 @@ async update(id: string, userId: string, dto: UpdateTaskDto): Promise<void> {
 
 #### 7. Create Auth Service
 
-**`src/modules/auth/auth.service.ts`**:
-
-Copied verbatim from `<skill-dir>/auth/nestjs/template/src/modules/auth/auth.service.ts` by the copy step; do not re-type it.
+**`src/modules/auth/auth.service.ts`**
 
 #### 8. Create Auth Controller
 
-**`src/modules/auth/auth.controller.ts`**:
-
-Copied verbatim from `<skill-dir>/auth/nestjs/template/src/modules/auth/auth.controller.ts` by the copy step; do not re-type it.
+**`src/modules/auth/auth.controller.ts`**
 
 #### 9. Create Auth Module
 
-**`src/modules/auth/auth.module.ts`**:
-
-Copied verbatim from `<skill-dir>/auth/nestjs/template/src/modules/auth/auth.module.ts` by the copy step; do not re-type it.
+**`src/modules/auth/auth.module.ts`**
 
 #### 10. Export from Modules Barrel
 
@@ -191,13 +173,9 @@ Vitest does not load `.env`, and `env.config.ts` now throws without `JWT_SECRET`
     env: { JWT_SECRET: 'test'.repeat(8) },
 ```
 
-**`test/auth.e2e-spec.ts`**:
+**`test/auth.e2e-spec.ts`**
 
-Copied verbatim from `<skill-dir>/auth/nestjs/template/test/auth.e2e-spec.ts` by the copy step; do not re-type it.
-
-**`test/modules/auth/authz.spec.ts`** — unit tests for the role guard and ownership check; no app boot needed:
-
-Copied verbatim from `<skill-dir>/auth/nestjs/template/test/modules/auth/authz.spec.ts` by the copy step; do not re-type it.
+**`test/modules/auth/authz.spec.ts`** — unit tests for the role guard and ownership check; no app boot needed
 
 ### Browser Client (Cookie Mode)
 
@@ -224,9 +202,7 @@ import fastifyCookie from '@fastify/cookie';
   await fastify.register(fastifyCookie);
 ```
 
-**3. `src/modules/auth/auth.cookies.ts`**:
-
-Copied verbatim from `<skill-dir>/auth/nestjs/template-cookie/src/modules/auth/auth.cookies.ts` by the copy step; do not re-type it.
+**3. `src/modules/auth/auth.cookies.ts`**
 
 **4. `src/modules/auth/jwt.strategy.ts`** — import `fromSessionCookie` from `./auth.cookies` and read Bearer first, then the cookie:
 
@@ -274,9 +250,7 @@ Copied verbatim from `<skill-dir>/auth/nestjs/template-cookie/src/modules/auth/a
 
 `/session` needs no CSRF token: its body must be JSON (Fastify answers 415 to a body with no Content-Type and hands `text/plain` to Zod as a string → 400 — the e2e test pins both), and a cross-origin JSON `fetch` must pass a CORS preflight the allowlist rejects (OWASP's custom-request-header defense). `@Throttle` applies once the Rate Limiting step below installs `@nestjs/throttler`.
 
-**7. `test/auth-cookie.e2e-spec.ts`** — calls `setupSecurity`/`setupCors` like `app.factory.ts` (suites that skip them still get a clean 401 from the guard):
-
-Copied verbatim from `<skill-dir>/auth/nestjs/template-cookie/test/auth-cookie.e2e-spec.ts` by the copy step; do not re-type it.
+**7. `test/auth-cookie.e2e-spec.ts`** — calls `setupSecurity`/`setupCors` like `app.factory.ts` (suites that skip them still get a clean 401 from the guard)
 
 ### Rate Limiting (Required for Production)
 
@@ -310,13 +284,10 @@ Then tighten only the auth endpoints: in `auth.controller.ts`, import `{ Throttl
 
 ### Rules
 
-- Never commit `JWT_SECRET` — only a placeholder in `.env.example`.
 - Hash passwords with argon2id (`argon2` package) — never store plaintext; minimum 12-character passwords.
 - Browser SPAs use cookie mode, never a `localStorage` token; Bearer is for non-browser clients.
-- `JwtStrategy.validate()`'s return becomes `req.user`; return a full user once a database exists.
 - `JwtStrategy.validate()` returns `roles: []`, so every `RolesGuard` route denies until roles are loaded. Once a database is added, load the user's roles from it there, never from the token.
 - Every record-by-id handler calls `assertOwner` (or filters by owner) first.
-- Rate limiting (`@nestjs/throttler`) is mandatory before production.
 - **TRUST_PROXY must be set when behind a reverse proxy** — `ThrottlerGuard` reads `req.ip`, which Fastify takes from `X-Forwarded-For` only with `trustProxy` (`TRUST_PROXY`); otherwise all requests share one bucket. Set comma-separated trusted CIDRs — one hop: the ALB's VPC CIDR; two hops: Traefik and ALB CIDRs. A numeric hop count trusts nothing.
 
 ### Validate

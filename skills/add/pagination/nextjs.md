@@ -24,11 +24,7 @@ Run `TC_PART=leaf TC_LEAF=add/pagination/nextjs bash "<skill-dir>/../scaffold/sh
 
 **2. Pagination Response Type**
 
-Copied verbatim from `<skill-dir>/pagination/nextjs/template/src/lib/types/pagination.ts` by the copy step; do not re-type it.
-
 **3. Pagination Helpers (Business Logic)**
-
-Copied verbatim from `<skill-dir>/pagination/nextjs/template/src/lib/pagination/pagination-service.ts` by the copy step; do not re-type it.
 
 **4. Data Access + API Route**
 
@@ -245,6 +241,4 @@ export function ProjectsList() {
 - Drive loading/disabled UI off `isFetching` for page changes; `isPending` covers only the first load
 - Validate the response with Zod `safeParse` and derive the row type from the schema — never re-declare the row shape
 - Client code throws `APIError` from `@/integrations/error` (not `@/lib/errors`), never a generic `Error`
-- Keep queries out of route handlers and fetches out of components — route → `integrations/`, component → hook → feature `api/`
 - Whitelist every sortable field before it reaches the ORM's `orderBy` — `parseSortParam` returns `null` for anything outside the list
-- Use the shadcn `Button` for pagination controls — never a raw `<button>`
