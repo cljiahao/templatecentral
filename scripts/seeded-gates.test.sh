@@ -392,8 +392,27 @@ has "src/y.pyi:1:" "$OUT" "nosonar names the .pyi file"
 hasnt "
 eslint.config.mjs:1:" "$OUT" "nosonar leaves the root eslint config alone"
 
-# ---- scan-secrets.sh needs gitleaks; without it the test says so and moves on.
-if command -v gitleaks > /dev/null 2>&1; then
+# obtain_gitleaks: gitleaks from PATH, else the pinned Linux x86_64 release from ci-gates.sh (version and sha256 read
+# from there, checked with sha256sum -c, unpacked into the temp dir). Returns 1 when it cannot be had.
+obtain_gitleaks() {
+  command -v gitleaks > /dev/null 2>&1 && return 0
+  [ "$(uname -s)" = Linux ] || return 1
+  [ "$(uname -m)" = x86_64 ] || return 1
+  command -v sha256sum > /dev/null 2>&1 || return 1
+  local ver sha
+  ver=$(sed -n 's/^ *GITLEAKS_VERSION="\(.*\)"$/\1/p' "$SH/.claude/ci-gates.sh" | head -1)
+  sha=$(sed -n 's/^ *GITLEAKS_SHA256="\(.*\)"$/\1/p' "$SH/.claude/ci-gates.sh" | head -1)
+  [ -n "$ver" ] || return 1
+  [ -n "$sha" ] || return 1
+  mkdir -p "$T/gitleaks-bin" || return 1
+  curl -fsSL -m 120 -o "$T/gitleaks.tar.gz" "https://github.com/gitleaks/gitleaks/releases/download/v${ver}/gitleaks_${ver}_linux_x64.tar.gz" || return 1
+  echo "${sha}  $T/gitleaks.tar.gz" | sha256sum -c - > /dev/null 2>&1 || { echo "seeded-gates.test: gitleaks checksum mismatch" >&2; return 1; }
+  tar -xzf "$T/gitleaks.tar.gz" -C "$T/gitleaks-bin" gitleaks || return 1
+  PATH="$T/gitleaks-bin:$PATH"
+}
+
+# ---- scan-secrets.sh needs gitleaks; on a laptop without it the test says so and moves on, in CI it fails.
+if obtain_gitleaks; then
   newrepo secret-clean
   OUT=$(cd "$R" && clean bash scripts/scan-secrets.sh git 2>&1)
   check 0 "$?" "scan-secrets passes on a clean repo"
@@ -412,7 +431,7 @@ if command -v gitleaks > /dev/null 2>&1; then
   hasnt "$key" "$OUT" "scan-secrets never prints the secret"
 else
   if [ -n "${CI:-}${GITHUB_ACTIONS:-}${TF_BUILD:-}" ]; then
-    bad "gitleaks not installed in CI: scan-secrets cases must run"
+    bad "gitleaks not installed in CI and not obtainable (pinned download failed): scan-secrets cases must run"
   else
     echo "SKIPPED: gitleaks not installed, scan-secrets cases not run"
   fi

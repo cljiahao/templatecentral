@@ -26,16 +26,35 @@ gate() {
   if [ "$rc" -eq 0 ]; then ok; else bad "$ST/$HOST $label exited $rc"; printf '%s\n' "$out" | tail -8 | sed 's/^/    /'; fi
 }
 
-# ruff_gate: ruff format --check and ruff check on the seeded FastAPI src and test; with no ruff or uvx the case is skipped locally and fails closed in CI.
+# obtain_ruff: sets RUFF_CMD to ruff from PATH, else uvx, else a pip install of the spec the seeded project pins in
+# requirements-dev.txt into the temp dir (no sudo, no account, no key). Returns 1 when none works. Tried once per run.
+RUFF_STATE=""
+RUFF_CMD=()
+obtain_ruff() {
+  if [ -n "$RUFF_STATE" ]; then [ "$RUFF_STATE" = ok ]; return; fi
+  RUFF_STATE=no
+  local spec
+  spec=$(sed -n 's/^\(ruff[<>=!~][^[:space:]#]*\).*$/\1/p' "$REPO_ROOT/skills/scaffold/fastapi/template/requirements-dev.txt" | head -1)
+  if command -v ruff > /dev/null 2>&1; then
+    RUFF_CMD=(ruff); RUFF_STATE=ok
+  elif [ -n "$spec" ] && command -v uvx > /dev/null 2>&1; then
+    RUFF_CMD=(uvx --from "$spec" ruff); RUFF_STATE=ok
+  elif [ -n "$spec" ] && command -v python3 > /dev/null 2>&1; then
+    if python3 -m pip install -q --disable-pip-version-check --target "$T/ruffpkg" "$spec" > /dev/null 2>&1 && [ -x "$T/ruffpkg/bin/ruff" ]; then
+      RUFF_CMD=("$T/ruffpkg/bin/ruff"); RUFF_STATE=ok
+    fi
+  fi
+  [ "$RUFF_STATE" = ok ]
+}
+
+# ruff_gate: ruff format --check and ruff check on the seeded FastAPI src and test; with no ruff the case is skipped locally and fails closed in CI.
 ruff_gate() {
-  local -a r
-  if command -v ruff > /dev/null 2>&1; then r=(ruff)
-  elif command -v uvx > /dev/null 2>&1; then r=(uvx --from 'ruff>=0.17.4' ruff)
-  else
+  if ! obtain_ruff; then
     if [ -n "${CI:-}${GITHUB_ACTIONS:-}${TF_BUILD:-}" ]; then bad "$ST/$HOST ruff is not available in CI, so the seeded tests were not format-checked"
-    else echo "SKIPPED: ruff and uvx are not installed, so the seeded FastAPI src and test were NOT format-checked."; fi
+    else echo "SKIPPED: ruff could not be found or installed, so the seeded FastAPI src and test were NOT format-checked."; fi
     return 0
   fi
+  local -a r=("${RUFF_CMD[@]}")
   gate ruff-format "${r[@]}" format --check src/ test/
   gate ruff-check "${r[@]}" check src/ test/
 }
