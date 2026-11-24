@@ -139,8 +139,85 @@ def conftest_context(root, rel, cache):
     return ",".join(parts)
 
 
+def binds_locally(scope, name):
+    """True when a function or lambda binds name as a parameter or local, unless it declares the name global."""
+    args = scope.args
+    params = args.posonlyargs + args.args + args.kwonlyargs + [a for a in (args.vararg, args.kwarg) if a]
+    if any(a.arg == name for a in params):
+        return True
+    if isinstance(scope, ast.Lambda):
+        return False
+    todo = list(scope.body)
+    bound = False
+    while todo:
+        n = todo.pop()
+        if isinstance(n, (ast.Global, ast.Nonlocal)) and name in n.names:
+            return False
+        if isinstance(n, FUNCS + (ast.ClassDef,)):
+            bound = bound or n.name == name
+            continue
+        if isinstance(n, ast.Name) and n.id == name and isinstance(n.ctx, (ast.Store, ast.Del)):
+            bound = True
+        if isinstance(n, ast.alias) and (n.asname or n.name.split(".")[0]) == name:
+            bound = True
+        if isinstance(n, ast.ExceptHandler) and n.name == name:
+            bound = True
+        todo.extend(ast.iter_child_nodes(n))
+    return bound
+
+
+def only_plain_reads(tree, name, target):
+    """True when every reference to the module-level name is its one assignment target or the table argument of a parametrize decorator."""
+    allowed = {id(target)}
+    for n in ast.walk(tree):
+        if isinstance(n, FUNCS + (ast.ClassDef,)):
+            for deco in n.decorator_list:
+                f = deco.func if isinstance(deco, ast.Call) else None
+                fname = f.attr if isinstance(f, ast.Attribute) else f.id if isinstance(f, ast.Name) else ""
+                if fname == "parametrize" and len(deco.args) >= 2 and isinstance(deco.args[1], ast.Name) and deco.args[1].id == name:
+                    allowed.add(id(deco.args[1]))
+    ok = [True]
+
+    def visit(n):
+        if not ok[0]:
+            return
+        if isinstance(n, ast.Name) and n.id == name and id(n) not in allowed:
+            ok[0] = False
+            return
+        if isinstance(n, FUNCS + (ast.Lambda,)):
+            outer = list(n.decorator_list) if isinstance(n, FUNCS) else []
+            outer += list(n.args.defaults) + [d for d in n.args.kw_defaults if d is not None]
+            for o in outer:
+                visit(o)
+            if not binds_locally(n, name):
+                for b in (n.body if isinstance(n.body, list) else [n.body]):
+                    visit(b)
+            return
+        if isinstance(n, ast.ClassDef):
+            for o in list(n.decorator_list) + list(n.bases) + [k.value for k in n.keywords]:
+                visit(o)
+            class_binds = any(
+                isinstance(x, ast.Name) and x.id == name and isinstance(x.ctx, ast.Store)
+                for st in n.body if not isinstance(st, FUNCS + (ast.ClassDef,))
+                for x in ast.walk(st)
+            )
+            for st in n.body:
+                if not class_binds or isinstance(st, FUNCS + (ast.ClassDef,)):
+                    visit(st)
+            return
+        if isinstance(n, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+            if any(isinstance(x, ast.Name) and x.id == name for g in n.generators for x in ast.walk(g.target)):
+                visit(n.generators[0].iter)
+                return
+        for kid in ast.iter_child_nodes(n):
+            visit(kid)
+
+    visit(tree)
+    return ok[0]
+
+
 def module_table(tree, name):
-    """The list or tuple literal a module-level name is assigned once, or None."""
+    """The list or tuple literal a module-level name is assigned once and only read afterwards, or None."""
     hits = [st for st in tree.body if name in bound_names(st)]
     if len(hits) != 1:
         return None
@@ -148,6 +225,8 @@ def module_table(tree, name):
     value = st.value if isinstance(st, (ast.Assign, ast.AnnAssign)) else None
     targets = st.targets if isinstance(st, ast.Assign) else [st.target] if isinstance(st, ast.AnnAssign) else []
     if len(targets) != 1 or not isinstance(targets[0], ast.Name) or not isinstance(value, (ast.List, ast.Tuple)):
+        return None
+    if not only_plain_reads(tree, name, targets[0]):
         return None
     return value.elts
 

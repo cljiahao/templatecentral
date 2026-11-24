@@ -18,6 +18,7 @@
 # A case that passes a named handler the same file does not define (it('a', handler)) is counted and gets a NOTE.
 # Known limits, accepted: a no-op statement or a reordered body defeats rule 1, and the same shape split across files
 #   defeats rule 2. The check finds copy-paste, not every semantic duplicate.
+# Known limit: test files inside a nested git repository or submodule are not checked; a NOTE names each such folder.
 # Files: in a git work tree, what git tracks plus what it does not ignore; elsewhere everything but node_modules and virtual
 #   environments, with a NOTE that build output was not filtered.
 # Helpers print one record per case: kind, file, line, token count, exact key, shape key (tab-separated).
@@ -94,7 +95,7 @@ resolve_link() {
 # (ignored build output), in one pass over both lists with no process per file. Adds the count git dropped to ndropped.
 # A name with a tab or newline would break the tab-separated records: that stops the run.
 filter_list() {
-  local f dir skip v before after
+  local f dir skip v before after nn nsum=0
   while IFS= read -r -d '' f; do
     case "$f" in
       *$'\t'* | *$'\n'*) die "a test file name holds a tab or newline: rename it ($(printf '%s' "$f" | tr '\t\n' '??'))" ;;
@@ -107,12 +108,18 @@ filter_list() {
     [ "$skip" -eq 1 ] || printf '%s\n' "$f"
   done < "$1" > "$wd/cand"
   if [ "$in_git" -eq 1 ]; then
+    while IFS= read -r v; do
+      dir=${v%/.git}
+      nn=$(TC_PREFIX="$dir/" awk 'BEGIN { p = ENVIRON["TC_PREFIX"]; n = length(p) } substr($0, 1, n) == p { c++ } END { print c + 0 }' "$wd/cand")
+      nsum=$((nsum + nn))
+      [ "$nn" -eq 0 ] || printf '%s\t%s\n' "${dir#"$root"/}" "$nn" >> "$wd/nested.cnt"
+    done < "$wd/nested.dirs"
     before=$(awk 'END { print NR }' "$wd/cand")
     TC_ROOT_PREFIX="$root/" awk 'BEGIN { pre = ENVIRON["TC_ROOT_PREFIX"]; n = length(pre) }
       NR == FNR { g[$0] = 1; next }
       substr($0, 1, n) == pre && (substr($0, n + 1) in g) { print }' "$wd/gitlist" "$wd/cand" > "$wd/cand.git" || die "cannot compare the file list with git's"
     after=$(awk 'END { print NR }' "$wd/cand.git")
-    ndropped=$((ndropped + before - after))
+    ndropped=$((ndropped + before - after - nsum))
     tr '\n' '\0' < "$wd/cand.git" > "$2"
   else
     tr '\n' '\0' < "$wd/cand" > "$2"
@@ -157,14 +164,29 @@ declared_tests() {
 : > "$wd/notes"
 in_git=0
 ndropped=0
-if command -v git > /dev/null 2>&1 && [ "$(git -C "$root" rev-parse --is-inside-work-tree 2> /dev/null)" = true ]; then
+: > "$wd/nested.dirs"
+: > "$wd/nested.cnt"
+gitrc=1
+gitout=
+if command -v git > /dev/null 2>&1; then
+  gitout=$(git -C "$root" rev-parse --is-inside-work-tree 2> "$wd/git.err")
+  gitrc=$?
+  # Only "not a git repository" with no GIT_DIR set means a plain folder; any other failure (a broken GIT_DIR, unsafe
+  # ownership, a corrupt repository) stops the run instead of falling back to reading everything.
+  if [ "$gitrc" -ne 0 ] && { [ -n "${GIT_DIR:-}" ] || ! grep -q 'not a git repository' "$wd/git.err"; }; then
+    die "git could not tell whether $root is a work tree ($(head -n 1 "$wd/git.err")): fix the git setup or unset GIT_DIR, then run again"
+  fi
+fi
+if [ "$gitrc" -eq 0 ] && [ "$gitout" = true ]; then
   in_git=1
+  find "$root" -mindepth 2 -name node_modules -prune -o -name .git -print 2> /dev/null | sort > "$wd/nested.dirs" || die "cannot walk $root"
   git -C "$root" ls-files -z -co --exclude-standard 2> /dev/null | tr '\0' '\n' > "$wd/gitlist" || die "cannot list the files of the git work tree $root"
 else
   printf 'NOTE build output was not filtered because the project is not a git repository: compiled copies of tests are read too.\n' >> "$wd/notes"
 fi
 filter_list "$wd/ts.raw" "$wd/ts.kept"
 filter_list "$wd/py.raw" "$wd/py.kept"
+awk -F '\t' '{ c[$1] += $2; if (!($1 in o)) { o[$1] = ++n; k[n] = $1 } } END { for (i = 1; i <= n; i++) printf "NOTE %s: nested git repository, %d test files under it were not checked (git lists only the outer repository); run the check inside it.\n", k[i], c[k[i]] }' "$wd/nested.cnt" >> "$wd/notes"
 # Paths of the regular test files first, so a symlink to one of them is skipped, not compared with itself.
 : > "$wd/real"
 for kept in "$wd/ts.kept" "$wd/py.kept"; do

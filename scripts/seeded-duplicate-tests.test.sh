@@ -790,10 +790,85 @@ verdict 0 "ts const table changed by push"
 tsdecl "const T = [[1, 1], [1, 1]]; T[1] = [2, 2];"
 verdict 0 "ts const table changed by index assignment"
 tsdecl "let T = [[1, 1], [1, 1]];"
-verdict 0 "ts let table never changed is still not row-checked"
+verdict 1 "ts let table never written is row-checked"
+tsdecl "var T = [[1, 1], [1, 1]];"
+verdict 1 "ts var table never written is row-checked"
 tsdecl "const T = [[1, 1], [1, 1]]; const n = T.length;"
 verdict 1 "ts clean control: const table only read still repeats a row"
 has "the parameter table repeats a row" "$OUT" "ts const table only read: flagged"
+
+# Round 6, major 1: a table is resolved only when every reference is a plain read (the declaration, each(T), T.length).
+for form in "Object.assign(T, [[1, 1], [2, 2]]);" "mut(T);" "const A = T; A.push([2, 2]);" "T['push']([2, 2]);" \
+  "Array.prototype.push.call(T, [2, 2]);" "T[1][0] = 5;" "T[1].push(9);" "[T[0], T[1]] = [[1, 2], [3, 4]];" \
+  "Object.defineProperty(T, 1, { value: [2, 2] });" "export { T };" "T.length = 1;" "const { 0: z } = T;"; do
+  tsdecl "const T = [[1, 1], [1, 1]]; $form"
+  verdict 0 "ts table with another reference is not resolved: $form"
+done
+tsdecl "let T = [[1, 1], [1, 1]]; Object.assign(T, [[1, 1], [2, 2]]);"
+verdict 0 "ts let table with a call argument is not resolved"
+tsdecl "const T = [[1, 1], [1, 1]]; function g() { const T = []; T.push(1); } function h(T) { T.push(2); } const o = { T: 1 }; const n = o.T;"
+verdict 1 "ts shadowed names and property names do not switch the row check off"
+tsdecl "const T = [[1, 2], [3, 4]]; function g() { const T = [[1, 1], [1, 1]]; return T.length; }"
+verdict 0 "ts an unrelated shadowing table does not switch the row check on for the real one"
+tsdecl "const T = [[1, 1], [1, 1]]; function g() { T.push([2, 2]); }"
+verdict 0 "ts a write in another function counts"
+tsdecl "const T = [[1, 1], [1, 1]]; const n = (T as const).length;"
+verdict 1 "ts a wrapped plain read is still a plain read"
+
+# Round 6, major 1, Python: the same inverted rule for a module-level table.
+pyref() { # pyref <extra text after the constant> — one parametrize over ROWS
+  printf 'import pytest\nfrom f import f\n\nROWS = [1, 1]\n%s\n\n\n@pytest.mark.parametrize("x", ROWS)\ndef test_a(x):\n    r = f(x)\n    assert r.a == 2\n    assert r.b == 3\n' "$1" > "$P/test_a.py"
+}
+newp
+pyref ""
+verdict 1 "py table only read repeats a row"
+pyref "ROWS.append(2)"
+verdict 0 "py table changed by a method call is not resolved"
+pyref "mut(ROWS)"
+verdict 0 "py table passed to a call is not resolved"
+pyref "ALIAS = ROWS"
+verdict 0 "py table aliased is not resolved"
+pyref "ROWS[1] = 2"
+verdict 0 "py table changed by index assignment is not resolved"
+pyref "def g():
+    global ROWS
+    ROWS = [1, 2]"
+verdict 0 "py table written through global is not resolved"
+pyref "def g(ROWS):
+    ROWS.append(2)"
+verdict 1 "py a parameter named like the table does not switch the row check off"
+pyref "def g():
+    ROWS = []
+    ROWS.append(2)"
+verdict 1 "py a local named like the table does not switch the row check off"
+
+# Round 6, minor 2: test files inside a nested git repository are not checked, and the run says so.
+newp
+ts_case "$P/a.test.ts" "" 2
+ts_case "$P/vendor/lib/b.test.ts" "" 2
+ts_case "$P/vendor/lib/c.test.ts" "" 2
+git init -q "$P/vendor/lib"
+verdict 0 "nested git repository holds duplicates"
+has "NOTE vendor/lib: nested git repository, 2 test files under it were not checked" "$OUT" "nested git repository: NOTE names the folder and the count"
+ts_case "$P/vendor/lib/c.test.ts" "" 2
+rm -rf "$P/vendor/lib/.git"
+verdict 1 "clean control: without the nested repository the duplicates are found"
+lacks "nested git repository" "$OUT" "no nested repository: no NOTE"
+newp
+ts_case "$P/vendor/lib/b.test.ts" "" 2
+git init -q "$P/vendor/lib"
+verdict 0 "every test file in a nested repository"
+has "nested git repository, 1 test files under it" "$OUT" "every test file in a nested repository: NOTE, not an ignore-rule failure"
+
+# Round 6, minor 3: git failing for another reason than "not a git repository" stops the run.
+newp
+ts_case "$P/a.test.ts" "" 2
+ts_case "$P/b.test.ts" "" 2
+OUT=$(GIT_DIR="$T/no-such-git-dir" bash "$CHECK" "$P" 2>&1)
+check 2 "$?" "broken GIT_DIR: exit"
+has "git could not tell whether" "$OUT" "broken GIT_DIR: names the cause"
+rm -rf "$P/.git"
+verdict 1 "clean control: a plain folder without git is still read"
 
 # Round 5, item 3: a project path that is a symlink is followed.
 newp
@@ -837,15 +912,28 @@ cpu() { # cpu <dir> — prints "user sys", output of the check in $T/time.out
 under() { # under <seconds> <"user sys">
   printf '%s\n' "$2" | awk -v max="$1" '{ print ($1 + $2 < max) ? "yes" : "no" }'
 }
-# Round 5, item 1: the git file list is intersected in one pass, with no process per test file. 1500 one-case files;
-# one grep per file costs about 7 s of CPU time here, one pass about 2.6 s.
-newp
-mkdir -p "$P/src"
-awk 'BEGIN { for (i = 1; i <= 1500; i++) { out = sprintf("%s/src/t%d.test.ts", ARGV[1], i); printf "import { expect, it } from \"vitest\";\nit(\"c\", () => {\n  expect(f%d(1)).toBe(%d);\n});\n", i, i > out; close(out) } }' "$P"
-CPU=$(cpu "$P")
-has "ok, 1500 test cases compared" "$(cat "$T/time.out")" "1500 files: all compared"
-check yes "$(under 5 "$CPU")" "1500 test files in a git work tree take under 5 seconds of CPU time (user+sys: $CPU)"
-echo "1500 files, git list, CPU time (user sys): $CPU"
+# Round 5, item 1 and round 6, minor 4: the git file list is intersected in one pass. Structural assertion: the number of
+# external commands the check starts must not grow with the number of test files (shims count every start).
+shim_count() { # shim_count <files> — prints the number of shimmed commands started on a project of that many test files
+  local n=$1 tool real
+  newp
+  mkdir -p "$P/src" "$T/shims"
+  rm -f "$T/shims/"* "$T/shim.count"
+  : > "$T/shim.count"
+  for tool in grep awk tr sort find readlink git cat head sed cut wc; do
+    real=$(command -v "$tool") || continue
+    printf '#!/bin/sh\necho x >> "%s"\nexec "%s" "$@"\n' "$T/shim.count" "$real" > "$T/shims/$tool"
+    chmod +x "$T/shims/$tool"
+  done
+  awk -v n="$n" 'BEGIN { for (i = 1; i <= n; i++) { out = sprintf("%s/src/t%d.test.ts", ARGV[1], i); printf "import { expect, it } from \"vitest\";\nit(\"c\", () => {\n  expect(f%d(1)).toBe(%d);\n});\n", i, i > out; close(out) } }' "$P"
+  OUT=$(PATH="$T/shims:$PATH" bash "$CHECK" "$P" 2>&1)
+  has "ok, $n test cases compared" "$OUT" "$n files: all compared"
+  awk 'END { print NR }' "$T/shim.count"
+}
+SMALL=$(shim_count 50)
+LARGE=$(shim_count 400)
+check "$SMALL" "$LARGE" "external commands started: 50 files $SMALL, 400 files $LARGE (must not grow with the file count)"
+case "$SMALL" in '' | 0) FAIL=$((FAIL + 1)); echo "FAIL: shims counted nothing" ;; *) PASS=$((PASS + 1)) ;; esac
 
 P=$(mktemp -d "$T/p.XXXXXX")
 mkdir -p "$P/node_modules" "$P/pytests"

@@ -338,34 +338,43 @@ const analyse = (file, text, ts) => {
   };
   const isHolder = (node) => ts.isSourceFile(node) || ts.isBlock(node) || ts.isModuleBlock(node);
 
-  // True when the file changes the array a name holds: an assignment, an index or property write, ++/--, delete, or a mutating method call.
-  const MUTATORS = new Set(['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse', 'fill', 'copyWithin']);
-  const isWrite = (n) => {
-    const par = n.parent;
-    if (!par) return false;
-    if (ts.isBinaryExpression(par) && par.left === n) return par.operatorToken.kind >= K.FirstAssignment && par.operatorToken.kind <= K.LastAssignment;
-    if ((ts.isPrefixUnaryExpression(par) || ts.isPostfixUnaryExpression(par)) && (par.operator === K.PlusPlusToken || par.operator === K.MinusMinusToken)) return true;
-    return ts.isDeleteExpression(par) && par.expression === n;
+  // A table resolves only when every reference in its scope is a plain read: the declaration, each(T) or for(T), T.length.
+  const wrapperKinds = (n) => ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isNonNullExpression(n) || ts.isTypeAssertionExpression(n);
+  const bindsLexically = (st, name) => boundNames(st).has(name) && !(ts.isVariableStatement(st) && !(st.declarationList.flags & ts.NodeFlags.BlockScoped));
+  const rebindsName = (n, name) => {
+    if (isFunctionLike(n) || ts.isFunctionDeclaration(n) || ts.isMethodDeclaration(n) || ts.isConstructorDeclaration(n)) return n.parameters.some((param) => boundIn(param.name).has(name));
+    if (ts.isBlock(n) || ts.isModuleBlock(n)) return n.statements.some((st) => bindsLexically(st, name));
+    if (ts.isForStatement(n) || ts.isForInStatement(n) || ts.isForOfStatement(n)) {
+      return !!n.initializer && ts.isVariableDeclarationList(n.initializer) && !!(n.initializer.flags & ts.NodeFlags.BlockScoped) && n.initializer.declarations.some((d) => boundIn(d.name).has(name));
+    }
+    if (ts.isCatchClause(n)) return !!n.variableDeclaration && boundIn(n.variableDeclaration.name).has(name);
+    return false;
   };
-  const mutated = (name, decl) => {
-    let hit = false;
+  const onlyPlainReads = (name, decl, root) => {
+    let ok = true;
     const walk = (n) => {
-      if (hit) return;
+      if (!ok) return;
+      if (n !== root && rebindsName(n, name)) return;
       if (ts.isIdentifier(n) && n.text === name && n !== decl.name) {
         const par = n.parent;
-        if (isWrite(n)) hit = true;
-        else if (par && (ts.isElementAccessExpression(par) || ts.isPropertyAccessExpression(par)) && par.expression === n) {
-          if (isWrite(par)) hit = true;
-          else if (ts.isPropertyAccessExpression(par) && MUTATORS.has(par.name.text) && par.parent && ts.isCallExpression(par.parent) && par.parent.expression === par) hit = true;
+        if ((ts.isPropertyAccessExpression(par) && par.name === n) || (ts.isPropertyAssignment(par) && par.name === n)) {
+          // a property name, not a reference
+        } else {
+          let top = n;
+          while (top.parent && wrapperKinds(top.parent) && top.parent.expression === top) top = top.parent;
+          const up = top.parent;
+          const isEachArg = up && ts.isCallExpression(up) && up.arguments.includes(top) && ts.isPropertyAccessExpression(up.expression) && (up.expression.name.text === 'each' || up.expression.name.text === 'for');
+          const isLength = up && ts.isPropertyAccessExpression(up) && up.expression === top && up.name.text === 'length' && !(up.parent && ts.isBinaryExpression(up.parent) && up.parent.left === up && up.parent.operatorToken.kind >= K.FirstAssignment && up.parent.operatorToken.kind <= K.LastAssignment) && !(up.parent && (ts.isPrefixUnaryExpression(up.parent) || ts.isPostfixUnaryExpression(up.parent) || ts.isDeleteExpression(up.parent)));
+          if (!isEachArg && !isLength) ok = false;
         }
       }
       ts.forEachChild(n, walk);
     };
-    walk(sf);
-    return hit;
+    walk(root);
+    return ok;
   };
 
-  // The array literal an identifier names in the nearest enclosing scope, or null unless exactly one same-file array literal in a const never changed.
+  // The array literal an identifier names in the nearest enclosing scope, or null unless one same-file array literal that is only read.
   const resolveTable = (id, from) => {
     for (let p = from.parent; p; p = p.parent) {
       if ((isFunctionLike(p) || ts.isFunctionDeclaration(p)) && p.parameters.some((param) => boundIn(param.name).has(id.text))) return null;
@@ -375,7 +384,12 @@ const analyse = (file, text, ts) => {
       if (hits.length > 1 || !ts.isVariableStatement(hits[0])) return null;
       const decls = hits[0].declarationList.declarations.filter((d) => boundIn(d.name).has(id.text));
       if (decls.length !== 1 || !ts.isIdentifier(decls[0].name) || !decls[0].initializer) return null;
-      if (!(hits[0].declarationList.flags & ts.NodeFlags.Const) || mutated(id.text, decls[0])) return null;
+      if (hits[0].modifiers && hits[0].modifiers.some((m) => m.kind === K.ExportKeyword)) return null;
+      let root = p;
+      if (!(hits[0].declarationList.flags & ts.NodeFlags.BlockScoped)) {
+        while (root.parent && !isFunctionLike(root) && !ts.isFunctionDeclaration(root) && !ts.isSourceFile(root)) root = root.parent;
+      }
+      if (!onlyPlainReads(id.text, decls[0], root)) return null;
       const init = unwrap(decls[0].initializer);
       return ts.isArrayLiteralExpression(init) ? init : null;
     }
