@@ -1294,7 +1294,7 @@ PY
   )
 }
 
-# The limit is four times the cost on 300 files, never below 300 centiseconds, so a slower runner raises it; a linear scan stays far under it and the old quadratic scan (660 centiseconds on 3000 files) does not.
+# The limit is four times the cost on 300 files, never below 300 centiseconds, so a slower runner raises it; a linear scan stays far under it and a quadratic scan does not.
 seed ts
 mkdir -p "$R/src/a" "$R/src/b" "$R/src/c"
 for i in $(seq 1 100); do
@@ -1317,6 +1317,133 @@ CPU_LIMIT=$((CPU_SMALL * 4))
 if [[ "$CPU_LIMIT" -lt 300 ]]; then CPU_LIMIT=300; fi
 if [[ "$CPU" -le "$CPU_LIMIT" ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: list-guarded on 3000 files used ${CPU} centiseconds of CPU, limit ${CPU_LIMIT} (300 files used ${CPU_SMALL})"; fi
 echo "list-guarded CPU: 300 files ${CPU_SMALL} cs, 3000 files ${CPU} cs, limit ${CPU_LIMIT} cs"
+
+# Round 6: a base package.json that cannot be parsed fails the scan, it never shrinks the guarded set.
+seed ts
+printf '#!/usr/bin/env bash\necho run\n' > "$R/scripts/run-tests.sh"
+git_ add -A
+git_ commit -q -m "runner"
+base_edit package.json '"test:ci": "vitest --run --coverage",' '"test:ci": "vitest --run --coverage",
+    "x\\y": "1",
+    "test:unit": "bash scripts/run-tests.sh",'
+git_ checkout -q -B work main
+python3 - "$R/package.json" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+s = s.replace('    "x\\\\y": "1",\n', '', 1)
+open(p, "w").write(s)
+PY
+printf 'exit 0\n' >> "$R/scripts/run-tests.sh"
+git_ commit -q -am "fix package.json and gut the runner"
+expect 2 "unparseable base package.json" "cannot derive the guarded set"
+LISTRC=$(cd "$R" && git checkout -q main && bash scripts/gate-ratchet.sh --list-guarded HEAD >/dev/null 2>&1; echo $?)
+check 2 "$LISTRC" "--list-guarded on an unparseable package.json exits 2"
+seed ts
+printf '#!/usr/bin/env bash\necho run\n' > "$R/scripts/run-tests.sh"
+git_ add -A
+git_ commit -q -m "runner"
+base_edit package.json '"test:ci": "vitest --run --coverage",' '"test:ci": "vitest --run --coverage",
+    "test:unit": "bash scripts/run-tests.sh",'
+git_ checkout -q -B work main
+printf 'exit 0\n' >> "$R/scripts/run-tests.sh"
+git_ commit -q -am "gut the runner"
+expect 1 "control: parseable package.json keeps the runner guarded" "scripts/run-tests.sh" "gate script, runner or manifest changed"
+
+# Round 6: a grep that fails with a status above 1 fails the scan with exit 2.
+seed ts
+git_ checkout -q -B work main
+printf 'x\n' >> "$R/scripts/check-docs.sh"
+git_ commit -q -am "touch a script"
+mkdir -p "$T/grepshim"
+REALGREP=$(command -v grep)
+printf '#!/bin/sh\ncase "$*" in *"[.]md$"*) exit 2 ;; esac\nexec %s "$@"\n' "$REALGREP" > "$T/grepshim/grep"
+chmod +x "$T/grepshim/grep"
+OLDPATH=$PATH
+PATH="$T/grepshim:$PATH"
+ratchet
+PATH=$OLDPATH
+check 2 "$EC" "a grep that fails with status 2 fails the scan ($OUT)"
+has "cannot derive the guarded set" "$OUT" "grep failure message"
+printf '#!/bin/sh\nexec %s "$@"\n' "$REALGREP" > "$T/grepshim/grep"
+PATH="$T/grepshim:$PATH"
+ratchet
+PATH=$OLDPATH
+check 1 "$EC" "control: a pass-through grep shim leaves the scan working ($OUT)"
+has "scripts/check-docs.sh" "$OUT" "control: the touched gate script is still found"
+
+# Round 6: gitleaks and comment-hygiene files are enforced, so the label never waives them.
+seed ts
+check "1" "$(listed .gitleaks.toml | cut -f3)" "gitleaks config is enforced"
+check "1" "$(listed .claude/comment-hygiene-patterns.txt | cut -f3)" "comment-hygiene patterns are enforced"
+git_ checkout -q -B work main
+python3 - "$R/.gitleaks.toml" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+open(p, "w").write(s.replace("useDefault = true", "useDefault = false", 1))
+PY
+git_ commit -q -am "gitleaks default rules off"
+ci_gate "allow-gate-change"
+check 1 "$EC" "waiver does not clear a gitleaks finding ($OUT)"
+has "cannot waive a change to the files that enforce the gates" "$OUT" "gitleaks waiver refusal"
+git_ checkout -q -B work main
+: > "$R/.claude/comment-hygiene-patterns.txt"
+git_ commit -q -am "patterns emptied"
+ci_gate "allow-gate-change"
+check 1 "$EC" "waiver does not clear a comment-hygiene finding ($OUT)"
+has "cannot waive a change to the files that enforce the gates" "$OUT" "patterns waiver refusal"
+
+# Round 6: a listing row with fewer than three fields fails closed.
+seed ts
+git_ checkout -q -B work main
+cat > "$R/scripts/gate-ratchet.sh" <<'STUB'
+#!/usr/bin/env bash
+if [ "${1:-}" = --list-guarded ]; then printf 'guard\t.claude/gates.txt\n'; exit 0; fi
+echo "WEAKENED .claude/gates.txt: x"
+exit 1
+STUB
+git_ commit -q -am "two column runner"
+git_ checkout -q -B main work
+git_ checkout -q -B work main
+printf '# note\n' >> "$R/.claude/gates.txt"
+git_ commit -q -am "touch manifest"
+ci_gate "allow-gate-change"
+check 1 "$EC" "a two-column listing fails closed ($OUT)"
+has "fewer than three fields" "$OUT" "short row message"
+
+# Round 6: a guarded path that holds a colon and a space is matched whole.
+seed ts
+printf '#!/usr/bin/env bash\necho a\n' > "$R/.claude/hooks/a: b.sh"
+git_ add -A
+git_ commit -q -m "hook with a colon and a space"
+git_ checkout -q -B work main
+printf 'exit 0\n' >> "$R/.claude/hooks/a: b.sh"
+git_ commit -q -am "sabotage the hook"
+ci_gate "allow-gate-change"
+check 1 "$EC" "waiver does not cover a hook with a colon and a space ($OUT)"
+has "cannot waive a change to the files that enforce the gates" "$OUT" "colon path waiver refusal"
+
+# Round 6: a Node hook-manager file is guarded content, so rewriting it is a finding.
+seed ts
+mkdir -p "$R/.husky"
+printf '#!/usr/bin/env sh\nbash scripts/check-docs.sh\n' > "$R/.husky/pre-commit"
+git_ add -A
+git_ commit -q -m "hook manager file"
+check "1" "$(listed .husky/pre-commit | cut -f3)" "hook-manager file is enforced"
+check "guard" "$(listed .husky/pre-commit | cut -f1)" "hook-manager file is kind guard"
+git_ checkout -q -B work main
+printf 'exit 0\n' > "$R/.husky/pre-commit"
+git_ commit -q -am "gut the hook"
+expect 1 "hook-manager file rewritten" ".husky/pre-commit" "gate script, runner or manifest changed"
+ci_gate "allow-gate-change"
+check 1 "$EC" "waiver does not cover the hook-manager file ($OUT)"
+seed ts
+check "" "$(listed .husky/pre-commit)" "a project without the folder lists nothing"
+git_ checkout -q -B work main
+printf 'x\n' >> "$R/scripts/check-docs.sh"
+git_ commit -q -am "touch"
+expect 1 "control: a project without the folder still guards its scripts" "scripts/check-docs.sh"
 
 echo "gate-ratchet.test: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]
