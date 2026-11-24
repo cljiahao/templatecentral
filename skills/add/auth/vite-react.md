@@ -298,4 +298,5 @@ export function SignOutButton() {
 
 - Do not store tokens in `localStorage`, where any injected script can read them; use HttpOnly cookies (set by the backend) or in-memory state
 - Call the backend through `ApiClient` subclasses (Step 3), never a raw `fetch` — it is the one place that sends `credentials: 'include'` and, on every non-GET, `X-CSRF-Token`. The auth service's own three calls are the only exception
+- Redirect to `/login` on 401 — `ProtectedRoute` covers navigation; API calls must handle 401 too
 - Role and ownership checks in the SPA only hide UI. The API must enforce them on every request

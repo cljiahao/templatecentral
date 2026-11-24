@@ -258,7 +258,7 @@ These decide what the caller may touch; both deny by default. `user.role` (Step 
 
 **`src/lib/authz.ts`**
 
-Use `isOwner` on record-by-id pages, actions and handlers. Another user's record gets the same 404 as a missing one, so ids cannot be probed:
+`session` below is `await auth.api.getSession({ headers: await headers() })`. Use `isOwner` on record-by-id pages, actions and handlers. Another user's record gets the same 404 as a missing one, so ids cannot be probed:
 
 ```tsx
 // Server Component page

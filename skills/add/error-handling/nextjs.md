@@ -195,6 +195,6 @@ pnpm test
 pnpm build
 ```
 
-### Next.js Error Boundary Tests
+### Next.js Error Boundary Tests (`test/error-boundary.test.tsx`)
 
 > **Deps not in scaffold**: `pnpm add -D @testing-library/react @testing-library/jest-dom jsdom`. The `@vitest-environment jsdom` docblock keeps `node` as the default for API tests.

@@ -122,7 +122,7 @@ export function NavigationBreadcrumbs() {
 
 ### 5. Export from `src/lib/logging/index.ts`
 
-Also add to `src/lib/errors/index.ts`:
+The logging barrel is copied. Also add to `src/lib/errors/index.ts`:
 
 ```ts
 export { logEvent } from './error-log-handler';

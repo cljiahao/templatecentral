@@ -22,9 +22,9 @@ export type PaginationParams = z.infer<typeof paginationSchema>;
 
 Run `TC_PART=leaf TC_LEAF=add/pagination/nextjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/pagination/nextjs/template/` (listed in `<skill-dir>/pagination/nextjs/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**2. Pagination Response Type**
+**2. Pagination Response Type** (`src/lib/types/pagination.ts`)
 
-**3. Pagination Helpers (Business Logic)**
+**3. Pagination Helpers (Business Logic)** (`src/lib/pagination/pagination-service.ts`)
 
 **4. Data Access + API Route**
 

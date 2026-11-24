@@ -5,7 +5,7 @@
 
 Run `TC_PART=leaf TC_LEAF=add/pagination/vite-react bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/pagination/vite-react/template/` (listed in `<skill-dir>/pagination/vite-react/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**1. Pagination Hook**
+**1. Pagination Hook** (`src/hooks/use-pagination.ts`)
 
 **2. Export from the hooks barrel**
 
