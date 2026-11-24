@@ -12,7 +12,7 @@ Goal: bring an existing project up to the templateCentral standard in one run: m
 |---|---|---|
 | Baseline | no-marker path, after Phase 1 | `general/quality-baseline.md` |
 | Quality pass | only on a yes to its question | `general/quality-baseline.md`, `general/quality-pass.md`, `../test/implementation.md`, `../standards/code-standards/comments.md` |
-| Phase 4 | full seed (Phase 2 choice A, or Phase 0 seed) | `general/phase-4-upgrade.md`, then `../scaffold/shared/` `harness-kit.md`, `<variant-file>`, `harness-kit-enforcement.md`, `harness-kit-finalize.md`, `documentation-kit.md` |
+| Phase 4 | full seed (Phase 2 choice A, or Phase 0 seed) | `general/phase-4-upgrade.md`, then `../scaffold/shared/harness-kit.md`, `shared/<variant-file>` (`harness-kit-ts.md` for nestjs, nextjs, vite-react; `harness-kit-fastapi.md` for fastapi; load only that one), `shared/harness-kit-enforcement.md`, `shared/harness-kit-finalize.md`, `shared/documentation-kit.md` |
 | Phase 5 | health check 5a–5c; 5d re-sync only if approved | `general/phase-5-health-check.md`; for 5d also the five kit files Phase 4 loads |
 | Defect notes | after the defect report | `general/UPGRADE-NOTES.md` |
 
