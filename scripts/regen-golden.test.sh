@@ -95,8 +95,17 @@ check 0 "$(find "$S/tests/golden" -name '*.regen.*' | wc -l | tr -d ' ')" "term_
 regen --write
 check 0 "$EC" "after_failures: a clean run writes the rest ($OUT)"
 
-# with moved.d empty, --fences lists the snapshot change in a dry run and writes it with --write
-rm -f "$S"/tests/golden/fences/moved.d/*.tsv
+# with moved.d empty, a deleted.d row still refuses --fences
+rm -f "$S"/tests/golden/fences/moved.d/*.tsv "$S"/tests/golden/fences/deleted.d/*.tsv
+printf 'skills/add/zz-regen-test.md\tHeading\t0\t%064d\n' 0 > "$S/tests/golden/fences/deleted.d/zz-regen-test.tsv"
+fences_before=$(snap "$S/tests/golden/fences")
+regen --fences nextjs-github
+check 2 "$EC" "fences_with_deleted_rows: refused with exit 2 ($OUT)"
+check 1 "$(printf '%s\n' "$OUT" | grep -c 'deleted.d has rows')" "fences_with_deleted_rows: the refusal is passed on ($OUT)"
+check "$fences_before" "$(snap "$S/tests/golden/fences")" "fences_with_deleted_rows: snapshots unchanged"
+
+# with moved.d and deleted.d empty, --fences lists the snapshot change in a dry run and writes it with --write
+rm -f "$S"/tests/golden/fences/deleted.d/*.tsv
 fences_before=$(snap "$S/tests/golden/fences")
 regen --fences nextjs-github
 check 0 "$EC" "fences_dry_run: exits 0 ($OUT)"
