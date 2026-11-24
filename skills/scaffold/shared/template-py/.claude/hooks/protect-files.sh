@@ -66,7 +66,7 @@ case "$rel" in
   Dockerfile|*/Dockerfile) reason="container image definition" ;;
   lefthook.yml|*/lefthook.yml|.gitleaks.toml|*/.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
   .claude/comment-hygiene-patterns.txt|*/.claude/comment-hygiene-patterns.txt) reason="comment-hygiene pattern list — an edit can weaken the CI gate" ;;
-  .lefthook/*|*/.lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
+  .lefthook/*|*/.lefthook/*|.hus[k]y/*|*/.hus[k]y/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
   .github/workflows/*|.github/actions/*|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*) reason="CI/CD pipeline definition — changes skip or weaken the merge gates" ;;
 esac
 # Gate scripts and runners are whatever gate-ratchet.sh --list-guarded derives from the tracked tree, run from the project folder or else the git top level; nothing is listed here.

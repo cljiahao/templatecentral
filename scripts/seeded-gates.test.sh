@@ -604,6 +604,17 @@ for st in ts py; do
   check "" "$OUT" "[$st] protect-files from a subdirectory lets an unrelated script through"
 done
 
+# a Node hook-manager file is guarded: protect-files asks before an edit.
+for st in ts py; do
+  R="$T/guard-$st"
+  j=$(python3 -c 'import json, sys; print(json.dumps({"tool_input": {"file_path": sys.argv[1]}}))' "$R/.husky/pre-commit")
+  OUT=$(cd "$R" && printf '%s' "$j" | clean env CLAUDE_PROJECT_DIR="$R" bash "$HK/template-$st/.claude/hooks/protect-files.sh" 2>&1)
+  has "git-hook script" "$OUT" "[$st] protect-files asks before editing a hook-manager file"
+  j=$(python3 -c 'import json, sys; print(json.dumps({"tool_input": {"file_path": sys.argv[1]}}))' "$R/src/app.ts")
+  OUT=$(cd "$R" && printf '%s' "$j" | clean env CLAUDE_PROJECT_DIR="$R" bash "$HK/template-$st/.claude/hooks/protect-files.sh" 2>&1)
+  check "" "$OUT" "[$st] protect-files lets a source file through next to a hook-manager folder"
+done
+
 # no second list: the three consumers name no gate script of their own.
 RAT="$HK/template/scripts/gate-ratchet.sh"
 KOF=$(awk '/^kind_of\(\)/,/^}/' "$RAT")

@@ -80,41 +80,58 @@ kind_of() {
   esac
 }
 
-# Tracked files of <ref> into $wd/tracked.lst, then the derived guard set into $wd/guard.lst: each file under .claude/hooks/, each .claude/*.sh, .claude/settings.json, every scripts/ or .claude/ path named in a gate-bearing source, and the protect-files.sh gate patterns. Gate-bearing sources are hooks, .claude/*.sh, gates.txt, scripts/, lefthook, a Node hook-manager folder, CI files, the Makefile and the gate or install scripts of a package.json; skill, agent, rule and markdown files are never read. Returns 1 when git cannot list or read a source.
+# Runs grep and accepts its no-match status (1) as success; any other status, a real failure, is returned as failure.
+gs_grep() {
+  local rc
+  grep "$@"
+  rc=$?
+  [ "$rc" -le 1 ]
+}
+
+# Tracked files of <ref> into $wd/tracked.lst, then the derived guard set into $wd/guard.lst: each file under .claude/hooks/, each .claude/*.sh, .claude/settings.json, each Node hook-manager file, every scripts/ or .claude/ path named in a gate-bearing source, and the protect-files.sh gate patterns. Gate-bearing sources are hooks, .claude/*.sh, gates.txt, scripts/, lefthook, a Node hook-manager folder, CI files, the Makefile and the gate or install scripts of a package.json; skill, agent, rule and markdown files are never read. No stage hides a failure: every command writes to a file and its status is checked, so a source that cannot be listed, read or parsed returns 1.
 guard_scan() {
   local ref=$1 f pf line labels reason mre
   mre='(scripts|[.]claude)/[A-Za-z0-9_@./-]*[A-Za-z0-9_@-]'
   git ls-tree -r "$ref" > "$wd/tree.raw" 2>/dev/null || return 1
-  awk -F'\t' '$1 !~ /^160000 / { print substr($0, index($0, "\t") + 1) }' "$wd/tree.raw" > "$wd/tracked.lst"
+  awk -F'\t' '$1 !~ /^160000 / { print substr($0, index($0, "\t") + 1) }' "$wd/tree.raw" > "$wd/tracked.lst" || return 1
   : > "$wd/mentions.lst"; : > "$wd/guard.lst"; : > "$wd/pats.lst"
-  grep -E '(^|/)[.]claude/hooks/|(^|/)[.]claude/[^/]*[.]sh$|(^|/)[.]claude/settings[.]json$|(^|/)lefthook[.]yml$|(^|/)[.]lefthook/' "$wd/tracked.lst" > "$wd/guard.lst"
-  grep -E '(^|/)[.]claude/(hooks/|[^/]*[.]sh$|gates[.]txt$|settings[.]json$)|(^|/)scripts/|(^|/)[.]lefthook/|(^|/)[.]hus[k]y/|(^|/)[.]github/workflows/|(^|/)azure-pipelines|(^|/)(lefthook[.]yml|Makefile|package[.]json)$' "$wd/tracked.lst" | grep -Ev '[.]md$' > "$wd/sources.lst"
+  gs_grep -E '(^|/)[.]claude/hooks/|(^|/)[.]claude/[^/]*[.]sh$|(^|/)[.]claude/settings[.]json$|(^|/)lefthook[.]yml$|(^|/)[.]lefthook/|(^|/)[.]hus[k]y/' "$wd/tracked.lst" > "$wd/guard.lst" || return 1
+  gs_grep -E '(^|/)[.]claude/(hooks/|[^/]*[.]sh$|gates[.]txt$|settings[.]json$)|(^|/)scripts/|(^|/)[.]lefthook/|(^|/)[.]hus[k]y/|(^|/)[.]github/workflows/|(^|/)azure-pipelines|(^|/)(lefthook[.]yml|Makefile|package[.]json)$' "$wd/tracked.lst" > "$wd/sources.raw" || return 1
+  gs_grep -Ev '[.]md$' "$wd/sources.raw" > "$wd/sources.lst" || return 1
   while IFS= read -r f; do
     git show "$ref:$f" > "$wd/src.txt" 2>/dev/null || return 1
     case "$f" in
-      package.json | */package.json) awk -v K=pkgjson -v B=1 -v CMDS=1 -f "$wd/facts.awk" "$wd/src.txt" 2>/dev/null | grep -aoE "$mre" >> "$wd/mentions.lst" ;;
-      *) grep -aoE "$mre" "$wd/src.txt" >> "$wd/mentions.lst" ;;
+      package.json | */package.json)
+        awk -v K=pkgjson -v B=1 -v CMDS=1 -f "$wd/facts.awk" "$wd/src.txt" > "$wd/cmds.txt" 2>/dev/null || return 1
+        gs_grep -aoE "$mre" "$wd/cmds.txt" >> "$wd/mentions.lst" || return 1
+        ;;
+      *) gs_grep -aoE "$mre" "$wd/src.txt" >> "$wd/mentions.lst" || return 1 ;;
     esac
   done < "$wd/sources.lst"
-  sort -u -o "$wd/mentions.lst" "$wd/mentions.lst"
-  awk 'NR == FNR { m[$0] = 1; next } { p = $0; while (1) { if (p in m) { print $0; break }; i = index(p, "/"); if (!i) break; p = substr(p, i + 1) } }' "$wd/mentions.lst" "$wd/tracked.lst" >> "$wd/guard.lst"
-  pf=$(grep -E '(^|/)[.]claude/hooks/protect-files[.]sh$' "$wd/tracked.lst" | head -n 1)
+  sort -u -o "$wd/mentions.lst" "$wd/mentions.lst" || return 1
+  awk 'NR == FNR { m[$0] = 1; next } { p = $0; while (1) { if (p in m) { print $0; break }; i = index(p, "/"); if (!i) break; p = substr(p, i + 1) } }' "$wd/mentions.lst" "$wd/tracked.lst" >> "$wd/guard.lst" || return 1
+  gs_grep -E '(^|/)[.]claude/hooks/protect-files[.]sh$' "$wd/tracked.lst" > "$wd/pf.lst" || return 1
+  pf=$(head -n 1 "$wd/pf.lst")
   if [ -n "$pf" ]; then
     git show "$ref:$pf" > "$wd/src.txt" 2>/dev/null || return 1
-    grep -E '^  [^ #].*\) reason=' "$wd/src.txt" | while IFS= read -r line; do
+    gs_grep -E '^  [^ #].*\) reason=' "$wd/src.txt" > "$wd/pf.rows" || return 1
+    : > "$wd/pats.split"
+    while IFS= read -r line; do
       reason=${line#*reason=}
       case "$reason" in *"instruction file"* | *"binding invariants"* | *"agent definition"* | *"MCP server"* | *"container image"* | *"merge base snapshot"*) continue ;; esac
       labels=${line%%\) reason=*}
-      printf '%s\n' "$labels" | tr '|' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
-    done | grep -v '^$' | sort -u > "$wd/pats.lst"
-    awk 'NR == FNR { g = $0; gsub(/[.]/, "[.]", g); gsub(/[*]/, ".*", g); re[++n] = "^" g "$"; next } { for (i = 1; i <= n; i++) if ($0 ~ re[i]) { print; break } }' "$wd/pats.lst" "$wd/tracked.lst" >> "$wd/guard.lst"
+      printf '%s\n' "$labels" | tr '|' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' >> "$wd/pats.split" || return 1
+    done < "$wd/pf.rows"
+    gs_grep -v '^$' "$wd/pats.split" > "$wd/pats.nz" || return 1
+    sort -u "$wd/pats.nz" > "$wd/pats.lst" || return 1
+    awk 'NR == FNR { g = $0; gsub(/[.]/, "[.]", g); gsub(/[*]/, ".*", g); re[++n] = "^" g "$"; next } { for (i = 1; i <= n; i++) if ($0 ~ re[i]) { print; break } }' "$wd/pats.lst" "$wd/tracked.lst" >> "$wd/guard.lst" || return 1
   fi
-  sort -u -o "$wd/guard.lst" "$wd/guard.lst"
+  sort -u -o "$wd/guard.lst" "$wd/guard.lst" || return 1
 }
 
-# The content-frozen kinds, which the allow-gate-change label can never waive and verify-harness.sh hashes; ci-gates.sh and verify-harness.sh read this as the third column of --list-guarded.
+# The content-frozen kinds (guard, budget, ci, gates, hosts, gitleaks, patterns), which the allow-gate-change label can never waive and verify-harness.sh hashes; ci-gates.sh and verify-harness.sh read this as the third column of --list-guarded.
 enforced_kind() {
-  case "$1" in guard | budget | ci | gates | hosts) return 0 ;; esac
+  case "$1" in guard | budget | ci | gates | hosts | gitleaks | patterns) return 0 ;; esac
   return 1
 }
 
