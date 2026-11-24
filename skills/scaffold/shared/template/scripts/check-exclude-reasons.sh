@@ -25,7 +25,7 @@
 # every vitest*.config.*, jest*.config.*, stryker*.conf*, .nycrc* and .c8rc* file, package.json keys jest, nyc, c8, stryker and jscpd,
 # and .jscpd.json ignore. A config imported from a relative file is followed one level. Any depth is scanned: a folder named build or
 # coverage inside src is read like any other.
-# Scope: the gate covers vitest, jest, pytest-cov and coverage.py, Sonar properties files, Stryker, mutmut and inline markers; c8 and nyc on the command line, mvn and a Sonar scan action are outside it.
+# Scope: the gate covers vitest, jest, pytest-cov and coverage.py, Sonar properties files, Stryker, mutmut and inline markers; c8 and nyc on the command line, mvn, a Sonar scan action, excludes of two tools that hide different halves, and a root, --root or workspace that hides source in another folder are outside it.
 # Broad means judged from the files on disk (one list is judged as the union of its non-default entries, so splitting a broad pattern does not help): a pattern that matches every non-test source file of the project, of one package (a folder
 # with its own package.json or pyproject.toml), of one top-level source folder, or every source file of one type in any of those. ./ and
 # // are normalised first, and a pattern form the gate cannot evaluate (such as !(a)) is a finding too.

@@ -319,7 +319,7 @@ js_audit() {
 # The whole audit, run once: it reads the one shared file list (rules_files), so no folder is skipped by its name and config discovery,
 # the command-line scan and the marker scan see the same files.
 audit_all() {
-  local FILES rel f abs base big tools words tab a_cmd a_mark pfile pline ptool ppath target pdir out cmd_out
+  local mout mrc mclean FILES rel f abs base big tools words tab a_cmd a_mark pfile pline ptool ppath target pdir out cmd_out
   tab=$(printf '\t')
   FILES=$(rules_files "$P")
   rules_init "$FILES"
@@ -413,7 +413,13 @@ EOF
   if [ "${#a_mark[@]}" -gt 0 ]; then
     tools=$(cat "$DEFECTS/exclusion-audit/defaults.txt") || return 0
     words=$(cat "$DEFECTS/exclusion-audit/placeholders.txt") || return 0
-    printf '%s\0' "${a_mark[@]}" | TC_EXCLUDE_DEFAULTS=$tools TC_REASON_PLACEHOLDERS=$words xargs -0 awk -v mode=marks -f "$DEFECTS/exclusion-audit/scan.awk" 2> /dev/null | audit_records
+    mout=$(printf '%s\0' "${a_mark[@]}" | TC_EXCLUDE_DEFAULTS=$tools TC_REASON_PLACEHOLDERS=$words xargs -0 awk -v mode=marks -f "$DEFECTS/exclusion-audit/scan.awk" 2>&1)
+    mrc=$?
+    mclean=$(printf '%s\n' "$mout" | grep "^M$tab")
+    if [ "$mrc" -ne 0 ] || [ "$(printf '%s\n' "$mout" | grep -v "^M$tab" | grep -c .)" -gt 0 ]; then
+      mclean="$mclean${mclean:+$NL}X${tab}${a_mark[0]}${tab}1${tab}the inline marker scanner failed, so no source file was audited for markers${tab}${tab}"
+    fi
+    printf '%s\n' "$mclean" | audit_records
   fi
 }
 

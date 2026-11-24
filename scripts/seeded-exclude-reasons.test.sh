@@ -809,7 +809,7 @@ mk "$d" src/a.ts $'// NOSONAR -- reason: the legacy API needs this shape here\ne
 r3_ok "item 3 control: NOSONAR with a reason" "$d"
 mk "$d" src/a.ts $'// NOSONAR\nexport const a = 1;\n'
 r3_fail "item 3: NOSONAR" "$d" "src/a\.ts:1 .*NOSONAR|src/a\.ts:1 .*nosonar"
-r3_lost "item 3 nosonar" "$d" "src/a\.ts:1" check-exclude-reasons.awk '/[^a-z0-9_]nosonar[^a-z0-9_]/' '/^ nosonar[^a-z0-9_]/'
+r3_lost "item 3 nosonar" "$d" "src/a\.ts:1" check-exclude-reasons.awk '/[^A-Za-z0-9_]NOSONAR[^A-Za-z0-9_]/' '/^ NOSONAR[^A-Za-z0-9_]/'
 mk "$d" src/a.ts $'// Stryker disable next-line StringLiteral\nexport const a = 1;\n'
 r3_fail "item 3: Stryker disable next-line without a reason" "$d" "src/a\.ts:1 .*$NR"
 r3_lost "item 3 next-line" "$d" "stryker disable next-line' $NR" check-exclude-reasons.awk '/^stryker[ \t]+disable[ \t]+next-line/' '/^stryker[ \t]+zzz[ \t]+next-line/'
@@ -958,8 +958,8 @@ done
 # ---- Round 5 -----------------------------------------------------------------------------------------------------------------------
 # Item numbers follow the review of round 4. Each failing case has a clean control and a mutant gate with the fix undone.
 AW=check-exclude-reasons.awk
-NOSON='/[^a-z0-9_]nosonar[^a-z0-9_]/'
-NOSONF='/^ nosonar[^a-z0-9_]/'
+NOSON='/[^A-Za-z0-9_]NOSONAR[^A-Za-z0-9_]/'
+NOSONF='/^ NOSONAR[^A-Za-z0-9_]/'
 
 # 1 NOSONAR counts anywhere in a comment, as a whole word, never in code or a string.
 d=$(r4dir son1)
@@ -970,8 +970,8 @@ mk "$d" src/a.ts $'foo(); // todo: NOSONAR here\n'
 r3_fail "item 1: NOSONAR in a sentence" "$d" "src/a\.ts:1 .*nosonar.* $NR"
 mk "$d" src/a.ts $'foo(); // eslint-disable-line no-x // NOSONAR\n'
 r3_fail "item 1: NOSONAR after a second //" "$d" "src/a\.ts:1 .*nosonar.* $NR"
-mk "$d" src/a.ts $'foo(); /* lint-ok nosonar */\n'
-r3_fail "item 1: lower case nosonar in a block comment" "$d" "src/a\.ts:1 .*nosonar.* $NR"
+mk "$d" src/a.ts $'foo(); /* lint-ok NOSONAR */\n'
+r3_fail "item 1: NOSONAR in a block comment" "$d" "src/a\.ts:1 .*nosonar.* $NR"
 mk "$d" src/a.ts $'foo(); // eslint-disable-line no-x -- NOSONAR reason: third party callback signature here\n'
 r3_ok "item 1 control: NOSONAR after a directive with a reason" "$d"
 mk "$d" src/a.ts $'foo(); // NOSONARX is another word\nconst s = "// NOSONAR";\nconst t = 1; // see nosonarqube\n'
@@ -1027,10 +1027,10 @@ r3_ok "item 3 control: the second config excludes nothing" "$d"
 d=$(r4dir sk4)
 mk "$d" src/a.ts $'// Stryker disable all -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore all\n'
 r3_ok "item 4 control: disable with a reason and a restore" "$d"
-r3_flip "item 4 restore" "$d" "$AW" '|| kind == "stryker restore") {' '|| kind == "stryker zzz") {'
+r3_flip "item 4 restore" "$d" "$AW" 'if (kind == "stryker restore") {' 'if (kind == "stryker zzz") {'
 mk "$d" src/a.ts $'// Stryker disable all -- reason: legacy code kept until the rewrite\nexport const a = 1;\n'
 r3_fail "item 4: disable with no restore" "$d" "src/a\.ts:1 .*whole file"
-r3_lost "item 4 no restore" "$d" "src/a\.ts:1 .*whole file" "$AW" '|| kind == "stryker disable") stack' '|| kind == "stryker zzz") stack'
+r3_lost "item 4 no restore" "$d" "src/a\.ts:1 .*whole file" "$AW" '|| kind == "stryker disable") { stack' '|| kind == "stryker zzz") { stack'
 mk "$d" src/a.ts $'// Stryker disable all\nexport const a = 1;\n// Stryker restore all\n'
 r3_fail "item 4: disable with no reason" "$d" "src/a\.ts:1 .*stryker disable' $NR"
 mk "$d" src/a.ts $'// Stryker disable StringLiteral -- reason: legacy messages are copied text\nexport const a = 1;\n// Stryker restore StringLiteral\n'
@@ -1051,6 +1051,43 @@ mutant_dir "$d" "$AW" 'low = tolower(body)' 'low = tolower(body) (1 +)'
 if [ "$MRC" -eq 1 ] && printf '%s' "$MOUT" | grep -q 'marker scanner failed'; then ok "item 6: a marker scanner runtime error fails the gate"; else nok "item 6: a marker scanner runtime error should fail the gate (exit $MRC)" "$MOUT"; fi
 mutant_dir "$d" "$AW" 'low = tolower(body)' 'low = tolower(body) (1 +)' '|| bad "the inline marker' '|| : "the inline marker' "$G"
 if [ "$MRC" -eq 0 ]; then ok "revert proof: item 6 marker scanner passes silently with the check undone"; else nok "revert proof: item 6 marker scanner should pass silently with the check undone (exit $MRC)" "$MOUT"; fi
+
+# ---- Round 6 -----------------------------------------------------------------------------------------------------------------------
+SKM=' || sameset(ml, smut[k])'
+
+# 1 A Stryker restore closes only the disable whose mutator list it names; "restore all" closes every open disable.
+d=$(r4dir sk6)
+mk "$d" src/a.ts $'// Stryker disable all -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore Arith\n'
+r3_fail "item 1: restore of another mutator leaves disable all open" "$d" "src/a\.ts:1 .*whole file"
+r3_lost "item 1 mismatch" "$d" "src/a\.ts:1 .*whole file" "$AW" "$SKM" ' || 1'
+mk "$d" src/a.ts $'// Stryker disable Arith,String -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore Arith\n'
+r3_fail "item 1: restore of one of two mutators" "$d" "src/a\.ts:1 .*whole file"
+mk "$d" src/a.ts $'// Stryker disable Arith,String -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore String, Arith\n'
+r3_ok "item 1 control: the same two mutators in another order" "$d"
+mk "$d" src/a.ts $'// Stryker disable Arith -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore Arith\n'
+r3_ok "item 1 control: disable A and restore A" "$d"
+mk "$d" src/a.ts $'// Stryker disable all -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore all\n'
+r3_ok "item 1 control: disable all and restore all" "$d"
+mk "$d" src/a.ts $'// Stryker disable Arith: reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore all\n'
+r3_ok "item 1 control: restore all closes a named disable" "$d"
+r3_flip "item 1 restore all" "$d" "$AW" 'ml == "all" || sameset' 'ml == "zzz" || sameset'
+
+# 4 A reason in a later comment on the line of the marker counts.
+mk "$d" src/a.ts $'/* Stryker disable all */ // reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore all\n'
+r3_ok "item 4 control: a block marker with a reason in a // comment after it" "$d"
+r3_flip "item 4 later comment" "$d" "$AW" 'valid(reasontext(body))) rst[nrec] = "reason"' 'valid(reasontext(body)) && 0) rst[nrec] = "reason"'
+mk "$d" src/a.ts $'/* Stryker disable all */ // legacy code\nexport const a = 1;\n// Stryker restore all\n'
+r3_fail "item 4: a later comment with no reason" "$d" "src/a\.ts:1 .*stryker disable' $NR"
+
+# 5 NOSONAR is read in upper case, as a whole word.
+mk "$d" src/a.ts $'foo(); // see nosonar-docs\n'
+r3_ok "item 5 control: lower case nosonar in prose" "$d"
+r3_flip "item 5 upper case" "$d" "$AW" $'match(" " own " ", /[^A-Za-z0-9_]NOSONAR[^A-Za-z0-9_]/)' $'match(" " tolower(own) " ", /[^a-z0-9_]nosonar[^a-z0-9_]/)'
+mk "$d" app.py $'# see nosonar-docs\nx = 1\n'
+r3_ok "item 5 control: lower case nosonar in a Python comment" "$d"
+
+# 2 The scope statement names what is outside the gate, in one line.
+if [ "$(grep -c '^# Scope:' "$root/$SCRIPTS/$G")" -eq 1 ] && grep -q '^# Scope:.*two tools.*root, --root or workspace' "$root/$SCRIPTS/$G"; then ok "item 2: the scope statement names the two limits in one line"; else nok "item 2: the scope statement does not name the two limits in one line"; fi
 
 # Read-only: the gate never changes a project, and the fixtures are as they were.
 d=$(stage jest-none)

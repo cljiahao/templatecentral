@@ -493,12 +493,16 @@ unwanted links1 "a link to a regular file is fine" "symlink"
 # Revert proofs: a mutant copy of the migrate folder run over the same projects. PREFIX/PAT is a line the real audit gives and the mutant must lose;
 # with "gain" the mutant must give a line the real audit does not.
 audit_mutant3() { # audit_mutant3 lose|gain PREFIX PAT FILE OLD NEW
-  local mode=$1 pre=$2 pat=$3 file=$4 old=$5 new=$6 mout
+  local mode=$1 pre=$2 pat=$3 file=$4 old=$5 new=$6 old2=${7-} new2=${8-} file2=${9-} mout
   rm -rf "$WORK/mutaudit3"
   mkdir -p "$WORK/mutaudit3"
   cp -R "$root/skills/migrate/general" "$WORK/mutaudit3/general"
   if ! OLD=$old NEW=$new perl -0pi -e '$c += s/\Q$ENV{OLD}\E/$ENV{NEW}/g; END { $? = $c ? 0 : 3 }' "$WORK/mutaudit3/general/$file"; then
     nok "revert proof: the mutation '$old' did not apply to $file"
+    return
+  fi
+  if [ -n "$old2" ] && ! OLD=$old2 NEW=$new2 perl -0pi -e '$c += s/\Q$ENV{OLD}\E/$ENV{NEW}/g; END { $? = $c ? 0 : 3 }' "$WORK/mutaudit3/general/$file2"; then
+    nok "revert proof: the mutation '$old2' did not apply to $file2"
     return
   fi
   mout=$(bash "$WORK/mutaudit3/general/defect-report.sh" "$R3" 2>&1 | grep '  exclusion-audit  check  ' | sed 's/  exclusion-audit  check  .*//' | awk -v p="$pre/" 'index($0, p) == 1 { print substr($0, length(p) + 1) }')
@@ -518,15 +522,36 @@ audit_mutant3 lose broad1 "$H" "$AR" $'rules_eval excl "$p" "$dir"' 'return 1'
 audit_mutant3 gain dflt1 "no reason" defects/exclusion-audit/defaults.txt '**/tests/**' 'zzzunused'
 audit_mutant3 lose r4cfg "config/unit" defects/exclusion-audit.sh $'jest | vitest | stryker) jsmode=$tool ;;' 'jest | vitest | stryker) jsmode= ;;'
 audit_mutant3 lose r4py "pragma" defects/exclusion-audit/scan.awk $'          cm(rest, nr, raw, own)\n          j = index(rest, "#")\n          if (j == 0) break' $'          cm(rest, nr, raw, own)\n          break'
-audit_mutant3 lose r4nosonar "nosonar" defects/exclusion-audit/scan.awk '/[^a-z0-9_]nosonar[^a-z0-9_]/' '/^ nosonar[^a-z0-9_]/'
+audit_mutant3 lose r4nosonar "nosonar" defects/exclusion-audit/scan.awk '/[^A-Za-z0-9_]NOSONAR[^A-Za-z0-9_]/' '/^ NOSONAR[^A-Za-z0-9_]/'
 audit_mutant3 lose r4next "whole-file" defects/exclusion-audit/scan.awk 'if (nn > 20) big = 1' 'if (nn > 20000000) big = 1'
 audit_mutant3 lose r4rx "istanbul" defects/exclusion-audit/scan.awk $'function rxok() {\n  if (lastsig == "") return 1' $'function rxok() {\n  return 0\n  if (lastsig == "") return 1'
 audit_mutant3 lose r4cont "passes an exclude" "$AR" 'if (match(line, /\\[ \t]*$/)) {' 'if (0) {'
 audit_mutant3 lose r4dd "passes an exclude" "$AR" 'else if (t[k] == "--") dd = 1' 'else if (t[k] == "--zzz") dd = 1'
 audit_mutant3 lose r4add "custom" "$AR" 'if (match(line, /^[ \t]*addopts[ \t]*[=:]/)) {' 'if (0) {'
-audit_mutant3 lose r5son "nosonar" defects/exclusion-audit/scan.awk '/[^a-z0-9_]nosonar[^a-z0-9_]/' '/^ nosonar[^a-z0-9_]/'
+audit_mutant3 lose r5son "nosonar" defects/exclusion-audit/scan.awk '/[^A-Za-z0-9_]NOSONAR[^A-Za-z0-9_]/' '/^ NOSONAR[^A-Za-z0-9_]/'
 audit_mutant3 lose r5tox "tox" "$AR" '/^[ \t]*commands[A-Za-z_]*[ \t]*[=:]/' '/^[ \t]*commands_zzz[ \t]*[=:]/'
 audit_mutant3 lose r5uni "together hide" "$AR" '"sonar-exclusions" : kind' 'kind : kind'
+# Round 6 item 3: an awk failure in the marker scan is reported, and the report goes away when the check is undone. The first marker
+# file of a project carries the report, so the proof runs over a project of its own.
+audit_err6() { # audit_err6 gain|lose OLD2 NEW2: with the scanner broken (and OLD2 replaced by NEW2 in the audit), the report is present|absent
+  local mode=$1 out
+  rm -rf "$WORK/mut6" "$WORK/p6"
+  mkdir -p "$WORK/mut6" "$WORK/p6/src"
+  cp -R "$root/skills/migrate/general" "$WORK/mut6/general"
+  printf '{\n  "name": "demo"\n}\n' > "$WORK/p6/package.json"
+  printf 'foo(); // NOSONAR\n' > "$WORK/p6/src/a.ts"
+  if ! OLD='low = tolower(body)' NEW='low = tolower(body) (1 +)' perl -0pi -e '$c += s/\Q$ENV{OLD}\E/$ENV{NEW}/g; END { $? = $c ? 0 : 3 }' "$WORK/mut6/general/defects/exclusion-audit/scan.awk"; then nok "revert proof: the scanner mutation did not apply"; return; fi
+  if [ -n "${2-}" ] && ! OLD=$2 NEW=$3 perl -0pi -e '$c += s/\Q$ENV{OLD}\E/$ENV{NEW}/g; END { $? = $c ? 0 : 3 }' "$WORK/mut6/general/defects/exclusion-audit.sh"; then nok "revert proof: the audit mutation did not apply"; return; fi
+  out=$(bash "$WORK/mut6/general/defect-report.sh" "$WORK/p6" 2>&1 | grep '  exclusion-audit  check  ')
+  if printf '%s\n' "$out" | grep -q 'marker scanner failed'; then
+    if [ "$mode" = gain ]; then ok "item 3: a failing marker scanner is reported"; else nok "revert proof: item 3 still reports the failure with the check undone" "$out"; fi
+  else
+    if [ "$mode" = lose ]; then ok "revert proof: item 3 reports nothing with the check undone"; else nok "item 3: a failing marker scanner should be reported" "$out"; fi
+  fi
+}
+unwanted r5son "a working marker scan reports no scanner failure" "marker scanner failed"
+audit_err6 gain
+audit_err6 lose $'if [ "$mrc" -ne 0 ] || [ "$(printf \'%s\\n\' "$mout" | grep -v "^M$tab" | grep -c .)" -gt 0 ]; then' 'if false; then'
 audit_mutant3 lose links2 "^src/gone:1 is a symlink" defects/exclusion-audit.sh 'is a symlink that is not a link to a regular file, so nothing behind it was audited' 'zz'
 ALLAUD=$SAVED_AUD
 

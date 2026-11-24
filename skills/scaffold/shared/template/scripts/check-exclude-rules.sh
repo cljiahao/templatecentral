@@ -394,7 +394,7 @@ EOF
 # Read E records (tab separated, as the scanners print them) on stdin and print one line per group of exclude entries that has two or more
 # entries which are not defaults: file<TAB>group<TAB>first line<TAB>the entries joined by the SOH byte. A group is what is hidden, not where
 # it is written: one coverage group per tool and folder across all its config files (Sonar: sonar.exclusions and sonar.coverage.exclusions
-# together; sonar.cpd.exclusions and any other sonar.*.exclusions key each on their own), and one mutation group per tool.
+# together; sonar.cpd.exclusions and any other sonar.*.exclusions key each on their own), and one mutation group per tool and folder.
 rules_union_groups() {
   awk -F'\t' '
     function grp(f, kind,   b, d) {

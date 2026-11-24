@@ -141,9 +141,9 @@ function finish(   kind, scope, i, c, depth, tok, start, ent, nent, own, st, ln,
   }
 }
 # Inline markers in source files: a coverage marker counts only as the first token of a comment (a marker inside a string, or later in
-# a comment sentence, is not one); NOSONAR counts anywhere in a comment. Each needs a "reason:" on the same line or the line above. An
+# a comment sentence, is not one); NOSONAR counts anywhere in a comment, as an upper-case whole word. Each needs a "reason:" on the same line or the line above. An
 # ignore-file marker never passes, and neither does a v8 or c8 "ignore start", or a Stryker "disable", with no "ignore stop" or
-# "restore" after it in the file (it covers the rest of the file).
+# a "restore" naming the same mutators (or "restore all") after it in the file (it covers the rest of the file).
 function reasontext(t,   i) {
   i = index(tolower(t), "reason:")
   if (i == 0) return ""
@@ -151,7 +151,33 @@ function reasontext(t,   i) {
   sub(/[ \t]*\*\/.*$/, "", t)
   return trim(t)
 }
-function cm(body, nr, raw, own,   low, kind, st, prevt, at, rest, big, nn) {
+# The mutator list of a Stryker disable or restore: the words after the keyword, up to a reason, lower case, "all" when none is named.
+function mlist(s) {
+  sub(/^stryker[ \t]+(disable|restore)/, "", s)
+  sub(/[ \t]+--.*$/, "", s)
+  sub(/[ \t]*reason[ \t]*:.*$/, "", s)
+  sub(/:.*$/, "", s)
+  gsub(/[ \t]*,[ \t]*/, ",", s)
+  s = trim(s)
+  return (s == "" ? "all" : s)
+}
+function sameset(a, b,   na, nb, x, y, i, j, f) {
+  na = split(a, x, ","); nb = split(b, y, ",")
+  if (na != nb) return 0
+  for (i = 1; i <= na; i++) {
+    f = 0
+    for (j = 1; j <= nb; j++) if (x[i] == y[j]) f = 1
+    if (!f) return 0
+  }
+  return 1
+}
+function popat(k,   j) {
+  for (j = k; j < nstack; j++) { stack[j] = stack[j + 1]; smut[j] = smut[j + 1] }
+  nstack--
+}
+function cm(body, nr, raw, own,   low, kind, st, prevt, at, rest, big, nn, k, ml) {
+  # A reason in a later comment on the line of a marker still counts, as in /* Stryker disable all */ // reason: why.
+  if (nrec > 0 && rline[nrec] == nr && rst[nrec] == "none" && valid(reasontext(body))) rst[nrec] = "reason"
   low = tolower(body)
   sub(/^[ \t*]+/, "", low)
   kind = ""; big = 0
@@ -162,10 +188,16 @@ function cm(body, nr, raw, own,   low, kind, st, prevt, at, rest, big, nn) {
     else if (match(low, /^stryker[ \t]+restore([ \t]|$)/)) kind = "stryker restore"
   } else if (match(low, /^pragma[: \t]*no[ \t]*(cover|branch)/)) kind = "# " substr(low, RSTART, RLENGTH)
   # NOSONAR suppresses wherever it stands in a comment, so the word counts anywhere in the comment text (tested once per comment).
-  if (kind == "" && body == own && match(" " tolower(own) " ", /[^a-z0-9_]nosonar[^a-z0-9_]/)) kind = "nosonar"
+  if (kind == "" && body == own && match(" " own " ", /[^A-Za-z0-9_]NOSONAR[^A-Za-z0-9_]/)) kind = "nosonar"
   if (kind == "") return
-  if (kind ~ /ignore[ \t]+stop$/ || kind == "stryker restore") {
-    if (nstack > 0) nstack--
+  if (kind ~ /ignore[ \t]+stop$/) {
+    for (k = nstack; k >= 1; k--) if (smut[k] == "") { popat(k); break }
+    return
+  }
+  # A restore closes only the disable whose mutator list it names; "restore all" closes every open disable.
+  if (kind == "stryker restore") {
+    ml = mlist(low)
+    for (k = nstack; k >= 1; k--) if (smut[k] != "" && (ml == "all" || sameset(ml, smut[k]))) { popat(k); if (ml != "all") break }
     return
   }
   # ignore next N with N above 20 covers a block, not a line: it reads like an ignore start with no stop.
@@ -188,7 +220,7 @@ function cm(body, nr, raw, own,   low, kind, st, prevt, at, rest, big, nn) {
   if (length(at) > 100) at = substr(at, 1, 100)
   nrec++
   rline[nrec] = nr; rkind[nrec] = kind; rtext[nrec] = at; rst[nrec] = st
-  if (kind ~ /ignore[ \t]+start$/ || kind == "stryker disable") stack[++nstack] = nrec
+  if (kind ~ /ignore[ \t]+start$/ || kind == "stryker disable") { stack[++nstack] = nrec; smut[nstack] = (kind == "stryker disable" ? mlist(low) : "") }
 }
 function flush(   k, f) {
   if (fname == "") return
