@@ -1258,6 +1258,13 @@ for sv in nextjs:ts fastapi:py; do
   out=$(run_part "$tgt" "$st" settings); ec=$?
   check 1 "$([[ $ec -ne 0 && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "part_settings[$st]: a second run refuses (settings.json exists)"
 done
+# commit_fixture <dir>: a real scaffold commits before it verifies; verify-harness derives its enforcement layer from HEAD
+commit_fixture() {
+  if ! { git -C "$1" init -q -b main && git -C "$1" add -A \
+    && git -C "$1" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m "chore: scaffold"; }; then
+    echo "commit_fixture: fixture commit failed" >&2; exit 1
+  fi
+}
 # part_manifest: Step E writes harness.json from the files present, with the plugin version and doc flags
 pv=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([0-9][0-9.]*\)".*/\1/p' "$REPO_ROOT/.claude-plugin/plugin.json" | head -n 1)
 for st in nextjs fastapi; do
@@ -1268,6 +1275,7 @@ for st in nextjs fastapi; do
   check 0 "$ec" "part_manifest[$st]: exits 0 ($out)"
   got=$(python3 -c 'import json, sys; j = json.load(open(sys.argv[1])); print(j["templatecentral_version"], j["stack"], j["adoWiki"], "AGENTS.md" in j["seeded_files"], ".claude/hooks/protect-files.sh" in j["seeded_files"], "CLAUDE.md" in j["seeded_files"])' "$tgt/.claude/harness.json" 2>&1)
   check "$pv $st False True True False" "$got" "part_manifest[$st]: version from plugin.json, flags, core and hook entries, no CLAUDE.md entry when absent"
+  commit_fixture "$tgt"
   vh=$(cd "$tgt" && bash .claude/verify-harness.sh 2>&1); ec=$?
   check 0 "$ec" "part_manifest[$st]: verify-harness passes on the written manifest ($vh)"
   out=$(TC_STACK=$st TC_PART=manifest bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
@@ -1281,6 +1289,7 @@ TC_STACK=fastapi TC_PART=ci TC_CI=azure bash "$SHARED/tc-copy.sh" "$tgt" > /dev/
 TC_STACK=fastapi TC_PART=manifest bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1
 got=$(python3 -c 'import json, sys; j = json.load(open(sys.argv[1]))["seeded_files"]; print("azure-pipelines/templatecentral-gates.yml" in j, "azure-pipelines.yml" in j)' "$tgt/.claude/harness.json" 2>&1)
 check "True True" "$got" "part_manifest_azure: both Azure files are hashed"
+commit_fixture "$tgt"
 (cd "$tgt" && bash .claude/verify-harness.sh > /dev/null 2>&1); check 0 $? "part_manifest_azure: verify-harness passes"
 sed -i.bak '/- template: azure-pipelines\/templatecentral-gates.yml/d' "$tgt/azure-pipelines.yml"; rm -f "$tgt/azure-pipelines.yml.bak"
 (cd "$tgt" && bash .claude/verify-harness.sh > /dev/null 2>&1); check 1 $? "part_manifest_azure: verify-harness flags an unwired pipeline as drift"

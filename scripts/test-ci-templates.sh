@@ -1278,7 +1278,9 @@ dep_mutate "stack ecosystem changed (github-py)" github-py 'package-ecosystem: p
 # from the project: min(4, test files), and fails when there are none.
 nopass_check() { # nopass_check <scaffold dir>
   local hits
-  hits=$(grep -rIn -e 'passWithNoTests' "$1" 2>/dev/null | grep '/template' || true)
+  # A use is the CLI flag or the key given a value (key: v, key = v, "key": v, ['key']: v). A bare mention, such as
+  # the key name in gate-ratchet.sh's own list of Vitest keys, is not a use.
+  hits=$(grep -rIn -E -e '--passWithNoTests' -e "passWithNoTests[]\"']*[[:space:]]*[:=]" "$1" 2>/dev/null | grep '/template' || true)
   if [[ -n "$hits" ]]; then echo "$hits"; return 1; fi
 }
 if out=$(nopass_check "$REPO_ROOT/skills/scaffold" 2>&1); then ok "no passWithNoTests in any template"; else bad "passWithNoTests found in a template: $out"; fi
@@ -1319,6 +1321,7 @@ gate_fixture() { # gate_fixture <dir> <ts|py> <github|azure>
   local d="$1" st="$2" host="$3" h
   rm -rf "$d" && mkdir -p "$d/.claude/hooks"
   cp "$SHARED/template/.claude/gates.txt" "$SHARED/template/.claude/verify-harness.sh" "$d/.claude/"
+  mkdir -p "$d/scripts" && cp "$SHARED/template/scripts/gate-ratchet.sh" "$d/scripts/gate-ratchet.sh"
   cp "$SHARED/template-$st/lefthook.yml" "$d/lefthook.yml"
   if [[ "$host" == github ]]; then
     mkdir -p "$d/.github/workflows" && cp "$CI_DIR/github-$st/.github/workflows/ci.yml" "$d/.github/workflows/ci.yml"
@@ -1329,6 +1332,11 @@ gate_fixture() { # gate_fixture <dir> <ts|py> <github|azure>
   echo x > "$d/.claude/hooks/a.sh"
   h=$(shasum -a 256 "$d/.claude/hooks/a.sh" | cut -d' ' -f1)
   printf '{"seeded_files":{"a":{"path":".claude/hooks/a.sh","origin_hash":"%s"}}}' "$h" > "$d/.claude/harness.json"
+  # A real scaffold commits before it verifies; verify-harness derives its enforcement layer from HEAD
+  if ! { git -C "$d" init -q -b main && git -C "$d" add -A \
+    && git -C "$d" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m "chore: scaffold"; }; then
+    echo "gate_fixture: fixture commit failed" >&2; exit 1
+  fi
 }
 gate_verify() { (cd "$1" && bash .claude/verify-harness.sh 2>&1); }
 for st in ts py; do
