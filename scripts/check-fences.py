@@ -25,17 +25,24 @@ Layout, under <root>/tests/golden/fences/:
                    by N spaces: N spaces are added to every non-empty line of the file before hashing
                    (a blank line of the fence must be empty: a line of only spaces inside an indented fence does not
                    round-trip and fails as MISMATCH). '#' starts a comment line.
+  deleted.d/*.tsv  one file per slice, read in sorted order; one row per copy-verbatim fence that was
+                   deleted on purpose: file TAB heading TAB index TAB sha256
+                   All four must equal one snapshot row exactly. file starts with skills/. '#' starts a
+                   comment line. deleted.d holds only .gitkeep and regular *.tsv files; it and its files
+                   may not be symlinks. A slice that deletes a fence adds a row to its own file and never
+                   edits <skill>.tsv. scripts/check-fences-frozen.sh puts every change under deleted.d
+                   behind the fence-snapshot-change label.
 
 Moving a fence leaves the index of its later siblings unchanged in the snapshot. The check drops the
 mapped rows, then pairs the remaining rows of each heading with the live fences of that heading in
-order, so the snapshot keeps its keys.
+order, so the snapshot keeps its keys. A deleted row drops its snapshot row the same way.
 
 Usage:
   check-fences.py [--root DIR]                    check the markdown against the snapshot
   check-fences.py [--root DIR] --from-templates   hash only the mapped fences, from their files
   check-fences.py [--root DIR] --has-mappings     exit 0 when moved.d holds a row, 1 when it holds none, 2 on an error
   check-fences.py [--root DIR] --snapshot         write <skill>.tsv from the markdown (initial capture;
-                                                  refuses once moved.d holds a row)
+                                                  refuses once moved.d or deleted.d holds a row)
 
 Check results, one line each, exit 1 if any:
   MISMATCH  a fence (or the file that replaced it) differs from the snapshot
@@ -44,8 +51,17 @@ Check results, one line each, exit 1 if any:
   DUPLICATE a mapped fence is still in the markdown
   BADMAP    a mapping row names no snapshot row, repeats one (in any file), points outside template*
             under skills/, goes through a symlink, or points at a missing file
+  BADDELETE a deleted row names no snapshot row, has another sha256 than the snapshot row, repeats a
+            row (in any deleted.d file), or names a row that moved.d maps
+  UNDELETED a fence with a deleted row is still in the markdown
   EMPTY     nothing was compared, or no copy-verbatim fence is left in the markdown and none is mapped
-Exit 0 ok, 1 differences, 2 usage or parse error.
+Exit 0 ok, 1 differences, 2 usage or parse error. A malformed deleted row (column count, index, sha256
+length or characters, path outside skills/), an unexpected entry, a symlink or an unreadable file in
+deleted.d is a parse error: exit 2, never an empty list.
+
+Not caught: whether a deletion was a good idea (the label and the reviewer decide); shell fences (not
+copy-verbatim). A deleted row left after its whole markdown file is removed passes only when deleted rows
+(or moved.d rows) cover every snapshot row of that file; any other row of it is MISSING.
 """
 import glob
 import hashlib
@@ -156,6 +172,32 @@ def read_moved(gdir):
     return rows
 
 
+def read_deleted(gdir):
+    """Return [(source file name, file, heading, index, sha256)] from deleted.d/*.tsv; fail on anything off the allow-list."""
+    ddir = os.path.join(gdir, "deleted.d")
+    if os.path.islink(ddir):
+        raise ValueError(f"{ddir} is a symlink")
+    if not os.path.exists(ddir):
+        return []
+    rows = []
+    for name in sorted(os.listdir(ddir)):
+        path = os.path.join(ddir, name)
+        if name == ".gitkeep" and os.path.isfile(path) and not os.path.islink(path):
+            continue
+        if not name.endswith(".tsv") or os.path.islink(path) or not os.path.isfile(path):
+            raise ValueError(f"{path}: deleted.d holds only .gitkeep and regular *.tsv files")
+        for cols in read_rows(path, (4,)):
+            parts = cols[0].split("/")
+            if parts[0] != "skills" or ".." in parts or "" in parts or len(parts) < 2:
+                raise ValueError(f"{path}: file must be a path under skills/, got {cols[0]!r}")
+            if not re.fullmatch(r"[0-9]{1,6}", cols[2]):
+                raise ValueError(f"{path}: index must be a number, got {cols[2]!r}")
+            if not re.fullmatch(r"[0-9a-f]{64}", cols[3]):
+                raise ValueError(f"{path}: sha256 must be 64 lowercase hex characters, got {cols[3]!r}")
+            rows.append((name, cols[0], cols[1], int(cols[2]), cols[3]))
+    return rows
+
+
 def key_text(key):
     return f"{key[0]} :: {key[1]} :: {key[2]}"
 
@@ -191,10 +233,14 @@ def main(argv):
         moved_rows = read_moved(gdir)
         if mode == "has-mappings":
             return 0 if moved_rows else 1
+        deleted_rows = read_deleted(gdir)
         found = scan_skills(root)
         if mode == "snapshot":
             if moved_rows:
                 print("check-fences: moved.d has rows; a snapshot taken now would drop the moved fences.", file=sys.stderr)
+                return 2
+            if deleted_rows:
+                print("check-fences: deleted.d has rows; a snapshot taken now would drop the deleted fences.", file=sys.stderr)
                 return 2
             if not found:
                 print("check-fences: no fences found; nothing to snapshot", file=sys.stderr)
@@ -247,6 +293,23 @@ def main(argv):
             continue
         bad = 1
 
+    deleted = {}
+    moved_keys = {(f, h, i) for _, f, h, i, _, _ in moved_rows}
+    for src, f, h, i, digest in deleted_rows:
+        key = (f, h, i)
+        if key not in snap:
+            print(f"BADDELETE {key_text(key)} is not in the snapshot ({src})")
+        elif snap[key] != digest:
+            print(f"BADDELETE {key_text(key)} has a sha256 that differs from the snapshot ({src})")
+        elif key in deleted:
+            print(f"BADDELETE {key_text(key)} is deleted twice ({src} and {deleted[key]})")
+        elif key in moved_keys:
+            print(f"BADDELETE {key_text(key)} is also mapped in moved.d ({src})")
+        else:
+            deleted[key] = src
+            continue
+        bad = 1
+
     compared = 0
     for key, want in sorted(snap.items()):
         if key in mapped:
@@ -265,6 +328,7 @@ def main(argv):
     live = {}
     for key, digest, _lang in found:
         live.setdefault(key[:2], []).append(digest)
+    removed = set(mapped) | set(deleted)
     if not live and not mapped:
         print("EMPTY no copy-verbatim fence was found in skills/add, skills/migrate or skills/standards, and none is mapped to a file")
         return 1
@@ -274,17 +338,17 @@ def main(argv):
     for group in sorted(set(groups) | set(live)):
         rows = sorted(groups.get(group, []), key=lambda k: k[2])
         digests = list(live.get(group, []))
-        kept = [k for k in rows if k not in mapped]
-        # A mapped fence is still in the markdown only when the heading holds more fences than it has
+        kept = [k for k in rows if k not in removed]
+        # A mapped or deleted fence is still in the markdown only when the heading holds more fences than it has
         # unmapped rows; it is reported when removing one copy lines the rest up with the rows; otherwise the surplus is EXTRA.
         for k in rows:
-            if k in mapped and len(digests) > len(kept) and snap[k] in digests:
+            if k in removed and len(digests) > len(kept) and snap[k] in digests:
                 same = [i for i, d in enumerate(digests) if d == snap[k]]
                 want = [snap[x] for x in kept]
                 drop = next((i for i in same if (digests[:i] + digests[i + 1:])[:len(kept)] == want), None)
                 if drop is not None:
                     del digests[drop]
-                    print(f"DUPLICATE {key_text(k)}")
+                    print(f"{'DUPLICATE' if k in mapped else 'UNDELETED'} {key_text(k)}")
                     bad = 1
         for rank, k in enumerate(kept):
             compared += 1
@@ -301,7 +365,8 @@ def main(argv):
         print("EMPTY nothing was compared")
         bad = 1
     if not bad:
-        print(f"check-fences: {len(snap)} fences OK ({len(mapped)} in template files)")
+        note = f", {len(deleted)} deleted" if deleted else ""
+        print(f"check-fences: {len(snap)} fences OK ({len(mapped)} in template files{note})")
     return 1 if bad else 0
 
 
