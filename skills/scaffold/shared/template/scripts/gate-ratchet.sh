@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Gate-config ratchet: gate-ratchet.sh <base-ref|auto>. Fails when HEAD weakens a gate versus the merge base. Offline; runs the merge-base copy of itself and reads tracked files through git only.
-# gate-ratchet.sh --list-guarded [ref] prints "kind<TAB>path" for every tracked file the ratchet compares; ci-gates.sh and the tests read that one list.
-# Guarded set, derived from the tracked tree, never listed by hand: each file under .claude/hooks/, .claude/settings.json, every scripts/ or .claude/ path named in a script, hook, lefthook.yml or CI file, and every protect-files.sh pattern except instruction, invariant, agent, MCP, image and merge-snapshot entries. Parsed configs keep their parsed comparison; the rest are compared by content.
+# gate-ratchet.sh --list-guarded [ref] prints "kind<TAB>path<TAB>enforced" for every tracked file the ratchet compares; enforced is 1 when the allow-gate-change label can never waive the kind. ci-gates.sh, verify-harness.sh, protect-files.sh and the tests read that one list.
+# Scope: the ratchet guards gate scripts and the files that call them, thresholds, test and install scripts and their flags, lint and test-runner settings, and conftest collection control. Test bodies are covered by the coverage gate, not by the ratchet.
+# Guarded set, derived from the tracked tree, never listed by hand: each file under .claude/hooks/, each .claude/*.sh, .claude/settings.json, every scripts/ or .claude/ path named in a hook, .claude/*.sh, gates.txt, scripts/, lefthook, a Node hook-manager folder, CI file, Makefile or package.json gate script, and every protect-files.sh pattern except instruction, invariant, agent, MCP, image and merge-snapshot entries. Skill, agent, rule and markdown files are never read. Parsed configs keep their parsed comparison; the rest are compared by content.
 # Test scripts: every package.json script whose name has a test, coverage, lint, typecheck, build, check, verify, ci, format or audit word keeps its word list. Any change is a finding except these known-safe words: --reporter, --coverage.reporter, --outputFile (with or without a value), --coverage.reportsDirectory=, --silent, --color, --no-color. A script that is gone is a finding; a new script is covered by the flag checks and the CI and lefthook comparison.
 # pytest: any change to a [tool.pytest.ini_options] key or a new key is a finding, except raising --cov-fail-under and the markers, pythonpath and asyncio_default_fixture_loop_scope keys.
 # Type checkers: tsconfig and pyright strictness may tighten, never loosen; a new tsconfig or pyright config may not switch strictness off.
@@ -55,84 +56,80 @@ fi
 # Files compared by parsed values, by the kind of parser they need; the guard kind is never listed here, it comes from guard_scan.
 kind_of() {
   case "$1" in
-    .jscpd.json | */.jscpd.json) echo jscpd ;;
-    eslint.config.* | */eslint.config.*) echo eslint ;;
-    vitest.config.* | vite.config.* | vitest.workspace.* | */vitest.config.* | */vite.config.* | */vitest.workspace.*) echo vitest ;;
-    sonar-project.properties | */sonar-project.properties) echo sonar ;;
-    package.json | */package.json) echo pkgjson ;;
-    pyproject.toml | */pyproject.toml) echo pyproject ;;
-    .gitleaks.toml | */.gitleaks.toml) echo gitleaks ;;
-    scripts/test-budget.sh | */scripts/test-budget.sh) echo budget ;;
-    .claude/gates.txt | */.claude/gates.txt) echo gates ;;
-    .claude/registry-hosts.txt | */.claude/registry-hosts.txt) echo hosts ;;
-    .claude/dep-audit-allow.txt | */.claude/dep-audit-allow.txt) echo allow ;;
-    .claude/comment-hygiene-patterns.txt | */.claude/comment-hygiene-patterns.txt) echo patterns ;;
-    tsconfig.json | tsconfig.*.json | */tsconfig.json | */tsconfig.*.json) echo tsconfig ;;
-    pyrightconfig.json | */pyrightconfig.json) echo pyright ;;
-    pnpm-workspace.yaml | */pnpm-workspace.yaml) echo pnpmws ;;
-    .github/dependabot.yml | */.github/dependabot.yml) echo dependabot ;;
-    .npmrc | */.npmrc) echo npmrc ;;
-    .hadolint.yaml | */.hadolint.yaml | .hadolint.yml | */.hadolint.yml) echo hadolint ;;
-    .github/workflows/ci.yml | */.github/workflows/ci.yml | azure-pipelines.yml | */azure-pipelines.yml | azure-pipelines/templatecentral-gates.yml | */azure-pipelines/templatecentral-gates.yml) echo ci ;;
-    conftest.py | */conftest.py) echo conftest ;;
-    *) echo "" ;;
+    .jscpd.json | */.jscpd.json) KIND=jscpd ;;
+    eslint.config.* | */eslint.config.*) KIND=eslint ;;
+    vitest.config.* | vite.config.* | vitest.workspace.* | */vitest.config.* | */vite.config.* | */vitest.workspace.*) KIND=vitest ;;
+    sonar-project.properties | */sonar-project.properties) KIND=sonar ;;
+    package.json | */package.json) KIND=pkgjson ;;
+    pyproject.toml | */pyproject.toml) KIND=pyproject ;;
+    .gitleaks.toml | */.gitleaks.toml) KIND=gitleaks ;;
+    scripts/test-budget.sh | */scripts/test-budget.sh) KIND=budget ;;
+    .claude/gates.txt | */.claude/gates.txt) KIND=gates ;;
+    .claude/registry-hosts.txt | */.claude/registry-hosts.txt) KIND=hosts ;;
+    .claude/dep-audit-allow.txt | */.claude/dep-audit-allow.txt) KIND=allow ;;
+    .claude/comment-hygiene-patterns.txt | */.claude/comment-hygiene-patterns.txt) KIND=patterns ;;
+    tsconfig.json | tsconfig.*.json | */tsconfig.json | */tsconfig.*.json) KIND=tsconfig ;;
+    pyrightconfig.json | */pyrightconfig.json) KIND=pyright ;;
+    pnpm-workspace.yaml | */pnpm-workspace.yaml) KIND=pnpmws ;;
+    .github/dependabot.yml | */.github/dependabot.yml) KIND=dependabot ;;
+    .npmrc | */.npmrc) KIND=npmrc ;;
+    .hadolint.yaml | */.hadolint.yaml | .hadolint.yml | */.hadolint.yml) KIND=hadolint ;;
+    .github/workflows/ci.yml | */.github/workflows/ci.yml | azure-pipelines.yml | */azure-pipelines.yml | azure-pipelines/templatecentral-gates.yml | */azure-pipelines/templatecentral-gates.yml) KIND=ci ;;
+    conftest.py | */conftest.py) KIND=conftest ;;
+    *) KIND="" ;;
   esac
 }
 
-NL=$'\n'
-guard_nl=$NL
-
-# Tracked paths at <ref> that gate scripts, hooks, lefthook and CI files name, plus the protect-files.sh patterns that guard gates; one path per line.
+# Tracked files of <ref> into $wd/tracked.lst, then the derived guard set into $wd/guard.lst: each file under .claude/hooks/, each .claude/*.sh, .claude/settings.json, every scripts/ or .claude/ path named in a gate-bearing source, and the protect-files.sh gate patterns. Gate-bearing sources are hooks, .claude/*.sh, gates.txt, scripts/, lefthook, a Node hook-manager folder, CI files, the Makefile and the gate or install scripts of a package.json; skill, agent, rule and markdown files are never read. Returns 1 when git cannot list or read a source.
 guard_scan() {
-  local ref=$1 tracked f pf line labels reason
-  tracked=$(git ls-tree -r --name-only "$ref" 2>/dev/null) || return 1
-  printf '%s\n' "$tracked" | grep -E '(^|/)[.]claude/hooks/|(^|/)[.]claude/settings[.]json$'
-  printf '%s\n' "$tracked" | grep -E '(^|/)(scripts|[.]claude|[.]lefthook|[.]github/workflows|azure-pipelines)(/|$)|(^|/)(lefthook[.]yml|azure-pipelines[^/]*[.]ya?ml)$' | while IFS= read -r f; do
-    git show "$ref:$f" 2>/dev/null | grep -aoE '(scripts|[.]claude)/[A-Za-z0-9_@./-]*[A-Za-z0-9_@-]'
-  done | sort -u > "$wd/mentions.lst"
-  printf '%s\n' "$tracked" | awk 'NR == FNR { m[$0] = 1; next } { p = $0; while (1) { if (p in m) { print $0; break }; i = index(p, "/"); if (!i) break; p = substr(p, i + 1) } }' "$wd/mentions.lst" -
-  pf=$(printf '%s\n' "$tracked" | grep -E '(^|/)[.]claude/hooks/protect-files[.]sh$' | head -n 1)
-  [ -n "$pf" ] || return 0
-  git show "$ref:$pf" 2>/dev/null | grep -E '^  [^ #].*\) reason=' | while IFS= read -r line; do
-    reason=${line#*reason=}
-    case "$reason" in *"instruction file"* | *"binding invariants"* | *"agent definition"* | *"MCP server"* | *"container image"* | *"merge base snapshot"*) continue ;; esac
-    labels=${line%%\) reason=*}
-    printf '%s\n' "$labels" | tr '|' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
-  done | grep -v '^$' | sort -u > "$wd/pats.lst"
-  printf '%s\n' "$tracked" | awk 'NR == FNR { g = $0; gsub(/[.]/, "[.]", g); gsub(/[*]/, ".*", g); re[++n] = "^" g "$"; next } { for (i = 1; i <= n; i++) if ($0 ~ re[i]) { print; break } }' "$wd/pats.lst" -
-}
-
-# Loads the derived guard set of <ref> into guard_nl, newline-wrapped for exact matching.
-guard_load() {
-  guard_nl=$NL$(guard_scan "$1" | sort -u)$NL
-}
-
-# Parsed kind first, then membership in the derived guard set.
-kind_full() {
-  local k
-  k=$(kind_of "$1")
-  if [ -z "$k" ]; then
-    case "$guard_nl" in *"$NL$1$NL"*) k=guard ;; esac
+  local ref=$1 f pf line labels reason mre
+  mre='(scripts|[.]claude)/[A-Za-z0-9_@./-]*[A-Za-z0-9_@-]'
+  git ls-tree -r "$ref" > "$wd/tree.raw" 2>/dev/null || return 1
+  awk -F'\t' '$1 !~ /^160000 / { print substr($0, index($0, "\t") + 1) }' "$wd/tree.raw" > "$wd/tracked.lst"
+  : > "$wd/mentions.lst"; : > "$wd/guard.lst"; : > "$wd/pats.lst"
+  grep -E '(^|/)[.]claude/hooks/|(^|/)[.]claude/[^/]*[.]sh$|(^|/)[.]claude/settings[.]json$|(^|/)lefthook[.]yml$|(^|/)[.]lefthook/' "$wd/tracked.lst" > "$wd/guard.lst"
+  grep -E '(^|/)[.]claude/(hooks/|[^/]*[.]sh$|gates[.]txt$|settings[.]json$)|(^|/)scripts/|(^|/)[.]lefthook/|(^|/)[.]hus[k]y/|(^|/)[.]github/workflows/|(^|/)azure-pipelines|(^|/)(lefthook[.]yml|Makefile|package[.]json)$' "$wd/tracked.lst" | grep -Ev '[.]md$' > "$wd/sources.lst"
+  while IFS= read -r f; do
+    git show "$ref:$f" > "$wd/src.txt" 2>/dev/null || return 1
+    case "$f" in
+      package.json | */package.json) awk -v K=pkgjson -v B=1 -v CMDS=1 -f "$wd/facts.awk" "$wd/src.txt" 2>/dev/null | grep -aoE "$mre" >> "$wd/mentions.lst" ;;
+      *) grep -aoE "$mre" "$wd/src.txt" >> "$wd/mentions.lst" ;;
+    esac
+  done < "$wd/sources.lst"
+  sort -u -o "$wd/mentions.lst" "$wd/mentions.lst"
+  awk 'NR == FNR { m[$0] = 1; next } { p = $0; while (1) { if (p in m) { print $0; break }; i = index(p, "/"); if (!i) break; p = substr(p, i + 1) } }' "$wd/mentions.lst" "$wd/tracked.lst" >> "$wd/guard.lst"
+  pf=$(grep -E '(^|/)[.]claude/hooks/protect-files[.]sh$' "$wd/tracked.lst" | head -n 1)
+  if [ -n "$pf" ]; then
+    git show "$ref:$pf" > "$wd/src.txt" 2>/dev/null || return 1
+    grep -E '^  [^ #].*\) reason=' "$wd/src.txt" | while IFS= read -r line; do
+      reason=${line#*reason=}
+      case "$reason" in *"instruction file"* | *"binding invariants"* | *"agent definition"* | *"MCP server"* | *"container image"* | *"merge base snapshot"*) continue ;; esac
+      labels=${line%%\) reason=*}
+      printf '%s\n' "$labels" | tr '|' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
+    done | grep -v '^$' | sort -u > "$wd/pats.lst"
+    awk 'NR == FNR { g = $0; gsub(/[.]/, "[.]", g); gsub(/[*]/, ".*", g); re[++n] = "^" g "$"; next } { for (i = 1; i <= n; i++) if ($0 ~ re[i]) { print; break } }' "$wd/pats.lst" "$wd/tracked.lst" >> "$wd/guard.lst"
   fi
-  printf '%s' "$k"
+  sort -u -o "$wd/guard.lst" "$wd/guard.lst"
 }
 
-# Prints "kind<TAB>path" for every tracked path at <ref> the ratchet compares.
-list_kinds() {
-  local ref=$1 k p all
-  all=$(git ls-tree -r --name-only "$ref" 2>/dev/null) || return 1
-  [ -n "$all" ] || return 1
-  guard_load "$ref"
-  while IFS= read -r p; do
-    k=$(kind_full "$p")
-    if [ -n "$k" ]; then printf '%s\t%s\n' "$k" "$p"; fi
-  done <<< "$all"
+# The content-frozen kinds, which the allow-gate-change label can never waive and verify-harness.sh hashes; ci-gates.sh and verify-harness.sh read this as the third column of --list-guarded.
+enforced_kind() {
+  case "$1" in guard | budget | ci | gates | hosts) return 0 ;; esac
+  return 1
 }
 
-if [ -n "$list_mode" ]; then
-  list_kinds "$list_ref" || die "--list-guarded: cannot list the tracked files of $list_ref"
-  exit 0
-fi
+# Reads paths on stdin and prints "kind<TAB>path<TAB>enforced" (1 or 0) for each one the ratchet compares, in one pass without a subshell per path.
+classify() {
+  local g p e
+  awk 'NR == FNR { g[$0] = 1; next } { print (($0 in g) ? 1 : 0) "\t" $0 }' "$wd/guard.lst" - | while IFS=$'\t' read -r g p; do
+    kind_of "$p"
+    if [ -z "$KIND" ] && [ "$g" = 1 ]; then KIND=guard; fi
+    [ -n "$KIND" ] || continue
+    e=0
+    if enforced_kind "$KIND"; then e=1; fi
+    printf '%s\t%s\t%s\n' "$KIND" "$p" "$e"
+  done
+}
 
 # True when the merge base tracked this exact path.
 base_has() { printf '%s\n' "$base_paths" | grep -Fxq -- "$1"; }
@@ -231,7 +228,7 @@ content_ok() {
 
 cat > "$wd/facts.awk" <<'AWK'
 function fail(m) { printf "%s\n", m > "/dev/stderr"; ERRSET = 1; exit 3 }
-function emit(kind, key, val) { if (kind == "skip") return; gsub(/[\t\n]/, " ", key); gsub(/[\t\n]/, " ", val); printf "%s\t%s\t%s\n", kind, key, val }
+function emit(kind, key, val) { if (kind == "skip" || CMDS != "") return; gsub(/[\t\n]/, " ", key); gsub(/[\t\n]/, " ", val); printf "%s\t%s\t%s\n", kind, key, val }
 function blank(k,   s) { s = ""; while (k-- > 0) s = s " "; return s }
 function plain_num(v) { return v ~ /^[0-9]+([.][0-9]+)?$/ }
 
@@ -852,6 +849,7 @@ function scripts_walk(p,   n, j, ch, name, c, s) {
     j = p + 1
     while (j <= n) { ch = substr(T, j, 1); if (ch == "\\") { j += 2; continue }; if (ch == "\"") break; j++ }
     s = substr(T, p + 1, j - p - 1); p = j + 1
+    if (CMDS != "") { if (gate_script(name)) print s; continue }
     script_flags(name, s)
     emit("scr", name, "")
     if (gate_script(name)) emit("wl", name, wl_norm(s))
@@ -962,32 +960,104 @@ function do_gitleaks(   n) {
   if (n == 0 && !find("useDefault", 1)) fail("no section or useDefault found")
 }
 
-# Python lines that name a collection or run hook, a plugin list or a collect_ignore list, with the lines that belong to them; each block is one set fact, so a new or edited block is a finding and fixtures and helpers are not read.
-function conftest_hit(line,   rest, tk) {
-  if (line ~ /^[ \t]*#/) return 0
-  rest = line
+# Plugins that only add features and cannot hide tests.
+function neutral_plugin(name) { return name ~ /^pytest_(asyncio|cov|mock|timeout|xdist|randomly|django|env|socket|httpx|anyio|benchmark)$/ }
+
+# Python line with the comment and triple-quoted string text removed; QS carries an open triple quote to the next line.
+function py_code(line,   i, n, c, c3, out, q, e) {
+  n = length(line); out = ""; i = 1
+  while (i <= n) {
+    if (QS != "") {
+      e = index(substr(line, i), QS)
+      if (!e) return out
+      i += e + 2; QS = ""; out = out "\"\""; continue
+    }
+    c = substr(line, i, 1); c3 = substr(line, i, 3)
+    if (c3 == "\"\"\"" || c3 == "'''") { QS = c3; i += 3; continue }
+    if (c == "#") return out
+    if (c == "\"" || c == "'") {
+      q = c; out = out c; i++
+      while (i <= n) {
+        c = substr(line, i, 1)
+        if (c == "\\") { out = out substr(line, i, 2); i += 2; continue }
+        out = out c; i++
+        if (c == q) break
+      }
+      continue
+    }
+    out = out c; i++
+  }
+  return out
+}
+
+# True for a code line that can hide tests: a collection or run hook, collect_ignore, an autouse fixture, pytestmark, or a skip or exit call.
+function py_hit(code,   rest, tk) {
+  if (code ~ /(^|[^A-Za-z0-9_])(autouse|pytestmark|importorskip)([^A-Za-z0-9_]|$)/) return 1
+  if (code ~ /(^|[^A-Za-z0-9_.])(pytest[.](skip|xfail|exit)|sys[.]exit|os[.]_exit)([^A-Za-z0-9_]|$)/) return 1
+  rest = code
   while (match(rest, /(^|[^A-Za-z0-9_.])(collect_ignore_glob|collect_ignore|pytest_[A-Za-z0-9_]*)([^A-Za-z0-9_]|$)/)) {
     tk = substr(rest, RSTART, RLENGTH); gsub(/^[^A-Za-z]|[^A-Za-z0-9_]$/, "", tk)
-    if (tk !~ /^pytest_(asyncio|cov|mock|timeout|xdist|randomly|django|env|socket|httpx|anyio|benchmark)$/) return 1
+    if (!neutral_plugin(tk) && tk !~ /^pytest_(plugins|configure|addoption)$/) return 1
     rest = substr(rest, RSTART + RLENGTH - 1)
   }
   return 0
 }
+
+function py_start(code) { return py_hit(code) || code ~ /(^|[^A-Za-z0-9_.])pytest_(plugins|configure|addoption)([^A-Za-z0-9_]|$)/ }
+function bal(s,   k, c, d) { gsub(/"[^"]*"|'[^']*'/, "", s); d = 0; for (k = 1; k <= length(s); k++) { c = substr(s, k, 1); if (c ~ /[([{]/) d++; else if (c ~ /[)\]}]/) d-- }; return d }
 function indent_of(line) { match(line, /^[ \t]*/); return RLENGTH }
-function do_conftest(   n, L, i, j, blk, base, depth, l, c, k) {
-  n = split(T, L, "\n")
+
+# A pytest_plugins assignment whose entries are all neutral plugin names.
+function plugins_neutral(blk,   r, rest, tk) {
+  if (blk !~ /^[ \t]*pytest_plugins[ \t]*(:[^=]*)?[+]?=/) return 0
+  r = blk; sub(/^[^=]*=/, "", r); rest = r
+  while (match(rest, /"[^"]*"|'[^']*'/)) {
+    tk = substr(rest, RSTART + 1, RLENGTH - 2)
+    if (!neutral_plugin(tk)) return 0
+    rest = substr(rest, 1, RSTART - 1) " " substr(rest, RSTART + RLENGTH)
+  }
+  gsub(/[][(), \t\n]/, "", rest)
+  return rest == ""
+}
+
+function reg_stmt(c) {
+  if (c ~ /^[ \t]*pass[ \t]*$/) return 1
+  if (c ~ /^[ \t]*config[.]addinivalue_line[(][ \t]*["']markers["']/) return 1
+  if (c ~ /^[ \t]*(parser|group)[.](addoption|addini)[(]/) return 1
+  if (c ~ /^[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]*=[ \t]*parser[.]getgroup[(]/) return 1
+  return 0
+}
+
+# A pytest_configure or pytest_addoption hook whose body only registers markers or options.
+function reg_neutral(blk,   n, B, i, d) {
+  n = split(blk, B, "\n")
+  if (B[1] !~ /^[ \t]*(async[ \t]+)?def[ \t]+pytest_(configure|addoption)[ \t]*[(]/) return 0
+  if (B[1] ~ /[)][ \t]*:[ \t]*[^ \t]/) return 0
+  d = bal(B[1])
+  for (i = 2; i <= n; i++) {
+    if (d <= 0 && !reg_stmt(B[i])) return 0
+    d += bal(B[i])
+  }
+  return 1
+}
+
+# Code blocks that can hide tests, one set fact each, so a new or edited block is a finding and plain fixtures and helpers are not read.
+function do_conftest(   n, L, C, i, j, m, B, k, blk, base, depth, l, hit) {
+  n = split(T, L, "\n"); QS = ""
+  for (i = 1; i <= n; i++) { C[i] = py_code(L[i]); sub(/[ \t]+$/, "", C[i]) }
   for (i = 1; i <= n; i++) {
-    if (!conftest_hit(L[i])) continue
-    base = indent_of(L[i]); blk = L[i]; depth = 0
-    for (k = 1; k <= length(L[i]); k++) { c = substr(L[i], k, 1); if (c ~ /[([{]/) depth++; else if (c ~ /[)\]}]/) depth-- }
+    if (!py_start(C[i])) continue
+    base = indent_of(C[i]); blk = C[i]; depth = bal(C[i])
     for (j = i + 1; j <= n; j++) {
-      l = L[j]
-      if (l !~ /^[ \t]*$/ && depth <= 0 && indent_of(l) <= base) break
-      blk = blk "\n" l
-      for (k = 1; k <= length(l); k++) { c = substr(l, k, 1); if (c ~ /[([{]/) depth++; else if (c ~ /[)\]}]/) depth-- }
+      l = C[j]
+      if (l ~ /[^ \t]/ && depth <= 0 && indent_of(l) <= base) break
+      if (l ~ /[^ \t]/) blk = blk "\n" l
+      depth += bal(l)
     }
-    sub(/(\n[ \t]*)+$/, "", blk)
-    emit("set", "conftest-hook", blk)
+    hit = 0; m = split(blk, B, "\n")
+    for (k = 1; k <= m; k++) if (py_hit(B[k])) { hit = 1; break }
+    if (!hit) hit = (B[1] ~ /(^|[^A-Za-z0-9_.])pytest_plugins([^A-Za-z0-9_]|$)/) ? !plugins_neutral(blk) : !reg_neutral(blk)
+    if (hit) emit("set", "conftest-hook", blk)
     i = j - 1
   }
 }
@@ -1161,7 +1231,7 @@ END {
     else if (p[1] == "sev" && (n in bsevmax) && hagg[k] + 0 < bsevmax[n] + 0) { printf "WEAKENED %s: lint rule %s is %s in a new block, below %s at the merge base\n", F, p[2], label("sev", hagg[k]), label("sev", bsevmax[n]); bad = 1 }
     else if (p[1] == "max" && p[2] ~ /[.]limit/ && (n in blim) && hagg[k] + 0 > blim[n] + 0) { printf "WEAKENED %s: limit %s is %s in a new block, above %s at the merge base\n", F, p[2], hagg[k], blim[n]; bad = 1 }
   }
-  if (!NEWFILE) for (i = 1; i <= nn; i++) { split(hnew[i], p, SUBSEP); if (p[2] == "script-flag" && p[3] ~ /: (--config|-c|--workspace|--root)([ =]|$)/ && !script_at_base(p[3])) continue; if (p[2] == "conftest-hook") printf "WEAKENED %s: new or edited collection hook, plugin list or collect_ignore block, which can hide tests: '%s'\n", F, substr(p[3], 1, 120); else printf "WEAKENED %s: new ignore or exclude in %s was absent, now '%s'\n", F, p[2], p[3]; bad = 1 }
+  if (!NEWFILE) for (i = 1; i <= nn; i++) { split(hnew[i], p, SUBSEP); if (p[2] == "script-flag" && p[3] ~ /: (--config|-c|--workspace|--root)([ =]|$)/ && !script_at_base(p[3])) continue; if (p[2] == "conftest-hook") printf "WEAKENED %s: new or edited collection hook, plugin list, collect_ignore, autouse, skip or exit block, which can hide tests: '%s'\n", F, substr(p[3], 1, 120); else printf "WEAKENED %s: new ignore or exclude in %s was absent, now '%s'\n", F, p[2], p[3]; bad = 1 }
   for (k in hwl) if (!(k in bwl) && k ~ /^(prepare|prepublish|prepack|install|preinstall|postinstall)$/) { printf "WEAKENED %s: new install-time script %s (it runs on every install and can skip the gates; a gate script may only change by the known-safe words in the gate-ratchet.sh header)\n", F, k; bad = 1 }
   for (k in bwl) {
     if (!(k in hwl)) { printf "WEAKENED %s: script %s was '%s', now removed (a gate script may only change by the known-safe words in the gate-ratchet.sh header)\n", F, k, bwl[k]; bad = 1 }
@@ -1183,6 +1253,13 @@ END {
 }
 AWK
 
+if [ -n "$list_mode" ]; then
+  guard_scan "$list_ref" || die "--list-guarded: cannot list or read the tracked files of $list_ref"
+  [ -s "$wd/tracked.lst" ] || die "--list-guarded: cannot list the tracked files of $list_ref"
+  classify < "$wd/tracked.lst"
+  exit 0
+fi
+
 base_paths=$(git ls-tree -r --name-only "$mb" 2>/dev/null)
 paths=$( { printf '%s\n' "$base_paths"; git ls-tree -r --name-only HEAD; } 2>/dev/null | sort -u)
 [ -n "$paths" ] || die "cannot list tracked files"
@@ -1190,15 +1267,14 @@ if ! printf '%s\n' "$base_paths" | grep -Eq '(^|/)[.]claude/gates[.]txt$'; then
   echo "gate-ratchet: first adoption: the merge base has no .claude/gates.txt, nothing to compare"
   exit 0
 fi
-guard_load "$mb"
+guard_scan "$mb" || die "cannot derive the guarded set of the merge base $mb (a tracked file could not be read)"
+printf '%s\n' "$paths" | classify > "$wd/kinds.tsv"
 renames=$(git diff -M --name-status --diff-filter=R "$mb" HEAD 2>/dev/null)
 
 weakened=0
 unreadable=0
 checked=0
-while IFS= read -r path; do
-  kind=$(kind_full "$path")
-  [ -n "$kind" ] || continue
+while IFS=$'\t' read -r kind path _; do
   checked=$((checked + 1))
   : > "$wd/base"; : > "$wd/head"; : > "$wd/base.f"; : > "$wd/head.f"
   have_base=0; have_head=0
@@ -1246,7 +1322,7 @@ while IFS= read -r path; do
     file_bad=1
   fi
   if [ "$file_bad" -eq 1 ]; then weakened=1; fi
-done <<< "$paths"
+done < "$wd/kinds.tsv"
 
 added=$(git diff --no-renames --name-only --diff-filter=A "$mb" HEAD 2>/dev/null)
 while IFS= read -r path; do

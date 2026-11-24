@@ -592,6 +592,18 @@ for st in ts py; do
   has "scripts/check-extra.sh" "$OUT" "[$st] the waiver refusal names the new gate script"
 done
 
+# protect-files run from a subdirectory still reads the guarded set of the repository top level.
+for st in ts py; do
+  R="$T/guard-$st"
+  mkdir -p "$R/pkg"
+  j=$(python3 -c 'import json, sys; print(json.dumps({"tool_input": {"file_path": sys.argv[1]}}))' "$R/scripts/check-extra.sh")
+  OUT=$(cd "$R/pkg" && printf '%s' "$j" | clean env CLAUDE_PROJECT_DIR="$R/pkg" bash "$HK/template-$st/.claude/hooks/protect-files.sh" 2>&1)
+  has "gate script or runner the ratchet guards" "$OUT" "[$st] protect-files from a subdirectory guards the gate script"
+  j=$(python3 -c 'import json, sys; print(json.dumps({"tool_input": {"file_path": sys.argv[1]}}))' "$R/scripts/not-a-gate.sh")
+  OUT=$(cd "$R/pkg" && printf '%s' "$j" | clean env CLAUDE_PROJECT_DIR="$R/pkg" bash "$HK/template-$st/.claude/hooks/protect-files.sh" 2>&1)
+  check "" "$OUT" "[$st] protect-files from a subdirectory lets an unrelated script through"
+done
+
 # no second list: the three consumers name no gate script of their own.
 RAT="$HK/template/scripts/gate-ratchet.sh"
 KOF=$(awk '/^kind_of\(\)/,/^}/' "$RAT")
@@ -599,6 +611,9 @@ for n in check-docs check-supply-chain check-workflows check-env-example check-d
   case "$KOF" in *"$n"*) bad "kind_of lists $n by hand" ;; *) ok ;; esac
 done
 if grep -q 'enforcers=' "$HK/template/.claude/ci-gates.sh"; then bad "ci-gates.sh keeps an enforcers list"; else ok; fi
+if grep -Eq '[(](guard|budget|ci|gates|hosts)[|]' "$HK/template/.claude/ci-gates.sh"; then bad "ci-gates.sh keeps a list of enforced kinds"; else ok; fi
+if grep -Eq '[(](guard|budget|ci|gates|hosts)[|]|[.]claude/hooks/|check-[a-z-]+[.]sh' "$HK/template/.claude/verify-harness.sh"; then bad "verify-harness.sh keeps a list of guarded paths"; else ok; fi
+if grep -q -- '--list-guarded' "$HK/template/.claude/ci-gates.sh" && grep -q -- '--list-guarded' "$HK/template/.claude/verify-harness.sh"; then ok; else bad "ci-gates.sh and verify-harness.sh do not both read --list-guarded"; fi
 for st in ts py; do
   if grep -Eq 'scripts/(check-[a-z-]+|test-budget)[.|]' "$HK/template-$st/.claude/hooks/protect-files.sh"; then bad "[$st] protect-files keeps a list of gate scripts"; else ok; fi
 done

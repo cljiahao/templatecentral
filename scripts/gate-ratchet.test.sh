@@ -1093,5 +1093,212 @@ git_ commit -q -am "allow-list line"
 ci_gate "allow-gate-change"
 check 0 "$EC" "waiver still covers a label-waivable file ($OUT)"
 
+# Round 5: a base_edit helper puts an edit on main itself.
+base_edit() {
+  edit "$@"
+  git_ checkout -q -B main work
+}
+
+# listed <path>: the list-guarded line for a path at HEAD of the current repo, or nothing.
+listed() {
+  (cd "$R" && bash scripts/gate-ratchet.sh --list-guarded HEAD 2>/dev/null) | awk -F'\t' -v p="$1" '$2 == p { print }'
+}
+
+# Round 5: a path named only in a project skill document is not a guard.
+seed ts
+printf '#!/usr/bin/env bash\necho helper\n' > "$R/scripts/helper.sh"
+mkdir -p "$R/.claude/skills/demo"
+printf '# demo\nRun scripts/helper.sh before you start.\n' > "$R/.claude/skills/demo/SKILL.md"
+git_ add -A
+git_ commit -q -m "script named by a skill document"
+check "" "$(listed scripts/helper.sh)" "skill document mention does not list the script as guarded"
+git_ checkout -q -B work main
+printf 'echo more\n' >> "$R/scripts/helper.sh"
+printf 'Also run it twice.\n' >> "$R/.claude/skills/demo/SKILL.md"
+git_ commit -q -am "touch both"
+expect 0 "change touching a script and the skill document that names it"
+printf '#!/usr/bin/env bash\necho helper2\n' > "$R/scripts/helper2.sh"
+printf '# runs scripts/helper2.sh\n' >> "$R/.claude/gates.txt"
+git_ add -A
+git_ commit -q -m "script named by the manifest"
+git_ checkout -q -B main work
+git_ checkout -q -B work main
+printf 'exit 0\n' >> "$R/scripts/helper2.sh"
+git_ commit -q -am "edit manifest script"
+expect 1 "control: a script named by gates.txt stays guarded" "scripts/helper2.sh" "gate script, runner or manifest changed"
+
+# Round 5: a runner named only by package.json, the Makefile or .husky is guarded.
+seed ts
+printf '#!/usr/bin/env bash\necho run\n' > "$R/scripts/run-tests.sh"
+printf '#!/usr/bin/env bash\necho dev\n' > "$R/scripts/run-dev.sh"
+printf '#!/usr/bin/env bash\necho mk\n' > "$R/scripts/mk-step.sh"
+printf '#!/usr/bin/env bash\necho hk\n' > "$R/scripts/hk-step.sh"
+printf 'check:\n\tbash scripts/mk-step.sh\n' > "$R/Makefile"
+mkdir -p "$R/.husky"
+printf '#!/usr/bin/env sh\nbash scripts/hk-step.sh\n' > "$R/.husky/pre-commit"
+git_ add -A
+git_ commit -q -m "runners"
+base_edit package.json '"test:ci": "vitest --run --coverage",' '"test:ci": "vitest --run --coverage",
+    "test:unit": "bash scripts/run-tests.sh",
+    "dev": "bash scripts/run-dev.sh",'
+for r in run-tests mk-step hk-step; do
+  git_ checkout -q -B work main
+  printf 'exit 0\n' >> "$R/scripts/$r.sh"
+  git_ commit -q -am "gut $r"
+  expect 1 "runner $r named only by its caller" "scripts/$r.sh" "gate script, runner or manifest changed"
+done
+git_ checkout -q -B work main
+printf 'exit 0\n' >> "$R/scripts/run-dev.sh"
+git_ commit -q -am "edit dev script"
+expect 0 "control: a script named only by a dev script"
+check "" "$(listed scripts/run-dev.sh)" "dev-only script is not listed as guarded"
+
+# Round 5: conftest code that can hide tests is a finding, the rest is not.
+conftest_cases() {
+  local tag=$1
+  seed py
+  add_file test/unit/conftest.py 'import pytest
+
+
+@pytest.fixture(autouse=True)
+def _gate():
+    pytest.skip("always")'
+  expect 1 "$tag autouse fixture that skips" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'import pytest
+
+
+@pytest.fixture(autouse=True)
+def _quiet():
+    return 1'
+  expect 1 "$tag autouse fixture with no skip" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'import pytest
+
+pytestmark = pytest.mark.skip'
+  expect 1 "$tag pytestmark" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'import pytest
+
+
+def check():
+    pytest.xfail("x")'
+  expect 1 "$tag pytest.xfail" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'import pytest
+
+dep = pytest.importorskip("nothing_here")'
+  expect 1 "$tag importorskip" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'import pytest
+
+
+def check():
+    pytest.exit("stop")'
+  expect 1 "$tag pytest.exit" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'import sys
+
+sys.exit(0)'
+  expect 1 "$tag sys.exit" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'import os
+
+os._exit(0)'
+  expect 1 "$tag os._exit" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'pytest_plugins = ["pytest_asyncio", "evil_plugin"]'
+  expect 1 "$tag pytest_plugins with a plugin outside the list" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py 'def pytest_configure(config):
+    config.option.keyword = "zzz"'
+  expect 1 "$tag pytest_configure that sets an option" "test/unit/conftest.py" "collection hook"
+  add_file test/unit/conftest.py '"""Notes on pytest_collection_modifyitems and autouse fixtures."""
+import pytest
+
+
+@pytest.fixture
+def one():
+    # pytest_collection_modifyitems is not used here
+    return 1'
+  expect 0 "$tag hook name inside a docstring and a comment"
+  add_file test/unit/conftest.py 'pytest_plugins = ["pytest_asyncio"]'
+  expect 0 "$tag pytest_plugins with a neutral plugin"
+  add_file test/unit/conftest.py 'def pytest_configure(config):
+    config.addinivalue_line("markers", "slow: slow tests")'
+  expect 0 "$tag pytest_configure that only registers a marker"
+  add_file test/unit/conftest.py 'def pytest_addoption(parser):
+    parser.addoption("--runslow", action="store_true", default=False)'
+  expect 0 "$tag pytest_addoption that only adds an option"
+  add_file test/unit/conftest.py 'import pytest
+
+
+@pytest.fixture
+def client():
+    return object()
+
+
+def build(n):
+    return [n, n]'
+  expect 0 "$tag plain fixtures and helpers"
+}
+conftest_cases "[awk]"
+MAWK=$(command -v mawk || true)
+if [[ -n "$MAWK" ]]; then
+  mkdir -p "$T/mawkbin"
+  ln -sf "$MAWK" "$T/mawkbin/awk"
+  OLDPATH=$PATH
+  PATH="$T/mawkbin:$PATH"
+  conftest_cases "[mawk]"
+  seed py
+  passes pyproject.toml "fail_under = 80" "fail_under = 80
+plugins = ['']" "[mawk] coverage setting with only quotes"
+  weakens pyproject.toml "fail_under = 80" "fail_under = 80
+plugins = ['x']" "[mawk] coverage setting with a value" "new setting"
+  PATH=$OLDPATH
+fi
+
+# Round 5: the list carries an enforced column, one spaced guarded path, and the scan fails closed.
+seed ts
+check "1" "$(listed .claude/gates.txt | cut -f3)" "gates manifest is enforced"
+check "1" "$(listed scripts/test-budget.sh | cut -f3)" "budget script is enforced"
+check "1" "$(listed .github/workflows/ci.yml | cut -f3)" "ci workflow is enforced"
+check "0" "$(listed eslint.config.mjs | cut -f3)" "eslint config is label-waivable"
+check "0" "$(listed .claude/dep-audit-allow.txt | cut -f3)" "dependency allow-list is label-waivable"
+printf '#!/usr/bin/env bash\necho a\n' > "$R/.claude/hooks/my hook.sh"
+git_ add -A
+git_ commit -q -m "hook with a space"
+git_ checkout -q -B work main
+printf 'exit 0\n' >> "$R/.claude/hooks/my hook.sh"
+git_ commit -q -am "sabotage the spaced hook"
+ci_gate "allow-gate-change"
+check 1 "$EC" "waiver does not cover a hook with a space in its path ($OUT)"
+has "my hook.sh" "$OUT" "waiver refusal names the whole spaced path"
+seed ts
+printf '#!/usr/bin/env bash\necho a\n' > "$R/.claude/hooks/uniq.sh"
+printf 'unique-content-%s\n' "$$" >> "$R/.claude/hooks/uniq.sh"
+git_ add -A
+git_ commit -q -m "unique hook"
+BLOB=$(git_ rev-parse "HEAD:.claude/hooks/uniq.sh")
+git_ checkout -q -B work main
+git_ rm -q .claude/hooks/uniq.sh
+printf 'x\n' >> "$R/scripts/check-docs.sh"
+git_ commit -q -am "drop the hook"
+rm -f "$R/.git/objects/${BLOB:0:2}/${BLOB:2}"
+expect 2 "unreadable tracked file at the merge base" "cannot derive the guarded set"
+
+# Round 5: classification runs in one pass, with a CPU bound on a large tree.
+KOF=$(cat "$RATCHET")
+check 0 "$(printf '%s\n' "$KOF" | grep -c 'list_kinds\|kind_full')" "no per-path helper survives in the ratchet"
+check 0 "$(printf '%s\n' "$KOF" | awk '/^classify\(\)/,/^}/' | grep -c '[$][(]')" "classify has no command substitution per path"
+seed ts
+mkdir -p "$R/src/a" "$R/src/b" "$R/src/c"
+for i in $(seq 1 1000); do
+  printf 'x\n' > "$R/src/a/f$i.ts"
+  printf 'x\n' > "$R/src/b/f$i.ts"
+  printf 'x\n' > "$R/src/c/f$i.ts"
+done
+git_ add -A
+git_ commit -q -m "3000 files"
+CPU=$(cd "$R" && python3 - <<'PY'
+import resource, subprocess
+subprocess.run(["bash", "scripts/gate-ratchet.sh", "--list-guarded", "HEAD"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+r = resource.getrusage(resource.RUSAGE_CHILDREN)
+print(int((r.ru_utime + r.ru_stime) * 100))
+PY
+)
+if [[ "$CPU" -lt 100 ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: list-guarded on 3000 files used ${CPU} centiseconds of CPU, limit 100"; fi
+
 echo "gate-ratchet.test: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

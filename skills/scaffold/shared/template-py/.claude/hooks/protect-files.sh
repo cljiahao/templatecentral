@@ -69,13 +69,15 @@ case "$rel" in
   .lefthook/*|*/.lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
   .github/workflows/*|.github/actions/*|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*) reason="CI/CD pipeline definition — changes skip or weaken the merge gates" ;;
 esac
-# Gate scripts and runners are whatever gate-ratchet.sh --list-guarded derives from the tracked tree; nothing is listed here.
+# Gate scripts and runners are whatever gate-ratchet.sh --list-guarded derives from the tracked tree, run from the project folder or else the git top level; nothing is listed here.
 if [[ -z "$reason" ]]; then
   case "$rel" in
     scripts/* | */scripts/* | .claude/* | */.claude/*)
-      if git rev-parse --verify -q HEAD >/dev/null 2>&1 && [ -z "$(git rev-parse --show-prefix 2>/dev/null)" ]; then
-        if guarded=$(bash scripts/gate-ratchet.sh --list-guarded HEAD 2>/dev/null) && [ -n "$guarded" ]; then
-          if printf '%s\n' "$guarded" | awk -F'\t' -v p="$rel" '$2 == p { hit = 1 } END { exit !hit }'; then reason="gate script or runner the ratchet guards — an edit can defeat a merge gate"; fi
+      if git rev-parse --verify -q HEAD >/dev/null 2>&1; then
+        gdir=$root
+        if [ ! -f scripts/gate-ratchet.sh ]; then gdir=$(cd "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null && pwd -P); fi
+        if guarded=$(cd "$gdir" 2>/dev/null && bash scripts/gate-ratchet.sh --list-guarded HEAD 2>/dev/null) && [ -n "$guarded" ]; then
+          if printf '%s\n' "$guarded" | awk -F'\t' -v p="${abs#"$gdir"/}" '$2 == p { hit = 1 } END { exit !hit }'; then reason="gate script or runner the ratchet guards — an edit can defeat a merge gate"; fi
         else
           reason="the guarded set cannot be derived (scripts/gate-ratchet.sh failed or is missing) — approve each edit here"
         fi

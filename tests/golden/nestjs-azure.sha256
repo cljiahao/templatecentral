@@ -2,13 +2,13 @@
 # Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
 # Exception to the source commit: the seeded AGENTS.md, rules, tail, hooks and session-context.sh were trimmed to cap the per-session load (scripts/measure-seeded-load.sh).
 # Format: <sha256>  <path>
-acf4c8daf000538386c970c6d4d3dc4a163a82a39a10981c89567206ba729be9  .claude/ci-gates.sh
+0708f49638527126de1ef4e030a463952a7fb44fa9c36a2fce06e344a459f7ad  .claude/ci-gates.sh
 493e60c9326a091f17b62a1ddc088696825546f77f8214915360dd3616e3f392  .claude/comment-hygiene-patterns.txt
 ffd9e407ce34017ca93e75601289e53b0878d268853abcfa4601a16789e1de5a  .claude/gates.txt
 d3e0a70653413a8e3a27300998f35f9eeb11cc5c986f51b10975683b8feb2cc0  .claude/hooks/block-no-verify.sh
 23c76185d22e65b7667096ed17d2982d96d7b9a36fec8408a2896547c8ca5465  .claude/hooks/post-edit-comment-check.sh
 8de078a5759a301c6a8929305356bdc592213269f87898a4892206ab4ec6721f  .claude/hooks/post-edit-typecheck.sh
-31621d45a97765bb668c92a8132a1b570c300aa2d3591f5e78cc8ac99e0ff0ca  .claude/hooks/protect-files.sh
+c3cd170bdeed6965c7ed50eb418db08a56017d0ddea818cb74aad5516a242ece  .claude/hooks/protect-files.sh
 4e517dcc5ce3a9cc41828cded849f4734a5b9c8bdf89d7d0d2122476e9054171  .claude/hooks/session-context.sh
 9310e36318fc6bfb3953a6366193a913329f759ac0ae15af5ce67f57079f0681  .claude/hooks/skill-usage-log.sh
 d997f39290833016bb42d7b079e961e78cc1469bfd185f1d7e768f373e71aa1b  .claude/hooks/stop-checks.sh
@@ -21,7 +21,7 @@ bdaa785c95e21e9dc4ef70a8c376784784344426858620fd2b4d4c04f5daef22  .claude/regist
 66eaf32dab2335f6a69c5f51e8155cacbe2bb9d85cc4701de0225e675d4032c2  .claude/skills/nest-verify/SKILL.md
 8436a463b24cffbcfcbba9e6f9d88e1aee3048957c54424deef018d0b024a5b4  .claude/skills/skill-audit/SKILL.md
 805c987b975e0a4c66019d6de553ffcf1503c3f78c459bec67ff4fa5b9251bd5  .claude/skills/test-consolidate/SKILL.md
-04420463e8c00429ea3735a2666586d0e9c1fb52b0a64b391528eebc6be3ff26  .claude/verify-harness.sh
+640132d72b665057e79c60d05d7737d3ac326fcb2ba47ac767b59e5498af5453  .claude/verify-harness.sh
 dcf7f166300f51b18591329d7cc911f03e75ece443605995d7ecc856d0956d2b  .dockerignore
 fa14317a7cd1227941b747bec2719706bf42d0bb14618be1fc34abd5f40ed9ec  .env.example
 ea287dacf5aa5c36e2307d8965031a6bff56eb7db6634794c30fb6fce25a0379  .gitignore
@@ -54,7 +54,7 @@ e87336ac3c1719b2906e771d5e1f45cf49f3d7c40dd985fa6093d1f7afd7e3d2  scripts/check-
 2c33663b4054b73d26a4c65d17dbc39d26c0d905177918d930493a01cd6a5a27  scripts/check-supply-chain.sh
 d6de42b7b107ef5dba50819f28ec98172e6352b1c2d0c9efa4c30ddb71b7a2de  scripts/check-workarounds.sh
 6c0824c642d17d8e864133fcacb1a9e8979e5c4f739c71307d886b4a79834a06  scripts/check-workflows.sh
-835b909f88b8be82c3a9f71b491ca00849001da3dc524832312cc6e2b7b3d437  scripts/gate-ratchet.sh
+9501a047d6916b215999058e537e4bcaf448e8ded94ebf63a2227c6389e1b694  scripts/gate-ratchet.sh
 4063966fec5a5021ed09906289f89c2e5935dd4dc680ae6625affb3aecfd2dee  scripts/scan-secrets.sh
 a7867419d93209a05e60bdd53aef39e95368a506bea94204925c1dd4d8150d32  scripts/test-budget.sh
 d39772d4a50380753708f4f7e84d36fa783d6918bf30f95f323c374f82768448  sonar-project.properties

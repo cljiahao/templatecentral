@@ -8,7 +8,12 @@ manifest=".claude/harness.json"
 [ -f "$manifest" ] || { echo "verify-harness: $manifest missing" >&2; exit 2; }
 
 # Enforcement layer only — AGENTS.md / CLAUDE.md / *-verify skills legitimately evolve.
-guard='^(\.claude/hooks/|\.claude/settings\.json$|\.claude/(verify|regen)-harness\.sh$|\.claude/comment-hygiene-patterns\.txt$|lefthook\.yml$|\.lefthook/|\.gitleaks\.toml$|\.github/workflows/|\.claude/ci-gates\.sh$|scripts/(check-docs|test-budget|gate-ratchet|check-supply-chain|check-workflows|check-env-example|check-dockerfile|check-workarounds|scan-secrets|check-secret-scanner)\.sh$|\.claude/registry-hosts\.txt$|\.claude/gates\.txt$|azure-pipelines/templatecentral-gates\.yml$|azure-pipelines\.yml$)'
+# Enforcement layer: the files gate-ratchet.sh --list-guarded marks enforced; no list is kept here.
+if ! listing=$(bash scripts/gate-ratchet.sh --list-guarded HEAD 2>/dev/null) || [ -z "$listing" ]; then
+  echo "verify-harness: cannot derive the enforcement layer (scripts/gate-ratchet.sh --list-guarded HEAD failed); run it in a committed project" >&2
+  exit 2
+fi
+guarded=$(printf '%s\n' "$listing" | awk -F'\t' '$3 == 1 { print $2 }')
 
 sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1; else sha256sum "$1" | cut -d' ' -f1; fi; }
 read_manifest() {
@@ -28,7 +33,7 @@ drift=0; checked=0; unfilled=0
 while IFS=$'\t' read -r path origin; do
   [ -n "$path" ] || continue
   case "$origin" in ""|null|undefined|None|"<"*) echo "UNFILLED: $path (origin_hash is a placeholder)" >&2; unfilled=1; continue ;; esac
-  printf '%s' "$path" | grep -qE "$guard" || continue
+  printf '%s\n' "$guarded" | grep -qxF -- "$path" || continue
   checked=$((checked + 1))
   if [ ! -f "$path" ]; then echo "MISSING:  $path" >&2; drift=1; continue; fi
   [ "$(sha "$path")" = "$origin" ] || { echo "MODIFIED: $path" >&2; drift=1; }

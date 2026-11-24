@@ -1546,11 +1546,17 @@ V=$(mktemp -d "$T/vh.XXXX")
 mkdir -p "$V/.claude/hooks"
 echo x > "$V/.claude/hooks/a.sh"
 cp "$KIT/gates.txt" "$V/.claude/gates.txt"
+mkdir -p "$V/scripts"
+cp "$TPL/template/scripts/gate-ratchet.sh" "$V/scripts/gate-ratchet.sh"
+git -C "$V" init -q
+# vcommit <dir>: commit the whole fixture so verify-harness.sh lists its guarded files from HEAD.
+vcommit() { git -C "$1" add -A && git -C "$1" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q --allow-empty --no-verify -m fixture; }
 sha() { python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$1"; }
 
 # expect_verify <want-exit> <harness.json> <description> [PATH]
 expect_verify() {
   printf '%s' "$2" > "$V/.claude/harness.json"
+  vcommit "$V"
   if [[ -n "${4:-}" ]]; then
     (cd "$V" && PATH="$4" /bin/bash "$KIT/verify-harness.sh" >/dev/null 2>&1)
   else
@@ -1586,6 +1592,9 @@ done
 # Gate manifest: lefthook and each CI file must run every gate .claude/gates.txt lists.
 GV=$(mktemp -d "$T/gv.XXXX")
 mkdir -p "$GV/.claude" "$GV/.github/workflows" "$GV/azure-pipelines"
+mkdir -p "$GV/scripts"
+cp "$TPL/template/scripts/gate-ratchet.sh" "$GV/scripts/gate-ratchet.sh"
+git -C "$GV" init -q
 cp "$KIT/gates.txt" "$GV/.claude/gates.txt"
 printf '%s' "$GOOD" > "$GV/.claude/harness.json"
 mkdir -p "$GV/.claude/hooks"; cp "$V/.claude/hooks/a.sh" "$GV/.claude/hooks/a.sh"
@@ -1596,7 +1605,7 @@ while IFS='|' read -r gid lh ci; do
   if [[ "$lh" != "-" ]]; then echo "run: $lh" >> "$GV/lefthook.yml"; fi
   if [[ "$ci" != "-" ]]; then echo "run: $ci" >> "$GV/.github/workflows/ci.yml"; echo "- bash: $ci" >> "$GV/azure-pipelines/templatecentral-gates.yml"; fi
 done <<< "$gate_lines"
-gate_verify() { (cd "$GV" && bash "$KIT/verify-harness.sh" 2>&1); }
+gate_verify() { vcommit "$GV"; (cd "$GV" && bash "$KIT/verify-harness.sh" 2>&1); }
 out=$(gate_verify); check 0 "$?" "verify-harness passes when every runner has every listed gate"
 cp "$REPO_ROOT/skills/scaffold/shared/template-settings-ts/.claude/settings.json" "$GV/.claude/settings.json"
 out=$(gate_verify); check 0 "$?" "verify-harness passes on the seeded settings.json ($out)"

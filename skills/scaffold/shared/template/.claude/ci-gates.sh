@@ -149,11 +149,13 @@ case "$gate" in
     rc=$?
     guarded_list=$(bash "$runner" --list-guarded "$mbase"); list_rc=$?
     rm -f "$runner_tmp"
-    [ "$list_rc" -eq 0 ] && [ -n "$guarded_list" ] || fail "gate-ratchet.sh --list-guarded $mbase failed or listed nothing (output above), so the files that enforce the gates are unknown; fix the checker."
-    enforced=$(printf '%s\n' "$guarded_list" | awk -F'\t' '$1 ~ /^(guard|budget|ci|gates|hosts)$/ { print $2 }')
+    if [ "$list_rc" -ne 0 ] || [ -z "$guarded_list" ]; then
+      fail "gate-ratchet.sh --list-guarded $mbase failed or listed nothing (output above), so the files that enforce the gates are unknown; fix the checker."
+    fi
+    enforced=$(printf '%s\n' "$guarded_list" | awk -F'\t' '$3 == 1 { print $2 }')
     printf '%s\n' "$findings"
     if [ "$rc" -ne 0 ]; then
-      if { printf '%s\n' "$enforced" | sed 's/^/E /'; printf '%s\n' "$findings"; } | awk '/^E / { E[substr($0, 3)] = 1; next } /^(WEAKENED|UNREADABLE) / { p = $2; sub(/:$/, "", p); if (p in E) hit = 1 } END { exit !hit }'; then
+      if { printf '%s\n' "$enforced" | sed 's/^/E /'; printf '%s\n' "$findings"; } | awk '/^E / { E[substr($0, 3)] = 1; next } /^(WEAKENED|UNREADABLE) / { p = $0; sub(/^[A-Z]+ /, "", p); i = index(p, ": "); if (i) p = substr(p, 1, i - 1); else sub(/:$/, "", p); if (p in E) hit = 1 } END { exit !hit }'; then
         fail "the allow-gate-change label cannot waive a change to the files that enforce the gates (listed above); it needs the owner review that branch protection requires."
       fi
       if [ "$rc" -ne 1 ] || printf '%s\n' "$findings" | grep -q '^UNREADABLE '; then
