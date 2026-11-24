@@ -1379,7 +1379,12 @@ has "cannot waive a change to the files that enforce the gates" "$OUT" "patterns
 # Round 6: a listing row with fewer than three fields fails closed.
 seed ts
 git_ checkout -q -B work main
-printf '#!/usr/bin/env bash\nif [ "${1:-}" = --list-guarded ]; then printf "guard\\t.claude/gates.txt\\n"; exit 0; fi\necho "WEAKENED .claude/gates.txt: x"\nexit 1\n' > "$R/scripts/gate-ratchet.sh"
+cat > "$R/scripts/gate-ratchet.sh" <<'STUB'
+#!/usr/bin/env bash
+if [ "${1:-}" = --list-guarded ]; then printf 'guard\t.claude/gates.txt\n'; exit 0; fi
+echo "WEAKENED .claude/gates.txt: x"
+exit 1
+STUB
 git_ commit -q -am "two column runner"
 git_ checkout -q -B main work
 git_ checkout -q -B work main
