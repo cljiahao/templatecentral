@@ -1307,6 +1307,70 @@ fails sonar_scope_spec_inclusion_dropped "$H_SONAR" sonar_drop_spec "coverage ex
 fails sonar_scope_py_sources_changed "$H_SONAR" sonar_py_sources "missing sonar.sources=src"
 passes sonar_scope_aligned "$H_SONAR" true
 
+# ── check_seeded_pipefail_readers ────────────────────────────────────────────────────────────
+H_PF="Seeded pipefail scripts do not pipe into an early-exit reader"
+PF_FIXTURE="scaffold/shared/template/scripts/zz-pipefail-fixture.sh"
+PF_YAML="scaffold/shared/template-ci/github-ts/.github/workflows/zz-pipefail-fixture.yml"
+# pf_script <pipefail line> <command>: writes a seeded fixture script whose command sits on line 3.
+pf_script() { printf '#!/usr/bin/env bash\n%s\n%s\n' "$1" "$2" > "$S/$PF_FIXTURE"; }
+pf_grep_q() { pf_script 'set -uo pipefail' 'printf x | grep -q x'; }
+pf_here_string() { pf_script 'set -uo pipefail' 'grep -q x <<< "$v"'; }
+pf_no_pipefail() { pf_script 'set -u' 'printf x | grep -q x'; }
+pf_grep_Eq() { pf_script 'set -uo pipefail' 'printf x | grep -Eq x'; }
+pf_grep_iqE() { pf_script 'set -uo pipefail' 'if printf x | grep -iqE x; then :; fi'; }
+pf_grep_quiet() { pf_script 'set -uo pipefail' 'printf x | grep --quiet x'; }
+pf_grep_m1() { pf_script 'set -uo pipefail' 'v=$(printf x | grep -m1 x)'; }
+pf_grep_e_arg() { pf_script 'set -uo pipefail' 'printf x | grep -e q -E x'; }
+pf_grep_count() { pf_script 'set -uo pipefail' 'printf x | grep -c x'; }
+pf_grep_invert() { pf_script 'set -uo pipefail' 'printf x | grep -v y'; }
+pf_head() { pf_script 'set -uo pipefail' 'v=$(printf x | head -n 1)'; }
+pf_sed_q() { pf_script 'set -uo pipefail' "v=\$(printf x | sed '1q')"; }
+pf_sed_s() { pf_script 'set -uo pipefail' "v=\$(printf x | sed 's/x/q/')"; }
+pf_awk_exit() { pf_script 'set -uo pipefail' "printf x | awk '/x/ { exit }'"; }
+pf_awk_end_exit() { pf_script 'set -uo pipefail' "printf x | awk '/x/ { hit = 1 } END { exit !hit }'"; }
+pf_read() { pf_script 'set -uo pipefail' 'printf x | read -r v'; }
+pf_read_loop() { pf_script 'set -uo pipefail' 'printf x | while read -r v; do :; done'; }
+pf_multiline() { pf_script 'set -uo pipefail' 'printf x |
+  grep -q x'; }
+pf_in_subshell() { pf_script 'set -uo pipefail' 'v=$(printf x | grep -q x && echo y)'; }
+pf_quoted_pipe() { pf_script 'set -uo pipefail' "echo 'a | grep -q b'"; }
+pf_heredoc_body() { printf '#!/usr/bin/env bash\nset -uo pipefail\ncat <<EOF\nprintf x | grep -q x\nEOF\n' > "$S/$PF_FIXTURE"; }
+pf_comment() { pf_script 'set -uo pipefail' '# printf x | grep -q x'; }
+pf_unclosed_quote() { pf_script 'set -uo pipefail' "echo 'never closed"; }
+pf_yaml_run() { printf 'steps:\n  - run: |\n      set -o pipefail\n      printf x | grep -q x\n' > "$S/$PF_YAML"; }
+pf_yaml_clean() { printf 'steps:\n  - run: |\n      set -o pipefail\n      grep -q x <<< "$v"\n' > "$S/$PF_YAML"; }
+pf_yaml_other_key() { printf 'steps:\n  - name: printf x | grep -q x\n    run: |\n      set -o pipefail\n      echo ok\n' > "$S/$PF_YAML"; }
+pf_drop_anchor_pipefail() { sed -i.bak 's/pipefail//' "$SH/template/.lefthook/commit-msg.sh"; }
+pf_delete_anchor() { rm -f "$SH/template/.lefthook/commit-msg.sh"; }
+fails pipefail_reader_grep_q "$H_PF" pf_grep_q "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_grep_Eq "$H_PF" pf_grep_Eq "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_grep_iqE "$H_PF" pf_grep_iqE "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_grep_long_quiet "$H_PF" pf_grep_quiet "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_grep_max_count "$H_PF" pf_grep_m1 "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_head "$H_PF" pf_head "zz-pipefail-fixture.sh:3: pipe into head"
+fails pipefail_reader_sed_q "$H_PF" pf_sed_q "zz-pipefail-fixture.sh:3: pipe into sed"
+fails pipefail_reader_awk_exit "$H_PF" pf_awk_exit "zz-pipefail-fixture.sh:3: pipe into awk"
+fails pipefail_reader_read "$H_PF" pf_read "zz-pipefail-fixture.sh:3: pipe into read"
+fails pipefail_reader_multiline_pipe_names_reader_line "$H_PF" pf_multiline "zz-pipefail-fixture.sh:4: pipe into grep"
+fails pipefail_reader_inside_command_substitution "$H_PF" pf_in_subshell "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_in_yaml_run_block "$H_PF" pf_yaml_run "zz-pipefail-fixture.yml:4: pipe into grep"
+fails pipefail_reader_unclosed_quote_fails "$H_PF" pf_unclosed_quote "zz-pipefail-fixture.sh:3: single quote is never closed"
+fails pipefail_reader_fails_when_anchor_pipefail_dropped "$H_PF" pf_drop_anchor_pipefail "anchor script missing or no longer sets pipefail"
+fails pipefail_reader_fails_when_anchor_deleted "$H_PF" pf_delete_anchor "anchor script missing or no longer sets pipefail"
+passes pipefail_reader_here_string "$H_PF" pf_here_string
+passes pipefail_reader_no_pipefail_script "$H_PF" pf_no_pipefail
+passes pipefail_reader_grep_pattern_arg_named_q "$H_PF" pf_grep_e_arg
+passes pipefail_reader_grep_count "$H_PF" pf_grep_count
+passes pipefail_reader_grep_invert "$H_PF" pf_grep_invert
+passes pipefail_reader_sed_substitute "$H_PF" pf_sed_s
+passes pipefail_reader_awk_exit_in_end_block "$H_PF" pf_awk_end_exit
+passes pipefail_reader_while_read_loop "$H_PF" pf_read_loop
+passes pipefail_reader_pipe_inside_quotes "$H_PF" pf_quoted_pipe
+passes pipefail_reader_pipe_inside_heredoc_body "$H_PF" pf_heredoc_body
+passes pipefail_reader_pipe_inside_comment "$H_PF" pf_comment
+passes pipefail_reader_yaml_clean_block "$H_PF" pf_yaml_clean
+passes pipefail_reader_yaml_non_script_key "$H_PF" pf_yaml_other_key
+
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

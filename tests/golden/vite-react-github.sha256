@@ -2,7 +2,7 @@
 # Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
 # Exception to the source commit: the seeded AGENTS.md, rules, tail, hooks and session-context.sh were trimmed to cap the per-session load (scripts/measure-seeded-load.sh).
 # Format: <sha256>  <path>
-6ff0bc08732df11cda9adb7878d080787e553a3c79b7ae4e1b8465923a0dfa2d  .claude/ci-gates.sh
+6a57f48c998d0b4db7b2de1a5cd517752db1b3f44cd702183907b07481bd96fd  .claude/ci-gates.sh
 493e60c9326a091f17b62a1ddc088696825546f77f8214915360dd3616e3f392  .claude/comment-hygiene-patterns.txt
 ffd9e407ce34017ca93e75601289e53b0878d268853abcfa4601a16789e1de5a  .claude/gates.txt
 d3e0a70653413a8e3a27300998f35f9eeb11cc5c986f51b10975683b8feb2cc0  .claude/hooks/block-no-verify.sh
@@ -29,7 +29,7 @@ bd94a2fe74c8ec8e562e462ac8a87dc2571a98110ccff8bd6cb1f97873d35671  .dockerignore
 e96d49d3c822c9088d8ec0f0e691c80d419e0f72d6c6bc918b33e03befce71ec  .gitignore
 a1978b7a1e366072692ed55ab372a83b62908ccf6eaa5e2e261906c92c704e43  .gitleaks.toml
 f130b83deb64b249c1c91030fcbec6c742690e2adf78fd12284630cea296615e  .jscpd.json
-c66dad01d734dacc5092b980035b9901ec518e1ecbfb5db270a35d39750a27f0  .lefthook/commit-msg.sh
+c3b28ad731d5bcfe2dcebfb50e6850359761ca0b8069e58de39b0d3c0e0f50ad  .lefthook/commit-msg.sh
 d76c138f28da0f0acb33eb0048b6213930b9e67072421202bd77f04981bdb8f3  .npmrc
 a72a244d8521b76e9e669cd129525e1d0ba76481b123211d322a7b1c38b2804c  .prettierignore
 51a5686d6d1d4f2712a90345c6513021f742757633a60858b7f3169084538161  .prettierrc
@@ -55,10 +55,10 @@ aaea542dcd638a628af0dbadf04d299101629c453cf324746d7c9ab4908eb648  index.html
 6260a254cf729d72acd86748ac3cc397c1da231a5684ec2f47b93631dabaf0f0  scripts/check-docs.sh
 2392640032143c71f40e5a62c7a6dd0c9e111eafdae1339e3e8fe1e980b8054e  scripts/check-env-example.sh
 e87336ac3c1719b2906e771d5e1f45cf49f3d7c40dd985fa6093d1f7afd7e3d2  scripts/check-secret-scanner.sh
-2c33663b4054b73d26a4c65d17dbc39d26c0d905177918d930493a01cd6a5a27  scripts/check-supply-chain.sh
-d6de42b7b107ef5dba50819f28ec98172e6352b1c2d0c9efa4c30ddb71b7a2de  scripts/check-workarounds.sh
-6c0824c642d17d8e864133fcacb1a9e8979e5c4f739c71307d886b4a79834a06  scripts/check-workflows.sh
-02d5119a2c87d218aef06a8dc2bc3de7fcfb2187b3c207910f37faf99fc6de14  scripts/gate-ratchet.sh
+e17f2d480f4e72cecc8976eee0356454cb249d3e361a924d1fee6d8704fa2405  scripts/check-supply-chain.sh
+4235f622c022fe6c674c1b66c1a9d12d3812242d88978fdf8cbb9e6622256e54  scripts/check-workarounds.sh
+1876cc963623b353c8b358a84ad32668e061b53444cd89a848097072f2ae61f5  scripts/check-workflows.sh
+20a084c62ae07ee2cc3b91f93ffafde7654124f50acd60dbb273a2a964178a7d  scripts/gate-ratchet.sh
 4063966fec5a5021ed09906289f89c2e5935dd4dc680ae6625affb3aecfd2dee  scripts/scan-secrets.sh
 a7867419d93209a05e60bdd53aef39e95368a506bea94204925c1dd4d8150d32  scripts/test-budget.sh
 d39772d4a50380753708f4f7e84d36fa783d6918bf30f95f323c374f82768448  sonar-project.properties

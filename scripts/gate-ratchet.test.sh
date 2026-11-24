@@ -1445,5 +1445,62 @@ printf 'x\n' >> "$R/scripts/check-docs.sh"
 git_ commit -q -am "touch"
 expect 1 "control: a project without the folder still guards its scripts" "scripts/check-docs.sh"
 
+# bulk_main <count>: commit that many long-named files on main, so the tracked-path listing is far past one pipe buffer.
+bulk_main() {
+  git_ checkout -q main
+  python3 - "$R" "$1" <<'PY'
+import os, sys
+root, n = sys.argv[1], int(sys.argv[2])
+for i in range(n):
+    d = os.path.join(root, "bulk", "dir-%04d" % (i % 50))
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, "file-%05d-padding-padding-padding.txt" % i), "w") as fh:
+        fh.write("x\n")
+PY
+  git_ add -A
+  git_ commit -q -m bulk
+}
+
+# A repository with 3,000 tracked files: a weakened gate is still caught and never reads as first adoption.
+seed ts
+bulk_main 3000
+listing=$(git_ ls-tree -r --name-only main | wc -c | tr -d ' ')
+check 1 "$([ "$listing" -gt 100000 ] && echo 1 || echo 0)" "bulk fixture listing is over 100 KB ($listing)"
+weakens eslint.config.mjs "['error', 15]" "['error', 25]" "3,000 files: complexity limit raised" "was 15" "now 25"
+if [[ "$OUT" == *"first adoption"* ]]; then check no yes "3,000 files: never reported as first adoption"; else check ok ok "3,000 files: never reported as first adoption"; fi
+git_ checkout -q -B work main
+ratchet
+check 0 "$EC" "3,000 files: unchanged branch passes ($OUT)"
+
+seed ts
+git_ rm -q -f .claude/gates.txt
+git_ commit -q -m "no gates file"
+bulk_main 3000
+git_ checkout -q -B work main
+printf 'x\n' >> "$R/README.md"
+git_ add -A
+git_ commit -q -m "touch"
+expect 0 "3,000 files without gates.txt: still first adoption" "first adoption"
+
+# A git object that cannot be read stops the run with status 2 and a message, never a pass.
+seed ts
+edit tsconfig.json '"strict": true' '"strict": true, "noImplicitAny": true'
+blob=$(git_ rev-parse "main:tsconfig.json")
+rm -f "$R/.git/objects/${blob:0:2}/${blob:2}"
+ratchet
+check 2 "$EC" "missing base blob: exits 2 ($OUT)"
+has "cannot read tsconfig.json at the merge base" "$OUT" "missing base blob: names the unreadable file"
+
+seed ts
+git_ checkout -q -B work main
+printf 'x\n' >> "$R/README.md"
+git_ add -A
+git_ commit -q -m "touch"
+tree=$(git_ rev-parse "main^{tree}")
+rm -f "$R/.git/objects/${tree:0:2}/${tree:2}"
+ratchet
+check 2 "$EC" "missing base tree: exits 2 ($OUT)"
+if [[ "$OUT" == *"first adoption"* ]]; then check no yes "missing base tree: never reported as first adoption"; else check ok ok "missing base tree: never reported as first adoption"; fi
+
 echo "gate-ratchet.test: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

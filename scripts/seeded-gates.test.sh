@@ -648,5 +648,96 @@ for st in ts py; do
   if grep -Eq 'scripts/(check-[a-z-]+|test-budget)[.|]' "$HK/template-$st/.claude/hooks/protect-files.sh"; then bad "[$st] protect-files keeps a list of gate scripts"; else ok; fi
 done
 
+# ---- pipefail readers: every match test that used to read a pipe is fed input far past one pipe buffer, with the match first and with no match.
+big=$(printf 'padding %.0s' {1..30000})
+check 1 "$([ "${#big}" -gt 200000 ] && echo 1 || echo 0)" "padding string is over 200 KB"
+
+newrepo wa-bigtree
+g checkout -q main
+mkdir -p "$R/zzz"
+for ((i = 0; i < 3000; i++)); do printf 'x\n' > "$R/zzz/file-$i-padding-padding-padding-padding.txt"; done
+g add -A
+g commit -q -m bulk
+g checkout -q -B work main
+g rm -q test/add.test.ts
+g commit -q -m "drop covering test"
+runwa
+check 1 "$RC" "check-workarounds flags a deleted test with the source first in a big tree ($OUT)"
+has "removed test: test/add.test.ts (covers src/add.ts)" "$OUT" "big tree: names the covered source"
+
+newrepo wa-bigtree-none
+g checkout -q main
+mkdir -p "$R/zzz"
+for ((i = 0; i < 3000; i++)); do printf 'x\n' > "$R/zzz/file-$i-padding-padding-padding-padding.txt"; done
+g rm -q src/add.ts
+g add -A
+g commit -q -m bulk
+g checkout -q -B work main
+g rm -q test/add.test.ts
+g commit -q -m "drop covering test"
+runwa
+check 0 "$RC" "check-workarounds allows a deleted test whose source is gone, in a big tree ($OUT)"
+
+newrepo cm-hooks
+{ printf 'Merge '; printf '%s' "$big"; printf '\n'; } > "$T/cm-merge.txt"
+OUT=$(clean bash "$SH/.lefthook/commit-msg.sh" "$T/cm-merge.txt" 2>&1)
+check 0 "$?" "commit-msg accepts a 200 KB merge subject"
+{ printf 'feat: '; printf '%s' "$big"; printf '\n'; } > "$T/cm-long.txt"
+OUT=$(clean bash "$SH/.lefthook/commit-msg.sh" "$T/cm-long.txt" 2>&1)
+check 1 "$?" "commit-msg rejects a 200 KB conventional subject"
+{ printf 'feat(a): '; printf 'y%.0s' {1..100}; printf '\n'; } > "$T/cm-ok.txt"
+OUT=$(clean bash "$SH/.lefthook/commit-msg.sh" "$T/cm-ok.txt" 2>&1)
+check 0 "$?" "commit-msg accepts a 100 character description"
+{ printf 'Merge'; printf '\n'; } > "$T/cm-bare.txt"
+OUT=$(clean bash "$SH/.lefthook/commit-msg.sh" "$T/cm-bare.txt" 2>&1)
+check 1 "$?" "commit-msg rejects a subject that only starts like a merge"
+
+newrepo cg-comment
+g checkout -q main
+cp "$SH/.claude/comment-hygiene-patterns.txt" "$R/.claude/"
+g add -A
+g commit -q -m patterns
+g checkout -q -B work main
+printf '// %s\n' "Added $big" > "$R/src/a.ts"
+g add -A
+g commit -q -m work
+g update-ref refs/remotes/origin/main main
+OUT=$(cd "$R" && clean env GITHUB_BASE_REF=main bash .claude/ci-gates.sh comments main 2>&1)
+check 1 "$?" "comments gate flags a marker comment of 200 KB ($(printf '%s' "$OUT" | tail -c 300))"
+has "src/a.ts:" "$OUT" "comments gate names the file with the 200 KB marker comment"
+newrepo cg-comment-none
+g checkout -q main
+cp "$SH/.claude/comment-hygiene-patterns.txt" "$R/.claude/"
+g add -A
+g commit -q -m patterns
+g checkout -q -B work main
+printf '// %s\n' "plain words $big" > "$R/src/a.ts"
+g add -A
+g commit -q -m work
+g update-ref refs/remotes/origin/main main
+OUT2=$(cd "$R" && clean env GITHUB_BASE_REF=main bash .claude/ci-gates.sh comments main 2>&1)
+RC2=$?
+check 0 "$RC2" "comments gate passes a 200 KB comment with no marker ($OUT2)"
+
+# ---- ci-gates ratchet: an unreadable-config finding past one pipe buffer cannot be waived by the label.
+# stub_ratchet <first line>: a repo whose merge-base ratchet prints that line, then 12,000 detail lines, and exits 1.
+stub_ratchet() {
+  newrepo "$1"
+  printf '%s\n' '#!/usr/bin/env bash' 'if [ "${1:-}" = "--list-guarded" ]; then printf "gate\tsome-file\t0\n"; exit 0; fi' "echo \"$2\"" 'for ((i = 0; i < 12000; i++)); do echo "detail line $i padding padding padding"; done' 'exit 1' > "$R/scripts/gate-ratchet.sh"
+  g add -A
+  g commit -q -m "stub ratchet"
+  g update-ref refs/remotes/origin/main HEAD
+  g checkout -q -b pr
+  printf 'x\n' >> "$R/src/add.ts"
+  g commit -q -am change
+  OUT=$(cd "$R" && clean env LABELS="allow-gate-change" bash .claude/ci-gates.sh ratchet main 2>&1)
+  RC=$?
+}
+stub_ratchet cg-ratchet-unreadable "UNREADABLE some.cfg: cannot parse"
+check 1 "$RC" "ratchet gate: label does not waive a 200 KB unreadable finding ($(printf '%s' "$OUT" | tail -c 300))"
+has "cannot waive an unreadable config" "$OUT" "ratchet gate: says the unreadable finding is not waivable"
+stub_ratchet cg-ratchet-weakened "WEAKENED some.cfg: was 1, now 2"
+check 0 "$RC" "ratchet gate: label still waives a big weakened-only finding ($(printf '%s' "$OUT" | tail -c 300))"
+
 echo "seeded-gates: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

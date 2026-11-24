@@ -14,9 +14,17 @@ cooldown_floor=7
 cr=$(printf '\r')
 q="[\"']?"
 
-# Top-level scalar of a flat YAML file: prints the value, nothing when the key is absent.
+# Top-level scalar of a flat YAML file: prints the value, nothing when the key is absent. The awk reads to the end, so the writer is never cut off by a reader that quits early.
 yaml_value() {
-  ws_lines "$1" | grep -E "^$2:" | head -n 1 | sed -E 's/^[^:]*:[[:space:]]*//; s/[[:space:]]+#.*$//; s/^["'"'"']//; s/["'"'"']$//'
+  ws_lines "$1" | awk -v key="$2" -v sq="'" '
+    !done && index($0, key ":") == 1 {
+      sub(/^[^:]*:[[:space:]]*/, "")
+      sub(/[[:space:]]+#.*$/, "")
+      sub("^[\"" sq "]", "")
+      sub("[\"" sq "]$", "")
+      print
+      done = 1
+    }'
 }
 
 # File lines with quotes around a top-level key removed, so a quoted key reads like a plain one.
@@ -32,14 +40,14 @@ done
 subdir_note() {
   local found
   if [ -f package.json ]; then return 0; fi
-  found=$(find . -mindepth 2 -maxdepth 3 -name node_modules -prune -o -name package.json -print 2> /dev/null | sed 's|^\./||' | sort | head -n 3 | tr '\n' ' ')
+  found=$(find . -mindepth 2 -maxdepth 3 -name node_modules -prune -o -name package.json -print 2> /dev/null | sed 's|^\./||' | sort | awk 'NR <= 3 { printf "%s ", $0 }')
   if [ -n "$found" ]; then
     echo "check-supply-chain: NOTE no package.json at the project root, so the pnpm checks did not run. Found: ${found}Run this script from that directory too."
   fi
 }
 
 pnpm_settings() {
-  local ws=pnpm-workspace.yaml v
+  local ws=pnpm-workspace.yaml v wsl
   if [ ! -f package.json ]; then
     subdir_note
     return 0
@@ -52,6 +60,10 @@ pnpm_settings() {
     bad "$ws has CRLF line endings, which the checks cannot read. Convert it to LF (dos2unix $ws) and commit the converted file."
     return 0
   fi
+  wsl=$(ws_lines "$ws") || {
+    bad "$ws cannot be read."
+    return 0
+  }
   v=$(yaml_value "$ws" minimumReleaseAge)
   v=${v%\"}
   v=${v#\"}
@@ -59,19 +71,19 @@ pnpm_settings() {
     '' | *[!0-9]*) bad "$ws needs 'minimumReleaseAge: <minutes>' (a number). Add 'minimumReleaseAge: 10080' to wait 7 days before installing a new release." ;;
     *) if [ "$v" -lt 1440 ]; then bad "$ws sets minimumReleaseAge to $v minutes; the floor is 1440 (1 day). Restore 'minimumReleaseAge: 10080'."; fi ;;
   esac
-  if ws_lines "$ws" | grep -qE '^minimumReleaseAgeExclude:'; then
+  if grep -qE '^minimumReleaseAgeExclude:' <<< "$wsl"; then
     bad "$ws sets minimumReleaseAgeExclude, which disables the cooldown for the listed packages. Remove it and wait out the release age, or pin an older release."
   fi
-  if ! ws_lines "$ws" | grep -qE '^allowBuilds:'; then
+  if ! grep -qE '^allowBuilds:' <<< "$wsl"; then
     bad "$ws has no 'allowBuilds:' map. Dependency install scripts stay off unless a package is listed there with true; add 'allowBuilds:' and list only the packages that need a build."
   fi
-  if ws_lines "$ws" | grep -qE "^dangerouslyAllowAllBuilds:[[:space:]]*${q}[Tt][Rr][Uu][Ee]"; then
+  if grep -qE "^dangerouslyAllowAllBuilds:[[:space:]]*${q}[Tt][Rr][Uu][Ee]" <<< "$wsl"; then
     bad "$ws sets dangerouslyAllowAllBuilds: true, which runs every dependency's install script. Remove it and list only the needed packages under allowBuilds."
   fi
-  if ws_lines "$ws" | grep -qE "^strictDepBuilds:[[:space:]]*${q}[Ff][Aa][Ll][Ss][Ee]"; then
+  if grep -qE "^strictDepBuilds:[[:space:]]*${q}[Ff][Aa][Ll][Ss][Ee]" <<< "$wsl"; then
     bad "$ws sets strictDepBuilds: false, which hides unreviewed install scripts. Remove it so an unlisted build script fails the install."
   fi
-  if ws_lines "$ws" | grep -qE "^ignoreScripts:[[:space:]]*${q}[Ff][Aa][Ll][Ss][Ee]"; then
+  if grep -qE "^ignoreScripts:[[:space:]]*${q}[Ff][Aa][Ll][Ss][Ee]" <<< "$wsl"; then
     bad "$ws sets ignoreScripts: false. Remove it; the allowBuilds map is the only place to allow a build."
   fi
   if [ -f .npmrc ] && grep -qiE '^[[:space:]]*(ignore-scripts[[:space:]]*=[[:space:]]*false|dangerously-allow-all-builds[[:space:]]*=[[:space:]]*true)' .npmrc; then
@@ -81,7 +93,8 @@ pnpm_settings() {
 
 # Lockfile and requirements lines that pull from a host other than the public default or .claude/registry-hosts.txt.
 registry_hosts() {
-  local allow=.claude/registry-hosts.txt f host hosts line
+  local allow=.claude/registry-hosts.txt f host hosts line allow_hosts=""
+  if [ -f "$allow" ]; then allow_hosts=$(grep -vE '^[[:space:]]*(#|$)' "$allow" | tr '[:upper:]' '[:lower:]'); fi
   for f in pnpm-lock.yaml uv.lock requirements*.txt; do
     if [ ! -f "$f" ]; then continue; fi
     hosts=$(
@@ -92,8 +105,8 @@ registry_hosts() {
     )
     for host in $hosts; do
       case "$host" in registry.npmjs.org | pypi.org | files.pythonhosted.org) continue ;; esac
-      if [ -f "$allow" ] && grep -vE '^[[:space:]]*(#|$)' "$allow" | tr '[:upper:]' '[:lower:]' | grep -qxF -- "$host"; then continue; fi
-      line=$(grep -niF -- "$host" "$f" | head -n 1 | cut -d: -f1)
+      if [ -n "$allow_hosts" ] && grep -qxF -- "$host" <<< "$allow_hosts"; then continue; fi
+      line=$(awk -v h="$host" 'index(tolower($0), tolower(h)) { print NR; exit }' "$f")
       bad "$f:${line:-1} resolves a package from $host, which is not the default public registry. Remove the dependency, or add '$host' to $allow after review."
     done
   done
