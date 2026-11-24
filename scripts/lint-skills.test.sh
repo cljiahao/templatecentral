@@ -1314,16 +1314,16 @@ PF_YAML="scaffold/shared/template-ci/github-ts/.github/workflows/zz-pipefail-fix
 # pf_script <pipefail line> <command>: writes a seeded fixture script whose command sits on line 3.
 pf_script() { printf '#!/usr/bin/env bash\n%s\n%s\n' "$1" "$2" > "$S/$PF_FIXTURE"; }
 pf_grep_q() { pf_script 'set -uo pipefail' 'printf x | grep -q x'; }
-pf_here_string() { pf_script 'set -uo pipefail' 'grep -q x <<< "$v"'; }
+pf_here_string() { pf_script 'set -uo pipefail' "grep -q x <<< \"\$v\""; }
 pf_no_pipefail() { pf_script 'set -u' 'printf x | grep -q x'; }
 pf_grep_Eq() { pf_script 'set -uo pipefail' 'printf x | grep -Eq x'; }
 pf_grep_iqE() { pf_script 'set -uo pipefail' 'if printf x | grep -iqE x; then :; fi'; }
 pf_grep_quiet() { pf_script 'set -uo pipefail' 'printf x | grep --quiet x'; }
-pf_grep_m1() { pf_script 'set -uo pipefail' 'v=$(printf x | grep -m1 x)'; }
+pf_grep_m1() { pf_script 'set -uo pipefail' "v=\$(printf x | grep -m1 x)"; }
 pf_grep_e_arg() { pf_script 'set -uo pipefail' 'printf x | grep -e q -E x'; }
 pf_grep_count() { pf_script 'set -uo pipefail' 'printf x | grep -c x'; }
 pf_grep_invert() { pf_script 'set -uo pipefail' 'printf x | grep -v y'; }
-pf_head() { pf_script 'set -uo pipefail' 'v=$(printf x | head -n 1)'; }
+pf_head() { pf_script 'set -uo pipefail' "v=\$(printf x | head -n 1)"; }
 pf_sed_q() { pf_script 'set -uo pipefail' "v=\$(printf x | sed '1q')"; }
 pf_sed_s() { pf_script 'set -uo pipefail' "v=\$(printf x | sed 's/x/q/')"; }
 pf_awk_exit() { pf_script 'set -uo pipefail' "printf x | awk '/x/ { exit }'"; }
@@ -1332,13 +1332,13 @@ pf_read() { pf_script 'set -uo pipefail' 'printf x | read -r v'; }
 pf_read_loop() { pf_script 'set -uo pipefail' 'printf x | while read -r v; do :; done'; }
 pf_multiline() { pf_script 'set -uo pipefail' 'printf x |
   grep -q x'; }
-pf_in_subshell() { pf_script 'set -uo pipefail' 'v=$(printf x | grep -q x && echo y)'; }
+pf_in_subshell() { pf_script 'set -uo pipefail' "v=\$(printf x | grep -q x && echo y)"; }
 pf_quoted_pipe() { pf_script 'set -uo pipefail' "echo 'a | grep -q b'"; }
 pf_heredoc_body() { printf '#!/usr/bin/env bash\nset -uo pipefail\ncat <<EOF\nprintf x | grep -q x\nEOF\n' > "$S/$PF_FIXTURE"; }
 pf_comment() { pf_script 'set -uo pipefail' '# printf x | grep -q x'; }
 pf_unclosed_quote() { pf_script 'set -uo pipefail' "echo 'never closed"; }
 pf_yaml_run() { printf 'steps:\n  - run: |\n      set -o pipefail\n      printf x | grep -q x\n' > "$S/$PF_YAML"; }
-pf_yaml_clean() { printf 'steps:\n  - run: |\n      set -o pipefail\n      grep -q x <<< "$v"\n' > "$S/$PF_YAML"; }
+pf_yaml_clean() { printf 'steps:\n  - run: |\n      set -o pipefail\n      grep -q x <<< "%s"\n' "\$v" > "$S/$PF_YAML"; }
 pf_yaml_other_key() { printf 'steps:\n  - name: printf x | grep -q x\n    run: |\n      set -o pipefail\n      echo ok\n' > "$S/$PF_YAML"; }
 pf_drop_anchor_pipefail() { sed -i.bak 's/pipefail//' "$SH/template/.lefthook/commit-msg.sh"; }
 pf_delete_anchor() { rm -f "$SH/template/.lefthook/commit-msg.sh"; }

@@ -723,7 +723,7 @@ check 0 "$RC2" "comments gate passes a 200 KB comment with no marker ($OUT2)"
 # stub_ratchet <first line>: a repo whose merge-base ratchet prints that line, then 12,000 detail lines, and exits 1.
 stub_ratchet() {
   newrepo "$1"
-  printf '%s\n' '#!/usr/bin/env bash' 'if [ "${1:-}" = "--list-guarded" ]; then printf "gate\tsome-file\t0\n"; exit 0; fi' "echo \"$2\"" 'for ((i = 0; i < 12000; i++)); do echo "detail line $i padding padding padding"; done' 'exit 1' > "$R/scripts/gate-ratchet.sh"
+  printf '%s\n' '#!/usr/bin/env bash' "if [ \"\${1:-}\" = \"--list-guarded\" ]; then printf \"gate\\tsome-file\\t0\\n\"; exit 0; fi" "echo \"$2\"" "for ((i = 0; i < 12000; i++)); do echo \"detail line \$i padding padding padding\"; done" 'exit 1' > "$R/scripts/gate-ratchet.sh"
   g add -A
   g commit -q -m "stub ratchet"
   g update-ref refs/remotes/origin/main HEAD
