@@ -236,8 +236,11 @@ def main(argv):
         deleted_rows = read_deleted(gdir)
         found = scan_skills(root)
         if mode == "snapshot":
-            if moved_rows or deleted_rows:
-                print("check-fences: moved.d or deleted.d has rows; a snapshot taken now would drop those fences.", file=sys.stderr)
+            if moved_rows:
+                print("check-fences: moved.d has rows; a snapshot taken now would drop the moved fences.", file=sys.stderr)
+                return 2
+            if deleted_rows:
+                print("check-fences: deleted.d has rows; a snapshot taken now would drop the deleted fences.", file=sys.stderr)
                 return 2
             if not found:
                 print("check-fences: no fences found; nothing to snapshot", file=sys.stderr)

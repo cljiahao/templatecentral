@@ -497,7 +497,6 @@ r=$(three del-extra-first)
 rm_fence "$r" C; del_row "$r" 2 slice-a
 printf '\n```ts\nD\n```\n' >> "$r/skills/add/s.md"
 expect_fail "$r" "EXTRA" "P7_delete_last_then_add_another_fence"
-sha0=$(snap_sha "$r" 2)
 bad_row() { # bad_row <name> <row text> <description>
   local rr; rr=$(three "$1")
   rm_fence "$rr" A; mkdir -p "$rr/$G/deleted.d"
