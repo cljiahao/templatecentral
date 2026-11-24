@@ -166,7 +166,7 @@ printf '{}\n' >"$R/package.json"; printf 'export default []\n' >"$R/eslint.confi
 cat >"$T/stubbin/pnpm" <<'STUB'
 #!/usr/bin/env bash
 case "$2" in
-  eslint) cat "$STUB_LINT"; [ -s "$STUB_LINT" ] && exit 1; exit 0 ;;
+  eslint) cat "$STUB_LINT"; if [ -n "${STUB_ERR:-}" ]; then cat "$STUB_ERR" >&2; fi; if [ -n "${STUB_LINT_RC:-}" ]; then exit "$STUB_LINT_RC"; fi; [ -s "$STUB_LINT" ] && exit 1; exit 0 ;;
   tsc) cat "$STUB_TSC"; [ -s "$STUB_TSC" ] && exit 2; exit 0 ;;
 esac
 exit 3
@@ -392,7 +392,7 @@ GR=$(newproj gline)
 (cd "$GR" && git init -q -b main) >/dev/null 2>&1
 printf '%s\n' "$OLD" | gb "$GR" record lint colon >/dev/null
 printf 'a.ts:1:1: E\n' | gb "$GR" record types colon --tool tsc >/dev/null
-: | gb "$GR" record dockerfile colon --tool script >/dev/null
+printf 'check-dockerfile: ok (1 file)\n' | gb "$GR" record dockerfile colon --tool script --rc 0 >/dev/null
 (cd "$GR" && git add -A && gitc commit -qm base && git tag base)
 out=$(gb "$GR" growth base); check "gate lines: control, no change" 0 $?
 grep -v "^# gate${tab}dockerfile${tab}" "$GR/$BL" >"$T/gl1.txt" && cp "$T/gl1.txt" "$GR/$BL"
@@ -514,6 +514,87 @@ out=$(runhd check); check "hadolint: a new finding fails" 1 $?
 contains "hadolint: the new finding is named" "NEW dockerfile: Dockerfile: DL3025 warning" "$out"
 HADO_RC=0; : >"$T/hado.txt"
 out=$(runhd check); check "hadolint: clean output passes" 0 $?
+
+# round 3: a script gate that prints nothing did not run
+SG=$(newproj silent)
+mkdir -p "$SG/scripts" "$SG/.claude"; printf 'FROM scratch\n' >"$SG/Dockerfile"
+printf '#!/usr/bin/env bash\necho "Dockerfile:1: Use a pinned base image" >&2\necho "Dockerfile:2: Add a USER" >&2\nexit 1\n' >"$SG/scripts/check-dockerfile.sh"
+out=$(bash "$G" -C "$SG" run record 2>&1); check "script gate: record exits 0" 0 $?
+check "script gate: two entries recorded" 2 "$(nent "$SG/$BL")"
+out=$(bash "$G" -C "$SG" run check 2>&1); check "script gate: control passes" 0 $?
+printf '#!/usr/bin/env bash\nexit 0\n' >"$SG/scripts/check-dockerfile.sh"
+out=$(bash "$G" -C "$SG" run check 2>&1); check "script gate: a silent script fails run check" 1 $?
+contains "script gate: the silence is explained" "did not run" "$out"
+out=$(bash "$G" -C "$SG" run prune 2>&1); check "script gate: a silent script fails run prune" 1 $?
+SG2=$(newproj silent2)
+mkdir -p "$SG2/scripts"; printf 'FROM scratch\n' >"$SG2/Dockerfile"; cp "$SG/scripts/check-dockerfile.sh" "$SG2/scripts/"
+out=$(bash "$G" -C "$SG2" run record 2>&1); check "script gate: a silent script fails run record" 1 $?
+exists=no; [ -f "$SG2/$BL" ] && exists=yes; check "script gate: nothing was written" no "$exists"
+printf '#!/usr/bin/env bash\necho "check-dockerfile: ok (1 file)"\n' >"$SG2/scripts/check-dockerfile.sh"
+out=$(bash "$G" -C "$SG2" run record 2>&1); check "script gate: control, an ok line records" 0 $?
+out=$(bash "$G" -C "$SG2" run check 2>&1); check "script gate: control, an ok line passes run check" 0 $?
+
+# round 3: trailing whitespace does not hide a summary
+out=$(printf '%s\n1 problem  \t\n' "$OLD" | gb "$P" check lint colon --rc 1); check "a summary with trailing spaces is a summary" 0 $?
+
+# round 3: record replaces a v1 file; check, prune, validate and growth keep failing on it
+V3=$(newproj v1rec)
+mkdir -p "$V3/.claude"; printf '# templatecentral gate baseline v1\nlint\ta.ts\t1\tOld\n' >"$V3/$BL"
+out=$(printf 'a.ts:1:1: Old\n' | gb "$V3" record lint colon); check "record replaces a v1 file" 0 $?
+contains "record says it replaced a v1 file" "NOTE" "$out"
+check "the replacement is v2" "$HEADER_LINE" "$(head -n 1 "$V3/$BL")"
+out=$(gb "$V3" validate); check "the replacement validates" 0 $?
+V4=$(newproj v1refresh)
+mkdir -p "$V4/node_modules" "$V4/.claude"
+printf '{"dependencies":{"@nestjs/core":"1"}}\n' >"$V4/package.json"; printf '{}\n' >"$V4/nest-cli.json"
+printf 'export default []\n' >"$V4/eslint.config.mjs"; printf 'node_modules\n' >"$V4/.gitignore"
+printf '# templatecentral gate baseline v1\nlint\ta.ts\t1\tOld\n' >"$V4/$BL"
+(cd "$V4" && git init -q -b main && git add -A && gitc commit -qm init) >/dev/null 2>&1
+printf 'a.ts:1:1: Old\n' >"$T/lint6.txt"
+out=$(STUB_LINT="$T/lint6.txt" STUB_TSC="$T/empty.txt" PATH="$T/stubbin:/usr/bin:/bin" bash "$REFRESH" "$V4" --apply --gate-baseline 2>&1)
+check "harness-refresh replaces a v1 file" "$HEADER_LINE" "$(head -n 1 "$V4/$BL")"
+check "the replacement keeps the finding" 1 "$(nent "$V4/$BL")"
+
+# round 3: stderr noise does not fail a run; a crash with only stderr does
+RE=$(newproj stderr)
+mkdir -p "$RE/node_modules" "$RE/.claude"
+printf '{}\n' >"$RE/package.json"; printf 'export default []\n' >"$RE/eslint.config.mjs"
+printf '%s\n' "$OLD" >"$T/lint7.txt"
+rune() { STUB_LINT="$T/lint7.txt" STUB_TSC="$T/empty.txt" STUB_ERR="${ERRF:-}" STUB_LINT_RC="${LRC:-}" PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$RE" run "$@" 2>&1; }
+out=$(rune record); check "stderr: record exits 0" 0 $?
+printf 'WARN deprecated package foo\n' >"$T/err7.txt"; ERRF="$T/err7.txt"
+out=$(rune check); check "stderr: findings at rc 1 with a WARN line on stderr pass" 0 $?
+ERRF=
+printf 'a.ts:1:1: New [Error/n]\n%s\n' "$OLD" >"$T/lint7.txt"; ERRF="$T/err7.txt"
+out=$(rune check); check "stderr: a new finding still fails with stderr noise" 1 $?
+ERRF=; : >"$T/lint7.txt"; printf 'Error: eslint crashed\n' >"$T/err8.txt"; ERRF="$T/err8.txt"; LRC=2
+out=$(rune check); check "stderr: a crash with only stderr text fails" 1 $?
+contains "stderr: the crash text is shown" "eslint crashed" "$out"
+ERRF=; LRC=2
+out=$(rune check); check "stderr: a non-zero exit with no output fails" 1 $?
+ERRF=; LRC=
+
+# round 3: pyright configured but missing is a failure, not a skip
+RPM=$(newproj pyrmissing)
+mkdir -p "$RPM/.claude"; printf '{}\n' >"$RPM/pyrightconfig.json"
+printf '%s\n# gate\ttypes\tpyright\ntypes\tapp/m.py\t1\tOld\n' "$HEADER_LINE" >"$RPM/$BL"
+out=$(PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$RPM" run check 2>&1); check "pyright: configured, binary missing fails run check" 1 $?
+contains "pyright: the reason is named" "configured but not installed" "$out"
+printf '%s\n' "$HEADER_LINE" >"$RPM/$BL"
+out=$(PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$RPM" run check 2>&1); check "pyright: configured, binary missing fails even when not recorded" 1 $?
+rm -f "$RPM/pyrightconfig.json"
+out=$(PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$RPM" run check 2>&1); check "pyright: control, not configured is skipped" 0 $?
+
+# round 3: record and run dry refuse a failed run with no output
+out=$(: | gb "$P" record fresh colon --rc 1); check "record refuses rc 1 with empty output" 1 $?
+out=$(: | gb "$P" record fresh colon --rc 0); check "control: record accepts rc 0 with empty output" 0 $?
+RD=$(newproj dryfail)
+mkdir -p "$RD/node_modules"; printf '{}\n' >"$RD/package.json"; printf 'export default []\n' >"$RD/eslint.config.mjs"
+: >"$T/empty2.txt"
+out=$(STUB_LINT="$T/empty2.txt" STUB_LINT_RC=2 STUB_TSC="$T/empty.txt" PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$RD" run dry 2>&1)
+contains "run dry refuses a failed run with no output" "would NOT be recorded" "$out"
+out=$(STUB_LINT="$T/empty2.txt" STUB_TSC="$T/empty.txt" PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$RD" run dry 2>&1)
+contains "control: run dry on a clean run records zero" "lint would record 0 finding(s)" "$out"
 
 if [ "$fail" -eq 0 ]; then echo "all migrate-baseline checks passed"; fi
 exit "$fail"

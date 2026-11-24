@@ -12,9 +12,10 @@
 # Adapters (what each gate prints today): colon = "path:line[:col]: message" (eslint -f unix, ruff --output-format concise, check-workflows.sh, check-dockerfile.sh) and the hadolint form "path:line CODE level: message";
 #   tsc = "path(line,col): error TSnnnn: message" (tsc --pretty false); pyright = "  path:line:col - error: message (rule)".
 # --rc N is the tool's exit code (default 1). A line is a finding first; only a line that is not a finding and matches one known full-line summary is a summary.
-# At rc 0 a line that is neither is tool noise and is ignored; at a non-zero rc it fails. Colour, cursor and hyperlink escape sequences and carriage returns are stripped first.
+# At rc 0 a line that is neither is tool noise and is ignored; at a non-zero rc it fails. A script gate (workflows, dockerfile) needs a finding or a summary line even at rc 0.
+# run reads stdout only; stderr counts only when the tool exits non-zero and stdout has no finding line. record replaces a v1 file with a NOTE. Colour, cursor and hyperlink escape sequences and carriage returns are stripped first.
 # File format (version 2): line 1 is "# templatecentral gate baseline v2"; then one gate line per recorded gate, "# gate" TAB gate TAB tool, sorted by gate; then one line per entry: gate TAB file TAB count TAB fingerprint, sorted bytewise by gate, file, fingerprint.
-# The fingerprint is the message with spaces collapsed, never the line number, so moved code matches and a second copy (count + 1) is new. A renamed file is new. A version 1 file fails: record again.
+# The fingerprint is the message with spaces collapsed, never the line number, so moved code matches and a second copy (count + 1) is new. A renamed file is new. validate, check, prune and growth fail on a version 1 file; record replaces it.
 # Exit 0 ok, 1 a finding or growth, 2 a usage error or an unusable file. Nothing is read from .env files; no network. Needs bash 3.2+, POSIX awk, sort; git for growth.
 set -u
 
@@ -53,7 +54,7 @@ trap 'exit 143' TERM
 valid_gate() { case "$1" in ''|*[!a-z0-9-]*) return 1 ;; esac; return 0; }
 valid_adapter() { case "$1" in colon|tsc|pyright) return 0 ;; esac; return 1; }
 
-# norm <adapter>: stdin to "file TAB fingerprint TAB original line"; a line it cannot read becomes "! TAB TAB line".
+# norm <adapter>: stdin to "file TAB fingerprint TAB original line"; a line it cannot read becomes "! TAB TAB line", a summary line "= TAB TAB line".
 # A line is tried as a finding first; it is a summary only when it is not a finding and matches one full-line pattern.
 norm() {
   LC_ALL=C GB_ROOTS="$ROOT$NL$ROOT_LOGICAL" awk -v ad="$1" '
@@ -86,6 +87,7 @@ norm() {
       gsub(esc "\\][^" bel "]*" bel, "", line)
       gsub(esc "\\[[0-?]*[ -/]*[@-~]", "", line)
       sub(/\r$/, "", line)
+      sub(/[[:space:]]+$/, "", line)
       if (line ~ /^[[:space:]]*$/) next
       found = 0
       if (ad == "tsc") {
@@ -101,7 +103,7 @@ norm() {
         } else if (match(line, /:[0-9]+(:[0-9]+)?: /)) { nf = substr(line, 1, RSTART - 1); nm = substr(line, RSTART + RLENGTH); found = 1 }
       }
       if (found) { flush(); pf = nf; pm = nm; po = line; have = 1; next }
-      if (is_summary(line)) { flush(); next }
+      if (is_summary(line)) { flush(); printf "=\t\t%s\n", line; next }
       if (ad != "colon" && line ~ /^[[:space:]]/ && have) { pm = pm " " line; po = po " " collapse(line); next }
       flush()
       printf "!\t\t%s\n", line
@@ -171,6 +173,7 @@ write_baseline() {
 
 RC=1
 STRICT=0
+NOSIG=0
 GATE=
 ADAPTER=
 TOOL=
@@ -192,11 +195,17 @@ take_gate_args() {
   done
 }
 # load_findings: stdin through the adapter into $W/norm.tsv and $W/cur.tsv. At rc 0 a line that is not a finding is tool noise and is dropped.
+# A script gate (tool "script") always prints a finding or a summary line, so none of either means the script did not run: NOSIG is 1.
 load_findings() {
-  norm "$ADAPTER" >"$W/norm.tsv"
-  if [ "$RC" -eq 0 ]; then awk -F'\t' '$1 != "!"' "$W/norm.tsv" >"$W/norm0.tsv"; mv -f "$W/norm0.tsv" "$W/norm.tsv"; fi
+  local nsum nfind
+  norm "$ADAPTER" >"$W/norm.raw"
+  nsum=$(awk -F'\t' '$1 == "=" { n++ } END { print n + 0 }' "$W/norm.raw")
+  if [ "$RC" -eq 0 ]; then awk -F'\t' '$1 != "!" && $1 != "="' "$W/norm.raw" >"$W/norm.tsv"; else awk -F'\t' '$1 != "="' "$W/norm.raw" >"$W/norm.tsv"; fi
   counts "$W/norm.tsv" >"$W/cur.tsv"
   NUNP=$(awk -F'\t' '$1 == "!" { n++ } END { print n + 0 }' "$W/norm.tsv")
+  nfind=$(awk -F'\t' '$1 != "!" { n++ } END { print n + 0 }' "$W/norm.tsv")
+  NOSIG=0
+  if [ "$TOOL" = script ] && [ $((nfind + nsum)) -eq 0 ]; then NOSIG=1; fi
 }
 # require_same_tool: exit 1 when the gate was recorded with another tool than the one that ran now.
 require_same_tool() {
@@ -221,10 +230,20 @@ cmd_record() {
     awk -F'\t' '$1 == "!" { print "  " $3 }' "$W/norm.tsv" | head -n 10 >&2
     exit 1
   fi
-  if [ -e "$BPATH" ] || [ -L "$BPATH" ]; then validate_file "$BPATH" "$BREL" || exit 2; fi
+  if [ "$NOSIG" -eq 1 ]; then echo "gate-baseline: $GATE: a script gate printed no finding and no summary line, so it did not run; nothing is recorded." >&2; exit 1; fi
+  if [ "$RC" -ne 0 ] && [ ! -s "$W/norm.tsv" ]; then
+    echo "gate-baseline: $GATE exited $RC with no finding it can read; a failed tool is not a clean run, so nothing is recorded." >&2
+    exit 1
+  fi
+  local otool='' haveold=0
+  if [ -f "$BPATH" ] && [ ! -L "$BPATH" ] && [ "$(head -n 1 "$BPATH")" = "$HEADER_V1" ]; then
+    echo "gate-baseline: NOTE: $BREL is an older v1 file; it is replaced by a v2 file, and each gate is recorded again by its own run." >&2
+  elif [ -e "$BPATH" ] || [ -L "$BPATH" ]; then
+    validate_file "$BPATH" "$BREL" || exit 2
+    haveold=1
+  fi
   : >"$W/body"; : >"$W/gl"
-  local otool=
-  if [ -f "$BPATH" ]; then
+  if [ "$haveold" -eq 1 ]; then
     file_entries "$BPATH" | awk -F'\t' -v g="$GATE" '$1 != g' >"$W/body"
     file_gl "$BPATH" | awk -F'\t' -v g="$GATE" '$1 != g' >"$W/gl"
     otool=$(gate_tool "$GATE")
@@ -254,6 +273,10 @@ cmd_check() {
   if [ "$NUNP" -gt 0 ]; then
     echo "gate-baseline: $GATE printed output that cannot be baselined (not a finding line):" >&2
     awk -F'\t' '$1 == "!" { print "  " $3 }' "$W/norm.tsv" | head -n 10 >&2
+    exit 1
+  fi
+  if [ "$NOSIG" -eq 1 ]; then
+    echo "gate-baseline: $GATE: a script gate printed no finding and no summary line; the script did not run." >&2
     exit 1
   fi
   if [ "$RC" -ne 0 ] && [ ! -s "$W/norm.tsv" ]; then
@@ -290,6 +313,7 @@ cmd_prune() {
   require_same_tool
   load_findings
   [ "$NUNP" -eq 0 ] || die "$GATE printed output the adapter cannot read; not pruning on a failed run"
+  [ "$NOSIG" -eq 0 ] || die "$GATE: a script gate printed no finding and no summary line; the script did not run; not pruning"
   if [ "$RC" -ne 0 ] && [ ! -s "$W/norm.tsv" ]; then die "$GATE exited $RC with no finding it can read; not pruning on a failed run"; fi
   gate_entries "$GATE" >"$W/old.tsv"
   file_entries "$BPATH" | awk -F'\t' -v g="$GATE" '$1 != g' >"$W/body"
@@ -373,20 +397,23 @@ gate_run() {
   local g=$1 bin f found
   SKIP=
   SKIPKIND=na
+  : >"$W/err.txt"
   case "$g" in
     lint)
       if ls "$ROOT"/eslint.config.* >/dev/null 2>&1; then
         gate_node_ok || return 1
-        ADAPTER="colon"; TOOL=eslint; (cd "$ROOT" && pnpm exec eslint . -f unix) >"$W/out.txt" 2>&1; RCV=$?
+        ADAPTER="colon"; TOOL=eslint; (cd "$ROOT" && pnpm exec eslint . -f unix) >"$W/out.txt" 2>"$W/err.txt"; RCV=$?
       elif bin=$(py_bin ruff) && [ -n "$bin" ]; then
-        ADAPTER="colon"; TOOL=ruff; (cd "$ROOT" && "$bin" check --no-cache --output-format concise .) >"$W/out.txt" 2>&1; RCV=$?
+        ADAPTER="colon"; TOOL=ruff; (cd "$ROOT" && "$bin" check --no-cache --output-format concise .) >"$W/out.txt" 2>"$W/err.txt"; RCV=$?
       else SKIP="no eslint.config.* and no ruff"; return 1; fi ;;
     types)
       if [ -f "$ROOT/tsconfig.json" ]; then
         gate_node_ok || return 1
-        ADAPTER="tsc"; TOOL=tsc; (cd "$ROOT" && pnpm exec tsc --noEmit --incremental false --pretty false) >"$W/out.txt" 2>&1; RCV=$?
-      elif { [ -f "$ROOT/pyrightconfig.json" ] || grep -q 'tool.pyright' "$ROOT/pyproject.toml" 2>/dev/null; } && bin=$(py_bin pyright) && [ -n "$bin" ]; then
-        ADAPTER="pyright"; TOOL=pyright; (cd "$ROOT" && "$bin") >"$W/out.txt" 2>&1; RCV=$?
+        ADAPTER="tsc"; TOOL=tsc; (cd "$ROOT" && pnpm exec tsc --noEmit --incremental false --pretty false) >"$W/out.txt" 2>"$W/err.txt"; RCV=$?
+      elif [ -f "$ROOT/pyrightconfig.json" ] || grep -q 'tool.pyright' "$ROOT/pyproject.toml" 2>/dev/null; then
+        bin=$(py_bin pyright)
+        [ -n "$bin" ] || { SKIP="pyright is configured but not installed"; SKIPKIND=cannot; return 1; }
+        ADAPTER="pyright"; TOOL=pyright; (cd "$ROOT" && "$bin") >"$W/out.txt" 2>"$W/err.txt"; RCV=$?
       else SKIP="no tsconfig.json and no configured pyright"; return 1; fi ;;
     workflows|dockerfile)
       [ -f "$ROOT/scripts/check-$g.sh" ] || { SKIP="scripts/check-$g.sh is missing"; return 1; }
@@ -406,6 +433,13 @@ gate_run() {
 # gate_recorded <gate>: the baseline file has a gate line for the gate.
 gate_recorded() { [ -f "$BPATH" ] && [ -n "$(gate_tool "$1")" ]; }
 
+# merge_stderr: when the tool exited non-zero and its stdout holds no finding line, its stderr is the evidence and is appended to the output. Otherwise stderr is dropped.
+merge_stderr() {
+  [ "$RCV" -ne 0 ] || return 0
+  [ -s "$W/err.txt" ] || return 0
+  if [ "$(norm "$ADAPTER" <"$W/out.txt" | awk -F'\t' '$1 != "!" && $1 != "=" { n++ } END { print n + 0 }')" -eq 0 ]; then cat "$W/err.txt" >>"$W/out.txt"; fi
+}
+
 cmd_run() {
   [ $# -eq 1 ] || die "usage: gate-baseline.sh run <record|dry|check|prune>"
   local mode=$1 g worst=0 rec
@@ -421,9 +455,12 @@ cmd_run() {
       else echo "gate-baseline: $g does not apply or was not run ($SKIP)"; fi
       continue
     fi
+    merge_stderr
     if [ "$mode" = dry ]; then
       RC=$RCV; load_findings <"$W/out.txt"
       if [ "$NUNP" -gt 0 ]; then echo "gate-baseline: $g would NOT be recorded: its output has $NUNP line(s) the adapter cannot read"; continue; fi
+      if [ "$NOSIG" -eq 1 ]; then echo "gate-baseline: $g would NOT be recorded: the script printed no finding and no summary line"; continue; fi
+      if [ "$RC" -ne 0 ] && [ ! -s "$W/norm.tsv" ]; then echo "gate-baseline: $g would NOT be recorded: it exited $RC with no finding it can read"; continue; fi
       echo "gate-baseline: $g would record $(awk -F'\t' '{ n += $3 } END { print n + 0 }' "$W/cur.tsv") finding(s) in $(wc -l <"$W/cur.tsv" | tr -d ' ') entr(ies)"
       continue
     fi
