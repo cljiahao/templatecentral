@@ -71,7 +71,7 @@ $(printf '%s' "$ulist" | tr '\001' '\n')
 EOT
     [ "$(printf '%s' "$keep" | grep -c .)" -ge 2 ] || continue
     if hides_union "${keep%?}" "$ucdir" "$(py_flag "$ufile")"; then
-      lines_hides="$lines_hides$ufile:$uline the $ukind entries of this list together hide hand-written source (between them they match every source file of the project, of one package or of one top-level source folder, or every source file of one type there, and no reason can cover that)$NL"
+      lines_hides="$lines_hides$ufile:$uline the $ukind exclude entries together hide hand-written source (between them they match every source file of the project, of one package or of one top-level source folder, or every source file of one type there, and no reason can cover that)$NL"
     fi
   done <<EOT
 $unions
@@ -157,6 +157,7 @@ cmd_lines() {
     case "$ctag" in
       F) echo "$cfile:$cline passes an exclude or include on the command line, where it cannot carry a reason: move it into the config file with a reason" ;;
       P) POINTERS="$POINTERS$cfile$tab$cline$tab$ctool$tab$cpath$NL" ;;
+      Q) echo "the command-line scanner failed ($ctool), so no command line was audited" ;;
     esac
   done
 }

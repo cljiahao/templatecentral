@@ -21,3 +21,7 @@ The round-3 projects are not stored here. `scripts/seeded-exclude-reasons.test.s
 ## Round 4 (built at run time)
 
 The round 4 cases (`--config` pointer in tool mode, `#` segments, NOSONAR and Stryker markers, union of one list, coverage.py absolute paths, whole-root include, continuation lines, flags after `--`, other Sonar properties names, pytest `addopts`, `ignore next N`, regex literals, reason source, shell `-c`, seeded gate files) are built by `scripts/seeded-exclude-reasons.test.sh` and the `r4*` fixtures of `scripts/exclusion-audit.test.sh`. Each has a clean control and a revert proof.
+
+## Round 5 (built at run time)
+
+The round 5 cases (NOSONAR anywhere in a comment, tox.ini commands, exclude groups across Sonar kinds, Sonar files and vitest configs, Stryker disable and restore, scanner runtime errors) are built in a temp folder by `scripts/seeded-exclude-reasons.test.sh` and `scripts/exclusion-audit.test.sh`, each with a clean control and a mutant with the fix undone.

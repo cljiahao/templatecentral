@@ -391,17 +391,31 @@ EOF
   return 1
 }
 
-# Read E records (tab separated, as the scanners print them) on stdin and print one line per exclude list that has two or more entries which
-# are not defaults: file<TAB>kind<TAB>first line<TAB>the entries joined by the SOH byte. Entries of one file and kind form one list.
+# Read E records (tab separated, as the scanners print them) on stdin and print one line per group of exclude entries that has two or more
+# entries which are not defaults: file<TAB>group<TAB>first line<TAB>the entries joined by the SOH byte. A group is what is hidden, not where
+# it is written: one coverage group per tool and folder across all its config files (Sonar: sonar.exclusions and sonar.coverage.exclusions
+# together; sonar.cpd.exclusions and any other sonar.*.exclusions key each on their own), and one mutation group per tool.
 rules_union_groups() {
   awk -F'\t' '
+    function grp(f, kind,   b, d) {
+      b = f; sub(/^.*\//, "", b)
+      d = "."
+      if (f ~ /\//) { d = f; sub(/\/[^\/]*$/, "", d) }
+      if (b ~ /\.properties$/) return ((kind == "sonar-exclude" || kind == "sonar-coverage-exclude") ? "sonar-exclusions" : kind) "\t" d
+      if (b ~ /^(pyproject\.toml|setup\.cfg|tox\.ini|\.coveragerc.*)$/ || b ~ /\.(toml|ini|cfg)$/) return (kind ~ /^mutation/ ? "mutmut" : "coverage.py") "\t" d
+      if (kind ~ /^mutation/ || b ~ /^\.?stryker/) return "stryker\t" d
+      if (b ~ /^vite(st)?[.-]/ || b ~ /^vitest/) return "vitest\t" d
+      if (b ~ /^jest/) return "jest\t" d
+      if (b ~ /^(\.nycrc|\.c8rc|nyc\.)/) return "nyc\t" d
+      return b "\t" d
+    }
     $1 == "E" && $6 != "default" && $4 != "sonar-issue-ignore" {
-      k = $2 "\t" $4
-      if (!(k in first)) { first[k] = $3; order[++n] = k }
+      k = grp($2, $4)
+      if (!(k in first)) { first[k] = $3; ffile[k] = $2; order[++n] = k }
       cnt[k]++
       list[k] = list[k] (cnt[k] > 1 ? "\001" : "") $5
     }
-    END { for (i = 1; i <= n; i++) { k = order[i]; if (cnt[k] >= 2) printf "%s\t%s\t%s\n", k, first[k], list[k] } }'
+    END { for (i = 1; i <= n; i++) { k = order[i]; if (cnt[k] >= 2) { g = k; sub(/\t.*$/, "", g); printf "%s\t%s\t%s\t%s\n", ffile[k], g, first[k], list[k] } } }'
 }
 
 include_covers() {
@@ -471,7 +485,9 @@ is_binary() {
 # Print file<TAB>line for each command line that passes an exclude to a coverage, mutation or Sonar tool, and each config pointer.
 cmd_scan() {
   [ "$#" -gt 0 ] || return 0
-  awk '
+  local out rc tab bad
+  tab=$(printf '\t')
+  out=$(awk '
     function clean(t) {
       gsub(/^[\042\047\[(@]+/, "", t)
       gsub(/[\042\047\]),]+$/, "", t)
@@ -480,6 +496,7 @@ cmd_scan() {
     function isenv(t) { return (t ~ /^[A-Za-z_][A-Za-z0-9_]*=/) }
     function iswrap(t) {
       if (t ~ /^python[0-9.]*$/) return 1
+      if (t ~ /^\{(envpython|py)\}$/) return 1
       return (t == "npx" || t == "pnpm" || t == "yarn" || t == "npm" || t == "bunx" || t == "bun" || t == "exec" || t == "run" || t == "dlx" || t == "x" || t == "node" || t == "env" || t == "cross-env" || t == "time" || t == "sudo" || t == "uv" || t == "poetry" || t == "pipx" || t == "-m" || t == "RUN" || t == "CMD" || t == "ENTRYPOINT" || t == "run:" || t == "script:" || t == "command:" || t == "entrypoint:" || t == "-" || t == "sh" || t == "bash" || t == "-c" || t == "$")
     }
     function tool(t) {
@@ -535,11 +552,24 @@ cmd_scan() {
       n = split(line, parts, "\001")
       for (i = 1; i <= n; i++) seg(parts[i], ln)
     }
+    # tox.ini commands: each indented line is a command line (a trailing backslash joins the next one); the key may carry a suffix (commands_pre).
+    function toxline(t, ln) {
+      if (match(t, /\\[ \t]*$/)) {
+        sub(/\\[ \t]*$/, "", t)
+        if (tpend == "") tln = ln
+        tpend = tpend " " t
+        return
+      }
+      if (tpend != "") { t = tpend " " t; ln = tln; tpend = ""; tln = 0 }
+      lineseg(t, ln)
+    }
     function endad() { lineseg("pytest " adtext, adln); ad = 0; adtext = "" }
     function finbuf() { if (buf != "") lineseg(buf, bufln); buf = ""; bufln = 0 }
     function fin() {
       if (pend != "") lineseg(pend, pendln)
       pend = ""; pendln = 0
+      if (tpend != "") lineseg(tpend, tln)
+      tpend = ""; tln = 0; tc = 0
       finbuf(); inblock = 0
       if (ad) endad()
     }
@@ -554,6 +584,20 @@ cmd_scan() {
     # pytest settings: only addopts is a command line (it may point at a coverage config).
     pyc {
       line = $0
+      if (bn == "tox.ini") {
+        if (tc) {
+          if (line ~ /^[ \t]*$/ || line ~ /^[ \t]*[#;]/) next
+          if (line ~ /^[ \t]+[^ \t]/) { toxline(line, FNR); next }
+          if (tpend != "") { lineseg(tpend, tln); tpend = ""; tln = 0 }
+          tc = 0
+        }
+        if (match(line, /^[ \t]*commands[A-Za-z_]*[ \t]*[=:]/)) {
+          tc = 1
+          v = substr(line, RLENGTH + 1)
+          if (v ~ /[^ \t]/) toxline(v, FNR)
+          next
+        }
+      }
       if (ad) {
         if (ad == 2) { adtext = adtext " " line; if (line ~ /\]/) endad(); next }
         if (ad == 3) { adtext = adtext " " line; if (line ~ /"""/) endad(); next }
@@ -599,7 +643,15 @@ cmd_scan() {
       lineseg(line, ln)
       if (line ~ /:[ \t]*[|>][-+0-9]*[ \t]*(#.*)?$/) { inblock = 1; blockind = ind; buf = ""; bufln = 0 }
     }
-    END { fin() }' "$@" 2> /dev/null
+    END { fin() }' "$@" 2>&1)
+  rc=$?
+  # An awk runtime error prints on stderr and leaves the output short, which would read as a clean file: fail closed with a Q record.
+  bad=$(printf '%s\n' "$out" | grep -vE "^([FP]$tab.*)?$" | head -n 1)
+  if [ "$rc" -ne 0 ] || [ -n "$bad" ]; then
+    printf 'Q\t%s\t0\tthe command-line scanner failed (%s), so no command line was checked\n' "$1" "${bad:-exit status $rc}"
+    return 0
+  fi
+  [ -z "$out" ] || printf '%s\n' "$out"
 }
 
 # Print "line:text" for the first line of FILE (a karma, nyc.config or codecov file, which no scanner reads) that sets an exclude, ignore or omit key.

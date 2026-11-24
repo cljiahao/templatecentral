@@ -140,9 +140,10 @@ function finish(   kind, scope, i, c, depth, tok, start, ent, nent, own, st, ln,
     printf "E\t%s\t%d\t%s\t%s\t%s\n", file, entl[i], kind, ent[i], st
   }
 }
-# Inline coverage markers in source files: a marker counts only as the first token of a comment (a marker inside a string, or later in
-# a comment sentence, is not one). It needs a "reason:" on the same line or the line above. A whole-file marker never passes, and neither
-# does a v8 or c8 "ignore start" with no "ignore stop" after it in the file (it covers the rest of the file).
+# Inline markers in source files: a coverage marker counts only as the first token of a comment (a marker inside a string, or later in
+# a comment sentence, is not one); NOSONAR counts anywhere in a comment. Each needs a "reason:" on the same line or the line above. An
+# ignore-file marker never passes, and neither does a v8 or c8 "ignore start", or a Stryker "disable", with no "ignore stop" or
+# "restore" after it in the file (it covers the rest of the file).
 function reasontext(t,   i) {
   i = index(tolower(t), "reason:")
   if (i == 0) return ""
@@ -150,18 +151,20 @@ function reasontext(t,   i) {
   sub(/[ \t]*\*\/.*$/, "", t)
   return trim(t)
 }
-function cm(body, nr, raw, own,   low, kind, st, prevt, at, rest, big, whole, nn) {
+function cm(body, nr, raw, own,   low, kind, st, prevt, at, rest, big, nn) {
   low = tolower(body)
   sub(/^[ \t*]+/, "", low)
-  kind = ""; big = 0; whole = 0
+  kind = ""; big = 0
   if (isjs) {
     if (match(low, /^(istanbul|c8|v8)[ \t]+ignore[ \t]+(file|next|if|else|start|stop)/) || match(low, /^node:coverage[ \t]+(ignore|disable)/)) kind = substr(low, RSTART, RLENGTH)
     else if (match(low, /^stryker[ \t]+disable[ \t]+next-line/)) kind = "stryker disable next-line"
-    else if (match(low, /^stryker[ \t]+disable([ \t]|$)/)) { kind = "stryker disable"; whole = 1 }
+    else if (match(low, /^stryker[ \t]+disable([ \t]|$)/)) kind = "stryker disable"
+    else if (match(low, /^stryker[ \t]+restore([ \t]|$)/)) kind = "stryker restore"
   } else if (match(low, /^pragma[: \t]*no[ \t]*(cover|branch)/)) kind = "# " substr(low, RSTART, RLENGTH)
-  if (kind == "" && match(low, /^nosonar/)) kind = "nosonar"
+  # NOSONAR suppresses wherever it stands in a comment, so the word counts anywhere in the comment text (tested once per comment).
+  if (kind == "" && body == own && match(" " tolower(own) " ", /[^a-z0-9_]nosonar[^a-z0-9_]/)) kind = "nosonar"
   if (kind == "") return
-  if (kind ~ /ignore[ \t]+stop$/) {
+  if (kind ~ /ignore[ \t]+stop$/ || kind == "stryker restore") {
     if (nstack > 0) nstack--
     return
   }
@@ -180,12 +183,12 @@ function cm(body, nr, raw, own,   low, kind, st, prevt, at, rest, big, whole, nn
     sub(/^[ \t]*(\/\/+|#+|\/\*+|\*+)[ \t]*/, "", prevt)
     if (valid(reasontext(prevt))) st = "reason"
   }
-  if (kind ~ /ignore[ \t]+file$/ || whole || big) st = "file"
+  if (kind ~ /ignore[ \t]+file$/ || big) st = "file"
   at = trim(at)
   if (length(at) > 100) at = substr(at, 1, 100)
   nrec++
   rline[nrec] = nr; rkind[nrec] = kind; rtext[nrec] = at; rst[nrec] = st
-  if (kind ~ /ignore[ \t]+start$/) stack[++nstack] = nrec
+  if (kind ~ /ignore[ \t]+start$/ || kind == "stryker disable") stack[++nstack] = nrec
 }
 function flush(   k, f) {
   if (fname == "") return

@@ -576,13 +576,18 @@ r3_fail() { # r3_fail LABEL DIR PATTERN
   run_gate "$2"
   if [ "$RC" -eq 1 ] && printf '%s' "$OUT" | grep -Eq -- "$3"; then ok "$1 fails with: $3"; else nok "$1 should fail with '$3' (exit $RC)" "$OUT"; fi
 }
-mutant_dir() { # mutant_dir DIR FILE OLD NEW: run a mutant gate on DIR; MRC 99 when the mutation did not apply
+mutant_dir() { # mutant_dir DIR FILE OLD NEW [OLD2 NEW2 [FILE2]]: run a mutant gate on DIR; MRC 99 when a mutation did not apply
   local dir=$1 file=$2 old=$3 new=$4
   rm -rf "$WORK/mut3"
   mkdir -p "$WORK/mut3"
   cp "$root/$SCRIPTS"/check-exclude-reasons.* "$root/$SCRIPTS"/check-exclude-rules.sh "$WORK/mut3/"
   if ! OLD=$old NEW=$new perl -0pi -e '$c += s/\Q$ENV{OLD}\E/$ENV{NEW}/g; END { $? = $c ? 0 : 3 }' "$WORK/mut3/$file"; then
     MOUT="the mutation '$old' did not apply to $file"
+    MRC=99
+    return
+  fi
+  if [ -n "${5:-}" ] && ! OLD=$5 NEW=${6:-} perl -0pi -e '$c += s/\Q$ENV{OLD}\E/$ENV{NEW}/g; END { $? = $c ? 0 : 3 }' "$WORK/mut3/${7:-$file}"; then
+    MOUT="the mutation '$5' did not apply to ${7:-$file}"
     MRC=99
     return
   fi
@@ -804,7 +809,7 @@ mk "$d" src/a.ts $'// NOSONAR -- reason: the legacy API needs this shape here\ne
 r3_ok "item 3 control: NOSONAR with a reason" "$d"
 mk "$d" src/a.ts $'// NOSONAR\nexport const a = 1;\n'
 r3_fail "item 3: NOSONAR" "$d" "src/a\.ts:1 .*NOSONAR|src/a\.ts:1 .*nosonar"
-r3_lost "item 3 nosonar" "$d" "src/a\.ts:1" check-exclude-reasons.awk 'match(low, /^nosonar/)' 'match(low, /^zzznosonar/)'
+r3_lost "item 3 nosonar" "$d" "src/a\.ts:1" check-exclude-reasons.awk '/[^a-z0-9_]nosonar[^a-z0-9_]/' '/^ nosonar[^a-z0-9_]/'
 mk "$d" src/a.ts $'// Stryker disable next-line StringLiteral\nexport const a = 1;\n'
 r3_fail "item 3: Stryker disable next-line without a reason" "$d" "src/a\.ts:1 .*$NR"
 r3_lost "item 3 next-line" "$d" "stryker disable next-line' $NR" check-exclude-reasons.awk '/^stryker[ \t]+disable[ \t]+next-line/' '/^stryker[ \t]+zzz[ \t]+next-line/'
@@ -949,6 +954,103 @@ if [ -z "$drift" ]; then ok "item 17: no other shared script is source-typed"; e
 for h in user-prompt-guard.py user-prompt-guard.cjs; do
   if grep -q "\.claude/hooks/$h " "$root/skills/scaffold/shared/template.manifest" && grep -q 'user-prompt-guard' "$root/$SCRIPTS/check-exclude-rules.sh"; then ok "item 17: manifest hook $h is in the seeded-file list"; else nok "item 17: manifest hook $h is not in the seeded-file list"; fi
 done
+
+# ---- Round 5 -----------------------------------------------------------------------------------------------------------------------
+# Item numbers follow the review of round 4. Each failing case has a clean control and a mutant gate with the fix undone.
+AW=check-exclude-reasons.awk
+NOSON='/[^a-z0-9_]nosonar[^a-z0-9_]/'
+NOSONF='/^ nosonar[^a-z0-9_]/'
+
+# 1 NOSONAR counts anywhere in a comment, as a whole word, never in code or a string.
+d=$(r4dir son1)
+mk "$d" src/a.ts $'foo(); // eslint-disable-line no-x -- NOSONAR\n'
+r3_fail "item 1: NOSONAR after a directive" "$d" "src/a\.ts:1 .*nosonar.* $NR"
+r3_lost "item 1 after a directive" "$d" "src/a\.ts:1" "$AW" "$NOSON" "$NOSONF"
+mk "$d" src/a.ts $'foo(); // todo: NOSONAR here\n'
+r3_fail "item 1: NOSONAR in a sentence" "$d" "src/a\.ts:1 .*nosonar.* $NR"
+mk "$d" src/a.ts $'foo(); // eslint-disable-line no-x // NOSONAR\n'
+r3_fail "item 1: NOSONAR after a second //" "$d" "src/a\.ts:1 .*nosonar.* $NR"
+mk "$d" src/a.ts $'foo(); /* lint-ok nosonar */\n'
+r3_fail "item 1: lower case nosonar in a block comment" "$d" "src/a\.ts:1 .*nosonar.* $NR"
+mk "$d" src/a.ts $'foo(); // eslint-disable-line no-x -- NOSONAR reason: third party callback signature here\n'
+r3_ok "item 1 control: NOSONAR after a directive with a reason" "$d"
+mk "$d" src/a.ts $'foo(); // NOSONARX is another word\nconst s = "// NOSONAR";\nconst t = 1; // see nosonarqube\n'
+r3_ok "item 1 control: a longer word and a string are not markers" "$d"
+mk "$d" app.py $'x = 1  # noqa: S101 NOSONAR\n'
+r3_fail "item 1: Python NOSONAR after noqa" "$d" "app\.py:1 .*nosonar.* $NR"
+r3_lost "item 1 python" "$d" "app\.py:1" "$AW" "$NOSON" "$NOSONF"
+mk "$d" app.py $'x = 1  # noqa: S101 NOSONAR reason: third party callback signature here\n'
+r3_ok "item 1 control: Python NOSONAR with a reason" "$d"
+
+# 2 tox.ini commands are command lines.
+d=$(r4dir tox2)
+mk "$d" tox.ini $'[testenv]\ncommands =\n    coverage run --omit=app/a.py -m pytest\n'
+r3_fail "item 2: tox commands with --omit" "$d" "tox\.ini:3 $CMDP"
+r3_lost "item 2" "$d" "tox\.ini:3 $CMDP" "$RL" '/^[ \t]*commands[A-Za-z_]*[ \t]*[=:]/' '/^[ \t]*commands_zzz[ \t]*[=:]/'
+mk "$d" tox.ini $'[testenv]\ncommands =\n    pytest --cov=app --cov-config=missing.ini\n'
+r3_fail "item 2: tox commands with a missing --cov-config" "$d" "tox\.ini:3 points pytest at missing\.ini"
+mk "$d" tox.ini $'[testenv]\ncommands = coverage run --omit=app/a.py -m pytest\n'
+r3_fail "item 2: tox commands on the key line" "$d" "tox\.ini:2 $CMDP"
+mk "$d" tox.ini $'[testenv]\ncommands =\n    pytest --cov=app \\\n      --cov-config=missing.ini\n'
+r3_fail "item 2: tox continuation line holds the flag" "$d" "tox\.ini:3 points pytest at missing\.ini"
+mk "$d" tox.ini $'[testenv]\ncommands =\n    pytest --cov=app\n'
+r3_ok "item 2 control: tox commands without an exclude" "$d"
+
+# 3 One group per tool, judged by what is hidden: across Sonar kinds, across files, across configs of one tool.
+d=$(r4dir uni3)
+rm -f "$d"/src/*.ts
+mk "$d" src/a/p.ts $'export const p = 1;\n'
+mk "$d" src/b/q.ts $'export const q = 1;\n'
+mk "$d" sonar-project.properties $'# reason: generated code under a is not hand written\nsonar.exclusions=src/a/**\n# reason: generated code under b is not hand written\nsonar.coverage.exclusions=src/b/**\n'
+r3_fail "item 3: sonar.exclusions plus sonar.coverage.exclusions" "$d" "together hide"
+r3_lost "item 3 across kinds" "$d" "together hide" "$RL" '"sonar-exclusions" : kind' 'kind : kind'
+mk "$d" sonar-project.properties $'# reason: generated code under a is not hand written\nsonar.exclusions=src/a/**\n# reason: generated code under b is not hand written\nsonar.cpd.exclusions=src/b/**\n'
+r3_ok "item 3 control: sonar.cpd.exclusions is its own group" "$d"
+mk "$d" sonar-project.properties $'# reason: generated code under a is not hand written\nsonar.exclusions=src/a/**\n'
+mk "$d" .sonarcloud.properties $'# reason: generated code under b is not hand written\nsonar.exclusions=src/b/**\n'
+r3_fail "item 3: two Sonar properties files" "$d" "together hide"
+r3_lost "item 3 across files" "$d" "together hide" "$RL" $'k = grp($2, $4)' $'k = $2 "\\t" grp($2, $4)'
+mk "$d" .sonarcloud.properties $'sonar.sources=src\n'
+r3_ok "item 3 control: one Sonar file holds one narrow entry" "$d"
+d=$(r4dir uni3v)
+rm -f "$d"/src/*.ts
+mk "$d" src/a/p.ts $'export const p = 1;\n'
+mk "$d" src/b/q.ts $'export const q = 1;\n'
+vcfg "$d" 'src/a/**' vitest.config.ts
+vcfg "$d" 'src/b/**' vitest.unit.config.ts
+r3_fail "item 3: two vitest configs, one folder each" "$d" "together hide"
+r3_lost "item 3 vitest configs" "$d" "together hide" "$RL" $'k = grp($2, $4)' $'k = $2 "\\t" grp($2, $4)'
+mk "$d" vitest.unit.config.ts $'export default { test: { coverage: { reporter: [\'text\'] } } };\n'
+r3_ok "item 3 control: the second config excludes nothing" "$d"
+
+# 4 Stryker disable and restore are a pair, like ignore start and stop.
+d=$(r4dir sk4)
+mk "$d" src/a.ts $'// Stryker disable all -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore all\n'
+r3_ok "item 4 control: disable with a reason and a restore" "$d"
+r3_flip "item 4 restore" "$d" "$AW" '|| kind == "stryker restore") {' '|| kind == "stryker zzz") {'
+mk "$d" src/a.ts $'// Stryker disable all -- reason: legacy code kept until the rewrite\nexport const a = 1;\n'
+r3_fail "item 4: disable with no restore" "$d" "src/a\.ts:1 .*whole file"
+r3_lost "item 4 no restore" "$d" "src/a\.ts:1 .*whole file" "$AW" '|| kind == "stryker disable") stack' '|| kind == "stryker zzz") stack'
+mk "$d" src/a.ts $'// Stryker disable all\nexport const a = 1;\n// Stryker restore all\n'
+r3_fail "item 4: disable with no reason" "$d" "src/a\.ts:1 .*stryker disable' $NR"
+mk "$d" src/a.ts $'// Stryker disable StringLiteral -- reason: legacy messages are copied text\nexport const a = 1;\n// Stryker restore StringLiteral\n'
+r3_ok "item 4 control: disable and restore of one mutator" "$d"
+
+# 5 The scope statement in the gate header is one line.
+if [ "$(grep -c '^# Scope:' "$root/$SCRIPTS/$G")" -eq 1 ] && grep -q '^# Scope:.*are outside it\.$' "$root/$SCRIPTS/$G"; then ok "item 5: the scope statement is one line"; else nok "item 5: the scope statement is not one line"; fi
+
+# 6 An awk runtime error in a scanner fails the gate instead of passing as an empty result.
+d=$(r4dir err6)
+mk "$d" Makefile $'t:\n\tvitest run\n'
+mutant_dir "$d" "$RL" 'function isenv(t) { return (t ~ /^[A-Za-z_][A-Za-z0-9_]*=/) }' 'function isenv(t) { return (1 +) }'
+if [ "$MRC" -eq 1 ] && printf '%s' "$MOUT" | grep -q 'command-line scanner failed'; then ok "item 6: a command-line scanner runtime error fails the gate"; else nok "item 6: a command-line scanner runtime error should fail the gate (exit $MRC)" "$MOUT"; fi
+mutant_dir "$d" "$RL" 'function isenv(t) { return (t ~ /^[A-Za-z_][A-Za-z0-9_]*=/) }' 'function isenv(t) { return (1 +) }' $'if [ "$rc" -ne 0 ] || [ -n "$bad" ]; then' 'if false; then'
+if [ "$MRC" -eq 0 ]; then ok "revert proof: item 6 passes silently with the error check undone"; else nok "revert proof: item 6 should pass silently with the error check undone (exit $MRC)" "$MOUT"; fi
+mk "$d" src/a.ts $'foo(); // note\n'
+mutant_dir "$d" "$AW" 'low = tolower(body)' 'low = tolower(body) (1 +)'
+if [ "$MRC" -eq 1 ] && printf '%s' "$MOUT" | grep -q 'marker scanner failed'; then ok "item 6: a marker scanner runtime error fails the gate"; else nok "item 6: a marker scanner runtime error should fail the gate (exit $MRC)" "$MOUT"; fi
+mutant_dir "$d" "$AW" 'low = tolower(body)' 'low = tolower(body) (1 +)' '|| bad "the inline marker' '|| : "the inline marker' "$G"
+if [ "$MRC" -eq 0 ]; then ok "revert proof: item 6 marker scanner passes silently with the check undone"; else nok "revert proof: item 6 marker scanner should pass silently with the check undone (exit $MRC)" "$MOUT"; fi
 
 # Read-only: the gate never changes a project, and the fixtures are as they were.
 d=$(stage jest-none)

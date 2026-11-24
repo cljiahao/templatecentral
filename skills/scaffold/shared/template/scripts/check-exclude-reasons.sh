@@ -25,14 +25,13 @@
 # every vitest*.config.*, jest*.config.*, stryker*.conf*, .nycrc* and .c8rc* file, package.json keys jest, nyc, c8, stryker and jscpd,
 # and .jscpd.json ignore. A config imported from a relative file is followed one level. Any depth is scanned: a folder named build or
 # coverage inside src is read like any other.
-# Scope: the gate covers the tools the plugin seeds (vitest, jest, pytest-cov and coverage.py, the Sonar properties files, Stryker, mutmut)
-# and inline markers (istanbul, c8, v8, node:coverage, pragma: no cover, NOSONAR, Stryker disable). Other tools (c8 and nyc on the command line, mvn, a Sonar scan action) are outside it.
+# Scope: the gate covers vitest, jest, pytest-cov and coverage.py, Sonar properties files, Stryker, mutmut and inline markers; c8 and nyc on the command line, mvn and a Sonar scan action are outside it.
 # Broad means judged from the files on disk (one list is judged as the union of its non-default entries, so splitting a broad pattern does not help): a pattern that matches every non-test source file of the project, of one package (a folder
 # with its own package.json or pyproject.toml), of one top-level source folder, or every source file of one type in any of those. ./ and
 # // are normalised first, and a pattern form the gate cannot evaluate (such as !(a)) is a finding too.
-# Inline markers in source files (istanbul, c8 and v8 ignore comments, node:coverage, pragma: no cover) count only as the first token of a
-# comment, and need "reason:" on the same or the previous line. An ignore-file marker, or a v8 or c8 "ignore start" with no stop, fails
-# like a broad exclude.
+# Inline markers in source files (istanbul, c8 and v8 ignore comments, node:coverage, pragma: no cover, Stryker disable) count only as the
+# first token of a comment; NOSONAR counts anywhere in a comment. Each needs "reason:" on the same or the previous line. An ignore-file
+# marker, or a v8 or c8 "ignore start" or Stryker "disable" with no stop or "restore", fails like a broad exclude.
 # Fails, because none can carry a reason or be read: a symlink that is not a link to a regular file (a folder link, a dangling link), a YAML nyc config, a karma, codecov or nyc.config.*
 # file that sets an exclude, an exclude on a command line (-Dsonar.exclusions=, --coverage.exclude=, nyc, c8, jest, coverage.py and
 # mutation flags in package.json scripts, CI workflows, lefthook, Makefile), a --config, --cov-config or --rcfile that points at a file the
@@ -301,6 +300,7 @@ if [ "${#cmd_files[@]}" -gt 0 ]; then
     case "$ctag" in
       F) bad "$cfile:$cline passes an exclude or include on the command line, where it cannot carry a reason. Fix: move it into the coverage, mutation or Sonar config file with $FORM." ;;
       P) pending_pointers="$pending_pointers$cfile$tab$cline$tab$ctool$tab$cpath$NL" ;;
+      Q) bad "$ctool" ;;
     esac
   done <<EOT
 $cmd_out
@@ -392,7 +392,7 @@ fi
 
 # Inline coverage markers in source files need "reason:" on the same or the previous line.
 if [ "${#mark_files[@]}" -gt 0 ]; then
-  marks=$(printf '%s\0' "${mark_files[@]}" | xargs -0 awk -v mode=marks -f "$here/check-exclude-reasons.awk" 2> /dev/null)
+  marks=$(printf '%s\0' "${mark_files[@]}" | xargs -0 awk -v mode=marks -f "$here/check-exclude-reasons.awk" 2>&1) || bad "the inline marker scanner failed, so no source file was checked for markers: $(printf '%s' "$marks" | head -n 1)"
   records="$records
 $marks"
 fi
@@ -427,7 +427,7 @@ $(printf '%s' "$ulist" | tr '\001' '\n')
 EOT
   [ "$(printf '%s' "$keep" | grep -c .)" -ge 2 ] || continue
   if hides_union "${keep%?}" "$ucdir" "$(py_flag "$ufile")"; then
-    bad "$ufile:$uline the $ukind entries of this list together hide hand-written code (between them they match every source file of the project, of one package or of one top-level source folder, or every source file of one type there), and no reason can cover it. Fix: remove or narrow the entries so the list leaves out only what is really not hand-written."
+    bad "$ufile:$uline the $ukind exclude entries together hide hand-written code (between them they match every source file of the project, of one package or of one top-level source folder, or every source file of one type there), and no reason can cover it. Fix: remove or narrow the entries so the list leaves out only what is really not hand-written."
   fi
 done <<EOT
 $unions

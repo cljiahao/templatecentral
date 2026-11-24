@@ -420,6 +420,18 @@ mk r4dd/package.json '{"scripts":{"cov":"vitest run --coverage","t":"pnpm run co
 mk r4add/app/a.py $'x = 1\n'
 mk r4add/pyproject.toml $'[tool.pytest.ini_options]\naddopts = "--cov=app --cov-config=cfg/custom.ini"\n'
 mk r4add/cfg/custom.ini $'[run]\nomit = app/a.py\n'
+mk r5son/package.json $'{\n  "name": "demo"\n}\n'
+mk r5son/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk r5son/src/a.ts $'foo(); // eslint-disable-line no-x -- NOSONAR\n'
+mk r5tox/package.json $'{\n  "name": "demo"\n}\n'
+mk r5tox/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk r5tox/src/a.ts $'export const a = 1;\n'
+mk r5tox/tox.ini $'[testenv]\ncommands =\n    coverage run --omit=app/a.py -m pytest\n'
+mk r5uni/package.json $'{\n  "name": "demo"\n}\n'
+mk r5uni/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk r5uni/src/a/p.ts $'export const p = 1;\n'
+mk r5uni/src/b/q.ts $'export const q = 1;\n'
+mk r5uni/sonar-project.properties $'# reason: generated code under a is not hand written\nsonar.exclusions=src/a/**\n# reason: generated code under b is not hand written\nsonar.coverage.exclusions=src/b/**\n'
 mk venv1/env/lib/site.py $'def f(x):\n    if x:  # pragma: no cover\n        return 1\n'
 mk venv2/env/lib/site.py $'def f(x):\n    if x:  # pragma: no cover\n        return 1\n'
 mk cmd1/package.json $'{\n  "name": "demo",\n  "scripts": {\n    "ci": "pnpm test:coverage && pnpm lint --config eslint.config.js",\n    "lint:jest": "eslint --config .eslintrc.jest.js tests",\n    "sync": "rsync -a coverage/ --exclude x out/",\n    "unit": "vitest run --exclude e2e",\n    "test:e2e": "jest --config ./test/jest-e2e.json"\n  }\n}\n'
@@ -461,6 +473,9 @@ want r4rx "item 14: marker after a regex with a quote" "^src/a\.ts:1 inline cove
 want r4cont "item 8: a flag on a continuation line" "^Makefile:2 passes an exclude or include on the command line"
 want r4dd "item 9: a flag after --" "^package\.json:1 passes an exclude or include on the command line"
 want r4add "item 11: a config named by pytest addopts is read" "^cfg/custom\.ini:[0-9]+ coverage-exclude 'app/a\.py': no reason"
+want r5son "round 5 item 1: NOSONAR after a directive" "^src/a\.ts:1 inline coverage marker 'nosonar': no reason"
+want r5tox "round 5 item 2: tox commands with --omit" "^tox\.ini:3 passes an exclude or include on the command line"
+want r5uni "round 5 item 3: Sonar exclusions and coverage exclusions are one group" "together hide"
 want venv3 "a lone pyvenv.cfg does not hide its folder" "^env/lib/site\.py:2 inline coverage marker '# pragma: no cover': no reason$"
 unwanted cmd1 "other tools' command lines are not findings" "passes an exclude"
 want cmd2 "a tool segment after && is a finding" "passes an exclude"
@@ -503,12 +518,15 @@ audit_mutant3 lose broad1 "$H" "$AR" $'rules_eval excl "$p" "$dir"' 'return 1'
 audit_mutant3 gain dflt1 "no reason" defects/exclusion-audit/defaults.txt '**/tests/**' 'zzzunused'
 audit_mutant3 lose r4cfg "config/unit" defects/exclusion-audit.sh $'jest | vitest | stryker) jsmode=$tool ;;' 'jest | vitest | stryker) jsmode= ;;'
 audit_mutant3 lose r4py "pragma" defects/exclusion-audit/scan.awk $'          cm(rest, nr, raw, own)\n          j = index(rest, "#")\n          if (j == 0) break' $'          cm(rest, nr, raw, own)\n          break'
-audit_mutant3 lose r4nosonar "nosonar" defects/exclusion-audit/scan.awk 'match(low, /^nosonar/)' 'match(low, /^zzznosonar/)'
+audit_mutant3 lose r4nosonar "nosonar" defects/exclusion-audit/scan.awk '/[^a-z0-9_]nosonar[^a-z0-9_]/' '/^ nosonar[^a-z0-9_]/'
 audit_mutant3 lose r4next "whole-file" defects/exclusion-audit/scan.awk 'if (nn > 20) big = 1' 'if (nn > 20000000) big = 1'
 audit_mutant3 lose r4rx "istanbul" defects/exclusion-audit/scan.awk $'function rxok() {\n  if (lastsig == "") return 1' $'function rxok() {\n  return 0\n  if (lastsig == "") return 1'
 audit_mutant3 lose r4cont "passes an exclude" "$AR" 'if (match(line, /\\[ \t]*$/)) {' 'if (0) {'
 audit_mutant3 lose r4dd "passes an exclude" "$AR" 'else if (t[k] == "--") dd = 1' 'else if (t[k] == "--zzz") dd = 1'
 audit_mutant3 lose r4add "custom" "$AR" 'if (match(line, /^[ \t]*addopts[ \t]*[=:]/)) {' 'if (0) {'
+audit_mutant3 lose r5son "nosonar" defects/exclusion-audit/scan.awk '/[^a-z0-9_]nosonar[^a-z0-9_]/' '/^ nosonar[^a-z0-9_]/'
+audit_mutant3 lose r5tox "tox" "$AR" '/^[ \t]*commands[A-Za-z_]*[ \t]*[=:]/' '/^[ \t]*commands_zzz[ \t]*[=:]/'
+audit_mutant3 lose r5uni "together hide" "$AR" '"sonar-exclusions" : kind' 'kind : kind'
 audit_mutant3 lose links2 "^src/gone:1 is a symlink" defects/exclusion-audit.sh 'is a symlink that is not a link to a regular file, so nothing behind it was audited' 'zz'
 ALLAUD=$SAVED_AUD
 
