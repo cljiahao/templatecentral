@@ -147,22 +147,7 @@ export class AppModule {}
 
 #### 12. Protect Routes
 
-Use the `JwtAuthGuard` on any controller or endpoint that requires authentication:
-
-```typescript
-import { Controller, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-
-@UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
-@Controller('tasks')
-export class TaskController {
-  // All endpoints in this controller require auth
-}
-```
-
-For a single endpoint, put `@UseGuards(JwtAuthGuard)` + `@ApiBearerAuth()` on the handler — `AuthController.me` above is the pattern (`req.user` is what `JwtStrategy.validate()` returned).
+Put `@UseGuards(JwtAuthGuard)` + `@ApiBearerAuth()` on a controller to protect all its routes; on one handler to protect only it — `AuthController.me` above is the pattern (`req.user` is what `JwtStrategy.validate()` returned).
 
 #### 13. Test Env + Auth Tests
 

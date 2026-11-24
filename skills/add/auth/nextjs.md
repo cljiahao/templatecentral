@@ -250,42 +250,7 @@ Add under `## Architecture Decisions`:
 
 #### 13. Session usage patterns
 
-**Server Component or API route:**
-
-```ts
-import { auth } from '@/lib/auth';
-import { PAGE_ROUTES } from '@/lib/constants/routes';
-import { headers } from 'next/headers';
-import { redirect } from 'next/navigation';
-
-const session = await auth.api.getSession({ headers: await headers() });
-if (!session) redirect(PAGE_ROUTES.LOGIN);
-
-const { user } = session;
-```
-
-**Unauthenticated API response (never JSON — information-disclosure risk):**
-
-```ts
-if (!session) return new Response(null, { status: 401 });
-```
-
-**Client Component hook:**
-
-```tsx
-'use client';
-
-import { authClient } from '@/lib/auth-client';
-
-export function UserAvatar() {
-  const { data: session, isPending } = authClient.useSession();
-
-  if (isPending) return <Skeleton />;
-  if (!session) return null;
-
-  return <Avatar name={session.user.name} image={session.user.image} />;
-}
-```
+Server: `auth.api.getSession({ headers: await headers() })`; client: `authClient.useSession()`. Unauthenticated API calls get `new Response(null, { status: 401 })`, never JSON.
 
 #### 14. Authorization helpers
 

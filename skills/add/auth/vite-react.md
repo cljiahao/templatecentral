@@ -294,32 +294,6 @@ export function SignOutButton() {
 5. If a backend is configured (with cookie mode enabled), test the full login/logout flow — DevTools should show the session cookie as `HttpOnly` and every POST carrying `X-CSRF-Token`
 6. Run tests (`pnpm test`) — confirm no regressions
 
-### Architecture
-
-```
-src/
-├── features/auth/
-│   ├── api/
-│   │   └── auth-service.ts          # Backend auth API calls
-│   ├── components/
-│   │   ├── auth-provider.tsx         # React context (user state, login/logout)
-│   │   ├── protected-route.tsx       # Route guard (redirects to /login)
-│   │   ├── login-card.tsx            # Login UI
-│   │   └── index.ts                  # Component barrel
-│   ├── hooks/
-│   │   ├── use-auth.ts              # useAuth() hook
-│   │   └── index.ts                  # Hook barrel
-│   ├── types.ts                      # AuthUser, AuthState
-│   └── index.ts                      # Feature barrel
-├── pages/login.tsx                    # Login page
-├── router.tsx                         # ProtectedRoute wrapping auth'd routes
-├── lib/clients/
-│   ├── csrf.ts                        # csrfHeader() — single source of X-CSRF-Token
-│   └── api-client.ts                  # ApiClient: credentials + CSRF on non-GET
-└── components/layout/
-    └── providers.tsx                  # AuthProvider wrapping the app
-```
-
 ### Rules
 
 - Do not store tokens in `localStorage`, where any injected script can read them; use HttpOnly cookies (set by the backend) or in-memory state
