@@ -1589,6 +1589,42 @@ for gp in .claude/ci-gates.sh azure-pipelines/templatecentral-gates.yml; do
   expect_verify 1 "$CG" "flags a modified $gp"
 done
 
+# No match test may read from a pipe whose writer the reader's early exit can kill: under pipefail that turns a match
+# into a failure (a false "omits a gate") or silently skips a guarded file. The inputs below are far above the pipe
+# buffer and match on their first line, so the piped form fails every time and no timing is involved.
+pipe_fixture() { # pipe_fixture <dir> <guarded padding lines> <gate text padding lines>
+  local d="$1"
+  mkdir -p "$d/.claude/hooks" "$d/scripts" "$d/.github/workflows" "$d/azure-pipelines"
+  echo x > "$d/.claude/hooks/a.sh"
+  cp "$KIT/gates.txt" "$d/.claude/gates.txt"
+  printf '%s' "{\"seeded_files\":{\"a\":{\"path\":\".claude/hooks/a.sh\",\"origin_hash\":\"$(sha "$d/.claude/hooks/a.sh")\"}}}" > "$d/.claude/harness.json"
+  # A stand-in ratchet: the real one lists the same shape (kind, path, enforced), here with the match on line 1 and a long tail.
+  { printf '#!/usr/bin/env bash\n'
+    printf 'printf "guard\\t.claude/hooks/a.sh\\t1\\n"\n'
+    printf 'awk -v n=%s '"'"'BEGIN { for (i = 0; i < n; i++) printf "guard\\tpadding/file-%%d-with-a-long-enough-name\\t1\\n", i }'"'"'\n' "$2"
+  } > "$d/scripts/gate-ratchet.sh"
+  : > "$d/lefthook.yml"; : > "$d/.github/workflows/ci.yml"; : > "$d/azure-pipelines/templatecentral-gates.yml"
+  while IFS='|' read -r gid lh ci; do
+    case "$gid" in ""|"#"*) continue ;; esac
+    if [[ "$lh" != "-" ]]; then echo "run: $lh" >> "$d/lefthook.yml"; fi
+    if [[ "$ci" != "-" ]]; then echo "run: $ci" >> "$d/.github/workflows/ci.yml"; echo "- bash: $ci" >> "$d/azure-pipelines/templatecentral-gates.yml"; fi
+  done < "$d/.claude/gates.txt"
+  local f
+  for f in lefthook.yml .github/workflows/ci.yml azure-pipelines/templatecentral-gates.yml; do
+    awk -v n="$3" 'BEGIN { for (i = 0; i < n; i++) printf "  - padding-line-%d-to-fill-the-pipe-well-past-its-buffer\n", i }' >> "$d/$f"
+  done
+  git -C "$d" init -q
+  vcommit "$d"
+}
+PB=$(mktemp -d "$T/pipe.XXXX")
+pipe_fixture "$PB" 20000 20000
+check "yes" "$([[ $(wc -c < "$PB/lefthook.yml") -gt 262144 ]] && echo yes || echo no)" "pipe fixture: the gate text is far above the pipe buffer"
+out=$(cd "$PB" && bash "$KIT/verify-harness.sh" 2>&1); check 0 "$?" "verify-harness passes on a guarded list and gate text far above the pipe buffer ($out)"
+check 0 "$(grep -c 'GATE MISSING' <<<"$out")" "verify-harness reports no missing gate when the match is on the first line of a large text"
+echo y >> "$PB/.claude/hooks/a.sh"; vcommit "$PB"
+out=$(cd "$PB" && bash "$KIT/verify-harness.sh" 2>&1); check 1 "$?" "verify-harness still flags a modified guarded file when the guarded list is large"
+check 1 "$(grep -c 'MODIFIED: .claude/hooks/a.sh' <<<"$out")" "verify-harness names the modified guarded file when the guarded list is large"
+
 # Gate manifest: lefthook and each CI file must run every gate .claude/gates.txt lists.
 GV=$(mktemp -d "$T/gv.XXXX")
 mkdir -p "$GV/.claude" "$GV/.github/workflows" "$GV/azure-pipelines"
