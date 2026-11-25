@@ -111,6 +111,9 @@ Targets on new code, the SonarQube default gate: cognitive complexity 15, duplic
 - `helmet` in `security.setup.ts`; do not remove or weaken CSP, HSTS or frame-ancestors
 - `frame-ancestors` is `'none'` + `frameguard: deny` unless `portalFrameAncestor()` accepts `APPCENTRAL_PORTAL_ORIGIN` (one https origin, never `*` or a list); do not loosen its regex
 
+**CORS**
+- Origins come from `CLIENT_URL`, never `origin: '*'`
+
 **Rate Limiting & Proxy Trust**
 - Auth and other abuse-prone routes are rate-limited with `@nestjs/throttler`, and `TRUST_PROXY` must be set correctly whenever the app sits behind a load balancer or reverse proxy — otherwise every client shares the proxy's IP and the limiter is either useless or spoofable via `X-Forwarded-For`. Both are mandatory; see `templatecentral:add (auth)` for the configuration.
 - `TRUST_PROXY` takes proxy IPs/CIDRs (or names such as `loopback`) and must cover every proxy hop in front of the app. Do not use a hop count (a number) or `*`: Fastify 5.12.1 disabled the numeric form at runtime (GHSA-3m5p-2c4r-xxw2) because it trusts `X-Forwarded-*` from any connecting address, so a client that reaches the origin directly can spoof them; `*` has the same effect.

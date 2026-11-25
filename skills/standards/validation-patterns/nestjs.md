@@ -5,41 +5,9 @@
 
 The global `ZodValidationPipe` (`APP_PIPE`) validates every `createZodDto` `@Body()`/`@Query()` type. Plain-typed params (`@Param('id') id: string`) are not validated, so give them an explicit pipe.
 
-**1. DTOs**
+DTOs live in `src/modules/<feature>/dto/` as `createZodDto(schema)` classes. Bound pagination: `z.coerce.number().int()` with `page` `.min(1).max(10_000).default(1)` and `limit` `.min(1).max(100).default(10)`. Path ids: `@Param('id', new ZodValidationPipe(z.uuid()))`.
 
-```ts
-// src/modules/projects/dto/create-project.dto.ts
-import { createZodDto } from 'nestjs-zod';
-import { z } from 'zod';
-
-const createProjectSchema = z.object({
-  name: z
-    .string()
-    .min(1, 'Name is required')
-    .max(100, 'Name must be under 100 characters'),
-  description: z
-    .string()
-    .max(500, 'Description must be under 500 characters')
-    .optional(),
-});
-
-export class CreateProjectDto extends createZodDto(createProjectSchema) {}
-```
-
-```ts
-// src/modules/projects/dto/list-projects-query.dto.ts
-import { createZodDto } from 'nestjs-zod';
-import { z } from 'zod';
-
-const listProjectsQuerySchema = z.object({
-  page: z.coerce.number().int().positive().max(10_000).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
-});
-
-export class ListProjectsQueryDto extends createZodDto(listProjectsQuerySchema) {}
-```
-
-**2. Controller — validate at the boundary, delegate everything else**
+**1. File uploads and controller**
 
 > **File uploads with Fastify**: `FileInterceptor` from `@nestjs/platform-express` is incompatible with the Fastify adapter. Use `@fastify/multipart` (`pnpm add @fastify/multipart`), registered inside `createApp()` (`src/app.factory.ts`) before `app.init()` — `register` returns a promise, so await it:
 > ```ts
@@ -50,74 +18,9 @@ export class ListProjectsQueryDto extends createZodDto(listProjectsQuerySchema) 
 > });
 > ```
 
-```ts
-// src/modules/projects/projects.controller.ts
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Post,
-  Query,
-  Req,
-} from '@nestjs/common';
-import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { FastifyRequest } from 'fastify';
-import { ZodValidationPipe } from 'nestjs-zod';
-import { z } from 'zod';
-import { CreateProjectDto } from './dto/create-project.dto';
-import { ListProjectsQueryDto } from './dto/list-projects-query.dto';
-import { ProjectsService } from './projects.service';
+The upload handler takes `@Req() req: FastifyRequest`, reads `req.isMultipart() ? await req.file() : undefined`, throws `BadRequestException('File is required')` when absent, and passes the file to the service. Document it with `@ApiConsumes('multipart/form-data')` and an `@ApiBody` binary `file` property. Controllers validate at the boundary and delegate everything else.
 
-@ApiTags('projects')
-@Controller('projects')
-export class ProjectsController {
-  constructor(private readonly service: ProjectsService) {}
-
-  @Post()
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new project' })
-  async create(@Body() dto: CreateProjectDto) {
-    return await this.service.createProject(dto);
-  }
-
-  @Get()
-  @ApiOperation({ summary: 'List projects with pagination' })
-  async list(@Query() query: ListProjectsQueryDto) {
-    return await this.service.listProjects(query.page, query.limit);
-  }
-
-  @Get(':id')
-  @ApiOperation({ summary: 'Get project by ID' })
-  async getById(@Param('id', new ZodValidationPipe(z.uuid())) id: string) {
-    return await this.service.getProject(id);
-  }
-
-  @Post('upload')
-  @ApiOperation({ summary: 'Upload a file' })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    required: true,
-    schema: {
-      type: 'object',
-      required: ['file'],
-      properties: { file: { type: 'string', format: 'binary' } },
-    },
-  })
-  async uploadFile(@Req() req: FastifyRequest) {
-    const file = req.isMultipart() ? await req.file() : undefined;
-    if (!file) {
-      throw new BadRequestException('File is required');
-    }
-    return await this.service.storeUpload(file);
-  }
-}
-```
-
-**3. Service — upload checks live here, not in the controller**
+**2. Service — upload checks live here, not in the controller**
 
 ```ts
 // src/modules/projects/projects.service.ts — upload excerpt
@@ -152,21 +55,7 @@ export class ProjectsService {
 }
 ```
 
-## Testing / Verification
-
-```bash
-pnpm start:dev
-
-# Invalid body → 400 from the global ZodValidationPipe
-curl -X POST http://localhost:3000/projects \
-  -H "Content-Type: application/json" \
-  -d '{"name": ""}'
-
-# Non-UUID path param → 400
-curl http://localhost:3000/projects/not-a-uuid
-
-pnpm test
-```
+Verify: an invalid body or non-UUID path param returns 400; `pnpm test`.
 
 ## After Writing Code
 
