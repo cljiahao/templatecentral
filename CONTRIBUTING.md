@@ -29,7 +29,7 @@ Both `name` and `description` are required — CI will reject a skill missing ei
 
 ### Registering a skill
 
-Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills/"`, so any directory under `skills/` whose `SKILL.md` carries `name:` frontmatter is registered automatically — no `plugin.json` edits needed. A `SKILL.md` that has a `<!-- ref: -->` header instead of `name:` frontmatter is an **agent utility** (e.g. `build`, `test`, `review`, `cleanup`): it is catted on demand, not registered. See `skills/CONVENTIONS.md`.
+Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills/"`, so any directory under `skills/` whose `SKILL.md` carries `name:` frontmatter is registered automatically — no `plugin.json` edits needed. A `SKILL.md` that has a `<!-- ref: -->` header instead of `name:` frontmatter is an **agent utility** (e.g. `test`, `review`, `cleanup`): it is catted on demand, not registered. See `skills/CONVENTIONS.md`.
 
 ### Adding a new stack
 
