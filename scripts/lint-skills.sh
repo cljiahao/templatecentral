@@ -280,16 +280,16 @@ check_ref_file_headers() {
 }
 
 # skillmd_states — the one reader of a depth-1 SKILL.md's frontmatter (line 1 `---` to the next `---`,
-# a trailing CR ignored so a CRLF file still registers and then fails the CR rule). One line per file,
-# "<state><TAB><path>": reg (closed, has name:), bigfm:<N> (registered, N lines over the cap of 8:
-# 2 required fields, up to 5 optional ones in CONVENTIONS §3, 1 spare; the largest real one has 2),
+# trailing spaces, tabs and CR ignored so a CRLF file still registers and then fails the CR rule). One line
+# per file, "<state><TAB><path>": reg (closed, has name:), bigfm:<N> (registered, N lines over the cap of 7:
+# 2 required fields plus the 5 optional ones in CONVENTIONS §3; the largest real one has 2),
 # unclosed-reg / unclosed-none (opened, never closed: an error either way), none (not registered).
 skillmd_states() {
   local f st
   for f in "$SKILLS_DIR"/*/SKILL.md; do
     [[ -f "$f" ]] || continue
-    st=$(awk -v max=8 '
-      { sub(/\r$/, "") }
+    st=$(awk -v max=7 '
+      { sub(/[ \t\r]+$/, "") }
       NR == 1 { if ($0 != "---") { s = "none"; exit } next }
       /^---$/ { closed = 1; exit }
       /^name:/ { named = 1 }
@@ -349,10 +349,10 @@ check_file_line_budget() {
   # markdown file (.md, .markdown, .mdx) has a line cap by class (classify below is the one place the
   # class comes from the path); a name that is not lowercase .md fails. A file over its cap passes only
   # through its own exact-path row in tests/golden/line-budget.txt (path<TAB>max_lines<TAB>max_prose, `-`
-  # for max_prose on a non-leaf); every file under add/ and migrate/ that is not a stack router also has
-  # 50 prose lines outside fences. A SKILL.md that registered_skillmds lists stays with
-  # check_skillmd_body_length (its frontmatter is capped here: 8 lines, closed); every other SKILL.md is
-  # capped at 12. Any symlink outside a template root, or a carriage return, fails. A row may only shrink
+  # for max_prose on a non-leaf); every file under add/ and migrate/ except a stack router and a registered
+  # SKILL.md also has 50 prose lines outside fences. A SKILL.md that registered_skillmds lists stays with
+  # check_skillmd_body_length (its frontmatter is capped here: 7 lines, closed); every other SKILL.md is
+  # capped at 12. Any symlink, hidden directory or skill.md in another letter case outside a template root, or a carriage return, fails. A row may only shrink
   # and none is born after the initial capture: scripts/check-line-budget-frozen.sh compares it with the
   # base ref. TIMELESS.
   # Not caught: text quality; growth that stays under a file's own limit; any file in a template root
@@ -425,7 +425,7 @@ check_file_line_budget() {
     /^@root:/ { p = substr($0, 7); sub(/^\.\//, "", p); roots[p] = 1; next }
     /^@fm:/ {
       split(substr($0, 5), a, "\t")
-      if (a[1] ~ /^bigfm:/) bad(a[2] ": frontmatter is " substr(a[1], 7) " lines, limit 8 — keep name, description and the optional fields of CONVENTIONS.md §3")
+      if (a[1] ~ /^bigfm:/) bad(a[2] ": frontmatter is " substr(a[1], 7) " lines, limit 7 — keep name, description and the optional fields of CONVENTIONS.md §3")
       else bad(a[2] ": frontmatter has no closing --- line — close it, or remove the opening ---")
       next
     }
@@ -437,6 +437,13 @@ check_file_line_budget() {
     $0 != "" {
       p = $0; sub(/^\.\//, "", p)
       if (in_root(p)) next
+      n = split(p, seg, "/")
+      for (i = 1; i < n; i++) if (seg[i] ~ /^[.]/) {
+        hd = seg[1]; for (j = 2; j <= i; j++) hd = hd "/" seg[j]
+        if (!(hd in hidden)) { hidden[hd] = 1; bad(hd ": hidden directory under skills/ — nothing outside a template root may live in one; remove it or move its files") }
+        break
+      }
+      if (tolower(seg[n]) == "skill.md" && seg[n] != "SKILL.md") { bad(p ": must be named SKILL.md — rename the file"); next }
       if (tolower(p) !~ /[.](md|markdown|mdx)$/) next
       if (p !~ /[.]md$/) { bad(p ": markdown files under skills/ must be named *.md in lowercase — rename the file"); next }
       nfiles++; seen[p] = 1

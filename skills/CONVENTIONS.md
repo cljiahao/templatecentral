@@ -119,8 +119,8 @@ Never create `<framework>-add-auth` or similar registered skills. Add reference 
 
 ### Line budget
 
-`check_file_line_budget` (`scripts/lint-skills.sh`) scans every markdown file under `skills/` except the template roots (§1) and caps it by class: utility router 12, stack router 40, `patterns.md` and `comments.md` 60, scaffold `source-files.md` and kit, `code-standards`, `validation-patterns`, `drift-check`, `full-stack-pairing` 120, every other `add/` or `migrate/` file 150 plus 50 prose lines outside fences, this file 150.
-Only an exact-path row in `tests/golden/line-budget.txt` lets a file exceed its cap; rows only shrink, and `scripts/check-line-budget-frozen.sh BASE_REF` fails CI when one grows or a new one appears. Cut the file, never raise its row; a new file fits its class cap and takes no row. Any symlink outside a template root, a name not in lowercase `*.md`, a CR byte, or an unclosed or over-8-line frontmatter fails; a `SKILL.md` that is not registered (depth 1, `name:` in the frontmatter) is capped at 12.
+`check_file_line_budget` (`scripts/lint-skills.sh`) scans every markdown file under `skills/` except the template roots (§1) and caps it by class: utility router 12, stack router 40, `patterns.md` and `comments.md` 60, scaffold `source-files.md` and kit, `code-standards`, `validation-patterns`, `drift-check`, `full-stack-pairing` 120, every other `add/` or `migrate/` file 150 plus 50 prose lines outside fences, every other file 150 (this file too).
+Only an exact-path row in `tests/golden/line-budget.txt` lets a file exceed its cap; rows only shrink, and `scripts/check-line-budget-frozen.sh BASE_REF` fails CI when one grows or a new one appears. Cut the file, never raise its row; a new file fits its class cap and takes no row. Any symlink outside a template root, a hidden directory, a name not in lowercase `*.md` or not `SKILL.md`, a CR byte, or an unclosed or over-7-line frontmatter fails; a `SKILL.md` that is not registered (depth 1, `name:` in the frontmatter) is capped at 12.
 
 ---
 

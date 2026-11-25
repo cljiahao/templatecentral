@@ -13,6 +13,8 @@
 #   the change's own copy, so human review covers it; no label or variable waives it); a push without a PR;
 #   a later PR that targets a branch whose merge base lists no line-budget.txt: there is nothing to compare,
 #   so it passes as an initial capture and may add or raise rows.
+# Base without line-budget.txt: the run is an initial capture and passes. Base with the file: a kind change
+#   or a new row fails, and no label or variable waives it.
 # Exit 0 ok, 1 an allowance was raised or a row was added, 2 usage error or no base.
 set -uo pipefail
 

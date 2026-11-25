@@ -1632,8 +1632,8 @@ lb_symlink_not_md() { ln -s x.md "$LBD/skills/other/data.txt"; }
 lb_symlink_in_root() { ln -s big.md "$LBD/skills/scaffold/shared/template/link.md"; }
 lb_fm_n() { { echo '---'; echo 'name: add'; awk -v n="$1" 'BEGIN { for (i = 1; i < n - 1; i++) print "k" i ": v" }'; echo '---'; awk 'BEGIN { for (i = 1; i <= 90; i++) print "body " i }'; } > "$LBD/skills/add/SKILL.md"; }
 lb_fm_500() { lb_fm_n 501; }
-lb_fm_9() { lb_fm_n 10; }
-lb_fm_8() { lb_fm_n 9; }
+lb_fm_9() { lb_fm_n 9; }
+lb_fm_8() { lb_fm_n 8; }
 lb_template_elsewhere() { mkdir -p "$LBD/skills/add/template"; lb_lines add/template/q.md 900; }
 lb_template_real_root() { mkdir -p "$LBD/skills/add/template"; : > "$LBD/skills/add/template.manifest"; lb_lines add/template/q.md 900; }
 lb_upper_md() { lb_lines other/x2.MD 10; }
@@ -1651,9 +1651,9 @@ lb_crlf_fm_name() { { printf -- '---\r\nname: add\r\n---\r\n'; awk 'BEGIN { for 
 lb_probe line_budget_r3_symlinked_directory lb_symlinked_dir "add/auth/bigdir: is a symbolic link"
 lb_probe line_budget_r3_symlink_not_named_md lb_symlink_not_md "other/data.txt: is a symbolic link"
 lb_clean line_budget_r3_symlink_inside_template_root_is_ignored lb_symlink_in_root
-lb_probe line_budget_r3_frontmatter_500_lines lb_fm_500 "add/SKILL.md: frontmatter is 500 lines, limit 8"
-lb_probe line_budget_r3_frontmatter_9_lines lb_fm_9 "add/SKILL.md: frontmatter is 9 lines, limit 8"
-lb_clean line_budget_r3_frontmatter_8_lines_passes lb_fm_8
+lb_probe line_budget_r3_frontmatter_500_lines lb_fm_500 "add/SKILL.md: frontmatter is 500 lines, limit 7"
+lb_probe line_budget_r3_frontmatter_8_lines lb_fm_9 "add/SKILL.md: frontmatter is 8 lines, limit 7"
+lb_clean line_budget_r3_frontmatter_7_lines_passes lb_fm_8
 lb_probe line_budget_r3_template_dir_without_manifest_is_scanned lb_template_elsewhere "add/template/q.md: 900 lines, limit 150"
 lb_clean line_budget_r3_template_dir_with_manifest_is_exempt lb_template_real_root
 lb_probe line_budget_r3_uppercase_md lb_upper_md "other/x2.MD: markdown files under skills/ must be named *.md in lowercase"
@@ -1683,6 +1683,21 @@ lb_desc line_budget_r3_desc_registered_150_passes OK '---\nname: add\ndescriptio
 lb_desc line_budget_r3_desc_crlf_registered_151_fails FAIL '---\r\nname: add\r\ndescription: @D@\r\n---\r\nbody\r\n' 151
 lb_desc line_budget_r3_desc_name_in_body_only_passes OK '---\ndescription: @D@\n---\nname: add\n' 151
 lb_desc line_budget_r3_desc_unclosed_with_name_fails FAIL '---\nname: add\ndescription: @D@\nbody\n' 151
+lb_trailing_ws_fm() { { printf -- '---  \nname: add\n---\t\n'; awk 'BEGIN { for (i = 1; i <= 20; i++) print "b" i }'; } > "$LBD/skills/add/SKILL.md"; }
+lb_trailing_ws_big_fm() { { printf -- '---  \nname: add\n'; awk 'BEGIN { for (i = 1; i <= 20; i++) print "k" i ": v" }'; printf -- '---\t\n'; } > "$LBD/skills/add/SKILL.md"; }
+lb_lower_skillmd() { mkdir -p "$LBD/skills/add/x"; lb_lines add/x/skill.md 10; }
+lb_hidden_dir() { mkdir -p "$LBD/skills/add/.hid"; lb_lines add/.hid/a.md 10; }
+lb_visible_dir() { mkdir -p "$LBD/skills/add/vis"; lb_lines add/vis/a.md 10; }
+lb_mdx_file() { lb_lines other/x2.mdx 10; }
+lb_template_symlink() { mkdir -p "$LBD/skills/add/real"; lb_lines add/real/a.md 900; ln -s real "$LBD/skills/add/template"; }
+lb_probe line_budget_r4_trailing_whitespace_delimiters_still_register lb_trailing_ws_big_fm "add/SKILL.md: frontmatter is 21 lines, limit 7"
+lb_clean line_budget_r4_trailing_whitespace_delimiters_small_frontmatter_passes lb_trailing_ws_fm
+lb_probe line_budget_r4_skillmd_in_other_letter_case lb_lower_skillmd "add/x/skill.md: must be named SKILL.md"
+lb_probe line_budget_r4_hidden_directory lb_hidden_dir "add/.hid: hidden directory under skills/"
+lb_clean line_budget_r4_visible_directory_passes lb_visible_dir
+lb_probe line_budget_r4_mdx_file lb_mdx_file "other/x2.mdx: markdown files under skills/ must be named *.md in lowercase"
+lb_probe line_budget_r4_symlink_named_template_is_not_a_root lb_template_symlink "add/template: is a symbolic link"
+lb_desc line_budget_r4_desc_over_cap_frontmatter_still_checked FAIL '---\nname: add\ndescription: @D@\n'"$(awk 'BEGIN { for (i = 1; i <= 20; i++) printf "k%d: v\\n", i }')"'---\nbody\n' 151
 lb_slash_agrees() {
   [[ -n "${ONLY:-}" && ! "line_budget_slash_agrees" =~ $ONLY ]] && return 0
   lb_base; lb_over_other
