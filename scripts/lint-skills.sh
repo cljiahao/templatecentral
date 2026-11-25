@@ -275,8 +275,18 @@ check_ref_file_headers() {
   done < <(ref_md_files)
   [[ "$n" -gt 0 ]] || bad+="$SKILLS_DIR: no reference .md file found — the header check scanned nothing"$'\n'
   report "${bad%$'\n'}" \
-    "Ref file missing <!-- ref: --> on line 1 — add a ref header following CONVENTIONS.md §2" \
+    "Ref file missing <!-- ref: --> on line 1 — add a ref header following CONVENTIONS.md §4" \
     "All ref files have <!-- ref: --> headers"
+}
+
+# The one predicate for a registered skill: a depth-1 SKILL.md with a name: line (CONVENTIONS §1).
+# The body check and the line budget both read it, so a SKILL.md outside it is capped by the budget.
+registered_skillmds() {
+  local f
+  for f in "$SKILLS_DIR"/*/SKILL.md; do
+    [[ -f "$f" ]] || continue
+    if grep -q '^name:' "$f"; then printf '%s\n' "${f#"$SKILLS_DIR"/}"; fi
+  done
 }
 
 check_skillmd_body_length() {
@@ -284,14 +294,18 @@ check_skillmd_body_length() {
   # A long body bloats the skill picker tooltip and forces agents to read unnecessary prose
   # before they can delegate to the appropriate ref file.
   header "SKILL.md body length (<=30 lines)"
-  local bad
-  bad=$(awk '
-    function flush() { if (f != "" && registered && NR_f - fm_end > 30) print f " (" NR_f - fm_end " lines)" }
-    FNR == 1 { flush(); f = FILENAME; registered = 0; dashes = 0; fm_end = 0 }
-    { NR_f = FNR }
-    /^name:/ { registered = 1 }
-    /^---$/ && ++dashes == 2 { fm_end = FNR }
-    END { flush() }' "$SKILLS_DIR"/*/SKILL.md)
+  local bad="" f files=()
+  while IFS= read -r f; do
+    if [[ -n "$f" ]]; then files+=("$SKILLS_DIR/$f"); fi
+  done < <(registered_skillmds)
+  if [[ ${#files[@]} -gt 0 ]]; then
+    bad=$(awk '
+      function flush() { if (f != "" && NR_f - fm_end > 30) print f " (" NR_f - fm_end " lines)" }
+      FNR == 1 { flush(); f = FILENAME; dashes = 0; fm_end = 0 }
+      { NR_f = FNR }
+      /^---$/ && ++dashes == 2 { fm_end = FNR }
+      END { flush() }' "${files[@]}")
+  fi
   report "$bad" \
     "SKILL.md body exceeds 30 lines — move prose into an implementation.md ref file" \
     "All registered SKILL.md bodies <=30 lines"
@@ -301,16 +315,19 @@ check_file_line_budget() {
   # Every .md under skills/ outside template trees has a line cap by class (the classify function below
   # is the one place the class comes from the path). A file over its cap passes only through its own
   # exact-path row in tests/golden/line-budget.txt (path<TAB>max_lines<TAB>max_prose, `-` for max_prose
-  # on a non-leaf); add and migrate leaves also have 50 prose lines outside fences. Registered SKILL.md
-  # bodies stay with check_skillmd_body_length. A row may only shrink: scripts/check-line-budget-frozen.sh
-  # compares it with the base ref, because this check has no base. TIMELESS.
+  # on a non-leaf); add and migrate leaves also have 50 prose lines outside fences. A SKILL.md that
+  # registered_skillmds lists stays with check_skillmd_body_length; every other SKILL.md is capped at 12.
+  # A symlinked .md or a file with a carriage return fails. A row may only shrink and none is born after
+  # the initial capture: scripts/check-line-budget-frozen.sh compares it with the base ref. TIMELESS.
   # Not caught: text quality; files in template trees; growth that stays under a file's own limit.
   header "file line budget"
-  local ratchet files out
+  local ratchet files links input out
   case "$SKILLS_DIR" in */*) ratchet=${SKILLS_DIR%/*} ;; *) ratchet=. ;; esac
   ratchet="$ratchet/tests/golden/line-budget.txt"
   files=$( (cd "$SKILLS_DIR" 2>/dev/null && find . -type f -name '*.md' ! -path '*/template/*' ! -path '*/template-*/*') || true)
   files=$(LC_ALL=C sort <<<"$files")
+  links=$( (cd "$SKILLS_DIR" 2>/dev/null && find . -type l -name '*.md' ! -path '*/template/*' ! -path '*/template-*/*') || true)
+  input=$(registered_skillmds | sed 's/^/@reg:/'; sed '/^$/d; s/^/@link:/' <<<"$links"; cat <<<"$files")
   if ! out=$(awk -v root="$SKILLS_DIR" -v ratchet="$ratchet" '
     function bad(m) { print m }
     function row_error(s, f,   n, k, a, i) {
@@ -342,10 +359,10 @@ check_file_line_budget() {
       FCH = ch; FRUN = len; FREST = substr(s, sp + len + 1)
       return 1
     }
-    function classify(p, first,   n, a, base, top) {
+    function classify(p,   n, a, base, top) {
       n = split(p, a, "/"); base = a[n]; top = a[1]; LEAF = 0
       if (p == "CONVENTIONS.md") return 150
-      if (base == "SKILL.md") return (first == "---") ? 0 : 12
+      if (base == "SKILL.md") return ((p in regd) ? 0 : 12)
       if (p == "add/database/python.md" || p == "add/database/typescript.md" || p == "migrate/nextjs-backend-extraction.md") return 40
       if (p == "standards/validation-patterns/patterns.md" || p == "standards/code-standards/comments.md") return 60
       if ((top == "add" || top == "migrate") && (base == "implementation.md" || base ~ /^(fastapi|nestjs|nextjs|vite-react|python|typescript)[.]md$/)) { LEAF = 1; return 150 }
@@ -360,14 +377,19 @@ check_file_line_budget() {
       else { load_row(s); while ((getline s < ratchet) > 0) load_row(s) }
       close(ratchet)
     }
+    /^@reg:/ { regd[substr($0, 6)] = 1; next }
+    /^@link:/ {
+      p = substr($0, 7); sub(/^\.\//, "", p)
+      bad(p ": is a symbolic link — a skill file must be a real file; replace it with a copy")
+      next
+    }
     $0 != "" {
       p = $0; sub(/^\.\//, "", p); nfiles++; seen[p] = 1
       path = root "/" p
-      nl = 0; prose = 0; infence = 0; fcnt = 0; first = ""
+      nl = 0; prose = 0; infence = 0; fcnt = 0; hascr = 0
       while ((r = (getline s < path)) > 0) {
         nl++
-        if (nl == 1) first = s
-        sub(/\r$/, "", s)
+        if (index(s, "\r") > 0) hascr = 1
         if (infence) {
           if (fence_line(s) && FCH == och && FRUN >= olen && FREST ~ /^[ \t]*$/) infence = 0
           else if (s !~ /^[ \t]*$/) fcnt++
@@ -378,7 +400,8 @@ check_file_line_budget() {
       close(path)
       if (r < 0) { bad(p ": cannot read the file — fix its permissions"); next }
       if (infence) prose += fcnt
-      cap = classify(p, first)
+      if (hascr) bad(p ": contains a carriage return — convert it to LF line endings")
+      cap = classify(p)
       if (cap == 0) {
         if (p in lim) bad(ratchet ":" rowno[p] ": row for registered " p " — delete it; its body is capped by the SKILL.md body check")
         next
@@ -396,7 +419,7 @@ check_file_line_budget() {
     END {
       for (p in lim) if (!(p in seen)) bad(ratchet ":" rowno[p] ": row for " p ", which is no file under skills/ or sits in a template tree — delete the row")
       if (nfiles == 0) bad(root ": no .md file found — the line budget scanned nothing")
-    }' <<<"$files" 2>&1); then
+    }' <<<"$input" 2>&1); then
     out="line budget scanner failed: $out"
   fi
   out=$(LC_ALL=C sort <<<"$out")

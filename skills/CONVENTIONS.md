@@ -49,7 +49,7 @@ Version floors and the reasons for them live only in `.claude/rules/<stack>.md`.
 
 ### 2-Level (default)
 
-Use when a stack has **≤ 2 variants**. `add/SKILL.md` routes straight to `add/<capability>/<stack>.md` (`add/auth/fastapi.md`): 1 `cat`, no sub-SKILL.md.
+Use when a stack has **≤ 2 variants**. `add/SKILL.md` routes straight to `add/<capability>/<stack>.md` (`add/auth/fastapi.md`): 1 `cat`, no sub-SKILL.md; a capability directory never holds a SKILL.md of its own.
 
 ### 3-Level
 
@@ -69,6 +69,8 @@ Use when a stack has **> 2 variants** (several ORMs or drivers). `add/SKILL.md` 
 A registered `SKILL.md` has `name` and `description` frontmatter, a description of at most 150 characters and a body of at most 30 lines. Optional fields: `when_to_use`, `disable-model-invocation`, `allowed-tools` (scope tightly: `Bash(git add *)`, not `Bash`), `paths`, `argument-hint`; description plus `when_to_use` stay under 1,536 characters.
 
 The body holds only stack detection, a routing table or decision tree, `cat` commands to reference files and a one-line prerequisite. No implementation steps, file templates, numbered how-to lists or prose copied from another skill. A utility `SKILL.md` (build, test, review, cleanup) has no frontmatter and stays a router of at most 12 lines.
+
+Set `disable-model-invocation: true` on a destructive or scaffold-scope skill, so only an explicit user call runs it.
 
 Enforced by `check_skillmd_description_length`, `check_skillmd_body_length` and `check_file_line_budget`.
 
@@ -118,7 +120,7 @@ Never create `<framework>-add-auth` or similar registered skills. Add reference 
 ### Line budget
 
 `check_file_line_budget` (`scripts/lint-skills.sh`) caps every `.md` under `skills/` outside template trees by class: utility router 12, stack router 40, scaffold kit and standards stack files 120, leaf 150 plus 50 prose lines outside fences, this file 150.
-Only an exact-path row in `tests/golden/line-budget.txt` lets a file exceed its cap; rows only shrink, and `scripts/check-line-budget-frozen.sh BASE_REF` fails CI when one grows. Cut the file, never raise its row.
+Only an exact-path row in `tests/golden/line-budget.txt` lets a file exceed its cap; rows only shrink, and `scripts/check-line-budget-frozen.sh BASE_REF` fails CI when one grows or a new one appears. Cut the file, never raise its row; a new file fits its class cap and takes no row. A symlinked `.md` or a CR byte fails; a `SKILL.md` that is not registered (depth 1, `name:`) is capped at 12.
 
 ---
 

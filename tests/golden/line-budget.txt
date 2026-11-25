@@ -1,4 +1,4 @@
-# path	max_lines	max_prose (- for non-leaf). Rows only shrink; a new row needs a new file of at most 150 lines. See check_file_line_budget in scripts/lint-skills.sh.
+# path	max_lines	max_prose (- for non-leaf). Rows only shrink and none is added after the initial capture: a new file fits its class cap and takes no row. See check_file_line_budget in scripts/lint-skills.sh.
 add/ai-security/implementation.md	399	84
 add/auth/fastapi.md	408	69
 add/auth/nestjs.md	282	71

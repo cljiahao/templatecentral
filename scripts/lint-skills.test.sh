@@ -1494,7 +1494,7 @@ run_pfd() {
 # ── file line budget: the check alone, on a scratch tree (a full lint per probe is too slow) ──
 # lb_probe builds a tree that passes (the clean control), applies one mutation and expects the
 # named text. The function under test is cut out of $LINT, so reverting the check fails the probes.
-LB_FN=$(awk '/^check_file_line_budget\(\)/ { on = 1 } on { print } on && /^}/ { exit }' "$LINT")
+LB_FN=$(awk '/^(registered_skillmds|check_file_line_budget)\(\) \{/ { on = 1 } on { print } on && /^}/ { on = 0 }' "$LINT")
 LB_SH='set -euo pipefail; FAILED=0; header() { :; }; fail() { echo "FAIL: $*"; }; pass() { echo "OK:   $*"; }
 report() { if [[ -n "$1" ]]; then echo "$1"; fail "$2"; else pass "$3"; fi; }
 SKILLS_DIR=$1; while [[ ${#SKILLS_DIR} -gt 1 && "$SKILLS_DIR" == */ ]]; do SKILLS_DIR=${SKILLS_DIR%/}; done; '"$LB_FN"'; check_file_line_budget'
@@ -1598,6 +1598,20 @@ lb_probe line_budget_item8_ratchet_missing lb_ratchet_missing "line-budget.txt: 
 lb_probe line_budget_item8_ratchet_empty lb_ratchet_empty "line-budget.txt: empty"
 lb_probe line_budget_scans_something lb_no_files "no .md file found"
 lb_clean line_budget_template_trees_are_ignored lb_big_template_file
+lb_symlink() { ln -s ../other/x.md "$LBD/skills/other/link.md"; }
+lb_nested_skillmd() { mkdir -p "$LBD/skills/add/auth/sub"; { printf -- '---\nname: nested\n---\n'; awk 'BEGIN { for (i = 1; i <= 20; i++) print "b" i }'; } > "$LBD/skills/add/auth/sub/SKILL.md"; }
+lb_nameless_skillmd() { { printf -- '---\ndescription: x\n---\n'; awk 'BEGIN { for (i = 1; i <= 20; i++) print "b" i }'; } > "$LBD/skills/other/SKILL.md"; }
+lb_crlf_skillmd() { awk 'BEGIN { for (i = 1; i <= 12; i++) printf "l%d\r\n", i }' > "$LBD/skills/build/SKILL.md"; }
+lb_bare_cr() { printf 'a\rb\rc\r' > "$LBD/skills/other/y.md"; }
+lb_unlisted_leaf() { lb_lines add/auth/vite-react.md 151; }
+lb_nameless_short() { { printf -- '---\ndescription: x\n---\n'; awk 'BEGIN { for (i = 1; i <= 8; i++) print "b" i }'; } > "$LBD/skills/other/SKILL.md"; }
+lb_probe line_budget_fix1_symlinked_md lb_symlink "other/link.md: is a symbolic link"
+lb_probe line_budget_fix2_nested_skillmd_with_frontmatter lb_nested_skillmd "add/auth/sub/SKILL.md: 23 lines, limit 12"
+lb_probe line_budget_fix2_skillmd_frontmatter_without_name lb_nameless_skillmd "other/SKILL.md: 23 lines, limit 12"
+lb_clean line_budget_fix2_short_nameless_skillmd_passes lb_nameless_short
+lb_probe line_budget_fix4_crlf_skillmd lb_crlf_skillmd "build/SKILL.md: contains a carriage return"
+lb_probe line_budget_fix4_bare_cr_file lb_bare_cr "other/y.md: contains a carriage return"
+lb_probe line_budget_fix3_unlisted_leaf_over_cap lb_unlisted_leaf "add/auth/vite-react.md: 151 lines, limit 150"
 lb_slash_agrees() {
   [[ -n "${ONLY:-}" && ! "line_budget_slash_agrees" =~ $ONLY ]] && return 0
   lb_base; lb_over_other
