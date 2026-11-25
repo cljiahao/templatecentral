@@ -190,7 +190,7 @@ Every reference file must begin with this comment block as its **first line**:
 
 ### Agent-utility variant
 
-Reference files belonging to de-registered agent utilities (build/test/review/cleanup) use "— it is catted by agents via skills/<name>/SKILL.md (de-registered agent utility)." instead of the registered-skill suffix.
+Reference files belonging to de-registered agent utilities (test/review/cleanup) use "— it is catted by agents via skills/<name>/SKILL.md (de-registered agent utility)." instead of the registered-skill suffix.
 
 ---
 
@@ -342,7 +342,7 @@ This checklist matches what `/tc-audit` checks; `scripts/lint-skills.sh` enforce
 
 - [ ] Total registered skill count = 4: verify with `grep -rl '^name:' skills/*/SKILL.md | wc -l`
 
-> **Agent utilities** (`build`, `test`, `review`, `cleanup`) are not registered skills — their SKILL.md files have ref headers instead of `name:` frontmatter. They are catted directly by agents as needed. Skill directories = 8; registered skills = 4 (`add`, `migrate`, `scaffold`, `standards`).
+> **Agent utilities** (`test`, `review`, `cleanup`) are not registered skills — their SKILL.md files have ref headers instead of `name:` frontmatter. They are catted directly by agents as needed. Skill directories = 7; registered skills = 4 (`add`, `migrate`, `scaffold`, `standards`).
 
 ### Stack Detection
 
