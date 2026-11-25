@@ -84,29 +84,6 @@ export const externalApiUserSchema = z.looseObject({
 });
 ```
 
-**Schema Composition:**
-
-```ts
-const projectWithAuthor = createProjectSchema.extend({
-  authorId: uuidSchema,
-});
-
-const projectUpdate = createProjectSchema.pick({ name: true });
-
-const projectPublic = createProjectSchema.omit({ description: true });
-
-const eventSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('user-created'),
-    userId: uuidSchema,
-  }),
-  z.object({
-    type: z.literal('project-updated'),
-    projectId: uuidSchema,
-  }),
-]);
-```
-
 ### Field-level error formatting
 
 ```ts
@@ -122,13 +99,11 @@ Zod 4: use top-level `z.flattenError(err)` for field errors and `err.issues` for
 
 ## Rules
 
-1. **Validate all user input** — forms (client + server), body, query, path params, file uploads; parse `request.json()`, `form.data` and query params with Zod/Pydantic first
-2. **Field-level errors** — mapped to form field names, not schema paths
-3. **Server validates independently** — never trust client validation
-4. **Validate before business logic** — at the route/controller entry point
-5. **File uploads: cap, whitelist, sniff, rename** — Cap body size before buffering, whitelist type/extension, verify magic bytes, and generate the storage key server-side (never a path from the client filename). When the project accepts files from untrusted users, also scan them for malware before they are stored or served
-6. **Validate external API responses** — Zod `safeParse()`
-7. **User-friendly errors** — no raw validation paths or user input echoed back
-8. **Parameterized ORM queries** — never concatenate user input into SQL
-9. **`dangerouslySetInnerHTML` only for trusted content** — JSX otherwise auto-escapes
-10. **Cryptography and keys** — use vetted, maintained cryptographic libraries, never custom primitives; load keys and secrets from a secrets manager, or from environment variables injected from one, never from code, and rotate them; use TLS for data in transit and storage-level encryption for data at rest
+1. **Parse at the entry point** — body, query, path params, form data and uploads go through Zod/Pydantic before business logic; `request.json()` is `unknown` until parsed
+2. **Server validates independently** — client validation is UX only; a crafted request skips it
+3. **Field-level errors** — map to form field names (`z.flattenError`), not schema paths
+4. **No echo** — error responses carry neither raw validation paths nor user input
+5. **File uploads: cap, whitelist, sniff, rename** — cap body size before buffering, whitelist type/extension, verify magic bytes (the claimed type is attacker-controlled), generate the storage key server-side (a client filename can carry `../`). Untrusted uploaders: also scan for malware before storing or serving
+6. **Validate external API responses** — Zod `safeParse()`; an upstream contract break must fail loudly, not flow through as typed data
+7. **Parameterised queries only** — never build SQL by string concatenation; user input in a query string is injection
+8. **Cryptography and keys** — vetted, maintained libraries, never custom primitives; keys and secrets from a secrets manager (or env injected from one), never in code, and rotated; TLS in transit, storage-level encryption at rest
