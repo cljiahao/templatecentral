@@ -4,8 +4,6 @@
 
 # Add a FastAPI Endpoint
 
-An API endpoint: router → service.
-
 > **Placeholder names**: examples use the stem `my_thing` (`my_thing.py` in each directory, `MyThingRequest` / `MyThingResponse`). Replace it throughout (a `task` resource: `task.py`, `TaskRequest`, `run_task_service`). The import name must match the filename (e.g., `tasks.py` → `from api.routers import tasks`).
 
 ## Steps
@@ -157,9 +155,4 @@ After creating all files:
 
 ## Rules
 
-- **Tests ride with the change** — new or changed behaviour gets a test in the same change, per the test-value rule (`docs/CONSTITUTION.md` §4).
-- **Services contain business logic** — parse schemas → process → serialize response.
-- **One service function per endpoint**.
 - **Apply auth by default when the project has it** — if `src/api/dependencies/auth.py` exists, add the project's auth dependency (`user_id: Annotated[str, Depends(get_current_user)]` — Ruff `FAST002` rejects the bare `= Depends(...)` default) to new endpoints unless the route is deliberately public. Use `status_code=201` on create endpoints.
-- Services take Pydantic schemas or domain models, not raw `dict` or unvalidated data
-- Register the router in `src/api/routes.py` and add its tag to `src/api/tags.py`

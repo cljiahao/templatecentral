@@ -47,8 +47,6 @@ Vitest has `globals: true` — `describe`, `it`, `expect` need no import (explic
 
 ### Component Tests
 
-Use Testing Library to render and assert on DOM output:
-
 ```tsx
 // src/features/project/components/project-card.test.tsx
 import { render, screen } from '@testing-library/react';
@@ -129,8 +127,6 @@ describe('ProjectService (API-backed)', () => {
 ```
 
 ### React Query Hook Tests
-
-Wrap hooks in a `QueryClientProvider` for testing:
 
 ```tsx
 // src/features/project/hooks/use-projects.query.test.tsx
@@ -233,12 +229,4 @@ Confirm the build succeeds and all tests pass.
 
 ### Rules
 
-- One behavior per `it()`
-- Mock only boundaries (`fetch`, service modules, integration clients), not internal utilities or React internals
-- Query by role/text (`getByRole`, `getByText`, `getByLabelText`); `querySelector` or test IDs only when nothing semantic fits
-- Prefer `userEvent.setup()` over `fireEvent`
 - Reset in `afterEach`: `vi.resetAllMocks()` when the file uses `vi.fn()` / `vi.mock` (`vi.restoreAllMocks()` only undoes `vi.spyOn`, so queued values leak), `vi.restoreAllMocks()` for `vi.spyOn`, plus `vi.unstubAllGlobals()` after `vi.stubGlobal`
-- Fresh `QueryClient` per test
-- Test what the user sees or the caller gets; test your use of third-party code, not its behavior
-- `it.each` for sibling inputs; no snapshot or markup tests of static presentation
-- Tests do not share mutable state

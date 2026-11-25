@@ -112,16 +112,6 @@ def create_example_request(
 
 > **camelCase keys**: `BaseSchema` uses `alias_generator=to_camel`, so factory return values use camelCase keys (`"repeatCount"`) though Python params are snake_case.
 
-Rules:
-- Sensible, composable defaults; add a factory when an object has many fields or many variants.
-- Always use **camelCase keys** in factory dicts — they represent the API's JSON contract.
-
-### Assertions
-
-- One main concept per test.
-- Assert before and after when testing mutations.
-- `pytest.raises(..., match=...)` unless the message is not part of the contract.
-
 ### Parametrize
 
 Default for tests that differ only by input/output (never copy-paste siblings):
@@ -142,10 +132,3 @@ def test_is_eligible(age: int, expected: bool) -> None:
 python -m pytest test/                    # All tests
 python -m pytest test/test_api/           # API tests only
 ```
-
-### Rules
-
-- Tests do not share mutable state
-- Prefer pytest's `monkeypatch` over `unittest.mock.patch`
-- Use factories for what you own; mock only network, filesystem and time
-- Tests pass in any order

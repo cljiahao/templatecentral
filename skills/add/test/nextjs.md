@@ -206,17 +206,9 @@ pnpm build && pnpm test
 
 Confirm the build succeeds and all tests pass.
 
-### Naming
-
-- Files: `<name>.test.ts` under `test/api/`, mirroring the route path
-- Describe blocks: `describe('METHOD /api/<path>', ...)` — matches the HTTP method and route
-- Test names: `it('should <expected behavior>', ...)` — describes the outcome, not the implementation
-
 ### Helper Patterns
 
 #### Request Factory
-
-Create a helper for building `NextRequest` objects with JSON bodies:
 
 ```ts
 import { NextRequest } from 'next/server';
@@ -232,8 +224,6 @@ function jsonRequest(url: string, body: unknown, method = 'POST'): NextRequest {
 
 #### Params Factory
 
-For dynamic segment routes, create a params factory:
-
 ```ts
 function makeParams<T extends Record<string, string>>(values: T) {
   return { params: Promise.resolve(values) };
@@ -242,12 +232,5 @@ function makeParams<T extends Record<string, string>>(values: T) {
 
 ### Rules
 
-- API route handlers only — no component tests here
-- One behavior per `it()`
-- Mock at boundaries — mock integration-layer services/clients (`src/integrations/`), not internal utilities
-- Use `vi.mock()` at module level and `vi.mocked()` for type-safe mock access
-- Call `vi.resetAllMocks()` in `afterEach` (or set `mockReset: true` in `vitest.config.ts`). `vi.restoreAllMocks()` only restores `vi.spyOn` spies, so values queued on `vi.mock` factory `vi.fn()`s leak into the next test.
-- Descriptive names — `it('should return 404 when project not found')`
-- Tests do not share mutable state
+- Call `vi.resetAllMocks()` in `afterEach` — `vi.restoreAllMocks()` only restores `vi.spyOn` spies, so values queued on `vi.mock` factory `vi.fn()`s leak into the next test
 - One 500 test per handler pattern that asserts the body does not echo the internal error message; not one per route
-- Parametrize sibling inputs per `docs/CONSTITUTION.md` §4 (`it.each`), e.g. several invalid bodies → 400

@@ -37,8 +37,6 @@ export interface ProjectItem {
 
 ### 3. Create `constants.ts`
 
-Static data goes here, not in components:
-
 ```ts
 // Values use the API `sort` format: `asc_<field>` or `desc_<field>`.
 export const SORT_OPTIONS = [
@@ -133,16 +131,9 @@ export const createProjectSchema = z.object({
 export type CreateProjectInput = z.input<typeof createProjectSchema>;
 ```
 
-Use these schemas in:
-- **React Hook Form** — pass to `zodResolver(createProjectSchema)` for client-side form validation
-- **API route handlers** — use `safeParse()` to validate request bodies (see `templatecentral:add (endpoint)`)
-- **Service layer** — validate external API responses before returning typed data
-
 ### 5. Create Components (in `components/`)
 
 **Check the component library before writing UI** (`templatecentral:standards` → `code-standards/nextjs.md` → *Component Best Practices*). Prefer existing shadcn primitives and widgets (`custom-card`, `custom-dialog`, `custom-form-field`, `media-card`, `pill`, …) over new ones.
-
-Feature-specific components. Use `function` declarations:
 
 ```tsx
 // components/project-card.tsx
@@ -163,8 +154,6 @@ export function ProjectCard({ project }: { project: ProjectItem }) {
 Export from barrel: `components/index.ts`
 
 ### 6. Create Hooks (in `hooks/`)
-
-Follow naming convention:
 
 | Suffix | Purpose |
 |--------|---------|
@@ -197,29 +186,21 @@ export * from './constants';
 export type { ProjectItem } from './types';
 ```
 
-Export constants and types consumers need.
-
 If the feature has client-side data access services (hooks that call `/api/*`), also export the API layer:
 
 ```ts
 export * from './api';
 ```
 
-Only export what consumers outside the feature need.
-
 ### 8. Validate
 
 After creating all files:
 1. Run `pnpm build` — confirm no TypeScript errors
 2. Verify imports resolve: `import { X } from '@/features/<name>'` works from outside the feature
-3. If hooks use React Query, verify the query key is unique across the project
 
 ## Rules
 
-- **Direct imports** OK within the same feature
-- Do not import across features; promote shared code (used by 2+) to `components/widgets/` or `lib/`
-- The barrel exports only the public API
-- Write `types.ts` before components
+- Do not import across features; promote code used by 2+ features to `components/widgets/` or `lib/` — no lint rule enforces this, and cross-feature imports create cycles
 
 ## Standalone Components
 
@@ -241,7 +222,3 @@ npx shadcn@latest add <component-name>
 ```
 
 It installs into `src/components/ui/`; never hand-create primitives there.
-
-Rules:
-- Prefer composition with children over boolean flag props for variants
-- Add exports to the folder's `index.ts` barrel
