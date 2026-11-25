@@ -1,6 +1,6 @@
 <!-- ref: migrate/general/phase-5-health-check.md
      loaded-by: migrate/general/implementation.md → migrate/SKILL.md
-     prereq: Phase 0 of migrate/general/implementation.md routed here (project at @6.0.0+ with .claude/harness.json, or the @5.x hook re-sync). Do not invoke this file directly — it is loaded at runtime by the templatecentral:migrate skill. -->
+     prereq: Phase 0 of migrate/general/implementation.md routed here (project with a templateCentral marker and .claude/harness.json). Do not invoke this file directly — it is loaded at runtime by the templatecentral:migrate skill. -->
 
 # Migrate — Phase 5 (harness health check + safe re-sync)
 
@@ -10,7 +10,7 @@ Phase 4 (full seed) is `phase-4-upgrade.md`.
 
 ## Phase 5 — Harness Health Check
 
-Run when line 1 has `<!-- templateCentral: <stack>@6.0.0 -->` **and** `.claude/harness.json` exists, or for a `@5.x` hook re-sync. Reports drift from the origin hashes; never auto-repairs.
+Run when line 1 has a `<!-- templateCentral: <stack>@<version> -->` marker **and** `.claude/harness.json` exists. Reports drift from the origin hashes; never auto-repairs.
 
 **Step 5a: Read `.claude/harness.json`**
 

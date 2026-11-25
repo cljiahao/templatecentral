@@ -12,7 +12,7 @@ Moves `src/app/api/` and the integrations it uses into a sibling NestJS project;
 cat "<skill-dir>/nextjs-backend-extraction/common.md"
 ```
 
-**Phase 1 NestJS deltas:** In 1d, always include `src/integrations/clients/base/fetch-client.ts` and `axios-client.ts` if they exist. Assessment Database line: `[✓ Drizzle / ✓ Mongoose / None detected]`.
+**Phase 1 NestJS deltas:** In 1d, always include `src/integrations/clients/base/fetch-client.ts` and `axios-client.ts` if they exist.
 
 ---
 

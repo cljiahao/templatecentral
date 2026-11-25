@@ -3,11 +3,7 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:migrate skill. -->
 ## NestJS Database Migration
 
-**Read `drizzle-to-kysely.md` first** — shared steps (1, 5 types, 8 migration body, 9 translation table, 10 env block, After Writing Code) live there.
-
-```bash
-cat "<skill-dir>/database/drizzle-to-kysely.md"
-```
+Load `<skill-dir>/database/drizzle-to-kysely.md` first: it holds the shared steps (1, 5 types, 8 migration body, 9 translation table, 10 env block, After Writing Code).
 
 **Before Step 1**, create a migration branch so every change below (packages, scripts, deletions) is reviewable and revertible as one unit:
 
@@ -29,10 +25,9 @@ Remove `db:generate`, `db:migrate`, `db:push`, `db:studio`. Add:
 
 ### Step 3 — Delete Drizzle files
 
-> **Gate — these are user files.** Get explicit user confirmation before running the deletions below; never delete user code without it. The migration branch already exists (created before Step 1), so skip the first line if you are on it.
+> **Gate — these are user files.** Get explicit user confirmation before running the deletions below; never delete user code without it.
 
 ```bash
-git checkout -b migrate/drizzle-to-kysely   # then confirm with the user before the rm commands
 rm src/database/drizzle.service.ts
 rm src/database/schema.ts
 rm drizzle.config.ts
@@ -40,10 +35,6 @@ rm -rf drizzle/
 ```
 
 ### Step 4 — Create `src/database/kysely.service.ts` (IAM variant)
-
-> **Canonical source**: the copied `src/database/kysely.service.ts` and the `serviceConfig` block in
-> Step 10 match `add/database/typescript/nestjs-kysely-iam.md` (canonical).
-> The lint fails if they drift: re-copy, do not hand-edit.
 
 **Download the AWS RDS CA bundle first.** The Amazon RDS root CA is not in Node's default trust
 store, so without the bundle TLS fails with `SELF_SIGNED_CERT_IN_CHAIN`. Never "fix" it with
@@ -60,8 +51,6 @@ Run `TC_PART=leaf TC_LEAF=migrate/database/nestjs bash "<skill-dir>/../scaffold/
 Commit `certs/rds-global-bundle.pem` (it is a public certificate, not a secret) or bake it
 into the Docker image; `RDS_CA_BUNDLE_PATH` is set in Step 10. In a container, `NODE_EXTRA_CA_CERTS=/app/certs/rds-global-bundle.pem`
 is an equivalent process-wide alternative to the explicit `ca` option in the copied `kysely.service.ts`.
-
-Copied verbatim from `<skill-dir>/database/nestjs/template/src/database/kysely.service.ts` by the copy step; do not re-type it.
 
 ### Step 5 — Create `src/database/types.ts`
 
@@ -85,7 +74,7 @@ export class DatabaseModule {}
 
 ### Step 7 — Create `src/database/migrate.ts`
 
-Copied verbatim from `<skill-dir>/database/nestjs/template/src/database/migrate.ts` by the copy step; do not re-type it.
+The copy step wrote `src/database/migrate.ts`.
 
 ### Step 8 — Write first Kysely migration
 

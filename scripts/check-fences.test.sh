@@ -558,7 +558,14 @@ expect_ok "$REPO_ROOT" "repo snapshot matches skills/"
 case "$OUT" in *"fences OK"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: repo check reports fences OK [$OUT]" ;; esac
 nrows=$(cat "$REPO_ROOT"/tests/golden/fences/{add,migrate,standards}.tsv | grep -vc '^#')
 nfences=$(grep -rhcE '^[[:space:]]*(```|~~~)' "$REPO_ROOT"/skills/add "$REPO_ROOT"/skills/migrate "$REPO_ROOT"/skills/standards | awk '{ n += $1 } END { print n + 0 }')
-if [[ "$nrows" -gt 100 && "$nrows" -lt $((nfences / 2)) ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: snapshot row count $nrows looks wrong against $nfences fence lines"; fi
+# Rows in deleted.d/ still sit in the snapshot but their fences are gone from skills/, so they do not count as live.
+ndel=0
+for f in "$REPO_ROOT"/tests/golden/fences/deleted.d/*.tsv; do
+  [[ -f "$f" ]] || continue
+  ndel=$((ndel + $(grep -vc '^#' "$f")))
+done
+live=$((nrows - ndel))
+if [[ "$live" -gt 100 && "$live" -le $((nfences / 2)) ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: snapshot row count looks wrong: $live live rows ($nrows snapshot rows, $ndel deleted) against $nfences fence lines"; fi
 
 echo "check-fences.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
