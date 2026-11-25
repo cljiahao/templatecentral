@@ -166,7 +166,7 @@ export class UserService {
 
 #### B9. Keep Tests Runnable Without a Database
 
-Vitest does not load `.env`, and `env.config.ts` now throws without `DATABASE_URL` — add it to `test.env` in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create the object if needed):
+Vitest does not load `.env`, and `env.config.ts` now throws without `DATABASE_URL` — add it to `test.env` in **both** `vitest.config.mts` and `vitest.config.e2e.mts` (create the object if needed):
 
 ```typescript
     // pg connects lazily, so this placeholder is never dialled unless a test queries.

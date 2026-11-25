@@ -56,5 +56,5 @@ template/test/config/security.setup.spec.ts 644 - -
 template/test/main.spec.ts 644 - -
 template/tsconfig.build.json 644 - -
 template/tsconfig.json 644 - -
-template/vitest.config.e2e.ts 644 - -
-template/vitest.config.ts 644 - -
+template/vitest.config.e2e.mts 644 - -
+template/vitest.config.mts 644 - -

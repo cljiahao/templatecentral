@@ -22,11 +22,9 @@ First run `TC_PART=leaf TC_LEAF=add/auth/fastapi TC_TREE=template bash "<skill-d
 
 Request/response schemas for auth endpoints:
 
-**`src/api/schemas/request/auth.py`**:
-Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/schemas/request/auth.py` by the copy step; do not re-type it.
+**`src/api/schemas/request/auth.py`**
 
-**`src/api/schemas/response/auth.py`**:
-Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/schemas/response/auth.py` by the copy step; do not re-type it.
+**`src/api/schemas/response/auth.py`**
 
 #### 2. Extend Config
 
@@ -64,21 +62,15 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 #### 3. Create Security Module
 
-**`src/core/security.py`** — JWT token creation/verification and password hashing:
-
-Copied verbatim from `<skill-dir>/auth/fastapi/template/src/core/security.py` by the copy step; do not re-type it.
+**`src/core/security.py`** — JWT token creation/verification and password hashing
 
 #### 4. Create Auth Dependency
 
-The copy step created the **`src/api/dependencies/`** package (empty `__init__.py`) and **`auth.py`** — the `get_current_user` route guard:
-
-Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/dependencies/auth.py` by the copy step; do not re-type it.
+The copy step created the **`src/api/dependencies/`** package (empty `__init__.py`) and **`auth.py`** — the `get_current_user` route guard
 
 #### 5. Create Authorization Helpers
 
-**`src/api/dependencies/authz.py`** — deny-by-default role and ownership checks:
-
-Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/dependencies/authz.py` by the copy step; do not re-type it.
+**`src/api/dependencies/authz.py`** — deny-by-default role and ownership checks
 
 Use `require_roles` in place of `get_current_user` on role-gated routes, and `ensure_owner` on record-by-id handlers (see Rules):
 
@@ -105,8 +97,6 @@ Once `templatecentral:add` (database) adds a users store, make `get_current_role
 
 **`src/api/services/auth_service.py`** — registration and login stub (completed by the database capability).
 
-Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/services/auth_service.py` by the copy step; do not re-type it.
-
 #### 7. Add Auth Tag
 
 Add `AUTH` to the `APITags` enum in **`src/api/tags.py`**:
@@ -119,9 +109,7 @@ class APITags(StrEnum):
 
 #### 8. Create Auth Router
 
-**`src/api/routers/auth.py`**:
-
-Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/routers/auth.py` by the copy step; do not re-type it.
+**`src/api/routers/auth.py`**
 
 #### 9. Register the Router
 
@@ -190,13 +178,9 @@ def auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {create_access_token('test-user')}"}
 ```
 
-**`test/test_api/test_auth.py`** — covers the parts that stay unchanged when `templatecentral:add` (database) completes the stubs:
+**`test/test_api/test_auth.py`** — covers the parts that stay unchanged when `templatecentral:add` (database) completes the stubs
 
-Copied verbatim from `<skill-dir>/auth/fastapi/template/test/test_api/test_auth.py` by the copy step; do not re-type it.
-
-**`test/test_api/test_authz.py`** — a probe app tests the real dependencies apart from any feature router:
-
-Copied verbatim from `<skill-dir>/auth/fastapi/template/test/test_api/test_authz.py` by the copy step; do not re-type it.
+**`test/test_api/test_authz.py`** — a probe app tests the real dependencies apart from any feature router
 
 ### Browser Client (Cookie Mode)
 
@@ -365,9 +349,7 @@ def logout(response: Response) -> None:
 
 No CORS change: the SPA's proxied requests are same-origin and never preflight.
 
-**4. `test/test_api/test_auth_cookie.py`** — a probe app tests the cookie machinery apart from the login stub:
-
-Copied verbatim from `<skill-dir>/auth/fastapi/template-cookie/test/test_api/test_auth_cookie.py` by the copy step; do not re-type it.
+**4. `test/test_api/test_auth_cookie.py`** — a probe app tests the cookie machinery apart from the login stub
 
 ### Rate Limiting (Required for Production)
 
@@ -409,15 +391,12 @@ def create_session(request: Request, body: LoginRequest, response: Response) -> 
 
 ### Rules
 
-- Never commit `SECRET_KEY` — add it to `src/.env` and make sure `src/.env` is in `.gitignore`.
-- Use `HTTPBearer` scheme so Swagger UI gets the "Authorize" button.
 - Browser SPAs use cookie mode, never a `localStorage` token; Bearer is for non-browser clients.
 - Hash passwords with argon2id (`argon2-cffi`) — never store plaintext.
 - `get_current_user` returns the user ID; return a full user once a database exists.
 - Every record-by-id handler calls `ensure_owner` (or filters by owner) first.
 - Role-gated routes depend on `require_roles(...)`. Roles come from `get_current_roles`, never from the token, so a revoked role stops working on the next request.
 - When completing `login_user`, return the same 401 for unknown email and wrong password, and run `verify_password` against a dummy hash when the user is missing — otherwise response timing reveals which emails are registered.
-- Rate limiting (`slowapi`) is mandatory before production.
 - **TRUST_PROXY must be set when behind a reverse proxy** — `get_remote_address` reads `request.client.host`. Set `TRUST_PROXY` to your VPC CIDR (single-hop: ALB → App) or `TRUST_PROXY=10.0.0.0/8,172.16.0.0/12` (two-hop: ALB → Traefik → App). Without it every user shares the proxy's IP and one rate-limit bucket.
 
 ### Validate

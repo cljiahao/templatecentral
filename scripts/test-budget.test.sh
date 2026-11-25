@@ -417,6 +417,7 @@ scaffold() { # scaffold <stack> <dir>
 for stack in nextjs nestjs vite-react fastapi; do
   d=$T/scaffold-$stack
   scaffold "$stack" "$d"
+  printf '# %s\n\nA scaffolded project.\n' "$stack" > "$d/README.md"
   check 1 "$([[ -f $d/docs/adr/0001-test-each-behaviour-once.md && -x $d/scripts/test-budget.sh && -f $d/.claude/skills/test-consolidate/SKILL.md ]] && echo 1 || echo 0)" "scaffold[$stack]: ADR, script and skill seeded"
   OUT=$(cd "$d" && bash scripts/test-budget.sh 2>&1)
   check 0 "$?" "scaffold[$stack]: budget exits 0 ($OUT)"

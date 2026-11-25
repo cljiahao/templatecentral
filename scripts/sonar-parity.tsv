@@ -1,0 +1,132 @@
+# Sonar way parity table. One row per Sonar rule; checked by scripts/check-sonar-parity.sh.
+# columns (tab separated): lang	sonar key	name	type	status	local rule	reason
+# lang: ts | py. status: covered | partial | not-covered. reason is required for partial and not-covered.
+# local rule: ESLint rule id with plugin prefix (ts), ruff code or comma list (py), gate:<path under skills/scaffold/shared>#<literal the file must contain>, or - when none.
+# Keys, names, types and Sonar way membership are checked against scripts/sonar-parity-presets/sonar-rules.tsv (public Sonar rule metadata); a row whose key is not in it must say 'unverified:' in its reason.
+ts	typescript:S3776	Cognitive Complexity of functions should not be too high	code smell	covered	sonarjs/cognitive-complexity	
+ts	typescript:S1481	Unused local variables and functions should be removed	code smell	covered	sonarjs/no-unused-vars	
+ts	typescript:S1854	Unused assignments should be removed	code smell	covered	sonarjs/no-dead-store	
+ts	typescript:S4030	Collection contents should be used	code smell	covered	sonarjs/no-unused-collection	
+ts	typescript:S3358	Ternary operators should not be nested	code smell	covered	sonarjs/no-nested-conditional	
+ts	typescript:S1871	Two branches in a conditional structure should not have exactly the same implementation	code smell	covered	sonarjs/no-duplicated-branches	
+ts	typescript:S3923	All branches in a conditional structure should not have exactly the same implementation	bug	covered	sonarjs/no-all-duplicated-branches	
+ts	typescript:S1862	"if/else if" chains and "switch" cases should not have the same condition	bug	covered	sonarjs/no-identical-conditions	
+ts	typescript:S1764	Identical expressions should not be used on both sides of a binary operator	bug	covered	sonarjs/no-identical-expressions	
+ts	typescript:S4144	Functions should not have identical implementations	code smell	covered	sonarjs/no-identical-functions	
+ts	typescript:S3626	Jump statements should not be redundant	code smell	covered	sonarjs/no-redundant-jump	
+ts	typescript:S1301	"if" statements should be preferred over "switch" when simpler	code smell	partial	sonarjs/no-small-switch	needs type information; only NestJS lints with types, Next.js and Vite + React do not
+ts	typescript:S1313	IP addresses should not be hardcoded	code smell	covered	sonarjs/no-hardcoded-ip	
+ts	typescript:S2068	Credentials should not be hard-coded	vulnerability	covered	sonarjs/no-hardcoded-passwords	
+ts	typescript:S6418	Secrets should not be hard-coded	vulnerability	covered	sonarjs/no-hardcoded-secrets	
+ts	typescript:S5332	Clear-text protocols should not be used	vulnerability	covered	sonarjs/no-clear-text-protocols	
+ts	typescript:S2245	Pseudorandom number generators (PRNGs) should not be used in security contexts	vulnerability	covered	sonarjs/pseudo-random	
+ts	typescript:S4790	Weak hashing algorithms should not be used	vulnerability	covered	sonarjs/hashing	
+ts	typescript:S5547	Cipher algorithms should be robust	vulnerability	covered	sonarjs/no-weak-cipher	
+ts	typescript:S2077	SQL queries should not be dynamically formatted	vulnerability	partial	sonarjs/sql-queries	needs type information; only NestJS lints with types, Next.js and Vite + React do not
+ts	typescript:S4036	OS commands should not rely on PATH resolution	vulnerability	covered	sonarjs/no-os-command-from-path	
+ts	typescript:S4830	Server certificates should be verified during SSL/TLS connections	vulnerability	covered	sonarjs/unverified-certificate	
+ts	typescript:S5527	Server hostnames should be verified during SSL/TLS connections	vulnerability	covered	sonarjs/unverified-hostname	
+ts	typescript:S5852	Regular expressions should not cause catastrophic backtracking	vulnerability	partial	sonarjs/slow-regex	needs type information; only NestJS lints with types, Next.js and Vite + React do not
+ts	typescript:S4822	Promise rejections should not be caught by "try" blocks	bug	partial	sonarjs/no-try-promise	needs type information; only NestJS lints with types, Next.js and Vite + React do not
+ts	typescript:S2201	Return values from functions without side effects should not be ignored	bug	partial	sonarjs/no-ignored-return	needs type information; only NestJS lints with types, Next.js and Vite + React do not
+ts	typescript:S1134	Track uses of "FIXME" tags	code smell	not-covered	-	warn by design, not blocking
+ts	typescript:S1135	Track uses of "TODO" tags	code smell	not-covered	-	warn by design, not blocking
+ts	typescript:S108	Nested blocks of code should not be left empty	code smell	covered	no-empty	
+ts	typescript:S4204	The "any" type should not be used	code smell	covered	@typescript-eslint/no-explicit-any	
+ts	typescript:S905	Non-empty statements should change control flow or have at least one side-effect	bug	covered	@typescript-eslint/no-unused-expressions	
+ts	typescript:S9383	Promises should not be left unhandled	bug	not-covered	-	needs type-aware linting; only NestJS enables typescript-eslint recommendedTypeChecked, Next.js and Vite + React lint without type information
+ts	typescript:S6544	Promises should not be misused	bug	not-covered	-	needs type-aware linting (@typescript-eslint/no-misused-promises); only NestJS enables it
+ts	typescript:S4325	Redundant casts and non-null assertions should be avoided	code smell	not-covered	-	needs type-aware linting (@typescript-eslint/no-unnecessary-type-assertion); only NestJS enables it
+ts	typescript:S2966	Non-null assertions should not be used	code smell	not-covered	-	@typescript-eslint/no-non-null-assertion is in the strict preset, which no seeded config extends
+ts	typescript:S1077	Image, area, button with image, object and svg elements should have an alternative text	code smell	not-covered	-	Vite + React has no jsx-a11y plugin; Next.js eslint-config-next enables only a subset and at warn
+ts	typescript:S6844	Anchor tags should not be used as buttons	code smell	not-covered	-	no seeded config enables jsx-a11y/anchor-is-valid as an error
+ts	typescript:S6853	Label elements should have a text label and an associated control	code smell	not-covered	-	no seeded config enables jsx-a11y/label-has-associated-control
+ts	typescript:S1082	Mouse events should have corresponding keyboard events	bug	not-covered	-	no seeded config enables jsx-a11y/mouse-events-have-key-events as an error
+ts	typescript:S4507	Debugging features should not be enabled in production	vulnerability	covered	sonarjs/production-debug	
+ts	quality-gate:new_coverage	Coverage on new code is at least 80%	quality gate	covered	gate:template-ci/github-ts/.github/workflows/ci.yml#--fail-under=80	
+ts	quality-gate:new_duplicated_lines_density	Duplicated lines on new code are at most 3%	quality gate	partial	gate:template-ts/.jscpd.json#"threshold": 3	jscpd measures whole production source, not only new code, and its token rules differ from Sonar
+ts	quality-gate:new_security_hotspots_reviewed	Security hotspots on new code are 100% reviewed	quality gate	not-covered	-	hotspot review is a manual server-side step; no local check can close it
+ts	typescript:S1192	String literals should not be duplicated	code smell	not-covered	-	sonarjs no-duplicate-string is off in the recommended preset (not in the default JS profile per plugin metadata); listed for honesty, no local gate
+py	python:S3776	Cognitive Complexity of functions should not be too high	code smell	partial	C901	C901 is cyclomatic complexity (max 15), not cognitive; the two rank code differently
+py	python:S107	Functions, methods and lambdas should not have too many parameters	code smell	partial	PLR0913	max-args is set to 7 in pyproject.toml to match the Sonar default of 7 (ruff's own default is 5); counting of self, cls and keyword-only arguments was not compared
+py	python:S125	Sections of code should not be commented out	code smell	partial	ERA001	ERA001 is a heuristic and recognises fewer shapes of commented-out code than Sonar
+py	python:S1481	Unused local variables should be removed	code smell	partial	F841	F841 skips tuple unpacking, which Sonar flags
+py	python:S1172	Unused function parameters should be removed	code smell	covered	ARG001,ARG002,ARG003,ARG004,ARG005	
+py	python:S1854	Unused assignments should be removed	code smell	partial	F841	F841 flags a local that is never read; an assigned value that is overwritten before use is not flagged
+py	python:S1066	Mergeable "if" statements should be combined	code smell	covered	SIM102	
+py	python:S1871	Two branches in a conditional structure should not have exactly the same implementation	code smell	partial	SIM114	SIM114 merges adjacent branches with the same body; non-adjacent identical branches are missed
+py	python:S3923	All branches in a conditional structure should not have exactly the same implementation	bug	not-covered	-	no selected ruff rule flags a conditional whose every branch is identical
+py	python:S3358	Conditional expressions should not be nested	code smell	not-covered	-	no selected ruff rule flags nested conditional expressions
+py	python:S134	Control flow statements "if", "for", "while", "try" and "with" should not be nested too deeply	code smell	not-covered	-	ruff PLR1702 (too many nested blocks) is preview-only and not selected
+py	python:S1192	String literals should not be duplicated	code smell	not-covered	-	no selected ruff rule counts duplicated string literals; jscpd measures duplicated blocks only
+py	python:S1313	IP addresses should not be hardcoded	code smell	not-covered	-	ruff S104 flags binding to all interfaces only, not literal IP addresses
+py	python:S2068	Credentials should not be hard-coded	vulnerability	partial	S105,S106,S107	bandit rules match password-named variables, arguments and defaults; secrets under other names are missed (gitleaks covers known token shapes)
+py	python:S2245	Pseudorandom number generators (PRNGs) should not be used in security contexts	vulnerability	partial	S311	S311 flags every use of the random module, which is broader than Sonar but misses other weak generators
+py	python:S4790	Weak hashing algorithms should not be used	vulnerability	partial	S324	S324 covers hashlib and a few other call forms; other libraries are missed
+py	python:S2077	SQL queries should not be dynamically formatted	vulnerability	partial	S608	S608 matches string-built SQL by shape; queries assembled across statements are missed
+py	python:S4830	Server certificates should be verified during SSL/TLS connections	vulnerability	partial	S501	S501 flags requests and httpx calls with verify=False; ssl context and other libraries are missed
+py	python:S4423	Weak SSL/TLS protocols should not be used	vulnerability	partial	S502,S503,S504	S502 flags insecure protocol versions, S503 insecure default arguments, S504 ssl.wrap_socket without a version; direct calls only, other libraries are missed
+py	python:S5547	Cipher algorithms should be robust	vulnerability	partial	S304,S305	ruff flags a fixed list of weak cipher classes; others are missed
+py	python:S4721	OS commands should not be executed using a shell interpreter	vulnerability	partial	S602,S604,S605	ruff flags shell=True and os.system style calls; other shell paths are missed
+py	python:S5332	Clear-text protocols should not be used	vulnerability	not-covered	-	no selected ruff rule flags http://, ftp:// or telnet literals
+py	python:S5852	Regular expressions should not cause catastrophic backtracking	vulnerability	not-covered	-	ruff has no regular-expression denial-of-service rule
+py	python:S1134	Track uses of "FIXME" tags	code smell	not-covered	-	ruff FIX001 is not selected; TD005 only checks the description of a TODO
+py	python:S1135	Track uses of "TODO" tags	code smell	not-covered	-	ruff FIX002 is not selected; TD005 only checks the description of a TODO
+py	python:S100	Method names should comply with a naming convention	code smell	not-covered	-	ruff pep8-naming (N802) is not selected
+py	python:S101	Class names should comply with a naming convention	code smell	not-covered	-	ruff pep8-naming (N801) is not selected
+py	python:S117	Local variable and function parameter names should comply with a naming convention	code smell	not-covered	-	ruff pep8-naming (N806) is not selected
+py	quality-gate:new_coverage	Coverage on new code is at least 80%	quality gate	covered	gate:template-ci/github-py/.github/workflows/ci.yml#--fail-under=80	
+py	quality-gate:new_duplicated_lines_density	Duplicated lines on new code are at most 3%	quality gate	partial	gate:template-py/.jscpd.json#"threshold": 3	jscpd measures whole production source, not only new code, and its token rules differ from Sonar
+py	quality-gate:new_security_hotspots_reviewed	Security hotspots on new code are 100% reviewed	quality gate	not-covered	-	hotspot review is a manual server-side step; no local check can close it
+ts	typescript:S1128	Unnecessary imports should be removed	code smell	covered	@typescript-eslint/no-unused-vars	
+ts	typescript:S2589	Boolean expressions should not be gratuitous	code smell	covered	sonarjs/no-gratuitous-expressions	
+ts	typescript:S4165	Assignments should not be redundant	code smell	covered	sonarjs/no-redundant-assignments	
+ts	typescript:S1066	Mergeable "if" statements should be combined	code smell	not-covered	-	sonarjs/no-collapsible-if is off in the recommended preset and no seeded config enables it
+ts	typescript:S125	Sections of code should not be commented out	code smell	covered	sonarjs/no-commented-code	
+ts	typescript:S4158	Empty collections should not be accessed or iterated	bug	covered	sonarjs/no-empty-collection	
+ts	typescript:S1186	Functions should not be empty	code smell	not-covered	-	@typescript-eslint/no-empty-function is in the stylistic preset, which no seeded config extends
+ts	typescript:S4123	"await" should only be used with promises	code smell	partial	@typescript-eslint/restrict-plus-operands	needs type information; only NestJS lints with types, Next.js and Vite + React do not
+ts	typescript:S6551	Objects and classes converted or coerced to strings should define a "toString()" method	code smell	partial	@typescript-eslint/no-base-to-string	needs type information; only NestJS lints with types, Next.js and Vite + React do not
+ts	typescript:S6606	Nullish coalescing should be preferred	code smell	not-covered	-	@typescript-eslint/prefer-nullish-coalescing is in the stylistic type-checked preset, which no seeded config extends
+ts	typescript:S6477	JSX list components should have a key property	code smell	not-covered	-	no seeded config enables react/jsx-key as an error
+ts	typescript:S1244	Floating point numbers should not be tested for equality	bug	covered	sonarjs/no-floating-point-equality	
+ts	typescript:S6959	"Array.reduce()" calls should include an initial value	bug	partial	sonarjs/reduce-initial-value	needs type information; only NestJS lints with types, Next.js and Vite + React do not
+ts	typescript:S2871	"Array.prototype.sort()" and "Array.prototype.toSorted()" should use a compare function	bug	partial	sonarjs/no-alphabetical-sort	needs type information; only NestJS lints with types, Next.js and Vite + React do not
+ts	typescript:S3801	Functions should use "return" consistently	code smell	not-covered	-	sonarjs/no-inconsistent-returns needs type information and is off in the recommended preset; no seeded config enables it
+ts	typescript:S2234	Parameters should be passed in the correct order	code smell	partial	sonarjs/arguments-order	needs type information; only NestJS lints with types, Next.js and Vite + React do not
+ts	typescript:S2092	Cookies should have the "secure" flag	vulnerability	covered	sonarjs/insecure-cookie	
+ts	typescript:S3330	Cookies should have the "HttpOnly" flag	vulnerability	covered	sonarjs/cookie-no-httponly	
+ts	typescript:S5122	Cross-Origin Resource Sharing (CORS) policy should be restricted to trusted origins	vulnerability	covered	sonarjs/cors	
+ts	typescript:S5659	JWT should be signed and verified with strong cipher algorithms	vulnerability	covered	sonarjs/insecure-jwt-token	
+ts	typescript:S4502	CSRF protections should not be disabled	vulnerability	covered	sonarjs/csrf	
+ts	typescript:S2755	XML parsers should not be vulnerable to XXE attacks	vulnerability	covered	sonarjs/xml-parser-xxe	
+ts	typescript:S1523	Dynamic code execution should not use user-controlled data	vulnerability	covered	sonarjs/code-eval	
+ts	typescript:S3649	SQL injection vulnerabilities should be prevented (taint analysis)	vulnerability	not-covered	-	unverified: taint-flow rule (SQL injection) of the Sonar security engine; ESLint has no data-flow equivalent
+ts	typescript:S5131	Cross-site scripting vulnerabilities should be prevented (taint analysis)	vulnerability	not-covered	-	unverified: taint-flow rule (cross-site scripting) of the Sonar security engine; ESLint has no data-flow equivalent
+ts	typescript:S2083	Path traversal vulnerabilities should be prevented (taint analysis)	vulnerability	not-covered	-	unverified: taint-flow rule (path traversal) of the Sonar security engine; ESLint has no data-flow equivalent
+ts	typescript:S5144	Server-side request forgery vulnerabilities should be prevented (taint analysis)	vulnerability	not-covered	-	unverified: taint-flow rule (server-side request forgery) of the Sonar security engine; ESLint has no data-flow equivalent
+ts	typescript:S5145	Log injection vulnerabilities should be prevented (taint analysis)	vulnerability	not-covered	-	unverified: taint-flow rule (log injection) of the Sonar security engine; ESLint has no data-flow equivalent
+ts	typescript:S2076	OS command injection vulnerabilities should be prevented (taint analysis)	vulnerability	not-covered	-	unverified: taint-flow rule (OS command injection) of the Sonar security engine; ESLint has no data-flow equivalent
+ts	quality-gate:new_reliability_rating	Reliability rating on new code is A	quality gate	not-covered	-	unverified: the reliability rating on new code is computed on the Sonar server from every issue, local lint only covers the mapped rules
+py	quality-gate:new_reliability_rating	Reliability rating on new code is A	quality gate	not-covered	-	unverified: the reliability rating on new code is computed on the Sonar server from every issue, local lint only covers the mapped rules
+ts	quality-gate:new_security_rating	Security rating on new code is A	quality gate	not-covered	-	unverified: the security rating on new code is computed on the Sonar server from every issue, local lint only covers the mapped rules
+py	quality-gate:new_security_rating	Security rating on new code is A	quality gate	not-covered	-	unverified: the security rating on new code is computed on the Sonar server from every issue, local lint only covers the mapped rules
+ts	quality-gate:new_maintainability_rating	Maintainability rating on new code is A	quality gate	not-covered	-	unverified: the maintainability rating on new code is computed on the Sonar server from every issue, local lint only covers the mapped rules
+py	quality-gate:new_maintainability_rating	Maintainability rating on new code is A	quality gate	not-covered	-	unverified: the maintainability rating on new code is computed on the Sonar server from every issue, local lint only covers the mapped rules
+py	python:S1128	Unnecessary imports should be removed	code smell	covered	F401	
+py	python:S5754	"SystemExit" should be re-raised	code smell	partial	E722	E722 flags bare except only; BLE001 (blind except) is not selected and re-raising SystemExit is not checked
+py	python:S1763	All code should be reachable	bug	not-covered	-	ruff has no stable unreachable-code rule
+py	python:S1186	Functions and methods should not be empty	code smell	partial	B027	B027 flags empty methods in abstract base classes only
+py	python:S5806	Builtins should not be shadowed by local variables	code smell	not-covered	-	ruff flake8-builtins (A001, A002) is not selected
+py	python:S5445	Insecure temporary file creation methods should not be used	vulnerability	partial	S306,S108	S306 flags tempfile.mktemp and S108 hard-coded /tmp paths; other insecure temp-file helpers are missed
+py	python:S1244	Floating point numbers should not be tested for equality	bug	not-covered	-	ruff has no floating-point equality rule
+py	python:S3827	Variables, classes and functions should be defined before being used	bug	covered	F821	
+py	python:S1226	Function parameters initial values should not be ignored	bug	partial	PLW2901	PLW2901 flags a loop variable that is overwritten; reassigned function parameters are not flagged
+py	python:S1523	Dynamic code execution should not use user-controlled data	vulnerability	partial	S102,S307	S102 flags exec and S307 flags eval; other dynamic execution forms are missed
+py	python:S2755	XML parsers should not be vulnerable to XXE attacks	vulnerability	partial	S313,S314,S315,S316,S317,S318,S319,S320	ruff flags stdlib XML parsers by call; third-party parsers and parser options are not read
+py	python:S3649	SQL injection vulnerabilities should be prevented (taint analysis)	vulnerability	not-covered	-	unverified: taint-flow rule (SQL injection) of the Sonar security engine; ruff has no data-flow equivalent
+py	python:S5131	Cross-site scripting vulnerabilities should be prevented (taint analysis)	vulnerability	not-covered	-	unverified: taint-flow rule (cross-site scripting) of the Sonar security engine; ruff has no data-flow equivalent
+py	python:S2083	Path traversal vulnerabilities should be prevented (taint analysis)	vulnerability	not-covered	-	unverified: taint-flow rule (path traversal) of the Sonar security engine; ruff has no data-flow equivalent
+py	python:S5144	Server-side request forgery vulnerabilities should be prevented (taint analysis)	vulnerability	not-covered	-	unverified: taint-flow rule (server-side request forgery) of the Sonar security engine; ruff has no data-flow equivalent
+py	python:S5145	Log injection vulnerabilities should be prevented (taint analysis)	vulnerability	not-covered	-	unverified: taint-flow rule (log injection) of the Sonar security engine; ruff has no data-flow equivalent
+py	python:S2076	OS command injection vulnerabilities should be prevented (taint analysis)	vulnerability	not-covered	-	unverified: taint-flow rule (OS command injection) of the Sonar security engine; ruff has no data-flow equivalent

@@ -37,6 +37,7 @@ A leaf that tells the agent to write a file verbatim keeps that file as a real f
 - **Copying an add or migrate tree:** after the router's context check, the leaf runs `TC_PART=leaf TC_LEAF=<add|migrate>/<leaf stem> bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` (add `TC_TREE=template-<suffix>` to copy one tree at the step that needs it). Each moved fence becomes one line, `Copied verbatim from \`<skill-dir>/<path to the file>\` by the copy step; do not re-type it.` The script refuses, writes nothing and prints a `STOP:` line when a target path already exists.
 - **What stays inline:** only a fence that creates a new file with fixed content moves. A fence that edits or replaces an existing project file, an example the agent adapts or renames (`my_thing`, `projects`), a value the agent fills in from the user, and the canonical side of a drift-checked pair stay in the markdown.
 - **Snapshot rule:** a slice that moves fences adds rows to its own `tests/golden/fences/moved.d/<slice>.tsv` and never edits `tests/golden/fences/<skill>.tsv`. `python3 scripts/check-fences.py --root .` must pass.
+- **Deleted fences:** a slice that deletes copy-verbatim fences adds one row per fence to its own `tests/golden/fences/deleted.d/<slice>.tsv` (file, heading, index, sha256 of the snapshot row), needs the `fence-snapshot-change` label, and never edits `<skill>.tsv`.
 
 ### Version floors
 

@@ -17,8 +17,8 @@ def run_api() -> None:
     from core.config import api_settings, common_settings
     from core.logging import logger
 
-    # Container-bound; reachable only via the reverse proxy.
-    host = "0.0.0.0"  # noqa: S104
+    # Local launcher only; containers start uvicorn from docker-entrypoint.sh and bind there.
+    host = "127.0.0.1"
     port = api_settings.API_PORT
     reload = common_settings.ENVIRONMENT not in ["prod", "uat"]
 

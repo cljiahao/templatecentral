@@ -30,6 +30,7 @@ template/nginx.conf.template 644 - -
 template/package.json 644 __TC_PROJECT_NAME__ -
 template/pnpm-workspace.yaml 644 - -
 template/postcss.config.mjs 644 - -
+template/src/app.test.tsx 644 - -
 template/src/app.tsx 644 - -
 template/src/components/layout/error-boundary.tsx 644 - -
 template/src/components/layout/index.ts 644 - -
@@ -67,6 +68,7 @@ template/src/features/example/index.ts 644 - -
 template/src/features/example/schemas/index.ts 644 - -
 template/src/features/example/types.ts 644 - -
 template/src/hooks/index.ts 644 - -
+template/src/lib/clients/fetch-client.test.ts 644 - -
 template/src/lib/clients/fetch-client.ts 644 - -
 template/src/lib/constants/env.ts 644 - -
 template/src/lib/constants/index.ts 644 - -

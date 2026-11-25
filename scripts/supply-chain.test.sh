@@ -686,5 +686,32 @@ for f in "$SH/template-ci/azure/azure-pipelines/templatecentral-gates.yml" "$SH/
   check 0 "$?" "workflows passes on $(basename "$(dirname "$f")")/$(basename "$f") ($OUT)"
 done
 
+# A workspace file over one pipe buffer with the setting on line 1 is still read: the match must not depend on the writer finishing.
+sc_pnpm sc-big-excl
+{ printf 'minimumReleaseAgeExclude:\n  - left-pad\n'; cat "$NEXT/pnpm-workspace.yaml"; for ((i = 0; i < 4000; i++)); do printf '# padding line number %05d to push the file past sixty-four kilobytes\n' "$i"; done; } > "$D/pnpm-workspace.yaml"
+size=$(wc -c < "$D/pnpm-workspace.yaml" | tr -d ' ')
+check 1 "$([ "$size" -gt 262144 ] && echo 1 || echo 0)" "big workspace fixture is over 256 KB ($size)"
+run "$D" check-supply-chain.sh
+check 1 "$EC" "supply-chain blocks minimumReleaseAgeExclude on line 1 of a big file"
+has "minimumReleaseAgeExclude" "$OUT" "big file: names the exclude setting"
+
+sc_pnpm sc-big-ok
+{ cat "$NEXT/pnpm-workspace.yaml"; for ((i = 0; i < 4000; i++)); do printf '# padding line number %05d to push the file past sixty-four kilobytes\n' "$i"; done; } > "$D/pnpm-workspace.yaml"
+run "$D" check-supply-chain.sh
+check 0 "$EC" "supply-chain passes a big clean workspace file ($OUT)"
+
+# A lockfile with many hosts: an allow-listed host is found whichever line it is on. The foreign-host case is a named clean control (the old code named it too, since nothing there reads a pipeline status); the allow-list cases below are the ones that fail on the old script.
+sc_pnpm sc-big-hosts
+{ for ((i = 0; i < 3000; i++)); do printf '  l%05d@1.0.0:\n    resolution: {tarball: https://registry.npmjs.org/l%05d.tgz}\n' "$i" "$i"; done; printf '  x@1.0.0:\n    resolution: {tarball: https://evil.example.com/x.tgz}\n'; } > "$D/pnpm-lock.yaml"
+run "$D" check-supply-chain.sh
+check 1 "$EC" "control: supply-chain blocks a foreign host at the end of a big lockfile"
+has "evil.example.com" "$OUT" "big lockfile: names the foreign host"
+{ for ((i = 0; i < 6000; i++)); do printf 'host%05d.example.net\n' "$i"; done; printf 'evil.example.com\n'; } > "$D/.claude/registry-hosts.txt"
+run "$D" check-supply-chain.sh
+check 0 "$EC" "supply-chain finds a host at the end of a big allow-list ($OUT)"
+{ printf 'evil.example.com\n'; for ((i = 0; i < 6000; i++)); do printf 'host%05d.example.net\n' "$i"; done; } > "$D/.claude/registry-hosts.txt"
+run "$D" check-supply-chain.sh
+check 0 "$EC" "supply-chain finds a host on line 1 of a big allow-list ($OUT)"
+
 echo "supply-chain.test: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

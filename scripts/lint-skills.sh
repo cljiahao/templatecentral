@@ -1410,7 +1410,7 @@ def prop(name):
     m = re.search(rf"^{re.escape(name)}=(.*)$", props, re.M)
     return set(m.group(1).split(",")) if m else set()
 allowed = prop("sonar.test.inclusions") | prop("sonar.exclusions")
-for rel in ("vite-react/template/vite.config.ts", "nextjs/template/vitest.config.ts", "nestjs/template/vitest.config.ts"):
+for rel in ("vite-react/template/vite.config.ts", "nextjs/template/vitest.config.ts", "nestjs/template/vitest.config.mts"):
     cfg = read(rel)
     m = re.search(r"coverage:\s*\{.*?exclude:\s*\[(.*?)\]", cfg, re.S)
     if not m:
@@ -1789,6 +1789,477 @@ check_agents_marker_not_drifted_to_semver() {
     "All AGENTS.md schema markers <= @$HARNESS_SCHEMA_VERSION"
 }
 
+check_seeded_pipefail_readers() {
+  # A seeded script that sets pipefail must not pipe into a reader that can quit before the writer
+  # finishes: grep -q (any flag spelling, also -m, -l, -L), head, sed with q, awk with an exit outside
+  # END, or read. Past 64 KB the writer is killed (EPIPE), the pipeline returns non-zero, and a real
+  # match reads as no match, so a gate is skipped. Use a here-string, a temp file, a case match or a
+  # reader that reads to the end. No waiver comment exists. The scan covers every .sh, .envsh, .yml
+  # and .yaml file in a template tree and under migrate/general that sets pipefail, and the inline
+  # run/script blocks of the CI yaml. Heredoc bodies and backtick bodies are skipped. A file the
+  # tokenizer cannot finish also fails, the scanner must report every file it was given (a crash
+  # part way fails the lint), and the four anchor scripts must still set pipefail, so neither a parse
+  # failure nor dropping pipefail can hide a pipe. Forms caught: a reader behind xargs, timeout, sudo,
+  # stdbuf, nice, ionice or nohup; a reader inside a { } group or ( ) subshell that is fed by a pipe;
+  # a piped while, until or for loop whose body can break, return or exit; abbreviated long options
+  # such as --max=1, --m=1 or --q (an option that exactly names a known grep option that keeps
+  # reading, such as --file=, is left alone). Flagged on purpose, conservative: a subshell (exit 1)
+  # inside a piped loop body, and a prefix that GNU grep rejects as ambiguous. Will not catch, a
+  # closed list: a reader hidden inside a shell function, inside another script that the pipe runs,
+  # or inside a quoted sh -c or bash -c string. TIMELESS.
+  header "Seeded pipefail scripts do not pipe into an early-exit reader"
+  if ! have_python; then
+    fail "python3 is required for this check"
+    return
+  fi
+  local py out hits anchors a missing="" scan_list expected scanned
+  read -r -d '' py <<'PY' || true
+import os, re, sys
+
+
+WHY = "the reader can exit before the writer finishes, so under pipefail a real match reads as no match; use a here-string, a temp file, a case match or a reader that reads to the end"
+PREFIX = ("command", "builtin", "env", "exec", "time", "nice", "!", "{", "(", "if", "then", "do", "else", "while", "until")
+WRAPPERS = ("xargs", "timeout", "sudo", "stdbuf", "nice", "ionice", "nohup")
+READERS = ("grep", "egrep", "fgrep", "ggrep", "head", "ghead", "sed", "gsed", "awk", "gawk", "mawk", "nawk", "read")
+LOOPS = ("while", "until", "for")
+QUITTING_LONG = ("quiet", "silent", "max-count", "files-with-matches", "files-without-match")
+KEEPING_LONG = ("extended-regexp", "fixed-strings", "basic-regexp", "perl-regexp", "regexp", "file", "ignore-case", "no-ignore-case", "word-regexp", "line-regexp", "null-data", "no-messages", "invert-match", "version", "help", "byte-offset", "line-number", "line-buffered", "with-filename", "no-filename", "label", "only-matching", "text", "directories", "devices", "recursive", "dereference-recursive", "include", "exclude", "exclude-from", "exclude-dir", "count", "color", "colour", "binary-files", "binary", "unix-byte-offsets", "initial-tab", "null", "after-context", "before-context", "context", "group-separator", "no-group-separator")
+ASSIGN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
+KEYS = ("run", "script", "bash", "powershell", "pwsh", "inlineScript", "command")
+
+
+class Parser:
+    def __init__(self, text, base_lines):
+        self.t = text
+        self.n = len(text)
+        self.lines = base_lines
+        self.hits = []
+        self.problems = []
+        self.pending = []
+        self.ctx = None
+
+    def line_at(self, i):
+        return self.lines[min(i, self.n - 1)] if self.n else 1
+
+    def run(self):
+        end = self.commands(0, False)
+        if self.pending:
+            self.problems.append((self.line_at(self.n - 1), "heredoc is never closed"))
+        return end
+
+    def judge(self, chain, ctx):
+        for seg in chain:
+            self.track(seg, ctx)
+            if seg["pipe"] and not seg["dead"]:
+                self.reader(seg)
+
+    def lead(self, text):
+        words = text.split()
+        k = 0
+        while k < len(words) and (ASSIGN.match(words[k]) or words[k] in PREFIX):
+            k += 1
+        if k < len(words) and words[k].startswith("(") and len(words[k]) > 1:
+            words[k] = words[k].lstrip("(")
+        return words, k
+
+    def track(self, seg, ctx):
+        text = seg["text"]
+        body = re.sub(r"""'[^']*'|"(?:\\.|[^"\\])*\"""", "", text)
+        stripped = body.strip()
+        words, k = self.lead(text)
+        first = words[k] if k < len(words) else ""
+        raw = text.split()
+        r = 0
+        while r < len(raw) and (ASSIGN.match(raw[r]) or raw[r] in ("!", "{", "(", "then", "do", "else")):
+            r += 1
+        head = raw[r] if r < len(raw) else ""
+        if ctx["loop"] > 0 and not seg["dead"]:
+            if head in LOOPS:
+                ctx["loop"] += 1
+            elif first == "done":
+                ctx["loop"] -= 1
+            elif first in ("return", "exit") or (first == "break" and ctx["loop"] == 1):
+                self.hits.append((seg["line"], "piped loop body can " + first + " before the writer finishes: " + WHY))
+        elif seg["pipe"] and head in LOOPS and not seg["dead"]:
+            ctx["loop"] = 1
+        opener = False
+        if seg["pipe"] and not seg["dead"]:
+            if stripped.startswith("{"):
+                ctx["stack"].append("{")
+                opener = True
+            elif stripped.startswith("(") and not stripped.startswith("(("):
+                opener = True
+                if body.count("(") > body.count(")"):
+                    ctx["stack"].append("(")
+        if not opener and ctx["stack"]:
+            if ctx["stack"][-1] == "{" and stripped.startswith("}"):
+                ctx["stack"].pop()
+            elif ctx["stack"][-1] == "(" and body.count(")") > body.count("("):
+                ctx["stack"].pop()
+
+    def reader(self, seg):
+        text = seg["text"]
+        words, k = self.lead(text)
+        if k >= len(words):
+            return
+        loop_cond = any(w in ("while", "until") for w in text.split()[:k])
+        if os.path.basename(words[k]) in WRAPPERS:
+            for j in range(k + 1, len(words)):
+                if os.path.basename(words[j]) in READERS:
+                    k = j
+                    break
+        name = os.path.basename(words[k])
+        rest = " ".join(words[k + 1:])
+        line = seg["line"]
+        if name in ("grep", "egrep", "fgrep", "ggrep") and self.grep_quits(words[k + 1:]):
+            self.hits.append((line, "pipe into grep that quits at the first match: " + WHY))
+        elif name in ("head", "ghead"):
+            self.hits.append((line, "pipe into head: " + WHY))
+        elif name in ("sed", "gsed") and re.search(r"""(^|[\s'";{}0-9$/!])[qQ]([0-9]+)?(?=$|[\s'";}])""", rest):
+            self.hits.append((line, "pipe into sed that quits: " + WHY))
+        elif name in ("awk", "gawk", "mawk", "nawk") and self.awk_exits(rest):
+            self.hits.append((line, "pipe into awk that exits before the end of input: " + WHY))
+        elif name == "read" and not loop_cond:
+            self.hits.append((line, "pipe into read: " + WHY))
+
+    def grep_quits(self, args):
+        for w in args:
+            if w == "--":
+                break
+            if w.startswith("--"):
+                opt = w[2:].split("=", 1)[0]
+                if opt in KEEPING_LONG:
+                    continue
+                if opt and any(q.startswith(opt) for q in QUITTING_LONG):
+                    return True
+                continue
+            if w.startswith("-") and len(w) > 1:
+                for c in w[1:]:
+                    if c in "qmlL":
+                        return True
+                    if c in "efABCDd":
+                        break
+        return False
+
+    def awk_exits(self, prog):
+        prog = re.sub(r'"(?:\\.|[^"\\])*"', '""', prog)
+        prog = re.sub(r"(?<![\w)\]])/(?:\\.|[^/\\\n])+/", "//", prog)
+        spans = []
+        for m in re.finditer(r"\bEND\s*\{", prog):
+            depth, j = 1, m.end()
+            while j < len(prog) and depth:
+                depth += (prog[j] == "{") - (prog[j] == "}")
+                j += 1
+            spans.append((m.start(), j))
+        for m in re.finditer(r"\bexit\b", prog):
+            if not any(a <= m.start() < b for a, b in spans):
+                return True
+        return False
+
+    def commands(self, i, in_sub):
+        t, n = self.t, self.n
+        chain = []
+        seg = None
+        depth = 0
+
+        ctx = {"stack": [], "loop": 0}
+
+        def new(pipe, at):
+            nonlocal seg
+            seg = {"pipe": pipe or bool(ctx["stack"]), "text": "", "line": self.line_at(at), "dead": False, "started": False}
+            chain.append(seg)
+
+        def add(s, at):
+            if seg is None:
+                new(False, at)
+            if not seg["started"] and s.strip():
+                seg["started"] = True
+                seg["line"] = self.line_at(at)
+            seg["text"] += s
+
+        def flush():
+            nonlocal chain, seg
+            self.judge(chain, ctx)
+            chain, seg = [], None
+
+        new(False, i)
+        while i < n:
+            c = t[i]
+            if c == "\\":
+                if i + 1 < n and t[i + 1] == "\n":
+                    add(" ", i)
+                    i += 2
+                else:
+                    add(t[i:i + 2], i)
+                    i += 2
+                continue
+            if c == "#" and (i == 0 or t[i - 1] in " \t\n;(&|"):
+                while i < n and t[i] != "\n":
+                    i += 1
+                continue
+            if c == "'":
+                j = t.find("'", i + 1)
+                if j < 0:
+                    self.problems.append((self.line_at(i), "single quote is never closed"))
+                    return n
+                add(t[i:j + 1], i)
+                i = j + 1
+                continue
+            if c == "$" and t.startswith("$'", i):
+                j = i + 2
+                while j < n and t[j] != "'":
+                    j += 2 if t[j] == "\\" else 1
+                add(t[i:j + 1], i)
+                i = j + 1
+                continue
+            if c == '"':
+                j = self.dquote(i + 1)
+                if j < 0:
+                    self.problems.append((self.line_at(i), "double quote is never closed"))
+                    return n
+                add(t[i:j], i)
+                i = j
+                continue
+            if c == "`":
+                j = t.find("`", i + 1)
+                if j < 0:
+                    self.problems.append((self.line_at(i), "backtick is never closed"))
+                    return n
+                add(t[i:j + 1], i)
+                i = j + 1
+                continue
+            if t.startswith("$((", i):
+                j = t.find("))", i)
+                j = n - 1 if j < 0 else j + 1
+                add(t[i:j + 1], i)
+                i = j + 1
+                continue
+            if t.startswith("$(", i) or t.startswith("<(", i) or t.startswith(">(", i):
+                start = i
+                j = self.sub(i + 2)
+                add(t[start:j], start)
+                i = j
+                continue
+            if c == "<" and t.startswith("<<<", i):
+                add("<<<", i)
+                i += 3
+                continue
+            if c == "<" and t.startswith("<<", i):
+                m = re.compile(r"<<(-?)[ \t]*(?:'([^'\n]*)'|\"([^\"\n]*)\"|\\?([A-Za-z0-9_]+))").match(t, i)
+                if m:
+                    self.pending.append((m.group(1) == "-", m.group(2) or m.group(3) or m.group(4)))
+                    add(m.group(0), i)
+                    i = m.end()
+                    continue
+            if c == "\n":
+                i += 1
+                if self.pending:
+                    i = self.heredocs(i)
+                if seg is not None and seg["text"].strip() == "" and len(chain) > 1 and seg["pipe"]:
+                    continue
+                flush()
+                new(False, i)
+                continue
+            if c == "|":
+                pipe = not t.startswith("||", i)
+                i += 2 if not pipe else (2 if t.startswith("|&", i) else 1)
+                if not pipe:
+                    flush()
+                    new(False, i)
+                else:
+                    new(True, i)
+                continue
+            if c == "&" and t.startswith("&&", i):
+                flush()
+                i += 2
+                new(False, i)
+                continue
+            if c == ";":
+                flush()
+                i += 1
+                new(False, i)
+                continue
+            if c == "(" and t.startswith("((", i) and (seg is None or (seg["text"].split() or [""])[-1] in ("", "for", "if", "then", "do", "while", "until", "else", "elif", "!")):
+                j = self.arith(i)
+                add(t[i:j], i)
+                i = j
+                continue
+            if c == "(":
+                depth += 1
+                add(c, i)
+                i += 1
+                continue
+            if c == ")":
+                if depth:
+                    depth -= 1
+                    add(c, i)
+                    i += 1
+                    continue
+                if in_sub:
+                    flush()
+                    return i + 1
+                for s in chain:
+                    s["dead"] = True
+                flush()
+                i += 1
+                new(False, i)
+                continue
+            add(c, i)
+            i += 1
+        flush()
+        return i
+
+    def sub(self, i):
+        return self.commands(i, True)
+
+    def arith(self, i):
+        t, n = self.t, self.n
+        depth = 0
+        while i < n:
+            if t[i] == "(":
+                depth += 1
+            elif t[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    return i + 1
+            i += 1
+        return n
+
+    def dquote(self, i):
+        t, n = self.t, self.n
+        while i < n:
+            c = t[i]
+            if c == "\\":
+                i += 2
+            elif c == '"':
+                return i + 1
+            elif t.startswith("$((", i):
+                j = t.find("))", i)
+                i = n if j < 0 else j + 2
+            elif t.startswith("$(", i):
+                i = self.sub(i + 2)
+            elif c == "`":
+                j = t.find("`", i + 1)
+                if j < 0:
+                    return -1
+                i = j + 1
+            else:
+                i += 1
+        return -1
+
+    def heredocs(self, i):
+        t, n = self.t, self.n
+        while self.pending and i <= n:
+            dash, word = self.pending.pop(0)
+            while i < n:
+                j = t.find("\n", i)
+                j = n if j < 0 else j
+                row = t[i:j]
+                i = min(j + 1, n)
+                if (row.lstrip("\t") if dash else row) == word:
+                    break
+            else:
+                self.pending = []
+                self.problems.append((self.line_at(n - 1), "heredoc %s is never closed" % word))
+                return n
+        return i
+
+
+def sets_pipefail(text):
+    for row in text.splitlines():
+        if "pipefail" in row and not row.lstrip().startswith("#"):
+            return True
+    return False
+
+
+def yaml_blocks(text):
+    rows = text.split("\n")
+    out, numbers = [], []
+    k = 0
+    key_re = re.compile(r"^(\s*)(?:-\s+)?(" + "|".join(KEYS) + r"):\s*(.*)$")
+    while k < len(rows):
+        m = key_re.match(rows[k])
+        if not m:
+            k += 1
+            continue
+        indent, val = len(m.group(1)), m.group(3).strip()
+        if re.match(r"^[|>][-+]?\s*(#.*)?$", val):
+            k += 1
+            while k < len(rows) and (rows[k].strip() == "" or len(rows[k]) - len(rows[k].lstrip()) > indent):
+                out.append(rows[k])
+                numbers.append(k + 1)
+                k += 1
+            out.append("")
+            numbers.append(k)
+        else:
+            out.append(val)
+            numbers.append(k + 1)
+            out.append("")
+            numbers.append(k + 1)
+            k += 1
+    return out, numbers
+
+
+def scan(path):
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    if not sets_pipefail(text):
+        return [], [], False
+    if path.endswith((".yml", ".yaml")):
+        rows, numbers = yaml_blocks(text)
+        body = "\n".join(rows) + "\n"
+        per_char = []
+        for r, no in zip(rows, numbers):
+            per_char.extend([no] * (len(r) + 1))
+    else:
+        body = text if text.endswith("\n") else text + "\n"
+        per_char, no = [], 1
+        for ch in body:
+            per_char.append(no)
+            if ch == "\n":
+                no += 1
+    p = Parser(body, per_char)
+    p.run()
+    return p.hits, p.problems, True
+
+
+def main():
+    for path in sys.argv[1:]:
+        hits, problems, sets = scan(path)
+        if sets:
+            print("SETS " + path)
+        for line, msg in hits:
+            print("HIT %s:%d: %s" % (path, line, msg))
+        for line, msg in problems:
+            print("PARSE %s:%d: %s" % (path, line, msg))
+    print("DONE %d" % len(sys.argv[1:]))
+
+
+main()
+PY
+  scan_list=$({
+    template_files
+    { (cd "$SKILLS_DIR" 2>/dev/null && find migrate/general -type f -name '*.sh') || true; } | sed "s|^|$SKILLS_DIR/|"
+  } | grep -E '\.(sh|envsh|yml|yaml)$' | LC_ALL=C sort -u)
+  out=$(xargs python3 -I -c "$py" <<<"$scan_list" || true)
+  hits=$(grep -E '^(HIT|PARSE) ' <<<"$out" | sed -E 's/^(HIT|PARSE) //' || true)
+  expected=$(grep -c . <<<"$scan_list" || true)
+  scanned=$(awk '/^DONE / { n += $2 } END { print n + 0 }' <<<"$out")
+  if [[ "$scanned" != "$expected" ]]; then
+    hits="${hits:+$hits$'\n'}the scanner stopped early: it finished $scanned of $expected files (a crash or a killed process), so the files after it were not checked"
+  fi
+  anchors="scripts/gate-ratchet.sh .claude/ci-gates.sh scripts/check-supply-chain.sh .lefthook/commit-msg.sh"
+  for a in $anchors; do
+    grep -qxF "SETS $SKILLS_DIR/scaffold/shared/template/$a" <<<"$out" || missing="$missing$a "
+  done
+  if [[ -n "$missing" ]]; then
+    hits="${hits:+$hits$'\n'}anchor script missing or no longer sets pipefail: $missing"
+  fi
+  report "$hits" \
+    "A seeded pipefail script pipes into an early-exit reader (or cannot be parsed) — use a here-string, a temp file, a case match or a reader that reads to the end" \
+    "No seeded pipefail script pipes into an early-exit reader"
+}
+
 # ── RUN ALL CHECKS ─────────────────────────────────────────────────────────────
 
 echo "=== templateCentral skill lint ==="
@@ -1814,6 +2285,7 @@ check_scaffold_seeds_complete_harness
 check_template_trees_complete
 check_no_template_skill_md
 check_copy_script_single
+check_seeded_pipefail_readers
 check_step0_before_install
 check_migrate_hook_inventory_matches_kit
 check_duplicated_iam_blocks_match

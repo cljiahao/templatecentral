@@ -1,0 +1,299 @@
+# pin: npm eslint-plugin-sonarjs 4.2.2
+# version: eslint-plugin-sonarjs 4.2.2
+# source: eslint-plugin-sonarjs configs.recommended (meta.docs.recommended true -> error, else off); name, key and requiresTypeChecking from each rule's generated-meta.js
+# columns: rule<TAB>level<TAB>sonar key<TAB>requires type information 0|1<TAB>name
+sonarjs/function-name	off	S100	0	Function and method names should comply with a naming convention
+sonarjs/class-name	error	S101	0	Class names should comply with a naming convention
+sonarjs/max-lines	off	S104	0	Files should not have too many lines of code
+sonarjs/no-tab	off	S105	0	Tabulation characters should not be used
+sonarjs/variable-name	off	S117	0	Variable, property and parameter names should comply with a naming convention
+sonarjs/comment-regex	off	S124	0	Track comments matching a regular expression
+sonarjs/no-commented-code	off	S125	0	Sections of code should not be commented out
+sonarjs/elseif-without-else	off	S126	0	"if ... else if" constructs should end with "else" clauses
+sonarjs/no-fallthrough	error	S128	0	Switch cases should end with an unconditional "break" statement
+sonarjs/nested-control-flow	off	S134	0	Control flow statements "if", "for", "while", "switch" and "try" should not be nested too deeply
+sonarjs/too-many-break-or-continue-in-loop	off	S135	0	Loops should not contain more than a single "break" or "continue" statement
+sonarjs/max-lines-per-function	off	S138	0	Functions should not have too many lines of code
+sonarjs/no-nested-incdec	off	S881	0	Increment (++) and decrement (--) operators should not be used in a method call or mixed with other operators in an expression
+sonarjs/no-equals-in-for-termination	error	S888	0	Equality operators should not be used in "for" loop termination conditions
+sonarjs/no-extra-arguments	error	S930	0	Function calls should not pass extra arguments
+sonarjs/no-collapsible-if	off	S1066	0	Mergeable "if" statements should be combined
+sonarjs/expression-complexity	off	S1067	0	Expressions should not be too complex
+sonarjs/no-redundant-parentheses	off	S1110	0	Redundant pairs of parentheses should be removed
+sonarjs/no-labels	error	S1119	0	Labels should not be used
+sonarjs/no-nested-assignment	error	S1121	0	Assignments should not be made from within sub-expressions
+sonarjs/no-redundant-boolean	error	S1125	0	Boolean literals should not be used in comparisons
+sonarjs/prefer-single-boolean-return	error	S1126	0	Return of boolean expressions should not be wrapped into an "if-then-else" statement
+sonarjs/unused-import	error	S1128	1	Unnecessary imports should be removed
+sonarjs/fixme-tag	error	S1134	0	Track uses of "FIXME" tags
+sonarjs/todo-tag	error	S1135	0	Track uses of "TODO" tags
+sonarjs/useless-string-operation	off	S1154	1	Results of operations on strings should not be ignored
+sonarjs/no-unused-function-argument	off	S1172	0	Unused function parameters should be removed
+sonarjs/no-duplicate-string	off	S1192	0	String literals should not be duplicated
+sonarjs/no-case-label-in-switch	error	S1219	0	"switch" statements should not contain non-case labels
+sonarjs/no-parameter-reassignment	error	S1226	0	Initial values of parameters, caught exceptions, and loop variables should not be ignored
+sonarjs/no-floating-point-equality	error	S1244	0	Floating point numbers should not be tested for equality
+sonarjs/prefer-while	error	S1264	0	A "while" loop should be used instead of a "for" loop
+sonarjs/no-sonar-comments	off	S1291	0	Track uses of "NOSONAR" comments
+sonarjs/no-small-switch	error	S1301	1	"if" statements should be preferred over "switch" when simpler
+sonarjs/no-hardcoded-ip	error	S1313	0	IP addresses should not be hardcoded
+sonarjs/label-position	error	S1439	0	Only "while", "do", "for" and "switch" statements should be labelled
+sonarjs/public-static-readonly	error	S1444	0	Public "static" fields should be read-only
+sonarjs/file-header	off	S1451	0	Track lack of copyright and license headers
+sonarjs/call-argument-line	error	S1472	0	Function call arguments should not start on new lines
+sonarjs/max-switch-cases	error	S1479	0	"switch" statements should not have too many "case" clauses
+sonarjs/no-unused-vars	error	S1481	0	Unused local variables and functions should be removed
+sonarjs/prefer-immediate-return	off	S1488	1	Local variables should not be declared and then immediately returned or thrown
+sonarjs/function-inside-loop	error	S1515	0	Functions should not be defined inside loops
+sonarjs/code-eval	error	S1523	0	Dynamic code execution should not use user-controlled data
+sonarjs/no-variable-usage-before-declaration	off	S1526	0	Variables declared with "var" should be declared before they are used
+sonarjs/future-reserved-words	error	S1527	0	Future reserved words should not be used as identifiers
+sonarjs/array-constructor	off	S1528	0	Array constructors should not be used
+sonarjs/bitwise-operators	error	S1529	1	Bitwise operators should not be used in boolean contexts
+sonarjs/no-function-declaration-in-block	off	S1530	0	Function declarations should not be made within blocks
+sonarjs/no-primitive-wrappers	error	S1533	0	Wrapper objects should not be used for primitive types
+sonarjs/for-in	off	S1535	0	"for...in" loops should filter properties before acting on them
+sonarjs/cyclomatic-complexity	off	S1541	0	Cyclomatic Complexity of functions should not be too high
+sonarjs/no-skipped-tests	error	S1607	0	Tests should not be skipped without providing a reason
+sonarjs/no-identical-expressions	error	S1764	0	Identical expressions should not be used on both sides of a binary operator
+sonarjs/no-nested-switch	off	S1821	0	"switch" statements should not be nested
+sonarjs/constructor-for-side-effects	error	S1848	0	Objects should not be created to be dropped immediately without being used
+sonarjs/no-dead-store	error	S1854	0	Unused assignments should be removed
+sonarjs/no-identical-conditions	error	S1862	0	"if/else if" chains and "switch" cases should not have the same condition
+sonarjs/no-duplicated-branches	error	S1871	0	Two branches in a conditional structure should not have exactly the same implementation
+sonarjs/deprecation	error	S1874	1	Deprecated APIs should not be used
+sonarjs/no-inverted-boolean-check	error	S1940	0	Boolean checks should not be inverted
+sonarjs/misplaced-loop-counter	error	S1994	0	"for" loop increment clauses should modify the loops' counters
+sonarjs/no-nested-functions	error	S2004	0	Functions should not be nested too deeply
+sonarjs/no-hardcoded-passwords	error	S2068	0	Credentials should not be hard-coded
+sonarjs/sql-queries	error	S2077	1	SQL queries should not be dynamically formatted
+sonarjs/insecure-cookie	error	S2092	0	Cookies should have the "secure" flag
+sonarjs/no-useless-increment	error	S2123	0	Values should not be uselessly incremented
+sonarjs/no-globals-shadowing	error	S2137	0	Special identifiers should not be bound or assigned
+sonarjs/no-undefined-assignment	off	S2138	0	"undefined" should not be assigned
+sonarjs/no-empty-test-file	error	S2187	0	Test files should contain at least one test case
+sonarjs/no-ignored-return	error	S2201	1	Return values from functions without side effects should not be ignored
+sonarjs/no-wildcard-import	off	S2208	0	Wildcard imports should not be used
+sonarjs/arguments-order	error	S2234	1	Parameters should be passed in the correct order
+sonarjs/pseudo-random	error	S2245	0	Pseudorandom number generators (PRNGs) should not be used in security contexts
+sonarjs/for-loop-increment-sign	error	S2251	0	A "for" loop update clause should move the counter in the right direction
+sonarjs/null-dereference	error	S2259	1	Properties of variables with "null" or "undefined" values should not be accessed
+sonarjs/no-selector-parameter	error	S2301	1	Methods should not contain selector parameters
+sonarjs/updated-loop-counter	error	S2310	0	Loop counters should not be assigned within the loop body
+sonarjs/block-scoped-var	error	S2392	0	Variables should be used in the blocks where they are declared
+sonarjs/no-built-in-override	off	S2424	0	Built-in objects should not be overridden
+sonarjs/prefer-object-literal	off	S2428	0	Object literal syntax should be used
+sonarjs/no-ignored-exceptions	error	S2486	0	Exceptions should not be ignored
+sonarjs/no-gratuitous-expressions	error	S2589	0	Boolean expressions should not be gratuitous
+sonarjs/file-uploads	error	S2598	0	File uploads should be restricted
+sonarjs/file-permissions	error	S2612	0	File permissions should not be set to world-accessible values
+sonarjs/no-empty-character-class	error	S2639	1	Empty character classes should not be used
+sonarjs/no-unenclosed-multiline-block	error	S2681	0	Multiline blocks should be enclosed in curly braces
+sonarjs/index-of-compare-to-positive-number	error	S2692	1	"indexOf" checks should not be for positive numbers
+sonarjs/assertions-in-tests	error	S2699	1	Tests should include assertions
+sonarjs/no-implicit-global	error	S2703	0	Variables should be declared explicitly
+sonarjs/no-useless-catch	error	S2737	0	"catch" clauses should do more than rethrow
+sonarjs/xml-parser-xxe	error	S2755	0	XML parsers should not be vulnerable to XXE attacks
+sonarjs/non-existent-operator	error	S2757	0	Non-existent operators '=+', '=-' and '=!' should not be used
+sonarjs/web-sql-database	off	S2817	1	Web SQL databases should not be used
+sonarjs/post-message	error	S2819	1	Origins should be verified during cross-origin communications
+sonarjs/no-array-delete	error	S2870	1	"delete" should not be used on arrays
+sonarjs/no-alphabetical-sort	error	S2871	1	"Array.prototype.sort()" and "Array.prototype.toSorted()" should use a compare function
+sonarjs/no-fixed-wait-in-tests	error	S2925	0	Fixed waits should not be used in tests
+sonarjs/no-incomplete-assertions	error	S2970	0	Assertions should be complete
+sonarjs/no-global-this	error	S2990	0	The global "this" object should not be used
+sonarjs/new-operator-misuse	error	S2999	1	"new" should only be used with functions and classes
+sonarjs/no-delete-var	error	S3001	0	"delete" should be used only with object properties
+sonarjs/strings-comparison	off	S3003	1	Comparison operators should not be used with strings
+sonarjs/file-name-differ-from-class	off	S3317	0	Default export names and file names should match
+sonarjs/cookie-no-httponly	error	S3330	0	Cookies should have the "HttpOnly" flag
+sonarjs/no-nested-conditional	error	S3358	0	Ternary operators should not be nested
+sonarjs/no-incorrect-string-concat	off	S3402	1	Strings and non-strings should not be added
+sonarjs/different-types-comparison	error	S3403	1	Strict equality operators should not be used with dissimilar types
+sonarjs/inverted-assertion-arguments	error	S3415	0	Assertion arguments should be passed in the correct order
+sonarjs/shorthand-property-grouping	off	S3499	0	Shorthand object properties should be grouped at the beginning or end of an object declaration
+sonarjs/updated-const-var	error	S3500	0	"const" variables should not be reassigned
+sonarjs/arguments-usage	off	S3513	0	"arguments" should not be accessed directly
+sonarjs/destructuring-assignment-syntax	off	S3514	0	Destructuring syntax should be used for assignments
+sonarjs/no-invariant-returns	error	S3516	0	Function returns should not be invariant
+sonarjs/arrow-function-convention	off	S3524	0	Braces and parentheses should be used consistently with arrow functions
+sonarjs/class-prototype	off	S3525	1	Class methods should be used instead of "prototype" assignments
+sonarjs/generator-without-yield	error	S3531	0	Generators should explicitly "yield" a value
+sonarjs/no-require-or-define	off	S3533	1	"import" should be used to include external code
+sonarjs/no-associative-arrays	error	S3579	1	Array indexes should be numeric
+sonarjs/comma-or-logical-or-case	error	S3616	0	Comma and logical OR operators should not be used in switch cases
+sonarjs/no-redundant-jump	error	S3626	0	Jump statements should not be redundant
+sonarjs/inconsistent-function-call	error	S3686	0	Functions should be called consistently with or without "new"
+sonarjs/no-use-of-empty-return-value	error	S3699	0	The return value of void functions should not be used
+sonarjs/void-use	error	S3735	1	"void" should not be used
+sonarjs/operation-returning-nan	off	S3757	1	Arithmetic operations should not result in "NaN"
+sonarjs/values-not-convertible-to-numbers	off	S3758	1	Values not convertible to numbers should not be used in numeric comparisons
+sonarjs/non-number-in-arithmetic-expression	off	S3760	1	Arithmetic operators should only have numbers as operands
+sonarjs/cognitive-complexity	error	S3776	0	Cognitive Complexity of functions should not be too high
+sonarjs/argument-type	error	S3782	1	Arguments to built-in functions should match documented types
+sonarjs/in-operator-type-error	error	S3785	1	"in" should not be used with primitive types
+sonarjs/array-callback-without-return	error	S3796	1	Callbacks of array methods should have return statements
+sonarjs/declarations-in-global-scope	off	S3798	0	Variables and functions should not be declared in the global scope
+sonarjs/function-return-type	error	S3800	1	Functions should always return the same type
+sonarjs/no-inconsistent-returns	off	S3801	1	Functions should use "return" consistently
+sonarjs/no-reference-error	off	S3827	0	Variables should be defined before being used
+sonarjs/no-all-duplicated-branches	error	S3923	0	All branches in a conditional structure should not have exactly the same implementation
+sonarjs/no-same-line-conditional	error	S3972	0	Conditionals should start on new lines
+sonarjs/conditional-indentation	off	S3973	0	A conditionally executed single line should be denoted by indentation
+sonarjs/no-collection-size-mischeck	error	S3981	1	Collection size and array length comparisons should make sense
+sonarjs/no-unthrown-error	error	S3984	0	Errors should not be created without being thrown
+sonarjs/no-unused-collection	error	S4030	0	Collection contents should be used
+sonarjs/no-os-command-from-path	error	S4036	0	OS commands should not rely on PATH resolution
+sonarjs/no-misleading-array-reverse	error	S4043	1	Array-mutating methods should not be used misleadingly
+sonarjs/no-for-in-iterable	off	S4139	1	"for in" should not be used with iterables
+sonarjs/no-element-overwrite	error	S4143	0	Collection elements should not be replaced unconditionally
+sonarjs/no-identical-functions	error	S4144	0	Functions should not have identical implementations
+sonarjs/no-empty-collection	error	S4158	0	Empty collections should not be accessed or iterated
+sonarjs/no-redundant-assignments	error	S4165	0	Assignments should not be redundant
+sonarjs/prefer-type-guard	error	S4322	0	Type predicates should be used
+sonarjs/use-type-alias	error	S4323	0	Type aliases should be used
+sonarjs/no-return-type-any	off	S4324	1	Primitive return types should be used
+sonarjs/no-implicit-dependencies	off	S4328	0	Dependencies should be explicit
+sonarjs/no-useless-intersection	error	S4335	1	Type intersections should use meaningful types
+sonarjs/weak-ssl	error	S4423	0	Weak SSL/TLS protocols should not be used
+sonarjs/no-weak-keys	error	S4426	0	Cryptographic keys should be robust
+sonarjs/csrf	error	S4502	0	CSRF protections should not be disabled
+sonarjs/production-debug	error	S4507	0	Debugging features should not be enabled in production
+sonarjs/prefer-default-last	error	S4524	0	"default" clauses should be last
+sonarjs/no-in-misuse	error	S4619	1	"in" should not be used on arrays
+sonarjs/no-duplicate-in-composite	error	S4621	0	Union and intersection types should not include duplicated constituents
+sonarjs/max-union-size	off	S4622	0	Union types should not have too many elements
+sonarjs/no-undefined-argument	error	S4623	1	"undefined" should not be passed as the value of optional parameters
+sonarjs/no-nested-template-literals	error	S4624	0	Template literals should not be nested
+sonarjs/prefer-promise-shorthand	error	S4634	0	Shorthand promises should be used
+sonarjs/os-command	off	S4721	0	OS commands should not be executed using a shell interpreter
+sonarjs/no-redundant-optional	error	S4782	1	Optional property declarations should not use both '?' and 'undefined' syntax
+sonarjs/hashing	error	S4790	0	Weak hashing algorithms should not be used
+sonarjs/bool-param-default	off	S4798	0	Optional boolean parameters should have default value
+sonarjs/no-try-promise	error	S4822	1	Promise rejections should not be caught by "try" blocks
+sonarjs/unverified-certificate	error	S4830	0	Server certificates should be verified during SSL/TLS connections
+sonarjs/no-unsafe-unzip	off	S5042	0	Expanding archive files should not be done without controlling resource consumption
+sonarjs/cors	error	S5122	0	Cross-Origin Resource Sharing (CORS) policy should be restricted to trusted origins
+sonarjs/link-with-target-blank	error	S5148	0	Opened windows should not have access to the originating page
+sonarjs/disabled-auto-escaping	error	S5247	1	Auto-escaping in HTML template engines should not be disabled
+sonarjs/table-header	error	S5256	0	Tables should have headers
+sonarjs/no-table-as-layout	error	S5257	0	HTML "<table>" should not be used for layout purposes
+sonarjs/table-header-reference	error	S5260	0	Table cells should reference their headers
+sonarjs/object-alt-content	error	S5264	0	"<object>" tags should provide an alternative content
+sonarjs/no-clear-text-protocols	error	S5332	0	Clear-text protocols should not be used
+sonarjs/publicly-writable-directories	error	S5443	0	Temporary files should not be created in publicly writable directories
+sonarjs/unverified-hostname	error	S5527	0	Server hostnames should be verified during SSL/TLS connections
+sonarjs/encryption-secure-mode	error	S5542	0	Encryption algorithms should be used with secure mode and padding scheme
+sonarjs/no-weak-cipher	error	S5547	0	Cipher algorithms should be robust
+sonarjs/no-intrusive-permissions	off	S5604	0	Sensitive permissions should not be requested unnecessarily
+sonarjs/insecure-jwt-token	error	S5659	0	JWT should be signed and verified with strong cipher algorithms
+sonarjs/x-powered-by	error	S5689	0	Web application technologies should not disclose version information
+sonarjs/hidden-files	off	S5691	0	Hidden files should not be served statically
+sonarjs/content-length	error	S5693	0	HTTP request content length should be limited
+sonarjs/disabled-resource-integrity	error	S5725	1	Remote artifacts should not be used without integrity checks
+sonarjs/content-security-policy	error	S5728	0	Content security policy fetch directives should not be disabled
+sonarjs/no-mixed-content	off	S5730	0	Content Security Policy should block mixed-content
+sonarjs/frame-ancestors	off	S5732	0	Content Security Policy frame-ancestors directive should not be disabled
+sonarjs/no-mime-sniff	error	S5734	0	Browsers should not be allowed to perform MIME type sniffing
+sonarjs/no-referrer-policy	error	S5736	0	HTTP Referrer-Policy should not be set to an unsafe value
+sonarjs/strict-transport-security	error	S5739	0	HTTP Strict-Transport-Security policy should not be disabled
+sonarjs/confidential-information-logging	off	S5757	0	Confidential information should not be logged
+sonarjs/no-ip-forward	off	S5759	0	Client IP address should not be forwarded to proxies
+sonarjs/empty-string-repetition	error	S5842	1	Repeated patterns in regular expressions should not match the empty string
+sonarjs/regex-complexity	error	S5843	1	Regular expressions should not be too complicated
+sonarjs/no-incompatible-assertion-types	error	S5845	1	Assertions comparing incompatible types should not be made
+sonarjs/anchor-precedence	error	S5850	1	Alternatives in regular expressions should be grouped when used with anchors
+sonarjs/slow-regex	error	S5852	1	Regular expressions should not cause catastrophic backtracking
+sonarjs/no-invalid-regexp	error	S5856	1	Regular expressions should be syntactically valid
+sonarjs/unused-named-groups	error	S5860	1	Names of regular expressions named groups should be used
+sonarjs/no-same-argument-assert	error	S5863	0	Assertions should not be given twice the same argument
+sonarjs/unicode-aware-regex	off	S5867	1	Regular expressions using Unicode character classes or property escapes should enable the unicode flag
+sonarjs/no-misleading-character-class	error	S5868	1	Unicode Grapheme Clusters should be avoided inside regex character classes
+sonarjs/duplicates-in-character-class	error	S5869	1	Character classes in regular expressions should not contain the same character twice
+sonarjs/session-regeneration	error	S5876	0	A new session should be created during user authentication
+sonarjs/prefer-specific-assertions	error	S5906	0	The most specific assertion should be used
+sonarjs/no-trivial-assertions	error	S5914	0	Assertions should not be trivially true
+sonarjs/test-check-exception	error	S5958	0	Tests should check which exception is thrown
+sonarjs/stable-tests	error	S5973	0	Tests should be stable
+sonarjs/parameterized-tests	error	S5976	0	Similar tests should be grouped in a single Parameterized test
+sonarjs/no-empty-after-reluctant	error	S6019	1	Reluctant quantifiers in regular expressions should be followed by an expression that can't match the empty string
+sonarjs/single-character-alternation	error	S6035	1	Single-character alternations in regular expressions should be replaced with character classes
+sonarjs/no-code-after-done	error	S6079	0	Tests should not execute any code after "done()" is called
+sonarjs/disabled-timeout	error	S6080	0	Disabling Mocha timeouts should be explicit
+sonarjs/chai-determinate-assertion	error	S6092	0	Chai assertions should have only one reason to succeed
+sonarjs/aws-s3-bucket-insecure-http	error	S6249	0	S3 buckets should enforce HTTPS-only access
+sonarjs/aws-s3-bucket-versioning	error	S6252	0	Amazon S3 buckets should have versioning enabled
+sonarjs/aws-s3-bucket-granted-access	error	S6265	0	S3 buckets should not grant access to all users or authenticated users
+sonarjs/no-angular-bypass-sanitization	error	S6268	0	Angular built-in sanitization should not be disabled
+sonarjs/aws-iam-public-access	error	S6270	0	AWS resource-based policies should not grant public access
+sonarjs/aws-ec2-unencrypted-ebs-volume	error	S6275	0	EBS volumes should be encrypted
+sonarjs/aws-s3-bucket-public-access	error	S6281	0	Amazon S3 bucket public access should be fully blocked
+sonarjs/aws-iam-all-privileges	error	S6302	0	Policies should not grant all privileges
+sonarjs/aws-rds-unencrypted-databases	error	S6303	0	Amazon RDS resources should be encrypted at rest
+sonarjs/aws-iam-all-resources-accessible	off	S6304	0	IAM policies should not grant access to all account resources
+sonarjs/aws-opensearchservice-domain	error	S6308	0	OpenSearch domains should have encryption at rest enabled
+sonarjs/aws-iam-privilege-escalation	error	S6317	0	AWS IAM policies should limit the scope of permissions given
+sonarjs/aws-sagemaker-unencrypted-notebook	error	S6319	0	SageMaker notebook instances should be encrypted at rest
+sonarjs/aws-restricted-ip-admin-access	error	S6321	0	Administration services access should be restricted to specific IP addresses
+sonarjs/no-empty-alternatives	error	S6323	1	Alternation in regular expressions should not contain empty alternatives
+sonarjs/no-control-regex	error	S6324	1	Regular expressions should not contain control characters
+sonarjs/no-regex-spaces	error	S6326	1	Regular expressions should not contain multiple spaces
+sonarjs/aws-sns-unencrypted-topics	error	S6327	0	Amazon SNS topics should be encrypted at rest
+sonarjs/existing-groups	error	S6328	1	Replacement strings should reference existing regular expression groups
+sonarjs/aws-ec2-rds-dms-public	error	S6329	0	Public network access to cloud resources should be disabled
+sonarjs/aws-sqs-unencrypted-queue	error	S6330	0	SQS queues should be encrypted
+sonarjs/no-empty-group	error	S6331	1	Regular expressions should not contain empty groups
+sonarjs/aws-efs-unencrypted	error	S6332	0	Amazon EFS file systems should be encrypted
+sonarjs/aws-apigateway-public-api	error	S6333	0	AWS API Gateway should require authentication
+sonarjs/stateful-regex	error	S6351	0	Regular expressions with the global flag should be used with caution
+sonarjs/concise-regex	error	S6353	1	Regular expression quantifiers and character classes should be used concisely
+sonarjs/single-char-in-character-classes	error	S6397	1	Character classes in regular expressions should not contain only one character
+sonarjs/no-hardcoded-secrets	error	S6418	0	Secrets should not be hard-coded
+sonarjs/no-exclusive-tests	error	S6426	0	Exclusive tests should not be committed to version control
+sonarjs/hardcoded-secret-signatures	error	S6437	0	Credentials should not be hard-coded
+sonarjs/jsx-no-leaked-render	error	S6439	1	React components should not render non-boolean condition values
+sonarjs/no-hook-setter-in-body	error	S6442	0	React's useState hook should not be used directly in the render function or body of a component
+sonarjs/no-useless-react-setstate	error	S6443	0	React state setter function should not be called with its matching state variable
+sonarjs/no-uniq-key	error	S6486	0	JSX list components keys should match up between renders
+sonarjs/redundant-type-aliases	error	S6564	0	Redundant type aliases should not be used
+sonarjs/prefer-regexp-exec	error	S6594	1	"RegExp.exec()" should be preferred over "String.match()"
+sonarjs/no-internal-api-use	error	S6627	0	Users should not use internal APIs
+sonarjs/prefer-read-only-props	error	S6759	1	React props should be read-only
+sonarjs/no-literal-call	error	S6958	0	Literals should not be used as functions
+sonarjs/reduce-initial-value	error	S6959	1	"Array.reduce()" calls should include an initial value
+sonarjs/no-async-constructor	error	S7059	1	Constructors should not contain asynchronous operations
+sonarjs/review-blockchain-mnemonic	error	S7639	0	Wallet phrases should not be hard-coded
+sonarjs/dynamically-constructed-templates	error	S7790	0	Templates should not be constructed dynamically
+sonarjs/no-session-cookies-on-static-assets	error	S8441	0	Static Assets should not serve session cookies
+sonarjs/dompurify-unsafe-config	error	S8479	1	DOMPurify configuration should not be bypassable
+sonarjs/no-duplicate-test-title	error	S8754	0	Test titles should be unique within the same suite
+sonarjs/async-test-assertions	error	S8780	0	Async test assertions should be awaited or returned
+sonarjs/no-empty-test-title	error	S8781	0	Test and suite titles should not be empty or whitespace-only
+sonarjs/hooks-before-test-cases	error	S8782	0	Lifecycle hooks should not be interleaved with test cases or nested suites
+sonarjs/no-forced-browser-interaction	error	S8783	0	Forced browser interactions should not bypass actionability checks
+sonarjs/assertions-in-test-cases	error	S8784	0	Assertions should be placed inside test cases or hooks
+sonarjs/synchronous-suite-callback	error	S8785	0	Tests should not be registered asynchronously in suite callbacks
+sonarjs/super-linear-regex	error	S8786	0	Regular expressions should not cause non-linear backtracking
+sonarjs/prefer-native-lodash-alternative	error	S8907	0	Native APIs should be preferred over Lodash and Underscore.js methods
+sonarjs/no-default-utility-imports	error	S8927	0	Default imports from modular utility libraries should not be used
+sonarjs/memoize-cache-key	error	S8932	0	Lodash and Underscore.js `memoize` calls on functions with multiple parameters should use an explicit cache key function
+sonarjs/no-debug-commands-in-ui-tests	error	S8959	0	UI test debug commands should not be committed to version control
+sonarjs/no-mixed-completion-style	off	S8960	0	Test and hook callbacks should use a single completion style
+sonarjs/no-interpolation-in-inline-snapshots	error	S8967	0	Inline snapshots should not contain interpolations
+sonarjs/explicit-test-skip	error	S8968	0	Tests should be skipped explicitly
+sonarjs/no-empty-parameterized-test-dataset	error	S8998	0	Parameterized tests should not have empty datasets
+sonarjs/testing-library-query-assertion	error	S9027	0	Testing Library queries should match presence assertions
+sonarjs/synchronous-exception-assertions	error	S9072	1	Synchronous exception assertions should receive synchronous callbacks
+sonarjs/composite-assertions	off	S9073	0	Composite assertions should be split
+sonarjs/no-duplicate-parameterized-test-case	error	S9078	0	Parameterized tests should not contain duplicate test cases
+sonarjs/no-debounce-throttle-in-render	error	S9114	0	Lodash and Underscore.js debounced or throttled functions should not be recreated on every React render
+sonarjs/avoid-mutating-nested-properties-of-shallow-clones	error	S9135	0	Nested properties of Lodash and Underscore.js clone results should not be mutated
+sonarjs/prefer-native-jquery-alternative	error	S9144	0	Native APIs should be preferred over jQuery utility methods
+sonarjs/no-vue-class-component	error	S9145	0	Vue components should not use the deprecated "vue-class-component" or "vue-property-decorator" libraries
+sonarjs/no-vue-mixins	error	S9150	0	Vue components should not use mixins
+sonarjs/testing-library-prefer-query-by-disappearance	error	S9153	0	Testing Library disappearance waits should use non-throwing queries
+sonarjs/prefer-cypress-should	error	S9162	0	Cypress assertions should be retryable
+sonarjs/no-mutate-reactive-state-in-updated-hook	error	S9163	0	Reactive state should not be unconditionally mutated inside Vue's "updated" lifecycle hook
+sonarjs/vitest-mock-at-module-scope	error	S9169	0	vi.mock should be declared at module scope
+sonarjs/no-networkidle-wait	off	S9332	0	Playwright "networkidle" waits should not be used
+sonarjs/prefer-native-axios-alternative	error	S9339	0	Native APIs should be preferred over Axios utility methods

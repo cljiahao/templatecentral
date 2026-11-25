@@ -1,0 +1,7 @@
+# pin: npm eslint-config-next ^16.4.6
+# version: eslint-config-next 16.4.6
+# source: eslint-config-next dist/typescript.js: typescript-eslint recommended, then these overrides
+# extends: typescript-eslint-recommended
+# columns: rule<TAB>level
+@typescript-eslint/no-unused-vars	warn
+@typescript-eslint/no-unused-expressions	warn

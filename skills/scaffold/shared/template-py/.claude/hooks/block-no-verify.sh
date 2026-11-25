@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 # PreToolUse(Bash) — block hook-bypass and destructive git/shell commands. Exit 2 = block.
 # Best-effort tripwire, not a security boundary; the lefthook + CI layers are the backstop.
+# Closed list of what this text guard cannot see: variable indirection and command substitution (cat "$f", cat $(echo .env)),
+# strings built at run time inside an interpreter ('.e'+'nv', base64 decoded in Python), a script file written first and run second,
+# code fed to an interpreter on stdin or from a heredoc (python3 <<EOF, node - <<EOF), argument shapes where the word after git is not the
+# subcommand (os.execvp('git', [...]), ['git'] + [...], Deno {args: [...]}, sh.git.commit(...)), file-by-file removal (os.remove loops,
+# Path.rmdir, os.removedirs), a secret name with no leading dot or slash inside inline code when the file does not exist, a shell reached
+# through a program not known as a wrapper (busybox sh, doas sh, setsid sh, $SHELL, ssh host sh, docker exec -i c sh, kubectl exec), a command that reaches
+# sh -c through an xargs placeholder or a variable (xargs -I{} sh -c '{}', sh -c "$CMD"), runners other than the listed interpreters (npx tsx -e), and a removal target built by a call (path.join(root, 'src')) or an aliased import (from shutil import rmtree as r).
+# Everything else on the list below is judged.
+# A shell in command position that the guard sees fed from a pipe, here-string, heredoc, `-s` or process substitution is blocked outright
+# (even `echo hi | sh`), also behind the wrappers sudo, command, exec, nohup, time, nice, builtin, env, timeout, stdbuf, xargs and uv/poetry/pipenv/pdm run,
+# a leading FOO=1, ( ) or { }, and with a trailing redirect or comment. xargs sh script passes (the shell gets arguments); xargs sh -c with no readable string is blocked.
+# Inline code for python/node/perl/ruby/deno/bun (-c, -e, -p, --eval, eval) is scanned as text with the same checks as a shell command,
+# so python3 -c "print('rm -rf src')" and shutil.rmtree('./node_modules') are blocked by design.
 # Fallback only: hooks may be spawned from the session's original root, not a worktree.
 orig_dir=$PWD
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || { echo "BLOCKED: block-no-verify.sh cannot cd to the project root — refusing the command." >&2; exit 2; }
@@ -26,6 +39,62 @@ cut200() { S=$1 LC_ALL=C awk 'function ucut(s, n) { if (length(s) <= n) return s
 block() { echo "$(cut200 "BLOCKED: $1")" >&2; exit 2; }
 protected='main|uat|develop'
 root=$PWD
+# Shell access to secret files: Read deny rules gate the Read tool, not cat. A read is blocked when the named file exists; a write or copy that would create one is blocked outright. Env templates stay usable.
+is_secret() {
+  local lc
+  lc=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  case "${lc##*/}" in
+    .env.example|.env.default|.env.sample|.env.template) return 1 ;;
+    .env|.env.*|*.pem|*.key|*.p12|*.pfx|credentials.json|.netrc) return 0 ;;
+  esac
+  case "$lc" in secrets|*/secrets|.secrets|*/.secrets|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) return 0 ;; esac
+  return 1
+}
+secret_block() { block "shell access to secret file '$1' is not allowed. Never read or write it; use .env.example for placeholders and ask the user for real values."; }
+writes_to_secret() {
+  local t=$1 q
+  for q in "" "\"" "'"; do
+    case "$flat" in
+      *">$q$t"*|*"> $q$t"*|*"tee $q$t"*|*"tee -a $q$t"*) return 0 ;;
+    esac
+  done
+  [[ "$flat" =~ (^|[[:space:]])(cp|mv|ln|install|touch)[[:space:]].*[[:space:]\"\']${t}[\"\']?[[:space:]]*($|[;\&\|]) ]]
+}
+secret_guard() {
+  local delim tokens tok d f p b cdt tok_d hits
+  local -a sdirs
+  flat="${cmd//\\/}"
+  flat="${flat//[\"\']/}"
+  delim="[:space:]\"'\`;|&<>()="
+  tokens=$(printf '%s' "$flat" | grep -oiE "[^$delim]*(\\.env|\\.pem|\\.key|\\.p12|\\.pfx|credentials\\.json|\\.netrc|secrets|[*?[])[^$delim]*" || true)
+  [ -n "$tokens" ] || return 0
+  sdirs=("$root")
+  [ "$orig_dir" != "$root" ] && sdirs+=("$orig_dir")
+  while IFS= read -r cdt; do
+    cdt="${cdt##*[[:space:]]}"; cdt="${cdt//[\"\']/}"; cdt="${cdt/#\~/$HOME}"
+    for b in "$root" "$orig_dir"; do
+      case "$cdt" in /*) p="$cdt" ;; *) p="$b/$cdt" ;; esac
+      [ -d "$p" ] && sdirs+=("$p")
+    done
+  done < <(printf '%s\n' "$flat" | grep -oE '(^|[;&|(]|[[:space:]])cd[[:space:]]+[^;&|()[:space:]]+' || true)
+  while IFS= read -r tok; do
+    [ -n "$tok" ] || continue
+    tok="${tok/#\~/$HOME}"
+    tok="${tok//\$\{HOME\}/$HOME}"
+    tok="${tok//\$HOME/$HOME}"
+    for d in "${sdirs[@]}"; do
+      tok_d="${tok//\$\{PWD\}/$d}"
+      tok_d="${tok_d//\$PWD/$d}"
+      hits=$(cd "$d" 2>/dev/null && compgen -G "$tok_d")
+      while IFS= read -r f; do
+        [ -n "$f" ] && is_secret "$f" && secret_block "$f"
+      done <<< "$hits"
+    done
+    if [[ "$tok" != *[*?[]* ]] && is_secret "$tok" && writes_to_secret "$tok"; then secret_block "$tok"; fi
+    if [[ "$tok" == *:* ]] && is_secret "${tok#*:}" && [[ "$flat" =~ (^|[[:space:]\;\&\|\(])git[[:space:]]+([^;&|]*[[:space:]])?(show|cat-file|archive|blame|grep|log|diff)[[:space:]] ]]; then secret_block "${tok#*:}"; fi
+  done <<< "$tokens"
+}
+secret_guard
 # Directories a bare commit/push may land on: the cwd plus literal cd targets; anything unresolved adds the project root.
 cand=("$orig_dir")
 redir=0
@@ -70,16 +139,65 @@ protected_branch() {
 }
 
 # Unwrap bash -c/eval, unquote single words, mask other quoted text as Q; double quotes first so an apostrophe cannot swallow flags.
+# A quoted word holding a shell operator stays masked: its pipe, semicolon or redirect is text, not syntax ('x|sh', "a|bash").
 sq="'"
 scan=$(printf '%s' "$cmd" | sed -E \
   -e "s/(^|[[:space:];&|(])(bash|sh|zsh|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+\"([^\"]*)\"/\1 \4 /g" \
   -e "s/(^|[[:space:];&|(])(bash|sh|zsh|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+${sq}([^${sq}]*)${sq}/\1 \4 /g" \
-  -e "s/\"([^\"${sq}[:space:]]+)\"/\1/g" -e "s/\"[^\"]*\"/ Q /g" \
-  -e "s/${sq}([^${sq}[:space:]]+)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g")
+  -e "s/\"([^\"${sq}[:space:]|;\&<>()]+)\"/\1/g" -e "s/\"[^\"]*\"/ Q /g" \
+  -e "s/${sq}([^${sq}[:space:]|;\&<>()]+)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g")
+
+# Command position: line start, after ; & | ( { or a backtick, or after then/do/else; wrappers that run the next word (sudo, env, xargs, nohup, uv run) may follow.
+cpos='(^|[;&|(`{]|(^|[[:space:]])(then|do|else))[[:space:]]*'
+# Wrapper tokens, defined once. Leading assignments (FOO=1 cmd) may precede a wrapper chain; a wrapper takes flags, a value after a known value flag (sudo -u root, nice -n 5, xargs -I {}, uv run --with x), a duration (timeout 5) or an assignment.
+asg='[A-Za-z_][A-Za-z0-9_]*=([[:space:]]+Q)?[^[:space:]]*'
+wnames='sudo|command|exec|nohup|time|nice|builtin|env|timeout|stdbuf|(uv|poetry|pipenv|pdm)[[:space:]]+run'
+wargs="([[:space:]]+(-[^[:space:]]+|-[uginIPLdsCkUDtEaoe][[:space:]]+[^-[:space:]][^[:space:]]*|--[A-Za-z-]+[[:space:]]+[^-[:space:]][^[:space:]]*|${asg}|[0-9][0-9.]*[smhd]?))*"
+wrap_nx="(${asg}[[:space:]]+)*((/[^[:space:]]*/)?(${wnames})${wargs}[[:space:]]+)*"
+wrap="(${asg}[[:space:]]+)*((/[^[:space:]]*/)?(${wnames}|xargs)${wargs}[[:space:]]+)*"
+# Shells fed from a pipe, stdin, here-string, heredoc or process substitution hide their commands from this guard; the shell must be the command word, not an argument (grep sh < f).
+# Runs on the scan, where quoted text cannot contribute operators; a trailing backslash or pipe joins the next line. Behind a pipe the shell may be followed by flags, redirects or a comment; xargs hands the shell its arguments, not stdin, so only xargs sh -c with no readable string is judged.
+blind_shell() {
+  local w='\\?(/[^[:space:]]*/)?(bash|sh|zsh|dash|ksh)' f='([[:space:]]+-[^[:space:]]+)*' joined tl xa
+  tl='([[:space:]]+#.*|[[:space:]]*([0-9]*>>?[[:space:]]*[^[:space:]]*|[0-9]*>&[0-9-]*|&>[^[:space:]]*))*[[:space:]]*($|[;&|)}])'
+  xa="(/[^[:space:]]*/)?xargs${wargs}[[:space:]]+"
+  joined=$(printf '%s\n' "$scan" | awk '{ if (buf != "") $0 = buf " " $0; if ($0 ~ /\\$/) { sub(/\\$/, ""); buf = $0; next } if ($0 ~ /\|[ \t]*$/) { buf = $0; next } print; buf = "" } END { if (buf != "") print buf }')
+  printf '%s\n' "$joined" | grep -qE "\\|[[:space:]]*([({][[:space:]]*)?${wrap_nx}${w}${f}${tl}" ||
+    printf '%s\n' "$joined" | grep -qE "\\|[[:space:]]*([({][[:space:]]*)?${wrap_nx}${xa}${w}${f}[[:space:]]+-[A-Za-z]*c${tl}" ||
+    printf '%s\n' "$joined" | grep -qE "${cpos}${wrap}${w}${f}[[:space:]]*<" ||
+    printf '%s\n' "$joined" | grep -qE "${cpos}${wrap}${w}${f}[[:space:]]+(-[A-Za-z]*s[A-Za-z]*|-)([[:space:]]|\$)" ||
+    printf '%s\n' "$joined" | grep -qE "${cpos}(source|\\.)[[:space:]]+<\\("
+}
+if blind_shell; then
+  block "a shell fed from a pipe, stdin, here-string, heredoc or process substitution hides its commands from this guard. Run the commands directly."
+fi
+# Inline interpreter code is judged as text: the interpreter must be in command position, so a commit message or grep pattern naming python -c is not code; then quotes and brackets become spaces and the checks below treat it as a command line.
+interp=""
+interp_norm=""
+scan_shell=$scan
+inline_re="${cpos}${wrap}(/[^[:space:]]*/)?((python|pypy)[0-9.]*|nodejs|node|bun|perl|ruby|deno)[[:space:]]+(-([A-Za-ln-z]|-)[^[:space:]]*([[:space:]]+[^-[:space:]][^[:space:]]*)?[[:space:]]+)*(-[A-Za-z]*[ceEp]|--eval|--print|eval)([[:space:]=]|\$)"
+# The scan unwraps eval "…", so a match on the raw command is the fallback (deno eval "…").
+if [[ "$scan" =~ $inline_re ]] || [[ "$cmd" =~ $inline_re ]]; then
+  interp=${cmd#*"${BASH_REMATCH[0]}"}
+  interp_norm=$(printf '%s' "$interp" | sed "s/[]\"${sq}[{}(),]/ /g")
+  scan="$scan"$'\n'"$interp_norm"
+fi
+# A secret-file name in inline code is blocked even when the file does not exist yet (open('.env', 'w')); URLs, bare module and attribute names stay clean.
+interp_secret() {
+  local tok b
+  while IFS= read -r tok; do
+    tok="${tok#./}"; b="${tok##*/}"
+    case "$b" in ''|.key|.pem|.p12|.pfx) continue ;; esac
+    [[ "$b" == .* || "$tok" == */* || "$b" == credentials.json ]] || continue
+    is_secret "$tok" && secret_block "$tok"
+  done < <(printf '%s' "$interp" | sed -E "s#[A-Za-z][A-Za-z0-9+.-]*://[^[:space:]\"${sq})]*# #g" | LC_ALL=C tr -c 'A-Za-z0-9._/~-' '\n')
+}
+[ -n "$interp" ] && interp_secret
 
 # Hook-layer bypass via environment or a persisted alias/config (whole-command checks).
 lower_cmd=$(printf '%s' "$cmd" | tr '[:upper:]' '[:lower:]')
-if printf '%s' "$scan" | grep -qE '(^|[^A-Za-z0-9_])LEFTHOOK(_EXCLUDE)?=' && printf '%s' "$scan" | grep -qE '(^|[^A-Za-z0-9_-])git([[:space:]]|$)'; then
+lh='(^|[^A-Za-z0-9_])LEFTHOOK(_EXCLUDE)?'
+if { printf '%s' "$scan" | grep -qE "${lh}=" || printf '%s' "$interp" | grep -qE "$lh"; } && printf '%s' "$scan" | grep -qE '(^|[^A-Za-z0-9_-])git([[:space:]]|$)'; then
   block "LEFTHOOK=0 / LEFTHOOK_EXCLUDE disables the pre-commit hook layer — the same bypass as --no-verify. Fix the failure instead."
 fi
 if printf '%s' "$lower_cmd" | grep -qE 'git_config_(parameters|key_[0-9]+)' && printf '%s' "$lower_cmd" | grep -q 'hookspath'; then
@@ -190,7 +308,7 @@ while IFS= read -r seg; do
         if [ -z "$cdir" ] || [[ "$x" == /* ]]; then cdir=$x; else cdir="$cdir/$x"; fi
         i=$((i + 2)); continue ;;
       -c|--config-env)
-        printf '%s' "${t[$((i + 1))]:-}" | grep -qi 'core\.hookspath' && block "'git -c core.hooksPath=…' disables the git-hook layer, the same bypass as --no-verify."
+        printf '%s' "${t[$((i + 1))]:-}" | grep -qi 'core\.hookspath' && block "'git -c core.hooksPath=…' disables the git-hook layer, the same bypass as --no-verify. Fix the failure instead."
         i=$((i + 2)); continue ;;
       --git-dir|--work-tree) redir=1; i=$((i + 2)); continue ;;
       --git-dir=*|--work-tree=*) redir=1 ;;
@@ -230,7 +348,12 @@ while IFS= read -r seg; do
         esac
       done
       branch=$(protected_branch)
-      [ -n "$branch" ] && block "direct commit to protected branch '$branch'. Create a feature branch first."
+      if [ -n "$branch" ]; then
+        if printf '%s' "$scan" | grep -qE 'git[[:space:]]+(checkout[[:space:]]+(-[bB]|--orphan)|switch[[:space:]]+(-[cC]|--create))'; then
+          block "commit chained after a branch switch while '$branch' is checked out. Run 'git checkout -b <name>' alone first, then run 'git commit' as a separate command."
+        fi
+        block "direct commit to protected branch '$branch'. Run 'git checkout -b <feature-branch>' first, then commit again."
+      fi
       ;;
     push)
       force=0; target=0; explicit=0; pos=0
@@ -266,7 +389,27 @@ while IFS= read -r seg; do
   esac
 done <<< "$segments"
 
-if echo "$cmd" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && echo "$cmd" | grep -qE '(^|[[:space:]/"])(src|app|lib|test|\.claude|\.lefthook|\.git|node_modules)([[:space:]/"]|$)'; then
+# Guarded source directories, defined once for the rm check and the interpreter removal check.
+srcnames='src|app|lib|test|\.claude|\.lefthook|\.git|node_modules'
+srcdirs="(^|[[:space:]/\"])(${srcnames})([[:space:]/\"]|\$)"
+# rm_src <text>: rm -rf on a guarded directory in one text; run on the raw command, on the unwrapped scan (sh -c "rm -rf src") and on each segment of inline code.
+rm_src() {
+  printf '%s\n' "$1" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && printf '%s\n' "$1" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && printf '%s\n' "$1" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && printf '%s\n' "$1" | grep -qE "$srcdirs"
+}
+# interp_removes: inline code calls a recursive remover (shutil.rmtree, fs.rmSync with recursive, FileUtils.rm_rf) whose target is a guarded directory.
+interp_removes() {
+  local tgt="[[:space:]]+(\\./)?(${srcnames})(/|[[:space:]]|\$)"
+  printf '%s\n' "$interp_norm" | grep -qE "(rmtree|rimraf|rm_rf|rm_r|remove_entry|remove_dir|removeSync|emptyDirSync)${tgt}" && return 0
+  printf '%s\n' "$interp_norm" | grep -q 'recursive' || return 1
+  printf '%s\n' "$interp_norm" | grep -qE "(rmSync|rmdirSync|fs\\.rm|rmdir)${tgt}"
+}
+if rm_src "$cmd" || rm_src "$scan_shell"; then
   block "recursive rm on a source directory. Confirm with a human first."
+fi
+if [ -n "$interp" ]; then
+  while IFS= read -r seg; do
+    rm_src "$seg" && block "recursive rm on a source directory. Confirm with a human first."
+  done < <(printf '%s\n' "$interp_norm" | tr ';|&' '\n\n\n')
+  interp_removes && block "recursive removal of a source directory through an interpreter. Confirm with a human first."
 fi
 exit 0

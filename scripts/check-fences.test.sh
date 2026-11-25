@@ -440,12 +440,132 @@ run "$r" --has-mappings; check 0 "$RC" "has_mappings is 0 with a row"
 printf 'only\ttwo\n' > "$r/tests/golden/fences/moved.d/slice-b.tsv"
 run "$r" --has-mappings; check 2 "$RC" "has_mappings is 2 on a malformed row"
 
+# deleted.d: a deleted fence has one row; every other change to a fence still fails
+G=tests/golden/fences
+rm_fence() { # rm_fence <root> <letter> — the markdown loses fence <letter> (no row)
+  python3 - "$1/skills/add/s.md" "$2" <<'PY'
+import sys
+p, letter = sys.argv[1:]
+text = open(p).read().replace("```ts\n" + letter + "\n```\n", "")
+open(p, "w").write(text)
+PY
+}
+snap_sha() { awk -F'\t' -v f=skills/add/s.md -v i="$2" '$2 == f && $3 == "S" && $4 == i { print $1 }' "$1/$G/add.tsv"; }
+del_row() { # del_row <root> <index> <slice file> [sha] — one deleted.d row; sha defaults to the snapshot's
+  mkdir -p "$1/$G/deleted.d"
+  printf 'skills/add/s.md\tS\t%s\t%s\n' "$2" "${4:-$(snap_sha "$1" "$2")}" >> "$1/$G/deleted.d/$3.tsv"
+}
+r=$(three del-clean)
+mkdir -p "$r/$G/deleted.d"
+expect_ok "$r" "empty deleted.d passes"
+want="check-fences: 5 fences OK (0 in template files)"
+check "$want" "$OUT" "empty_deleted_d_output_is_unchanged"
+r=$(three del-none)
+rm_fence "$r" A
+expect_fail "$r" "MISSING skills/add/s.md :: S :: 2" "P2_fence_deleted_without_a_row"
+r=$(three del-ok)
+rm_fence "$r" A; del_row "$r" 0 slice-a
+expect_ok "$r" "P3_deleted_fence_with_a_row_passes"
+case "$OUT" in *"1 deleted"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: ok output counts the deletion [$OUT]" ;; esac
+sed -i.bak 's/^C$/C2/' "$r/skills/add/s.md" && rm "$r/skills/add/s.md.bak"
+expect_fail "$r" "MISMATCH skills/add/s.md :: S :: 2" "P3_later_sibling_change_after_a_deletion"
+r=$(three del-mid)
+rm_fence "$r" B; del_row "$r" 1 slice-a
+expect_ok "$r" "P3_middle_fence_deleted_siblings_keep_their_index"
+r=$(three del-present)
+del_row "$r" 0 slice-a
+expect_fail "$r" "UNDELETED skills/add/s.md :: S :: 0" "P4_row_but_fence_still_present"
+r=$(three del-hash)
+rm_fence "$r" A; del_row "$r" 0 slice-a "$(printf '%064d' 0)"
+expect_fail "$r" "BADDELETE skills/add/s.md :: S :: 0 has a sha256 that differs" "P5_wrong_hash"
+expect_fail "$r" "MISSING skills/add/s.md :: S :: 2" "P5_wrong_hash_does_not_cover_the_fence"
+r=$(three del-key)
+rm_fence "$r" A; del_row "$r" 0 slice-a
+printf 'skills/add/s.md\tNo such\t0\t%s\n' "$(snap_sha "$r" 0)" >> "$r/$G/deleted.d/slice-a.tsv"
+expect_fail "$r" "is not in the snapshot" "P5_unknown_heading"
+r=$(three del-dup)
+rm_fence "$r" A; del_row "$r" 0 slice-a; del_row "$r" 0 slice-b
+expect_fail "$r" "BADDELETE skills/add/s.md :: S :: 0 is deleted twice" "P6_same_row_in_two_files"
+r=$(three del-both)
+mv_fence "$r" A 0 slice-a; del_row "$r" 0 slice-b
+expect_fail "$r" "is also mapped in moved.d" "P6_same_row_in_moved_and_deleted"
+r=$(three del-extra)
+rm_fence "$r" A; del_row "$r" 0 slice-a
+printf '\n```ts\nD\n```\n' >> "$r/skills/add/s.md"
+expect_fail "$r" "EXTRA skills/add/s.md :: S :: 2" "P7_delete_then_add_another_fence"
+r=$(three del-extra-first)
+rm_fence "$r" C; del_row "$r" 2 slice-a
+printf '\n```ts\nD\n```\n' >> "$r/skills/add/s.md"
+expect_fail "$r" "EXTRA" "P7_delete_last_then_add_another_fence"
+bad_row() { # bad_row <name> <row text> <description>
+  local rr; rr=$(three "$1")
+  rm_fence "$rr" A; mkdir -p "$rr/$G/deleted.d"
+  printf '%b\n' "$2" > "$rr/$G/deleted.d/a.tsv"
+  run "$rr"
+  check 2 "$RC" "$3: exit code"
+}
+good=$(snap_sha "$(three del-sha)" 0)
+bad_row bad3 "skills/add/s.md\tS\t0" "P8_three_columns"
+bad_row bad5 "skills/add/s.md\tS\t0\t$good\textra" "P8_five_columns"
+bad_row badx "skills/add/s.md\tS\tx\t$good" "P8_index_x"
+bad_row bad63 "skills/add/s.md\tS\t0\t${good%?}" "P8_63_char_hash"
+bad_row badup "skills/add/s.md\tS\t0\t$(printf '%s' "$good" | tr a-f A-F)" "P8_uppercase_hash"
+bad_row badpath "docs/s.md\tS\t0\t$good" "P8_path_outside_skills"
+bad_row badesc "skills/../x.md\tS\t0\t$good" "P8_path_with_dotdot"
+bad_row junkfile "$good" "P8_one_column"
+r=$(three del-unknown-entry)
+rm_fence "$r" A; del_row "$r" 0 slice-a; : > "$r/$G/deleted.d/notes.txt"
+run "$r"; check 2 "$RC" "P8_unexpected_entry_in_deleted_d"
+r=$(three del-unreadable)
+rm_fence "$r" A; del_row "$r" 0 a
+if [[ "$(id -u)" == 0 ]]; then
+  echo "SKIP: P9_unreadable_deleted_d_file (running as root: chmod 000 does not block a read)"
+else
+  chmod 000 "$r/$G/deleted.d/a.tsv"
+  run "$r"; check 2 "$RC" "P9_unreadable_deleted_d_file_is_an_error"
+  chmod 644 "$r/$G/deleted.d/a.tsv"
+fi
+r=$(three del-link-dir)
+rm_fence "$r" A; del_row "$r" 0 a
+mv "$r/$G/deleted.d" "$r/real-deleted"; ln -s ../../../real-deleted "$r/$G/deleted.d"
+run "$r"; check 2 "$RC" "P9_deleted_d_symlink_dir_is_an_error"
+r=$(three del-link-file)
+rm_fence "$r" A; del_row "$r" 0 real; mkdir -p "$r/$G/deleted.d"
+ln -s real.tsv "$r/$G/deleted.d/a.tsv"
+run "$r"; check 2 "$RC" "P9_deleted_d_symlink_file_is_an_error"
+r=$(three del-snap)
+rm_fence "$r" A; del_row "$r" 0 slice-a
+code=$(python3 "$REPO_ROOT/scripts/check-fences.py" --root "$r" --snapshot > /dev/null 2>&1; echo $?)
+check 2 "$code" "P10_snapshot_refuses_with_a_deleted_row"
+r=$(three del-snap-empty)
+mkdir -p "$r/$G/deleted.d"; : > "$r/$G/deleted.d/.gitkeep"
+code=$(python3 "$REPO_ROOT/scripts/check-fences.py" --root "$r" --snapshot > /dev/null 2>&1; echo $?)
+check 0 "$code" "P10_snapshot_runs_with_an_empty_deleted_d"
+r=$(three del-hasmap)
+rm_fence "$r" A; del_row "$r" 0 slice-a
+run "$r" --has-mappings; check 1 "$RC" "has_mappings_ignores_deleted_rows"
+r=$(three del-tpl)
+mv_fence "$r" B 1 slice-a
+run "$r" --from-templates; before="$OUT"; rcb=$RC
+rm_fence "$r" A; del_row "$r" 0 slice-d
+run "$r" --from-templates
+check "$before" "$OUT" "P12_from_templates_output_unchanged_by_deleted_rows"
+check "$rcb" "$RC" "P12_from_templates_exit_unchanged_by_deleted_rows"
+rm -f "$r/$G/moved.d/slice-a.tsv"
+
 # the real tree matches its snapshot
 expect_ok "$REPO_ROOT" "repo snapshot matches skills/"
 case "$OUT" in *"fences OK"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: repo check reports fences OK [$OUT]" ;; esac
 nrows=$(cat "$REPO_ROOT"/tests/golden/fences/{add,migrate,standards}.tsv | grep -vc '^#')
 nfences=$(grep -rhcE '^[[:space:]]*(```|~~~)' "$REPO_ROOT"/skills/add "$REPO_ROOT"/skills/migrate "$REPO_ROOT"/skills/standards | awk '{ n += $1 } END { print n + 0 }')
-if [[ "$nrows" -gt 100 && "$nrows" -lt $((nfences / 2)) ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: snapshot row count $nrows looks wrong against $nfences fence lines"; fi
+# Rows in deleted.d/ still sit in the snapshot but their fences are gone from skills/, so they do not count as live.
+ndel=0
+for f in "$REPO_ROOT"/tests/golden/fences/deleted.d/*.tsv; do
+  [[ -f "$f" ]] || continue
+  ndel=$((ndel + $(grep -vc '^#' "$f")))
+done
+live=$((nrows - ndel))
+if [[ "$live" -gt 100 && "$live" -le $((nfences / 2)) ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: snapshot row count looks wrong: $live live rows ($nrows snapshot rows, $ndel deleted) against $nfences fence lines"; fi
 
 echo "check-fences.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

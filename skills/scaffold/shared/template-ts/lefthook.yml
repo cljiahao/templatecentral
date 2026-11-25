@@ -5,11 +5,11 @@ pre-commit:
   commands:
     format-lint:
       glob: "*.{ts,tsx,js,mjs,cjs}"
-      # Reformatting a hashed hook would make verify-harness.sh report MODIFIED.
+      # eslint --fix first, prettier last, so a removed disable comment leaves no prettier failure; hashed hooks stay excluded.
       exclude:
         - .claude/hooks/*
         - .claude/.harness-base/**
-      run: pnpm exec prettier --write {staged_files} && pnpm exec eslint --fix --max-warnings=0 --no-warn-ignored {staged_files}
+      run: pnpm exec eslint --fix --max-warnings=0 --no-warn-ignored {staged_files} && pnpm exec prettier --write {staged_files}
       stage_fixed: true
     typecheck:
       run: pnpm exec tsc --noEmit --incremental
@@ -18,7 +18,8 @@ pre-commit:
       run: pnpm install --frozen-lockfile
     secret-scan:
       # Scans staged changes when the scanner is installed; the next command warns or fails when it is not.
-      run: if command -v gitleaks >/dev/null 2>&1; then gitleaks git --pre-commit --staged --redact --no-banner; fi
+      run: if command -v gitleaks >/dev/null 2>&1; then gitleaks git --pre-commit --staged --redact --no-banner -v; fi
+      fail_text: Secret found (file, line and rule above, value hidden). Remove it and read it from the environment instead; if it was ever committed or pushed, treat it as exposed and replace it where it was issued.
     scanner-present:
       # Never a silent skip: warns with the install command locally and fails in CI.
       run: bash scripts/check-secret-scanner.sh
@@ -97,5 +98,12 @@ pre-push:
       run: bash scripts/check-docs.sh
     test-budget:
       run: bash scripts/test-budget.sh
+    gate-ratchet:
+      # Fails when a coverage threshold, an exclude or another gate setting is weaker than on the base branch; the same check runs in CI.
+      run: bash scripts/gate-ratchet.sh auto
+    workarounds:
+      # Fails on a lint, type, coverage or test suppression this change adds, and on a deleted test whose source remains.
+      run: bash scripts/check-workarounds.sh
     verify:
-      run: pnpm run check && pnpm test
+      # test:ci runs the 80% line floor that plain test skips.
+      run: pnpm run check && pnpm run test:ci

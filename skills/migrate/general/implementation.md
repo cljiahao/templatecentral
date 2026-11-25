@@ -6,38 +6,15 @@
 
 Goal: bring an existing project up to the templateCentral standard in one run: measure a baseline, seed the whole harness, prove it is live, and end with a comparison against the baseline. Detects the stack, asks the user once, then runs autonomously.
 
-**Phase files.** Phases 0–3 are below. Load Phase 4 or 5 only when Phase 0 routes to it. The shared kits load **here**, so every chain stays within two `cat` hops (CONVENTIONS §2). `<variant-file>` is `harness-kit-ts.md` for nestjs / nextjs / vite-react and `harness-kit-fastapi.md` for fastapi — load only that one.
+**Phase files** (paths under `<skill-dir>/`; the kits load here so every chain stays within two `cat` hops, CONVENTIONS §2). `<variant-file>` is `harness-kit-ts.md` for nestjs / nextjs / vite-react, `harness-kit-fastapi.md` for fastapi.
 
-**Baseline** (loaded only on the no-marker path, after Phase 1):
-```bash
-cat "<skill-dir>/general/quality-baseline.md"
-```
-
-**Quality pass** (only on a yes to its question, see "Quality pass (opt-in)" below; the test and comment rules load with it):
-```bash
-cat "<skill-dir>/general/quality-baseline.md"
-cat "<skill-dir>/general/quality-pass.md"
-cat "<skill-dir>/../test/implementation.md"
-cat "<skill-dir>/../standards/code-standards/comments.md"
-```
-
-**Phase 4** — full harness seed (unmarked project, Phase 2 choice A) / v4–v6 upgrade:
-```bash
-cat "<skill-dir>/general/phase-4-upgrade.md"
-cat "<skill-dir>/../scaffold/shared/harness-kit.md"
-cat "<skill-dir>/../scaffold/shared/<variant-file>"
-cat "<skill-dir>/../scaffold/shared/harness-kit-enforcement.md"
-cat "<skill-dir>/../scaffold/shared/harness-kit-finalize.md"
-cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
-```
-
-**Phase 5** — harness health check (5a–5c), then the safe re-sync (5d) only if the user approves it:
-```bash
-cat "<skill-dir>/general/phase-5-health-check.md"
-```
-On an approved 5d re-sync, load the five kit files that Phase 4 loads after `phase-4-upgrade.md` (the four harness-kit files and `documentation-kit.md`).
-
-"The Step 4b marker update" means: set line 1 of `AGENTS.md` to `<!-- templateCentral: <stack>@6.0.0 -->`.
+| Load | When | Files |
+|---|---|---|
+| Baseline | no-marker path, after Phase 1 | `general/quality-baseline.md` |
+| Quality pass | only on a yes to its question | `general/quality-baseline.md`, `general/quality-pass.md`, `../test/implementation.md`, `../standards/code-standards/comments.md` |
+| Phase 4 | full seed (Phase 2 choice A, or Phase 0 seed) | `general/phase-4-upgrade.md`, then `../scaffold/shared/harness-kit.md`, `shared/<variant-file>` (`harness-kit-ts.md` for nestjs, nextjs, vite-react; `harness-kit-fastapi.md` for fastapi; load only that one), `shared/harness-kit-enforcement.md`, `shared/harness-kit-finalize.md`, `shared/documentation-kit.md` |
+| Phase 5 | health check 5a–5c; 5d re-sync only if approved | `general/phase-5-health-check.md`; for 5d also the five kit files Phase 4 loads |
+| Defect notes | after the defect report | `general/UPGRADE-NOTES.md` |
 
 ---
 
@@ -51,15 +28,11 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
 
 **If no marker** → skip to Phase 1 (stack detection).
 
-**Baseline on every route that changes project files** (no marker, the seed or re-sync of a light adoption, `@5.x`, `@4.x`): after the user's yes and before the first write, run the Phase 3 A step 1 `--full` before-run; after the last write, run the Phase 3 A step 5 `--compare`. Phases 1–3 may be skipped, this step may not. The Phase 3 A step 1 before-run is this same run: take it once. The no-change `@6.0.0` route takes none.
+**Baseline on every route that changes project files** (no marker, the seed or re-sync of a light adoption): after the user's yes and before the first write, run the Phase 3 A step 1 `--full` before-run; after the last write, run the Phase 3 A step 5 `--compare`. Phases 1–3 may be skipped, this step may not. The Phase 3 A step 1 before-run is this same run: take it once. A route that changes nothing takes none.
 
-**If marker present, version `@6.0.0` or later** → check whether `.claude/harness.json` exists:
+**If a marker is present** → check whether `.claude/harness.json` exists:
 
-- **`.claude/harness.json` exists** → print:
-  ```
-  ✓ This project is on the current harness schema (@6.0.0). No migration needed.
-  ```
-  Then load and run **Phase 5** (5a–5c; offer 5d) — see the phase table above. To bring the harness files up to the current templates in one run instead, load `general/harness-refresh.md`.
+- **`.claude/harness.json` exists** → run the harness refresh first: load `general/harness-refresh.md` and follow it (dry run, confirm, apply, merge the `.templatecentral-new` files). When it is done, load and run **Phase 5** (5a–5c; offer 5d) for the source-level checks and the optional extras the refresh does not touch. A project that has `.claude/harness.json` never takes the Phase 1–4 path.
 
 - **`.claude/harness.json` does not exist** → a light adoption wrote the marker but never seeded
   the harness. Do **not** exit. Skip Phases 1–3 and present:
@@ -77,67 +50,13 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
   User A → proceed to Phase 4.
   User B → print "No changes made." Exit.
 
-**If marker present, version `@5.0.0` through `@5.x`** → the hooks are inert: pre-6.0.0 schemas wrote
-each `settings.json` hook with an array-valued `command`, which Claude Code silently skips. Re-seed
-them in exec form (`"command": "<bin>", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>"]`)
-from the harness kit. Skip Phases 1–3 and present:
-```
-⚠ This project was scaffolded with templateCentral <version>.
-
-Its .claude/settings.json hooks use an array-form "command", which Claude Code
-silently ignores — the harness guards have never actually run.
-
-The upgrade re-seeds the enforcement layer from the harness kit:
-- settings.json hooks rewritten to exec form ("command" + "args", ${CLAUDE_PROJECT_DIR} paths)
-- .claude/hooks/* reset to canonical (post-tool-failure.sh removed — Claude already sees tool errors)
-
-Re-sync? (A) Yes  (B) Skip
-```
-User A → first the before-run of the baseline step above, then the Step 4b marker update, before anything hashes `AGENTS.md` (or its
-`origin_hash` goes stale). Then, if `.claude/harness.json` exists, run Phase 5 (5a–5c) and the
-Step 5d re-sync, which replaces the array-form entries; otherwise proceed to Phase 4.
-User B → print "No changes made — hooks remain inert until re-synced." Exit.
-
-**If marker present, version `@4.0.0` through `@4.x`** → skip Phases 1–3. Present:
-```
-ℹ️ This project was scaffolded with templateCentral <version>.
-
-v5.0 converts seeded project skills to directory form:
-- .claude/skills/<name>/SKILL.md  — flat <name>.md files are silently ignored by Claude Code
-It also re-seeds settings.json hooks in exec form — earlier array-form hooks never ran
-
-Upgrade? (A) Yes  (B) Skip
-```
-User A → proceed to Phase 4.
-User B → print "No changes made." Exit.
-
-**If marker present, version earlier than `@4.0.0`** → skip Phases 1–3. Present:
-```
-ℹ️ This project was scaffolded with templateCentral <version>.
-
-v4.0 adds an AI harness layer to all scaffolds:
-- .claude/settings.json  — PreToolUse (.env guard), PostToolUse (type-check), Stop (test suite), SessionStart (re-injects AGENTS.md after compaction)
-- AGENTS.md              — ## AI Harness section with post-harness seams
-
-Upgrade? (A) Yes  (B) Skip
-```
-Before showing that message, replace its list (the two lines under "v4.0 adds an AI harness layer") with the current harness, because the upgrade seeds all of it, after a baseline run and ending with a comparison: `.claude/settings.json` and `.claude/hooks/` (exec-form enforcement layer); `lefthook.yml`, `.gitleaks.toml` and the CI quality gates; `.claude/harness.json` and `.claude/.harness-base/` (integrity manifest and merge base); the AGENTS.md tail, `docs/CONSTITUTION.md`, the root README and boundary docs.
-
-User A → proceed to Phase 4.
-User B → print "No changes made." Exit.
+**If the marker names a version before `@6.0.0`** → the file-existence rules above and below decide the route, not the version. Run `harness-refresh` when `.claude/harness.json` exists, else the seed offer above, then `defect-report.sh` (see "Known-defect report"). A project from `@5.x` or earlier can carry hooks whose `command` in `.claude/settings.json` is an array: Claude Code skips them, so they never ran. `harness-refresh.sh` does not rewrite a `settings.json` it cannot match to a shipped hash; it writes `.claude/settings.json.templatecentral-new`, so replace every array-form hook with the exec form from that file when you merge it.
 
 ---
 
 ## Phase 1 — Detect Stack (agent, autonomous)
 
-Scan the current directory for stack signals:
-
-| Signal | Stack |
-|---|---|
-| `next.config.ts` or `next.config.js` or `next.config.mjs` present | Next.js |
-| `vite.config.ts` or `vite.config.js` present AND no `next.config.*` | Vite + React |
-| `requirements.txt` contains `fastapi` | FastAPI |
-| `nest-cli.json` present, or `@nestjs/core` in `package.json` | NestJS |
+Detect the stack as `detect_stack` in `<skill-dir>/general/harness-refresh.sh` does; it is the one source and refuses when several stacks match.
 
 If multiple signals found (likely a monorepo root) → ask the user: "Which project
 should be adopted first — frontend or backend? Please provide the subdirectory path."
@@ -227,6 +146,11 @@ Print: "No changes made."
 Return control; the invoking skill must exit without generating any files.
 
 ---
+
+## Known-defect report (read-only)
+
+After a seed, re-sync or harness refresh, and whenever the user asks which older template code a project still carries, run `bash "<skill-dir>/general/defect-report.sh" <project-dir>` and show its output as printed. It writes nothing and needs no login, key or network. It does not filter by version, because a refresh rewrites the recorded one. Exit 1 means a `high` line, exit 2 means it could not run. Load the defect notes (table above) for the fix details and the two review-by-hand items.
+Change project source only after the user confirms each fix, one at a time. A line means a known older pattern, not a verdict: `check` lines need a look first.
 
 ## Quality pass (opt-in)
 

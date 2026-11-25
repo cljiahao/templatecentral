@@ -19,6 +19,7 @@ Thumbs.db
 
 # Tests
 /coverage
+/blob
 /.nyc_output
 *.spec.ts.snap
 

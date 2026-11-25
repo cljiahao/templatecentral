@@ -39,17 +39,11 @@ In `src/core/config.py`, update the `CommonSettings` defaults:
 - `PROJECT_DESCRIPTION` — Set to a relevant one-sentence description
 - `PROJECT_VERSION` — Set to `"v0.1.0"` (or user's preferred version)
 
-`CommonSettings` loads `src/.env`, whose values win over these defaults, so set the same `PROJECT_NAME` and `PROJECT_VERSION` in `src/.env.default` too. Step 3 copies that file to `src/.env`; agents do not edit `src/.env` itself.
+`CommonSettings` loads `src/.env`, whose values win over these defaults, so set the same `PROJECT_NAME` and `PROJECT_VERSION` in `src/.env.default` too. Step 3 has the user copy that file to `src/.env`; agents never touch `src/.env`.
 
 ### 3. Create environment file
 
-```bash
-cp src/.env.default src/.env
-```
-
-If a guard in your session blocks writing the env file, ask the user to run this copy and continue once it exists.
-
-**No interactive user** (headless run): skip the copy, continue, and note in your final report that the env file was not created. The quality gates run on the defaults.
+The user runs this copy themselves (`cp src/.env.default src/.env`); the seeded guards block agent access to a real env file, so never read or write one. Continue without it: the quality gates run on the defaults.
 
 Never commit `src/.env`.
 

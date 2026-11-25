@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# scripts/day-one.test.sh — scaffold each stack and CI host with tc-copy.sh into a temp repo and run every seeded gate that needs no network or install; each must pass on day one.
+# Regression test for gates that contradict the files the scaffold itself writes (for example the nosonar gate against the lint rule that lists the marker).
+# Usage: bash scripts/day-one.test.sh
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SHARED="$REPO_ROOT/skills/scaffold/shared"
+
+PASS=0
+FAIL=0
+ok() { PASS=$((PASS + 1)); }
+bad() { FAIL=$((FAIL + 1)); echo "FAIL: $1"; }
+
+T=$(mktemp -d "${TMPDIR:-/tmp}/dayone.XXXXXX") || exit 2
+trap 'rm -rf "$T"' EXIT
+
+clean() { env -u CI -u GITHUB_ACTIONS -u TF_BUILD "$@"; }
+
+# gate <label> <command...>: run in $P; a pass needs exit 0.
+gate() {
+  local label=$1 out rc
+  shift
+  out=$(cd "$P" && clean "$@" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ]; then ok; else bad "$ST/$HOST $label exited $rc"; printf '%s\n' "$out" | tail -8 | sed 's/^/    /'; fi
+}
+
+# obtain_ruff: sets RUFF_CMD to ruff from PATH, else uvx, else a pip install of the spec the seeded project pins in
+# requirements-dev.txt into the temp dir (no sudo, no account, no key). Returns 1 when none works. Tried once per run.
+RUFF_STATE=""
+RUFF_CMD=()
+obtain_ruff() {
+  if [ -n "$RUFF_STATE" ]; then [ "$RUFF_STATE" = ok ]; return; fi
+  RUFF_STATE=no
+  local spec
+  spec=$(sed -n 's/^\(ruff[<>=!~][^[:space:]#]*\).*$/\1/p' "$REPO_ROOT/skills/scaffold/fastapi/template/requirements-dev.txt" | head -1)
+  if command -v ruff > /dev/null 2>&1; then
+    RUFF_CMD=(ruff); RUFF_STATE=ok
+  elif [ -n "$spec" ] && command -v uvx > /dev/null 2>&1; then
+    RUFF_CMD=(uvx --from "$spec" ruff); RUFF_STATE=ok
+  elif [ -n "$spec" ] && command -v python3 > /dev/null 2>&1; then
+    if python3 -m pip install -q --disable-pip-version-check --target "$T/ruffpkg" "$spec" > /dev/null 2>&1 && [ -x "$T/ruffpkg/bin/ruff" ]; then
+      RUFF_CMD=("$T/ruffpkg/bin/ruff"); RUFF_STATE=ok
+    fi
+  fi
+  [ "$RUFF_STATE" = ok ]
+}
+
+# ruff_gate: ruff format --check and ruff check on the seeded FastAPI src and test; with no ruff the case is skipped locally and fails closed in CI.
+ruff_gate() {
+  if ! obtain_ruff; then
+    if [ -n "${CI:-}${GITHUB_ACTIONS:-}${TF_BUILD:-}" ]; then bad "$ST/$HOST ruff is not available in CI, so the seeded tests were not format-checked"
+    else echo "SKIPPED: ruff could not be found or installed, so the seeded FastAPI src and test were NOT format-checked."; fi
+    return 0
+  fi
+  local -a r=("${RUFF_CMD[@]}")
+  gate ruff-format "${r[@]}" format --check src/ test/
+  gate ruff-check "${r[@]}" check src/ test/
+}
+
+for ST in nestjs nextjs vite-react fastapi; do
+  for HOST in github azure; do
+    P="$T/$ST-$HOST"
+    mkdir -p "$P"
+    for part in stack base agents settings late; do
+      TC_STACK=$ST TC_PART=$part bash "$SHARED/tc-copy.sh" "$P" > /dev/null 2>&1 || bad "$ST/$HOST tc-copy part $part failed"
+    done
+    TC_STACK=$ST TC_PART=ci TC_CI=$HOST bash "$SHARED/tc-copy.sh" "$P" > /dev/null 2>&1 || bad "$ST/$HOST tc-copy part ci failed"
+    TC_STACK=$ST TC_PART=manifest bash "$SHARED/tc-copy.sh" "$P" > /dev/null 2>&1 || bad "$ST/$HOST tc-copy part manifest failed"
+    printf '# %s\n\nA scaffolded project.\n' "$ST" > "$P/README.md"
+    git -C "$P" init -q -b main
+    git -C "$P" add -A
+    git -C "$P" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m "chore: scaffold" || bad "$ST/$HOST base commit failed"
+    git -C "$P" checkout -q -b work
+
+    gate harness bash .claude/verify-harness.sh
+    gate docs bash scripts/check-docs.sh
+    gate testbudget bash scripts/test-budget.sh
+    gate nosonar bash .claude/ci-gates.sh nosonar
+    gate workarounds bash scripts/check-workarounds.sh main
+    gate ratchet bash scripts/gate-ratchet.sh auto
+    gate envexample bash scripts/check-env-example.sh
+    gate workflows bash scripts/check-workflows.sh
+    gate supplychain bash scripts/check-supply-chain.sh
+    gate dockerfile bash scripts/check-dockerfile.sh
+    case $ST in
+      fastapi)
+        gate ignores bash -c 'git check-ignore -q coverage.xml && git check-ignore -q .coverage'
+        gate coverage-floor grep -q 'fail_under = 80' pyproject.toml
+        ruff_gate
+        ;;
+      nestjs)
+        gate ignores bash -c 'git check-ignore -q coverage/x && git check-ignore -q blob/x'
+        gate coverage-floor grep -Eq 'thresholds: [{] lines: 80' vitest.config.mts
+        ;;
+      nextjs)
+        gate ignores bash -c 'git check-ignore -q coverage/x'
+        gate coverage-floor grep -Eq 'thresholds: [{] lines: 80' vitest.config.ts
+        ;;
+      vite-react)
+        gate ignores bash -c 'git check-ignore -q coverage/x'
+        gate coverage-floor grep -Eq 'thresholds: [{] lines: 80' vite.config.ts
+        ;;
+    esac
+  done
+done
+
+echo "day-one: $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ]

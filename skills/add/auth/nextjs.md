@@ -38,7 +38,7 @@ Then run `TC_PART=leaf TC_LEAF=add/auth/nextjs bash "<skill-dir>/../scaffold/sha
 
 #### 2. Write `src/lib/auth.ts` (verbatim — do not generate)
 
-Security-critical file. Copied verbatim from `<skill-dir>/auth/nextjs/template/src/lib/auth.ts` by the copy step; do not re-type it.
+Security-critical file.
 
 > `freshAge` (under `session`, for high-assurance flows) counts from session `createdAt`, not last activity: with `43200`, users re-authenticate after 12 h regardless of activity.
 
@@ -61,8 +61,6 @@ Security-critical file. Copied verbatim from `<skill-dir>/auth/nextjs/template/s
 > ```
 
 #### 3. Write `src/lib/auth-client.ts` (verbatim — do not generate)
-
-Copied verbatim from `<skill-dir>/auth/nextjs/template/src/lib/auth-client.ts` by the copy step; do not re-type it.
 
 #### 4. Write `src/proxy.ts` (verbatim — do not generate)
 
@@ -135,8 +133,6 @@ export const config = {
 
 Handlers are wrapped in `withLogging`; `pnpm check` rejects a bare `export const { GET, POST } = toNextJsHandler(auth)`.
 
-Copied verbatim from `<skill-dir>/auth/nextjs/template/src/app/api/auth/[...all]/route.ts` by the copy step; do not re-type it.
-
 #### 6. Add `PAGE_ROUTES.LOGIN` to `src/lib/constants/routes.ts`
 
 Add `LOGIN` to `PAGE_ROUTES` (`HOME` and `DASHBOARD` already exist — do not add them again):
@@ -149,8 +145,6 @@ export const PAGE_ROUTES = {
 ```
 
 #### 7. Create `src/app/(public)/login/page.tsx`
-
-Copied verbatim from `<skill-dir>/auth/nextjs/template/src/app/(public)/login/page.tsx` by the copy step; do not re-type it.
 
 #### 8. Create `src/app/dashboard/layout.tsx` (skip if already exists)
 
@@ -200,25 +194,15 @@ export default function DashboardPage() {
 
 #### 10. Create `src/features/auth/` components
 
-**`src/features/auth/components/login-button.tsx`** — SSO sign-in:
+**`src/features/auth/components/login-button.tsx`** — SSO sign-in
 
-Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/components/login-button.tsx` by the copy step; do not re-type it.
+**`src/features/auth/components/signout-button.tsx`**
 
-**`src/features/auth/components/signout-button.tsx`**:
+**`src/features/auth/components/login-card.tsx`**
 
-Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/components/signout-button.tsx` by the copy step; do not re-type it.
+**`src/features/auth/components/index.ts`**
 
-**`src/features/auth/components/login-card.tsx`**:
-
-Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/components/login-card.tsx` by the copy step; do not re-type it.
-
-**`src/features/auth/components/index.ts`**:
-
-Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/components/index.ts` by the copy step; do not re-type it.
-
-**`src/features/auth/index.ts`**:
-
-Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/index.ts` by the copy step; do not re-type it.
+**`src/features/auth/index.ts`**
 
 #### 11. Update `.env.example` and `.env.local`
 
@@ -266,52 +250,15 @@ Add under `## Architecture Decisions`:
 
 #### 13. Session usage patterns
 
-**Server Component or API route:**
-
-```ts
-import { auth } from '@/lib/auth';
-import { PAGE_ROUTES } from '@/lib/constants/routes';
-import { headers } from 'next/headers';
-import { redirect } from 'next/navigation';
-
-const session = await auth.api.getSession({ headers: await headers() });
-if (!session) redirect(PAGE_ROUTES.LOGIN);
-
-const { user } = session;
-```
-
-**Unauthenticated API response (never JSON — information-disclosure risk):**
-
-```ts
-if (!session) return new Response(null, { status: 401 });
-```
-
-**Client Component hook:**
-
-```tsx
-'use client';
-
-import { authClient } from '@/lib/auth-client';
-
-export function UserAvatar() {
-  const { data: session, isPending } = authClient.useSession();
-
-  if (isPending) return <Skeleton />;
-  if (!session) return null;
-
-  return <Avatar name={session.user.name} image={session.user.image} />;
-}
-```
+Server: `auth.api.getSession({ headers: await headers() })`; client: `authClient.useSession()`. Unauthenticated API calls get `new Response(null, { status: 401 })`, never JSON.
 
 #### 14. Authorization helpers
 
 These decide what the caller may touch; both deny by default. `user.role` (Step 2) is stored server-side and never accepted from the client. With a database adapter, regenerate the auth schema to add the `role` column. With the cookie cache on, a revoked role reaches `hasRole` only after the cache max age.
 
-**`src/lib/authz.ts`**:
+**`src/lib/authz.ts`**
 
-Copied verbatim from `<skill-dir>/auth/nextjs/template/src/lib/authz.ts` by the copy step; do not re-type it.
-
-Use `isOwner` on record-by-id pages, actions and handlers. Another user's record gets the same 404 as a missing one, so ids cannot be probed:
+`session` below is `await auth.api.getSession({ headers: await headers() })`. Use `isOwner` on record-by-id pages, actions and handlers. Another user's record gets the same 404 as a missing one, so ids cannot be probed:
 
 ```tsx
 // Server Component page
@@ -328,9 +275,7 @@ const item = await getItem(id);
 if (!isOwner(item?.ownerId, session.user.id)) return new Response(null, { status: 404 });
 ```
 
-**`test/lib/authz.test.ts`**:
-
-Copied verbatim from `<skill-dir>/auth/nextjs/template/test/lib/authz.test.ts` by the copy step; do not re-type it.
+**`test/lib/authz.test.ts`**
 
 #### 15. Adding an SSO provider
 
@@ -350,12 +295,6 @@ socialProviders: {
   },
 },
 ```
-
-| Provider | Config key | Required env vars | Callback URL |
-|----------|------------|-------------------|--------------|
-| Google | `google` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | `/api/auth/callback/google` |
-| GitHub | `github` | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | `/api/auth/callback/github` |
-| Microsoft | `microsoft` | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | `/api/auth/callback/microsoft` |
 
 All providers: https://www.better-auth.com/docs/authentication/social-sign-on
 
@@ -418,14 +357,7 @@ Single instance: the built-in limiter suffices — `rateLimit: { storage: 'datab
 
 ### Security Rules
 
-- Do not return JSON from `proxy.ts` for unauthorized API routes; use `new Response(null, { status: 401 })`, because a JSON body leaks information.
-- Keep `disableSignUp: process.env.NODE_ENV === 'production'` unless open registration is intended; removing it lets anyone create an account in production.
-- Keep the `isDev` guard on the dev login button; without it the bypass ships to production.
-- Do not hardcode secrets; read them from the environment.
 - Do not expose `BETTER_AUTH_SECRET` in `NEXT_PUBLIC_*` vars; those are sent to every browser.
 - Every page, Server Action and handler that touches a record by id checks `isOwner` (or filters by owner) first; another user's record → same 404 as missing.
-- Do not accept `role` from client input; keep `input: false` on the `role` field and change roles only from trusted server code.
-- Generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32`.
-- Rate limiting on auth endpoints is mandatory before production.
 - Override the scrypt default with argon2id (Step 2) — the project standard.
 - Reject breached passwords at sign-up/change (e.g. the Have I Been Pwned k-anonymity range API) before `authClient.signUp.email()`, in addition to the length floor.

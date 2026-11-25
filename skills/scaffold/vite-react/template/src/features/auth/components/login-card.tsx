@@ -29,6 +29,11 @@ export function LoginCard() {
             Sign in as dev user
           </Button>
         )}
+        {!ENV.IS_DEV && (
+          <p className="text-muted-foreground text-sm">
+            No sign-in provider is configured yet. Add one with templatecentral:add auth.
+          </p>
+        )}
       </div>
     </CustomCard>
   );

@@ -137,7 +137,7 @@ MONGODB_URL=mongodb://localhost:27017/mydb
 
 #### C8. Keep Tests Runnable Without a Database
 
-Vitest does not load `.env`, and `env.config.ts` now throws without `MONGODB_URL` — add it to `test.env` in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create the object if needed):
+Vitest does not load `.env`, and `env.config.ts` now throws without `MONGODB_URL` — add it to `test.env` in **both** `vitest.config.mts` and `vitest.config.e2e.mts` (create the object if needed):
 
 ```typescript
     // `test.env` overwrites the shell/CI value, so fall back only when none is set.

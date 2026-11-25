@@ -8,7 +8,7 @@ Reference detail for the rules in `AGENTS.md` (`## AI Harness`, `## Skills Secur
 
 **SessionStart (startup/resume/clear/compact):** `AGENTS.md` is already loaded, so the hook prints only what it cannot say: a line when the checkout is on `main`/`uat`/`develop`, and on compact three invariant lines that point at `docs/CONSTITUTION.md`. The CONSTITUTION itself is read on demand, not injected.
 
-**UserPromptSubmit:** pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
+**UserPromptSubmit:** blocks a prompt that carries an inline credential (AWS/GitHub/Anthropic keys, PEM blocks, DB URLs with a password); exit 2 blocks the prompt.
 
 **PostToolUse:** an incremental type-check (the stack's command is in the `AGENTS.md` bullet) and a comment-hygiene scan (policy: the comments page of `templatecentral:standards`; patterns from `.claude/comment-hygiene-patterns.txt`) after every Edit/Write. Both are feedback-only: findings reach Claude as `additionalContext`, never a block.
 
@@ -25,7 +25,11 @@ Reference detail for the rules in `AGENTS.md` (`## AI Harness`, `## Skills Secur
 - a changelog-touched check and a comment-hygiene check on added lines. Bypass labels: `skip-changelog`, `skip-comment-check` (on Azure, queue with variable `LABELS`);
 - a dependency-audit gate (`deps`): fails on high/critical advisories, no label bypass. The only suppression is the expiring allowlist `dep-audit-allow.txt` in the `.claude` folder.
 
+A workaround detector (`scripts/check-workarounds.sh`, pre-push and the CI `workarounds` gate) fails on added suppression markers (`# noqa`, `eslint-disable`, `@ts-ignore`, `NOSONAR` and similar), skipped or focused tests, `as any`, and a commit that deletes test files while their source remains; there is no waiver, so fix the cause or change the rule in config in its own reviewed change. Coverage has a global 80% line floor locally on every stack, and the `diffcover` gate fails when source changed but diff-cover found no lines.
+
 GitHub also gates changed-line coverage (`diff-cover` ≥80%) and lockfile-in-sync (`--frozen-lockfile`). On Azure the pipeline that includes the template owns those steps (the seeded `azure-pipelines.yml` runs both).
+
+On Next.js and Vite + React, the src/components/ui folder is for vendor-generated shadcn primitives only and is not measured for coverage; put hand-written components elsewhere, where the 80% line floor applies. Widening the coverage exclude fails the gate ratchet unless a human waiver is present.
 
 **Supply-chain and container gates** (all offline and keyless; CI runs each through `.claude/ci-gates.sh`, and the fast ones also run in lefthook):
 - `supplychain` (`scripts/check-supply-chain.sh`): pnpm install scripts stay off unless `allowBuilds` lists the package, `minimumReleaseAge` waits at least a day (seeded 7 days, never add `minimumReleaseAgeExclude`), CI installs are frozen (`pnpm --frozen-lockfile`, `pip --require-hashes`), `requirements.txt` carries `--hash` values, every lockfile host is the public registry or listed in `.claude/registry-hosts.txt`, and every Dependabot entry has a `cooldown` of at least 7 days (`default-days`). pip has no release-age setting, so Python relies on the Dependabot cooldown alone; `requirements-dev.txt` stays unhashed. Python direct dependencies live in `requirements.in`: edit it, then run `uv pip compile requirements.in --universal --generate-hashes -o requirements.txt` (`pip install uv==0.13.7` in the venv provides uv) and `pip install --require-hashes -r requirements.txt`. The install check judges each `pnpm install` and `pip install -r` command on its own; `npm ci`, `yarn install` and `npm install` are not checked because the seeded stacks use pnpm only. When `package.json` sits only in a subdirectory the check prints a NOTE and does not look inside it, so run it from that project's root.

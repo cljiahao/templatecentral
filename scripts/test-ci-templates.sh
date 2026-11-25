@@ -216,7 +216,7 @@ def step_bounds(lines, n):
 # Only the PR-only gates may carry a job- or stage-level if/condition, and only this exact one: the gates themselves
 # skip off-PR runs, so any other if/condition on a job or stage could silently switch a gate off. The templates are
 # parsed with PyYAML and walked structurally, so quoting, spacing, indent, flow style and anchors cannot hide a key.
-PR_ONLY_JOBS = {"changelog", "comment-hygiene", "gate-ratchet", "dependency-review"}
+PR_ONLY_JOBS = {"changelog", "workarounds", "comment-hygiene", "gate-ratchet", "dependency-review"}
 PR_ONLY_IF = "github.event_name == 'pull_request'"
 # Every step of every job must always run and fail the job: no if/condition/enabled/continue-on-error/continueOnError and
 # no non-positive timeout. Allowlist keyed by (template, job, step name, or its exact uses/task/script first line when
@@ -264,6 +264,9 @@ def condition_errors(rel, doc, tmpl):
             for key in STEP_NEUTRALISERS:
                 if key in step and not (key in allowed and step[key] == allowed[key]):
                     errors.append(f"{rel}: job {job} step {ident} has {key}: {step[key]}")
+            run = step.get("run")
+            if tmpl.startswith("github") and isinstance(run, str) and re.search(r"(?<!\|)\|(?!\|)", run) and "pipefail" not in run and step.get("shell") != "bash":
+                errors.append(f"{rel}: job {job} step {ident} pipes without pipefail, so a failing gate on the left of the pipe exits 0 (GitHub's default shell is bash -e); start the run with set -euo pipefail")
             for key in ("timeout-minutes", "timeoutInMinutes"):
                 if key in step and not (isinstance(step[key], int) and not isinstance(step[key], bool) and step[key] > 0):
                     errors.append(f"{rel}: job {job} step {ident} has {key}: {step[key]}")
@@ -396,7 +399,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          'test': ['plan'],
                          'coverage': ['plan', 'test'],
                          'changelog': [],
-                         'comment-hygiene': [], 'gate-ratchet': [],
+                         'comment-hygiene': [], 'workarounds': [], 'gate-ratchet': [],
                          'dependency-review': []},
                'gates': [('shard plan', 'plan', 'run', GH_PLAN),
                          ('dependency audit', 'quality', 'run', 'bash .claude/ci-gates.sh deps'),
@@ -414,7 +417,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('tests',
                           'test',
                           'run',
-                          'pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob="blob/shard-${{ '
+                          'pnpm exec vitest run --coverage --coverage.thresholds.lines=0 --reporter=default --reporter=blob --outputFile.blob="blob/shard-${{ '
                           'matrix.shard }}.json" --shard="${{ matrix.shard }}/${{ needs.plan.outputs.count }}"'),
                          ('shard upload', 'test', 'uses', 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'),
                          ('shard download', 'coverage', 'uses', 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'),
@@ -433,10 +436,12 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('diff-cover at 80',
                           'coverage',
                           'run',
-                          'pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage/cobertura-coverage.xml '
-                          '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80'),
+                          'set -euo pipefail\npipx run "diff-cover==${DIFF_COVER_VERSION}" coverage/cobertura-coverage.xml '
+                          '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80 | tee diff-cover.txt\n'),
+                         ('diffcover empty-report check', 'coverage', 'run', 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
                          ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
+                         ('workarounds check', 'workarounds', 'run', 'bash .claude/ci-gates.sh workarounds "$BASE_REF"'),
                          ('gate ratchet',
                           'gate-ratchet',
                           'run',
@@ -452,7 +457,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           'uses',
                           'actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294')]},
  'github-py': {'file': 'github-py/.github/workflows/ci.yml',
-               'needs': {'quality': [], 'changelog': [], 'comment-hygiene': [], 'gate-ratchet': [], 'dependency-review': []},
+               'needs': {'quality': [], 'changelog': [], 'comment-hygiene': [], 'workarounds': [], 'gate-ratchet': [], 'dependency-review': []},
                'gates': [('dependency audit', 'quality', 'run', 'bash .claude/ci-gates.sh deps'),
                          ('harness integrity', 'quality', 'run', 'bash .claude/verify-harness.sh'),
                          ('docs check', 'quality', 'run', 'bash scripts/check-docs.sh'),
@@ -469,11 +474,13 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('diff-cover at 80',
                           'quality',
                           'run',
-                          'pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml --compare-branch="origin/${BASE_REF:-main}" '
-                          '--fail-under=80'),
+                          'set -euo pipefail\npipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml --compare-branch="origin/${BASE_REF:-main}" '
+                          '--fail-under=80 | tee diff-cover.txt\n'),
+                         ('diffcover empty-report check', 'quality', 'run', 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'),
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
                          ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
+                         ('workarounds check', 'workarounds', 'run', 'bash .claude/ci-gates.sh workarounds "$BASE_REF"'),
                          ('gate ratchet',
                           'gate-ratchet',
                           'run',
@@ -497,7 +504,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                         ('tests',
                          'test',
                          'bash',
-                         'pnpm exec vitest run --coverage --reporter=default --reporter=blob '
+                         'pnpm exec vitest run --coverage --coverage.thresholds.lines=0 --reporter=default --reporter=blob '
                          '--outputFile.blob="blob/shard-$(shard).json" '
                          '--shard="$(shard)/$(shardCount)"'),
                         ('shard upload', 'test', 'task', 'PublishPipelineArtifact@1'),
@@ -532,7 +539,8 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          'set -euo pipefail\n'
                          'target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}\n'
                          'pipx run "diff-cover==$(diffCoverVersion)" coverage/cobertura-coverage.xml '
-                         '--compare-branch="origin/${target#refs/heads/}" --fail-under=80\n')]},
+                         '--compare-branch="origin/${target#refs/heads/}" --fail-under=80 | tee diff-cover.txt\n'),
+                        ('diffcover empty-report check', 'coverage', 'bash', 'bash .claude/ci-gates.sh diffcover "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"')]},
  'azure-py': {'file': 'azure-py/azure-pipelines.yml',
               'needs': {'quality': []},
               'gates': [('lint and format', 'quality', 'bash', 'ruff check src/ test/ && ruff format --check src/ test/'),
@@ -546,7 +554,8 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          'set -euo pipefail\n'
                          'target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}\n'
                          'pipx run "diff-cover==$(DIFF_COVER_VERSION)" coverage.xml --compare-branch="origin/${target#refs/heads/}" '
-                         '--fail-under=80\n')]},
+                         '--fail-under=80 | tee diff-cover.txt\n'),
+                        ('diffcover empty-report check', 'quality', 'bash', 'bash .claude/ci-gates.sh diffcover "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"')]},
  'azure-gates': {'file': 'azure/azure-pipelines/templatecentral-gates.yml',
                  'gates': [('Harness integrity', '(gates include)', 'bash', 'bash .claude/verify-harness.sh'),
                            ('Docs check (links and paths in README.md, AGENTS.md, docs/)',
@@ -570,6 +579,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                            ('Workflow hardening (pinned actions, token permissions, no injection)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh workflows'),
                            ('.env.example matches the variables the code reads', '(gates include)', 'bash', 'bash .claude/ci-gates.sh envexample'),
                            ('Dockerfile lint (digest pin, non-root USER, hadolint)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh dockerfile'),
+                           ('No suppression markers, no removed covering tests', '(gates include)', 'bash', 'bash .claude/ci-gates.sh workarounds "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'),
                            ('Changelog gate',
                             '(gates include)',
                             'bash',
@@ -647,7 +657,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                   {'uses': 'actions/setup-node', 'with': {'node-version': '26', 'cache': 'pnpm'}},
                                   {'run': 'pnpm install --frozen-lockfile'},
                                   {'env': {'SHARD_COUNT': '${{ needs.plan.outputs.count }}'}, 'run': GH_VALID},
-                                  {'run': 'pnpm exec vitest run --coverage --reporter=default --reporter=blob '
+                                  {'run': 'pnpm exec vitest run --coverage --coverage.thresholds.lines=0 --reporter=default --reporter=blob '
                                           '--outputFile.blob="blob/shard-${{ matrix.shard }}.json" --shard="${{ '
                                           'matrix.shard }}/${{ needs.plan.outputs.count }}"'},
                                   {'uses': 'actions/upload-artifact',
@@ -669,9 +679,11 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                               '--outputFile.json=report/collected.json'},
                                       {'run': COUNT_CHECK},
                                       {'env': {'BASE_REF': '${{ github.base_ref }}'},
-                                       'run': 'pipx run "diff-cover==${DIFF_COVER_VERSION}" '
+                                       'run': 'set -euo pipefail\npipx run "diff-cover==${DIFF_COVER_VERSION}" '
                                               'coverage/cobertura-coverage.xml '
-                                              '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80'}],
+                                              '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80 | tee diff-cover.txt\n'},
+                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
+                                       'run': 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'}],
                          'changelog': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
                                        {'env': {'BASE_REF': '${{ github.base_ref }}',
                                                 'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' ') "
@@ -724,7 +736,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                           '"require(\'./package.json\').packageManager.split(\'+\')[0]")"'},
                                  {'bash': 'pnpm install --frozen-lockfile'},
                                  {'bash': AZ_VALID},
-                                 {'bash': 'pnpm exec vitest run --coverage --reporter=default --reporter=blob '
+                                 {'bash': 'pnpm exec vitest run --coverage --coverage.thresholds.lines=0 --reporter=default --reporter=blob '
                                           '--outputFile.blob="blob/shard-$(shard).json" '
                                           '--shard="$(shard)/$(shardCount)"'},
                                  {'task': 'PublishPipelineArtifact@1',
@@ -756,7 +768,8 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                               'target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}\n'
                                               'pipx run "diff-cover==$(diffCoverVersion)" '
                                               'coverage/cobertura-coverage.xml '
-                                              '--compare-branch="origin/${target#refs/heads/}" --fail-under=80\n'}]}},
+                                              '--compare-branch="origin/${target#refs/heads/}" --fail-under=80 | tee diff-cover.txt\n'},
+                                     {'bash': 'bash .claude/ci-gates.sh diffcover "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'}]}},
  'github-py': {'jobs': {'quality': {'runs-on': 'ubuntu-latest', 'timeout-minutes': 20},
                         'changelog': {'if': "github.event_name == 'pull_request'",
                                       'runs-on': 'ubuntu-latest',
@@ -794,8 +807,10 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'npx --yes jscpd@${JSCPD_VERSION}'},
                                      {'run': 'python -m pytest test/ --cov=src --cov-report=xml -q'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
-                                      'run': 'pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml '
-                                             '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80'},
+                                      'run': 'set -euo pipefail\npipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml '
+                                             '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80 | tee diff-cover.txt\n'},
+                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
+                                       'run': 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                       'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'}],
                          'changelog': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
@@ -838,7 +853,8 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                     {'bash': 'set -euo pipefail\n'
                                              'target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}\n'
                                              'pipx run "diff-cover==$(DIFF_COVER_VERSION)" coverage.xml '
-                                             '--compare-branch="origin/${target#refs/heads/}" --fail-under=80\n'}]}},
+                                             '--compare-branch="origin/${target#refs/heads/}" --fail-under=80 | tee diff-cover.txt\n'},
+                                    {'bash': 'bash .claude/ci-gates.sh diffcover "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'}]}},
  'azure-gates': {'steps': {'(gates include)': [{'bash': 'bash .claude/verify-harness.sh'},
                                                {'bash': 'bash scripts/check-docs.sh'},
                                                {'bash': 'bash .claude/ci-gates.sh testbudget'},
@@ -850,6 +866,8 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                {'bash': 'bash .claude/ci-gates.sh workflows'},
                                                {'bash': 'bash .claude/ci-gates.sh envexample'},
                                                {'bash': 'bash .claude/ci-gates.sh dockerfile'},
+                                               {'bash': 'bash .claude/ci-gates.sh workarounds '
+                                                        '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'},
                                                {'bash': 'bash .claude/ci-gates.sh changelog '
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"',
                                                 'env': {'LABELS': '$(LABELS)'}},
@@ -1030,6 +1048,8 @@ PY
   fi
 }
 mutate "|| true after diff-cover (github-ts)" github-ts/.github/workflows/ci.yml '--fail-under=80' '--fail-under=80 || true' static
+mutate "diff-cover pipe loses pipefail (github-ts)" github-ts/.github/workflows/ci.yml '          set -euo pipefail\n          pipx run' '          pipx run' static "pipes without pipefail"
+mutate "diff-cover pipe loses pipefail (github-py)" github-py/.github/workflows/ci.yml '          set -euo pipefail\n          pipx run' '          pipx run' static "pipes without pipefail"
 mutate "continueOnError on the merge step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Merge shard reports' '        displayName: Merge shard reports\n        continueOnError: true' static
 mutate "condition: always() on the diff-cover step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Changed-line coverage' '        condition: always()\n        displayName: Changed-line coverage' static
 mutate "if: always() on the diff-cover step (github-py)" github-py/.github/workflows/ci.yml '      - name: Changed-line coverage (>= 80%)' '      - if: always()\n        name: Changed-line coverage (>= 80%)' static
@@ -1115,10 +1135,10 @@ mutate "test budget deleted (github-py)" github-py/.github/workflows/ci.yml '   
 mutate "test budget deleted (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '  - bash: bash .claude/ci-gates.sh testbudget\n    displayName: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)\n' '' static
 mutate "test budget made non-failing (github-py)" github-py/.github/workflows/ci.yml 'run: bash .claude/ci-gates.sh testbudget' 'run: bash .claude/ci-gates.sh testbudget || true' static
 mutate "docs check made non-failing (github-ts)" github-ts/.github/workflows/ci.yml 'run: bash scripts/check-docs.sh' 'run: bash scripts/check-docs.sh || true' static
-mutate "Tests step deleted (azure-ts)" azure-ts/azure-pipelines.yml "      - bash: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob=\"blob/shard-\$(shard).json\" --shard=\"\$(shard)/\$(shardCount)\"\\n        displayName: Tests (this shard, coverage in the blob report)\\n" "" static
+mutate "Tests step deleted (azure-ts)" azure-ts/azure-pipelines.yml "      - bash: pnpm exec vitest run --coverage --coverage.thresholds.lines=0 --reporter=default --reporter=blob --outputFile.blob=\"blob/shard-\$(shard).json\" --shard=\"\$(shard)/\$(shardCount)\"\\n        displayName: Tests (this shard, coverage in the blob report)\\n" "" static
 mutate "needs removed from coverage (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: [plan, test]\n' '  coverage:\n' static
 mutate "dependsOn removed from coverage (azure-ts)" azure-ts/azure-pipelines.yml '    dependsOn: [plan, test]\n' '' static
-mutate "set +e prefixed to the Tests command (github-ts)" github-ts/.github/workflows/ci.yml 'run: pnpm exec vitest run --coverage --reporter=default' 'run: set +e; pnpm exec vitest run --coverage --reporter=default' static
+mutate "set +e prefixed to the Tests command (github-ts)" github-ts/.github/workflows/ci.yml 'run: pnpm exec vitest run --coverage --coverage.thresholds.lines=0 --reporter=default' 'run: set +e; pnpm exec vitest run --coverage --coverage.thresholds.lines=0 --reporter=default' static
 mutate "&& exit 0 appended to the Tests command (github-ts)" github-ts/.github/workflows/ci.yml "--shard=\"\${{ matrix.shard }}/\${{ needs.plan.outputs.count }}\"\\n" "--shard=\"\${{ matrix.shard }}/\${{ needs.plan.outputs.count }}\" && exit 0\\n" static
 mutate "shell: bash {0} on the dependency audit (github-ts)" github-ts/.github/workflows/ci.yml '        run: bash .claude/ci-gates.sh deps\n' '        run: bash .claude/ci-gates.sh deps\n        shell: bash {0}\n' static
 mutate "dependency audit run replaced by echo skip (github-ts)" github-ts/.github/workflows/ci.yml 'run: bash .claude/ci-gates.sh deps' 'run: echo skip' static
@@ -1142,7 +1162,7 @@ mutate "nosonar step removed (azure gates, used by azure-ts and azure-py)" azure
 
 # 6b. pinned step options, defaults, step order, shard matrix, gate-include parameters
 mutate "working-directory on the diff-cover step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Changed-line coverage (>= 80%)\n        env:' '      - name: Changed-line coverage (>= 80%)\n        working-directory: docs\n        env:' static "differ from the pinned ordered list"
-mutate "BASE_REF env changed on the diff-cover step (github-ts)" "github-ts/.github/workflows/ci.yml" "          BASE_REF: \${{ github.base_ref }}\n        run: pipx run" "          BASE_REF: HEAD\n        run: pipx run" "static" "differ from the pinned ordered list"
+mutate "BASE_REF env changed on the diff-cover step (github-ts)" "github-ts/.github/workflows/ci.yml" "          BASE_REF: \${{ github.base_ref }}\n        run: |\n          set -euo pipefail\n          pipx run" "          BASE_REF: HEAD\n        run: |\n          set -euo pipefail\n          pipx run" "static" "differ from the pinned ordered list"
 mutate "env added on the tests step (github-py)" github-py/.github/workflows/ci.yml '      - name: Tests (serial; pytest-cov writes coverage.xml)\n' '      - name: Tests (serial; pytest-cov writes coverage.xml)\n        env: { PYTEST_ADDOPTS: --co }\n' static "differ from the pinned ordered list"
 mutate "workingDirectory on the diff-cover step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Changed-line coverage (>= 80%)' '        workingDirectory: docs\n        displayName: Changed-line coverage (>= 80%)' static "differ from the pinned ordered list"
 mutate "count comparison neutered (github-ts)" github-ts/.github/workflows/ci.yml "process.exit(ok ? 0 : 1);" "process.exit(0);" static "required gate 'test count equality'"
@@ -1258,7 +1278,9 @@ dep_mutate "stack ecosystem changed (github-py)" github-py 'package-ecosystem: p
 # from the project: min(4, test files), and fails when there are none.
 nopass_check() { # nopass_check <scaffold dir>
   local hits
-  hits=$(grep -rIn -e 'passWithNoTests' "$1" 2>/dev/null | grep '/template' || true)
+  # A use is the CLI flag or the key given a value (key: v, key = v, "key": v, ['key']: v). A bare mention, such as
+  # the key name in gate-ratchet.sh's own list of Vitest keys, is not a use.
+  hits=$(grep -rIn -E -e '--passWithNoTests' -e "passWithNoTests[]\"']*[[:space:]]*[:=]" "$1" 2>/dev/null | grep '/template' || true)
   if [[ -n "$hits" ]]; then echo "$hits"; return 1; fi
 }
 if out=$(nopass_check "$REPO_ROOT/skills/scaffold" 2>&1); then ok "no passWithNoTests in any template"; else bad "passWithNoTests found in a template: $out"; fi
@@ -1275,7 +1297,7 @@ open(p, "w").write(s.replace(old, new, 1))
 PY
   if out=$(nopass_check "$T/np" 2>&1); then bad "mutation not caught: $label"; else ok "mutation caught: $label -> $(head -1 <<<"$out")"; fi
 }
-nopass_mutate "passWithNoTests: true in vitest.config.ts" skills/scaffold/nestjs/template/vitest.config.ts 'test: {' 'test: { passWithNoTests: true,'
+nopass_mutate "passWithNoTests: true in vitest.config.ts" skills/scaffold/nestjs/template/vitest.config.mts 'test: {' 'test: { passWithNoTests: true,'
 nopass_mutate "--passWithNoTests in a package.json script" skills/scaffold/nestjs/template/package.json '"test": "vitest --run' '"test": "vitest --run --passWithNoTests'
 
 # 8. Python lint scope: CI and the lefthook pre-push gate check the same paths (src/ and test/)
@@ -1299,6 +1321,7 @@ gate_fixture() { # gate_fixture <dir> <ts|py> <github|azure>
   local d="$1" st="$2" host="$3" h
   rm -rf "$d" && mkdir -p "$d/.claude/hooks"
   cp "$SHARED/template/.claude/gates.txt" "$SHARED/template/.claude/verify-harness.sh" "$d/.claude/"
+  mkdir -p "$d/scripts" && cp "$SHARED/template/scripts/gate-ratchet.sh" "$d/scripts/gate-ratchet.sh"
   cp "$SHARED/template-$st/lefthook.yml" "$d/lefthook.yml"
   if [[ "$host" == github ]]; then
     mkdir -p "$d/.github/workflows" && cp "$CI_DIR/github-$st/.github/workflows/ci.yml" "$d/.github/workflows/ci.yml"
@@ -1309,6 +1332,11 @@ gate_fixture() { # gate_fixture <dir> <ts|py> <github|azure>
   echo x > "$d/.claude/hooks/a.sh"
   h=$(shasum -a 256 "$d/.claude/hooks/a.sh" | cut -d' ' -f1)
   printf '{"seeded_files":{"a":{"path":".claude/hooks/a.sh","origin_hash":"%s"}}}' "$h" > "$d/.claude/harness.json"
+  # A real scaffold commits before it verifies; verify-harness derives its enforcement layer from HEAD
+  if ! { git -C "$d" init -q -b main && git -C "$d" add -A \
+    && git -C "$d" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m "chore: scaffold"; }; then
+    echo "gate_fixture: fixture commit failed" >&2; exit 1
+  fi
 }
 gate_verify() { (cd "$1" && bash .claude/verify-harness.sh 2>&1); }
 for st in ts py; do

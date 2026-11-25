@@ -6,43 +6,23 @@
 
 Remove the example/demo code from a templateCentral-scaffolded project.
 
-### Step 0 — Verify context
+Needs the `<!-- templateCentral:` marker in `AGENTS.md` (it names the stack); without it, run `templatecentral:migrate` first and stop if still absent. Verify the example code exists for that stack; if not, stop and tell the user: "No example code found — nothing to remove. The example may have already been removed."
 
-Look for `<!-- templateCentral:` anywhere in `AGENTS.md`.
-
-If found → note the detected stack from the marker (nextjs / vite-react / fastapi /
-nestjs) and proceed to context check below.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to context check below.
-- Still absent (user chose to stop) → exit. Do not generate any files.
-
-**Context check:** Verify the example code exists for the detected stack:
-
-| Stack | What to check |
+| Stack | Example code |
 |---|---|
-| `nextjs` | `src/features/example/` directory exists |
-| `vite-react` | `src/features/example/` directory exists |
-| `fastapi` | `src/api/routers/example.py` file exists |
-| `nestjs` | `src/modules/example/` directory exists |
-
-If the check fails, stop and tell the user: "No example code found —
-nothing to remove. The example may have already been removed."
-
-If found → proceed to the section for your detected stack below.
+| `nextjs`, `vite-react` | `src/features/example/` |
+| `fastapi` | `src/api/routers/example.py` |
+| `nestjs` | `src/modules/example/` |
 
 ## Next.js
 
 1. Delete `src/features/example/`
 2. Edit `src/app/dashboard/(overview)/page.tsx` — remove the `ExampleList` import and usage; the `/dashboard` route stays, with placeholder content
-3. Verify no remaining imports reference `@/features/example`
 
 ## Vite + React
 
 1. Delete `src/features/example/`
 2. Edit `src/pages/dashboard.tsx` — remove the `ExampleList` import and usage; the `/dashboard` route stays, with placeholder content
-3. Verify no remaining imports reference `@/features/example`
 
 > `src/features/auth/` is intentional scaffold code (auth context, `AuthProvider`, `ProtectedRoute`, `LoginCard`) — do **not** delete it. `templatecentral:add (auth)` replaces the dev stub with a real implementation.
 
@@ -51,17 +31,13 @@ If found → proceed to the section for your detected stack below.
 1. Delete `src/api/routers/example.py`, `src/api/schemas/request/example.py`, `src/api/schemas/response/example.py`, `src/api/services/example.py`, `test/test_api/test_example.py`
 2. Edit `src/api/routes.py` — remove `from api.routers import example` and its `include_router(example.router, ...)` line
 3. Edit `src/api/tags.py` — remove `EXAMPLE` from `APITags` (keep `MISC` and `INFRASTRUCTURE`)
-4. Verify no remaining imports reference example modules
 
 ## NestJS
 
 1. Delete `src/modules/example/`; in `test/app.e2e-spec.ts` delete the three example-module tests (invalid body, create/read/update/delete, OpenAPI document) and their `@nestjs/swagger` and `nestjs-zod` imports
 2. Edit `src/modules/index.ts` — remove `export * from './example/example.module'`
 3. Edit `src/app.module.ts` — remove `ExampleModule` from both the top-level `import` and the `@Module({ imports: [...] })` array
-4. Verify no remaining imports reference the example module
 
-## Rules
+## Verify
 
-- Always verify with a search (grep for `example` or `Example`) after cleanup — stale imports cause build failures.
-- After cleanup, run that stack's **tests and production build** — `pnpm test` + `pnpm build` for the TypeScript stacks, `python -m pytest` + a container build for FastAPI — the app must still compile and run with no errors.
-- Deleting the example directory removes its own README too. Then run `bash scripts/check-docs.sh`: a link or path in the README, AGENTS.md or `docs/` that still points at the example (the `docs/architecture.md` Reuse table, say) is reported with its file and line. Fix each one.
+Run that stack's **tests and production build** (`pnpm test` + `pnpm build`; FastAPI: `python -m pytest` + a container build); the typecheck catches stale imports. Then run `bash scripts/check-docs.sh`: it reports each link or path in the README, AGENTS.md or `docs/` that still points at the example, with file and line. Fix each one.

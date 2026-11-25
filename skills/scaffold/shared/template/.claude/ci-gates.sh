@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|list> [base-branch]
+# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|list> [base-branch]
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -25,13 +25,49 @@ gate_listed() {
   done < "$manifest"
   return 1
 }
+# Prints one anchored extended regex for the globs the project's own coverage config leaves out of measurement: the coverage exclude array of the vitest or vite config, or omit of pyproject.toml. Prints nothing when there is none.
+coverage_excludes() {
+  local f
+  for f in vitest.config.ts vitest.config.mts vitest.config.js vitest.config.mjs vite.config.ts vite.config.mts vite.config.js vite.config.mjs pyproject.toml; do
+    [ -f "$f" ] || continue
+    awk -v toml="$([ "$f" = pyproject.toml ] && echo 1 || echo 0)" '
+      function conv(g,   i, n, c, o, d) {
+        n = length(g); o = ""; d = 0; i = 1
+        while (i <= n) {
+          c = substr(g, i, 1)
+          if (substr(g, i, 3) == "**/") { o = o "(.*/)?"; i += 3; continue }
+          if (substr(g, i, 2) == "**") { o = o ".*"; i += 2; continue }
+          if (c == "*") o = o "[^/]*"
+          else if (c == "?") o = o "[^/]"
+          else if (c == "{") { o = o "("; d++ }
+          else if (c == "}") { o = o ")"; d-- }
+          else if (c == "," && d > 0) o = o "|"
+          else if (c ~ /[.+()^$|\\[\]]/) o = o "\\" c
+          else o = o c
+          i++
+        }
+        return o
+      }
+      { T = T $0 "\n" }
+      END {
+        gsub(/\/\/[^\n]*/, "", T)
+        if (toml) { if (!match(T, /\[tool\.coverage\.run\]/)) exit; T = substr(T, RSTART); if (!match(T, /omit[ \t]*=[ \t]*\[/)) exit }
+        else { if (!match(T, /coverage[ \t\n]*:[ \t\n]*\{/)) exit; T = substr(T, RSTART); if (!match(T, /exclude[ \t\n]*:[ \t\n]*\[/)) exit }
+        T = substr(T, RSTART + RLENGTH); e = index(T, "]"); T = substr(T, 1, e - 1)
+        while (match(T, /"[^"]*"|\047[^\047]*\047/)) {
+          g = substr(T, RSTART + 1, RLENGTH - 2); T = substr(T, RSTART + RLENGTH)
+          printf "%s\n", conv(g)
+        }
+      }' "$f"
+  done | paste -sd '|' - | sed 's/^\(.\)/^(\1/; s/\(.\)$/\1)$/'
+}
 pr_only() {
   [ -n "$branch" ] || { echo "$gate: not a pull request — skipped"; exit 0; }
   git rev-parse --verify -q "$base^{commit}" >/dev/null || fail "$base not found — check out with full history (fetch-depth 0)"
 }
 
 case "$gate" in
-  secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile)
+  secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover)
     gate_listed "$gate" || fail "gate '$gate' is not listed in .claude/gates.txt"
     ;;
   list)
@@ -56,10 +92,11 @@ case "$gate" in
       # No sudo: works on hosted and self-hosted Linux x64 agents
       PATH="$tmp:$PATH"
     fi
+    [ -f scripts/scan-secrets.sh ] || fail "scripts/scan-secrets.sh is missing"
     if [ -n "$branch" ]; then
-      gitleaks git --redact --no-banner --log-opts="$base..HEAD" || fail "gitleaks found secrets in this PR's commits"
+      bash scripts/scan-secrets.sh git --log-opts="$base..HEAD" || fail "possible secrets in this PR's commits (file, line and rule above). Remove the value, rotate it if it was ever pushed, and read it from the environment."
     else
-      gitleaks git --redact --no-banner || fail "gitleaks found secrets in history"
+      bash scripts/scan-secrets.sh git || fail "possible secrets in history (file, line and rule above). Remove the value, rotate it, and read it from the environment."
     fi
     ;;
   changelog)
@@ -84,7 +121,7 @@ case "$gate" in
       [ -f "$f" ] || continue
       while IFS= read -r content; do
         stripped=$(printf '%s' "$content" | sed -E 's@^[[:space:]]*(#|//|\*|"""|/\*\*?)[[:space:]]?@@')
-        if [ -n "$stripped" ] && printf '%s' "$stripped" | grep -qEf "$strict_patterns"; then
+        if [ -n "$stripped" ] && grep -qEf "$strict_patterns" <<< "$stripped"; then
           flagged="$flagged$nl  - $f: $stripped"
         fi
       done < <(git diff -U0 "$base"...HEAD -- "$f" | grep '^+' | grep -vE '^\+\+\+' | sed 's/^+//' | grep -E '^[[:space:]]*(#|//|\*|"""|/\*\*?)')
@@ -102,17 +139,29 @@ case "$gate" in
     runner=scripts/gate-ratchet.sh
     mbase=$(git merge-base "$base" HEAD) || fail "no merge base with $base — check out with full history (fetch-depth 0)"
     runner_tmp=$(mktemp "${RUNNER_TEMP:-${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}}/gate-ratchet.XXXXXX") || fail "cannot create a temporary file"
-    if git show "$mbase:scripts/gate-ratchet.sh" > "$runner_tmp" 2>/dev/null; then runner=$runner_tmp; else [ -f "$runner" ] || fail "scripts/gate-ratchet.sh is missing"; fi
+    if git show "$mbase:scripts/gate-ratchet.sh" > "$runner_tmp" 2>/dev/null; then
+      runner=$runner_tmp
+    else
+      if git cat-file -e "$mbase:.claude/gates.txt" 2>/dev/null; then rm -f "$runner_tmp"; fail "the merge base has .claude/gates.txt but no scripts/gate-ratchet.sh, so the checker in this change would judge itself; restore scripts/gate-ratchet.sh at the base"; fi
+      [ -f "$runner" ] || fail "scripts/gate-ratchet.sh is missing"
+    fi
     findings=$(GATE_RATCHET_REEXEC=1 bash "$runner" "$base" 2>&1)
     rc=$?
+    guarded_list=$(bash "$runner" --list-guarded "$mbase"); list_rc=$?
     rm -f "$runner_tmp"
+    if [ "$list_rc" -ne 0 ] || [ -z "$guarded_list" ]; then
+      fail "gate-ratchet.sh --list-guarded $mbase failed or listed nothing (output above), so the files that enforce the gates are unknown; fix the checker."
+    fi
+    if printf '%s\n' "$guarded_list" | awk -F'\t' 'NF < 3 { bad = 1 } END { exit !bad }'; then
+      fail "gate-ratchet.sh --list-guarded $mbase listed a row with fewer than three fields (a runner older than the enforced column), so the files that enforce the gates are unknown; fix the checker."
+    fi
+    enforced=$(printf '%s\n' "$guarded_list" | awk -F'\t' '$3 == 1 { print $2 }')
     printf '%s\n' "$findings"
     if [ "$rc" -ne 0 ]; then
-      enforcers='(^|/)([.]github/workflows/ci[.]yml|azure-pipelines[.]yml|azure-pipelines/templatecentral-gates[.]yml|lefthook[.]yml|[.]claude/(ci-gates|verify-harness)[.]sh|[.]claude/gates[.]txt|[.]claude/hooks/protect-files[.]sh|scripts/(gate-ratchet|test-budget|check-supply-chain|check-workflows|check-env-example|check-dockerfile|check-secret-scanner)[.]sh|[.]claude/registry-hosts[.]txt)$'
-      if printf '%s\n' "$findings" | awk -v re="$enforcers" '/^(WEAKENED|UNREADABLE) / { p = $2; sub(/:$/, "", p); if (p ~ re) hit = 1 } END { exit !hit }'; then
+      if { printf '%s\n' "$enforced" | sed 's/^/E /'; printf '%s\n' "$findings"; } | awk '/^E / { E[substr($0, 3)] = 1; next } /^(WEAKENED|UNREADABLE) / { p = $0; sub(/^[A-Z]+ /, "", p); for (e in E) if (p == e ":" || substr(p, 1, length(e) + 2) == e ": ") hit = 1 } END { exit !hit }'; then
         fail "the allow-gate-change label cannot waive a change to the files that enforce the gates (listed above); it needs the owner review that branch protection requires."
       fi
-      if [ "$rc" -ne 1 ] || printf '%s\n' "$findings" | grep -q '^UNREADABLE '; then
+      if [ "$rc" -ne 1 ] || grep -q '^UNREADABLE ' <<< "$findings"; then
         fail "the allow-gate-change label cannot waive an unreadable config or a checker failure (output above); fix the cause."
       fi
       if bypassed allow-gate-change; then echo "gate-ratchet: the allow-gate-change label waived every finding printed above"; exit 0; fi
@@ -125,12 +174,12 @@ case "$gate" in
     bash scripts/test-budget.sh || fail "test budget exceeded or unreadable (output above). Consolidate duplicate tests with the test-consolidate skill."
     ;;
   nosonar)
-    # ESLint's no-warning-comments bans the marker in TS; ruff has no equivalent, so this covers Python (and TS source too).
-    if hits=$(git grep -nIiE 'NOSONAR' -- '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' ':!.claude'); then rc=0; else rc=$?; fi
+    # Matches a marker inside a comment only, so the ESLint rule that bans the word (terms: ['nosonar']) never trips it.
+    if hits=$(git grep -nIiE '(#|//|/[*]|^[[:space:]]*[*]).*NOSONAR' -- '*.py' '*.pyi' '*.ts' '*.tsx' '*.mts' '*.cts' '*.js' '*.jsx' '*.mjs' '*.cjs' ':(exclude,top).claude' ':(exclude,top)eslint.config.*'); then rc=0; else rc=$?; fi
     [ "$rc" -le 1 ] || fail "git grep failed while scanning for NOSONAR markers"
     if [ -n "$hits" ]; then
       printf '%s\n' "$hits" >&2
-      fail "NOSONAR markers found (listed above). Fix the finding instead of suppressing it."
+      fail "NOSONAR markers found (file:line above). Delete the marker and fix the finding it hides; if the rule is wrong for the whole project, change it in config in its own reviewed change."
     fi
     ;;
   deps)
@@ -181,7 +230,7 @@ case "$gate" in
         line=${line#"${line%%[![:space:]]*}"}
         line=${line%"${line##*[![:space:]]}"}
         case "$line" in ''|'#'*) continue ;; esac
-        if ! printf '%s\n' "$line" | grep -qiE '^(GHSA-[A-Za-z0-9-]+|CVE-[0-9]{4}-[0-9]+|PYSEC-[0-9]{4}-[0-9]+)[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[^[:space:]]'; then
+        if ! grep -qiE '^(GHSA-[A-Za-z0-9-]+|CVE-[0-9]{4}-[0-9]+|PYSEC-[0-9]{4}-[0-9]+)[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[^[:space:]]' <<< "$line"; then
           echo "malformed allowlist line: $line" >&2
           fail "$allow has a malformed line. Format: <GHSA|CVE|PYSEC id> <YYYY-MM-DD expiry> <reason>"
         fi
@@ -283,7 +332,8 @@ JS
       pkg=${line%%|*}; rest=${line#*|}; sev=${rest%%|*}; ids=${rest#*|}
       covered=0
       for id in $ids; do
-        if printf '%s\n' "$id" | tr '[:lower:]' '[:upper:]' | grep -qxFf "$tmp/allowed" -; then covered=1; break; fi
+        id_upper=$(printf '%s' "$id" | tr '[:lower:]' '[:upper:]')
+        if grep -qxFf "$tmp/allowed" <<< "$id_upper"; then covered=1; break; fi
       done
       [ "$covered" -eq 1 ] || blocked="$blocked${blocked:+$'\n'}  - $pkg: $ids ($sev)"
     done < <(sort -u "$tmp/found")
@@ -291,6 +341,45 @@ JS
       printf '%s\n' "$blocked" >&2
       fail "High/critical advisories or unaudited packages (listed above). Upgrade the dependency, or allowlist an audited advisory in $allow with an expiry date and a reason. Unaudited packages cannot be allowlisted: install the missing audit tool or make the package auditable, or remove it."
     fi
+    echo "deps: no unallowlisted high or critical advisories, every package audited"
+    ;;
+  workarounds)
+    pr_only
+    [ -f scripts/check-workarounds.sh ] || fail "scripts/check-workarounds.sh is missing"
+    bash scripts/check-workarounds.sh "$base" || fail "this change silences a tool or removes covering tests (output above). Fix the cause; there is no waiver."
+    ;;
+  diffcover)
+    # The CI step runs diff-cover --fail-under=80 and keeps its output in diff-cover.txt; diff-cover exits 0 when the diff has no covered lines, so this gate turns that into a failure whenever measured source changed. Deleted files, files the coverage config leaves out, and files whose added lines are all blank or comment-only have no lines to cover and are skipped.
+    pr_only
+    changed=$(git diff --name-only --diff-filter=d "$base"...HEAD) || fail "cannot diff against $base"
+    src=$(grep -E '^src/.*[.](py|ts|tsx|js|jsx|mjs|cjs)$' <<< "$changed" | grep -vE '(^|/)(test|tests|__tests__)/|[.](test|spec)[.]|(^|/)test_[^/]*[.]py$|_test[.]py$|[.]d[.]ts$') || src=""
+    excl=$(coverage_excludes)
+    if [ -n "$excl" ] && [ -n "$src" ]; then src=$(grep -vE "$excl" <<< "$src") || src=""; fi
+    code=""
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      if git diff -U0 --no-color --no-ext-diff "$base"...HEAD -- "$f" | awk -v py="$(case "$f" in *.py) echo 1 ;; *) echo 0 ;; esac)" '
+        /^@@/ { inbody = 1; next }
+        inbody && /^[+]/ {
+          t = substr($0, 2); sub(/^[ \t]+/, "", t)
+          if (t == "") next
+          if (py == 1) { if (t ~ /^#/) next }
+          else if (t ~ /^(\/\/|\/\*|\*\/|\*( |$))/) next
+          code = 1
+        }
+        END { exit code ? 0 : 1 }'; then
+        code="$code$f
+"
+      fi
+    done <<< "$src"
+    src=${code%$'\n'}
+    if [ -z "$src" ]; then echo "diffcover: no source file changed that needs coverage (deleted, excluded from coverage, or only comments and blank lines) — skipped"; exit 0; fi
+    out=${DIFF_COVER_OUTPUT:-diff-cover.txt}
+    [ -f "$out" ] || fail "$out is missing although source changed. The diff-cover step must run first and keep its output there."
+    if grep -q "No lines with coverage information" "$out"; then
+      fail "source changed but the coverage report has no lines for it ($(printf '%s' "$src" | tr '\n' ' ')). The tests did not run with coverage, or the report is stale; regenerate it. Do not exclude the files."
+    fi
+    echo "diffcover: the coverage report covers the changed source lines"
     ;;
   supplychain)
     [ -f scripts/check-supply-chain.sh ] || fail "scripts/check-supply-chain.sh is missing"
@@ -323,7 +412,7 @@ JS
     bash scripts/check-dockerfile.sh || fail "Dockerfile check failed (output above)."
     ;;
   *)
-    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|list> [base-branch]" >&2
+    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|list> [base-branch]" >&2
     exit 2
     ;;
 esac

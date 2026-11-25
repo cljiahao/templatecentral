@@ -20,7 +20,8 @@ LIVEPATH="$T/bin:$NODEDIR:/usr/bin:/bin"
 # seed <dir>: a fully seeded, wired project
 seed() {
   local d=$1
-  mkdir -p "$d/.claude/hooks" "$d/.lefthook" "$d/.github/workflows"
+  mkdir -p "$d/.claude/hooks" "$d/.lefthook" "$d/.github/workflows" "$d/scripts"
+  cp "$SH/template/scripts/gate-ratchet.sh" "$d/scripts/gate-ratchet.sh"
   cp -p "$SH"/template/.claude/hooks/* "$SH"/template-ts/.claude/hooks/* "$d/.claude/hooks/"
   cp -p "$SH"/template/.claude/ci-gates.sh "$SH"/template/.claude/gates.txt "$SH"/template/.claude/verify-harness.sh "$d/.claude/"
   cp "$SH/template-settings-ts/.claude/settings.json" "$d/.claude/settings.json"
@@ -38,7 +39,8 @@ MAN
   )
   (cd "$d" && git init -q && printf '#!/bin/sh\nlefthook run pre-commit\n' >.git/hooks/pre-commit \
     && printf '#!/bin/sh\nlefthook run commit-msg\n' >.git/hooks/commit-msg && printf '#!/bin/sh\nlefthook run pre-push\n' >.git/hooks/pre-push \
-    && chmod +x .git/hooks/pre-commit .git/hooks/commit-msg .git/hooks/pre-push)
+    && chmod +x .git/hooks/pre-commit .git/hooks/commit-msg .git/hooks/pre-push \
+    && git add -A && git -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q --no-verify -m seeded)
 }
 run() { PATH="$LIVEPATH" bash "$SCRIPT" "$1" 2>&1; }
 
@@ -521,4 +523,28 @@ gl_ok rn2 'yarn exec gitleaks git --staged'
 gl_ok rn3 'bunx gitleaks git --staged'
 gl_ok rn4 'pnpx gitleaks git --staged'
 gl_ok rn5 'npm exec -- gitleaks git --staged'
+# Item 2: only the real hook file counts; a .templatecentral-new beside a missing hook is not the hook.
+seed "$T/sc1"; rm "$T/sc1/.claude/hooks/subagent-stop.sh"
+cp "$SH/template-ts/.claude/hooks/subagent-stop.sh" "$T/sc1/.claude/hooks/subagent-stop.sh.templatecentral-new" 2>/dev/null || cp "$SH/template/.claude/hooks/subagent-stop.sh" "$T/sc1/.claude/hooks/subagent-stop.sh.templatecentral-new"
+chmod +x "$T/sc1/.claude/hooks/subagent-stop.sh.templatecentral-new"
+out=$(run "$T/sc1"); check "sidecar beside a missing hook: exits 1" 1 $?
+contains "sidecar beside a missing hook: reported missing" "FAIL hook subagent-stop: script missing" "$out"
+seed "$T/sc2"; cp "$T/sc2/.claude/hooks/subagent-stop.sh" "$T/sc2/.claude/hooks/subagent-stop.sh.templatecentral-new"
+out=$(run "$T/sc2"); check "control, real hook plus a sidecar: exits 0" 0 $?
+contains "control: the real hook is the one registered" "PASS hook subagent-stop executable and registered" "$out"
+
+# Item 7: every FAIL line states the fix; the lefthook line names the install step before lefthook install.
+nofix=0
+all=""
+for d in "$T/bare" "$T/m1" "$T/m2" "$T/m3" "$T/m4" "$T/m5" "$T/sc1"; do all="$all$(run "$d")"$'\n'; done
+all="$all$(PATH="$NODEDIR:/usr/bin:/bin" bash "$SCRIPT" "$T/ok" 2>&1)"$'\n'
+while IFS= read -r l; do
+  case "$l" in "FAIL "*) case "$l" in *". Fix: "*) ;; *) nofix=$((nofix + 1)); echo "no fix: $l" ;; esac ;; esac
+done <<EOF
+$all
+EOF
+check "every FAIL line carries a Fix" 0 "$nofix"
+contains "a FAIL is present to make the check real" "FAIL lefthook binary" "$all"
+contains "lefthook FAIL names the install step before lefthook install" "install lefthook as a dev dependency" "$all"
+case "$all" in *"install lefthook as a dev dependency"*"then run lefthook install"*) echo "ok   lefthook install step precedes lefthook install" ;; *) echo "FAIL lefthook install step order"; fail=1 ;; esac
 exit $fail
