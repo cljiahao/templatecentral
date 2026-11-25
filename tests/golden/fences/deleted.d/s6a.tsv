@@ -1,0 +1,20 @@
+# S6a skill pass: generic Zod/Pydantic example fences deleted from standards/validation-patterns (schemas, forms, controllers, routers, route handlers, form data).
+skills/standards/validation-patterns/fastapi.md	FastAPI (Python + Pydantic)	0	cf4b117dd051519f3f1a3b42e835d802ffcc4c9ed413ab7afc6bacf8ca9285ba
+skills/standards/validation-patterns/fastapi.md	FastAPI (Python + Pydantic)	1	ce00062372fd1a241debcca8c30b96827e10758792ed6981283d5ab089ccc334
+skills/standards/validation-patterns/fastapi.md	FastAPI (Python + Pydantic)	2	2726e2289bcaa1f3f51321d3216930030f9beccc7759124b1039bcf436929b0a
+skills/standards/validation-patterns/fastapi.md	FastAPI (Python + Pydantic)	3	ce3ce9a6e4deab4f8a9f67be7b978b1e4e5bd811188dd9ac65c0126b6d07304d
+skills/standards/validation-patterns/fastapi.md	FastAPI (Python + Pydantic)	4	cac11174e1cf9de633c109d252af85b1e9dc060df22917bc7b67159f949ad9ed
+skills/standards/validation-patterns/fastapi.md	FastAPI (Python + Pydantic)	6	72d5078a2c4a3cd9bd274ed80ea6dc0cc2d8f98d851433cd88cadb5e3f16dc69
+skills/standards/validation-patterns/nestjs.md	NestJS (TypeScript + Zod via nestjs-zod)	0	54732248e3a8243b35d3992e96f2a8143149959a3417df9c2c1a40c254e64416
+skills/standards/validation-patterns/nestjs.md	NestJS (TypeScript + Zod via nestjs-zod)	1	4e38f5544a3eb74ae751bed0b060efb697071f837401be7a0fb62ce2c86498d2
+skills/standards/validation-patterns/nestjs.md	NestJS (TypeScript + Zod via nestjs-zod)	2	33ea98cf3df8b229c436b8d840c0389b0f81eaa034d0f093e41818f2555ef66f
+skills/standards/validation-patterns/nextjs.md	Next.js (TypeScript + React + Zod)	0	2fb1436cde955bdf8921c15c0bf0f183b92cc1d7e709117e66c4870a6a5ae731
+skills/standards/validation-patterns/nextjs.md	Next.js (TypeScript + React + Zod)	1	4767ad75095c218dfc22bc590711656e34239f984a7e78ebca8267ccf5b61afa
+skills/standards/validation-patterns/nextjs.md	Next.js (TypeScript + React + Zod)	2	a88640bc0b65276f065395e784b0a9d73ef0458a067502734ea3373a3a754113
+skills/standards/validation-patterns/nextjs.md	Next.js (TypeScript + React + Zod)	3	5ced3d6aee97d25c513f306056ca85bcea6e8da615e1f220288a7da1a347047a
+skills/standards/validation-patterns/nextjs.md	Next.js (TypeScript + React + Zod)	4	2ffeba29ac9aad0faf9e53f60ed17b00bfc6059468856dd72106c003c96d2cc3
+skills/standards/validation-patterns/nextjs.md	Next.js (TypeScript + React + Zod)	6	36404f0763e9e7579aa9873220dcc8c85122b932d607dd20642c11391268dfea
+skills/standards/validation-patterns/patterns.md	Zod Pattern Library (Reusable)	1	68efa5916ae68c32e4e6137e3507ff0c549f25c082b8e318f1c1e16ba58bb91d
+skills/standards/validation-patterns/vite-react.md	Vite + React (TypeScript + React Hook Form + Zod)	0	4ed4f20eea81d4598cad172baf4ed5ec472cd6644334b6a0dbba006beaf4f7eb
+skills/standards/validation-patterns/vite-react.md	Vite + React (TypeScript + React Hook Form + Zod)	1	5509bf85f0a7050d1f85950ac3493b61071ae5bcedf643b06561e401da236f47
+skills/standards/validation-patterns/vite-react.md	Vite + React (TypeScript + React Hook Form + Zod)	2	b69e2a8c83611c6b1d5cad1817facf3ddfa67760a357779b0d73b5ab424db67c

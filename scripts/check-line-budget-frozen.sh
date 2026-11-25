@@ -10,7 +10,9 @@
 #   a git error, no BASE_REF, an unknown ref, no merge base or an unreadable file fails (exit 2), so CI
 #   without a base never passes silently. Row syntax and stale rows are the lint's job.
 # Not caught: a row that stays above what its file now needs; a change that edits the gate itself (CI runs
-#   the change's own copy, so human review covers it; no label or variable waives it); a push without a PR.
+#   the change's own copy, so human review covers it; no label or variable waives it); a push without a PR;
+#   a later PR that targets a branch whose merge base lists no line-budget.txt: there is nothing to compare,
+#   so it passes as an initial capture and may add or raise rows.
 # Exit 0 ok, 1 an allowance was raised or a row was added, 2 usage error or no base.
 set -uo pipefail
 

@@ -107,4 +107,4 @@ Build passes with zero TypeScript errors; NestJS also passes `pnpm test`.
 
 ## After Writing Code
 
-Run the build utility (`<skill-dir>/../build/SKILL.md`), then the review utility (`<skill-dir>/../review/SKILL.md`).
+Run the project's check command (`pnpm build && pnpm check`), then the review utility (`<skill-dir>/../review/SKILL.md`).

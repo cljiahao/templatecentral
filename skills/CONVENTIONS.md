@@ -68,7 +68,7 @@ Use when a stack has **> 2 variants** (several ORMs or drivers). `add/SKILL.md` 
 
 A registered `SKILL.md` has `name` and `description` frontmatter, a description of at most 150 characters and a body of at most 30 lines. Optional fields: `when_to_use`, `disable-model-invocation`, `allowed-tools` (scope tightly: `Bash(git add *)`, not `Bash`), `paths`, `argument-hint`; description plus `when_to_use` stay under 1,536 characters.
 
-The body holds only stack detection, a routing table or decision tree, `cat` commands to reference files and a one-line prerequisite. No implementation steps, file templates, numbered how-to lists or prose copied from another skill. A utility `SKILL.md` (build, test, review, cleanup) has no frontmatter and stays a router of at most 12 lines.
+The body holds only stack detection, a routing table or decision tree, `cat` commands to reference files and a one-line prerequisite. No implementation steps, file templates, numbered how-to lists or prose copied from another skill. A utility `SKILL.md` (test, review, cleanup) has no frontmatter and stays a router of at most 12 lines.
 
 Set `disable-model-invocation: true` on a destructive or scaffold-scope skill, so only an explicit user call runs it.
 
@@ -86,7 +86,7 @@ Line 1 of every reference file is this block, with no blank line inside it:
      prereq: <what must be known first>. Do not invoke this file directly — it is loaded at runtime by the templatecentral:<skill> skill. -->
 ```
 
-- Utility reference files (build, test, review, cleanup) end `— it is catted by agents via skills/<name>/SKILL.md (de-registered agent utility).` instead.
+- Utility reference files (test, review, cleanup) end `— it is catted by agents via skills/<name>/SKILL.md (de-registered agent utility).` instead.
 - Files inside a template tree take no header (Section 1).
 - Enforced by `check_ref_file_headers` and `check_ref_header_prereq_suffix`.
 
@@ -119,8 +119,8 @@ Never create `<framework>-add-auth` or similar registered skills. Add reference 
 
 ### Line budget
 
-`check_file_line_budget` (`scripts/lint-skills.sh`) caps every `.md` under `skills/` outside template trees by class: utility router 12, stack router 40, scaffold kit and standards stack files 120, leaf 150 plus 50 prose lines outside fences, this file 150.
-Only an exact-path row in `tests/golden/line-budget.txt` lets a file exceed its cap; rows only shrink, and `scripts/check-line-budget-frozen.sh BASE_REF` fails CI when one grows or a new one appears. Cut the file, never raise its row; a new file fits its class cap and takes no row. A symlinked `.md` or a CR byte fails; a `SKILL.md` that is not registered (depth 1, `name:`) is capped at 12.
+`check_file_line_budget` (`scripts/lint-skills.sh`) scans every markdown file under `skills/` except the template roots (§1) and caps it by class: utility router 12, stack router 40, `patterns.md` and `comments.md` 60, scaffold `source-files.md` and kit, `code-standards`, `validation-patterns`, `drift-check`, `full-stack-pairing` 120, every other `add/` or `migrate/` file 150 plus 50 prose lines outside fences, this file 150.
+Only an exact-path row in `tests/golden/line-budget.txt` lets a file exceed its cap; rows only shrink, and `scripts/check-line-budget-frozen.sh BASE_REF` fails CI when one grows or a new one appears. Cut the file, never raise its row; a new file fits its class cap and takes no row. Any symlink outside a template root, a name not in lowercase `*.md`, a CR byte, or an unclosed or over-8-line frontmatter fails; a `SKILL.md` that is not registered (depth 1, `name:` in the frontmatter) is capped at 12.
 
 ---
 
@@ -140,7 +140,7 @@ Only an exact-path row in `tests/golden/line-budget.txt` lets a file exceed its 
 
 - No reference file is also a registered skill.
 - No registered `SKILL.md` repeats prose from another one.
-- Registered skills = 4 (`add`, `migrate`, `scaffold`, `standards`); `build`, `test`, `review` and `cleanup` are utilities with ref headers, not `name:` frontmatter.
+- Registered skills = 4 (`add`, `migrate`, `scaffold`, `standards`); `test`, `review` and `cleanup` are utilities with ref headers, not `name:` frontmatter.
 - Every stack in a routing table has its reference file, and every `cat` target exists (`check_skilldir_refs_resolve`).
 
 ---

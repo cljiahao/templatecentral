@@ -1496,7 +1496,7 @@ run_pfd() {
 # ── file line budget: the check alone, on a scratch tree (a full lint per probe is too slow) ──
 # lb_probe builds a tree that passes (the clean control), applies one mutation and expects the
 # named text. The function under test is cut out of $LINT, so reverting the check fails the probes.
-LB_FN=$(awk '/^(registered_skillmds|check_file_line_budget)\(\) \{/ { on = 1 } on { print } on && /^}/ { on = 0 }' "$LINT")
+LB_FN=$(awk '/^(skillmd_states|registered_skillmds|line_budget_roots|check_file_line_budget|check_skillmd_description_length)\(\) \{/ { on = 1 } on { print } on && /^}/ { on = 0 }' "$LINT")
 LB_HEAD=$(cat <<'EOF'
 set -euo pipefail; FAILED=0; header() { :; }; fail() { echo "FAIL: $*"; }; pass() { echo "OK:   $*"; }
 report() { if [[ -n "$1" ]]; then echo "$1"; fail "$2"; else pass "$3"; fi; }
@@ -1522,6 +1522,7 @@ lb_base() {
   lb_lines other/x.md 150
   lb_lines scaffold/shared/template/big.md 500
   lb_lines scaffold/shared/template-ts/big.md 500
+  : > "$LBD/skills/scaffold/shared/template.manifest"
   lb_leaf add/auth/nestjs.md 250 60
   lb_rows 'add/auth/nestjs.md\t312\t60\n' > "$LBD/tests/golden/line-budget.txt"
 }
@@ -1624,6 +1625,64 @@ lb_clean line_budget_fix2_short_nameless_skillmd_passes lb_nameless_short
 lb_probe line_budget_fix4_crlf_skillmd lb_crlf_skillmd "build/SKILL.md: contains a carriage return"
 lb_probe line_budget_fix4_bare_cr_file lb_bare_cr "other/y.md: contains a carriage return"
 lb_probe line_budget_fix3_unlisted_leaf_over_cap lb_unlisted_leaf "add/auth/vite-react.md: 151 lines, limit 150"
+# Round 3: symlinked dirs and any-name links, frontmatter cap, real template roots, markdown variants,
+# prose cap for add/ and migrate/ files without a row, unclosed frontmatter, shared registration, last line, CRLF.
+lb_symlinked_dir() { mkdir -p "$LBD/real"; awk 'BEGIN { for (i = 1; i <= 9999; i++) print "line " i }' > "$LBD/real/huge.md"; ln -s ../../../real "$LBD/skills/add/auth/bigdir"; }
+lb_symlink_not_md() { ln -s x.md "$LBD/skills/other/data.txt"; }
+lb_symlink_in_root() { ln -s big.md "$LBD/skills/scaffold/shared/template/link.md"; }
+lb_fm_n() { { echo '---'; echo 'name: add'; awk -v n="$1" 'BEGIN { for (i = 1; i < n - 1; i++) print "k" i ": v" }'; echo '---'; awk 'BEGIN { for (i = 1; i <= 90; i++) print "body " i }'; } > "$LBD/skills/add/SKILL.md"; }
+lb_fm_500() { lb_fm_n 501; }
+lb_fm_9() { lb_fm_n 10; }
+lb_fm_8() { lb_fm_n 9; }
+lb_template_elsewhere() { mkdir -p "$LBD/skills/add/template"; lb_lines add/template/q.md 900; }
+lb_template_real_root() { mkdir -p "$LBD/skills/add/template"; : > "$LBD/skills/add/template.manifest"; lb_lines add/template/q.md 900; }
+lb_upper_md() { lb_lines other/x2.MD 10; }
+lb_markdown_ext() { lb_lines other/x2.markdown 10; }
+lb_lower_md() { lb_lines other/x2.md 10; }
+lb_new_add_prose_141() { lb_leaf add/auth/zz.md 5 141; }
+lb_new_add_prose_50() { lb_leaf add/auth/zz.md 5 50; }
+lb_new_migrate_prose_141() { mkdir -p "$LBD/skills/migrate/general"; lb_leaf migrate/general/zz.md 5 141; }
+lb_new_migrate_prose_50() { mkdir -p "$LBD/skills/migrate/general"; lb_leaf migrate/general/zz.md 5 50; }
+lb_unclosed_fm() { { echo '---'; echo 'name: x'; awk 'BEGIN { for (i = 1; i <= 5; i++) print "body " i }'; } > "$LBD/skills/add/SKILL.md"; }
+lb_unclosed_fm_nameless() { { echo '---'; awk 'BEGIN { for (i = 1; i <= 5; i++) print "body " i }'; } > "$LBD/skills/other/SKILL.md"; }
+lb_no_final_newline_150() { lb_lines other/x2.md 149; printf 'last' >> "$LBD/skills/other/x2.md"; }
+lb_no_final_newline_151() { lb_lines other/x2.md 150; printf 'last' >> "$LBD/skills/other/x2.md"; }
+lb_crlf_fm_name() { { printf -- '---\r\nname: add\r\n---\r\n'; awk 'BEGIN { for (i = 1; i <= 20; i++) printf "b%d\r\n", i }'; } > "$LBD/skills/add/SKILL.md"; }
+lb_probe line_budget_r3_symlinked_directory lb_symlinked_dir "add/auth/bigdir: is a symbolic link"
+lb_probe line_budget_r3_symlink_not_named_md lb_symlink_not_md "other/data.txt: is a symbolic link"
+lb_clean line_budget_r3_symlink_inside_template_root_is_ignored lb_symlink_in_root
+lb_probe line_budget_r3_frontmatter_500_lines lb_fm_500 "add/SKILL.md: frontmatter is 500 lines, limit 8"
+lb_probe line_budget_r3_frontmatter_9_lines lb_fm_9 "add/SKILL.md: frontmatter is 9 lines, limit 8"
+lb_clean line_budget_r3_frontmatter_8_lines_passes lb_fm_8
+lb_probe line_budget_r3_template_dir_without_manifest_is_scanned lb_template_elsewhere "add/template/q.md: 900 lines, limit 150"
+lb_clean line_budget_r3_template_dir_with_manifest_is_exempt lb_template_real_root
+lb_probe line_budget_r3_uppercase_md lb_upper_md "other/x2.MD: markdown files under skills/ must be named *.md in lowercase"
+lb_probe line_budget_r3_dot_markdown lb_markdown_ext "other/x2.markdown: markdown files under skills/ must be named *.md in lowercase"
+lb_clean line_budget_r3_lowercase_md_passes lb_lower_md
+lb_probe line_budget_r3_new_add_file_prose_cap lb_new_add_prose_141 "add/auth/zz.md: 141 prose lines outside fences, limit 50"
+lb_clean line_budget_r3_new_add_file_prose_50_passes lb_new_add_prose_50
+lb_probe line_budget_r3_new_migrate_file_prose_cap lb_new_migrate_prose_141 "migrate/general/zz.md: 141 prose lines outside fences, limit 50"
+lb_clean line_budget_r3_new_migrate_file_prose_50_passes lb_new_migrate_prose_50
+lb_probe line_budget_r3_unclosed_frontmatter_registered lb_unclosed_fm "add/SKILL.md: frontmatter has no closing ---"
+lb_probe line_budget_r3_unclosed_frontmatter_nameless lb_unclosed_fm_nameless "other/SKILL.md: frontmatter has no closing ---"
+lb_clean line_budget_r3_last_line_without_newline_150_passes lb_no_final_newline_150
+lb_probe line_budget_r3_last_line_without_newline_151_fails lb_no_final_newline_151 "other/x2.md: 151 lines, limit 150"
+lb_probe line_budget_r3_crlf_frontmatter_with_name lb_crlf_fm_name "add/SKILL.md: contains a carriage return"
+LB_DESC_SH="$LB_HEAD"$'\n'"$LB_FN"$'\n''check_skillmd_description_length'
+lb_desc() { # lb_desc <name> <FAIL|OK> <file prefix lines, \n-escaped> <description length>: the description check alone
+  if [[ -n "${ONLY:-}" && ! "$1" =~ $ONLY ]]; then return 0; fi
+  local out d
+  lb_base
+  d=$(awk -v n="$4" 'BEGIN { for (i = 0; i < n; i++) printf "d" }')
+  printf '%b' "${3//@D@/$d}" > "$LBD/skills/add/SKILL.md"
+  out=$(bash -c "$LB_DESC_SH" _ "$LBD/skills" 2>&1 || true)
+  if [[ "$out" != *"$2:"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $1 — expected $2, got [$out]"; else PASS=$((PASS + 1)); fi
+}
+lb_desc line_budget_r3_desc_registered_151_fails FAIL '---\nname: add\ndescription: @D@\n---\nbody\n' 151
+lb_desc line_budget_r3_desc_registered_150_passes OK '---\nname: add\ndescription: @D@\n---\nbody\n' 150
+lb_desc line_budget_r3_desc_crlf_registered_151_fails FAIL '---\r\nname: add\r\ndescription: @D@\r\n---\r\nbody\r\n' 151
+lb_desc line_budget_r3_desc_name_in_body_only_passes OK '---\ndescription: @D@\n---\nname: add\n' 151
+lb_desc line_budget_r3_desc_unclosed_with_name_fails FAIL '---\nname: add\ndescription: @D@\nbody\n' 151
 lb_slash_agrees() {
   [[ -n "${ONLY:-}" && ! "line_budget_slash_agrees" =~ $ONLY ]] && return 0
   lb_base; lb_over_other
