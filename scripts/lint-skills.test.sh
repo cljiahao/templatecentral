@@ -1605,6 +1605,12 @@ lb_crlf_skillmd() { awk 'BEGIN { for (i = 1; i <= 12; i++) printf "l%d\r\n", i }
 lb_bare_cr() { printf 'a\rb\rc\r' > "$LBD/skills/other/y.md"; }
 lb_unlisted_leaf() { lb_lines add/auth/vite-react.md 151; }
 lb_nameless_short() { { printf -- '---\ndescription: x\n---\n'; awk 'BEGIN { for (i = 1; i <= 8; i++) print "b" i }'; } > "$LBD/skills/other/SKILL.md"; }
+lb_body_name_skillmd() { { echo 'intro'; echo 'name: not-frontmatter'; awk 'BEGIN { for (i = 1; i <= 20; i++) print "b" i }'; } > "$LBD/skills/other/SKILL.md"; }
+lb_fence_name_skillmd() { { echo '```'; echo 'name: in-a-fence'; echo '```'; awk 'BEGIN { for (i = 1; i <= 20; i++) print "b" i }'; } > "$LBD/skills/other/SKILL.md"; }
+lb_short_body_name() { { echo 'intro'; echo 'name: x'; } > "$LBD/skills/other/SKILL.md"; }
+lb_probe line_budget_fix5_name_in_body_is_not_registered lb_body_name_skillmd "other/SKILL.md: 22 lines, limit 12"
+lb_probe line_budget_fix5_name_in_fence_is_not_registered lb_fence_name_skillmd "other/SKILL.md: 23 lines, limit 12"
+lb_clean line_budget_fix5_short_skillmd_with_name_in_body_passes lb_short_body_name
 lb_probe line_budget_fix1_symlinked_md lb_symlink "other/link.md: is a symbolic link"
 lb_probe line_budget_fix2_nested_skillmd_with_frontmatter lb_nested_skillmd "add/auth/sub/SKILL.md: 23 lines, limit 12"
 lb_probe line_budget_fix2_skillmd_frontmatter_without_name lb_nameless_skillmd "other/SKILL.md: 23 lines, limit 12"

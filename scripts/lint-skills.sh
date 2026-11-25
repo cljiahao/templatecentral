@@ -279,13 +279,16 @@ check_ref_file_headers() {
     "All ref files have <!-- ref: --> headers"
 }
 
-# The one predicate for a registered skill: a depth-1 SKILL.md with a name: line (CONVENTIONS §1).
+# The one predicate for a registered skill: a depth-1 SKILL.md whose frontmatter (line 1 `---` to the
+# next `---`) has a name: line (CONVENTIONS §1).
 # The body check and the line budget both read it, so a SKILL.md outside it is capped by the budget.
 registered_skillmds() {
   local f
   for f in "$SKILLS_DIR"/*/SKILL.md; do
     [[ -f "$f" ]] || continue
-    if grep -q '^name:' "$f"; then printf '%s\n' "${f#"$SKILLS_DIR"/}"; fi
+    if awk 'NR == 1 { if ($0 != "---") exit; next } /^---$/ { exit } /^name:/ { found = 1 } END { exit !found }' "$f"; then
+      printf '%s\n' "${f#"$SKILLS_DIR"/}"
+    fi
   done
 }
 
