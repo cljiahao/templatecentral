@@ -83,7 +83,7 @@ Run this before Steps 4e and 4f. No documentation refresh is needed (the kit ski
 
 **Step 4e: Seed project skills**
 
-Create the stack's verify skill if absent: copy each `SKILL.md.tmpl` under `<skill-dir>/../scaffold/<stack>/template/.claude/skills/` (`next-verify` and `next-migrate`, `nest-verify`, `vite-verify` or `api-verify`) to `.claude/skills/<stack>-verify/SKILL.md` (`next-migrate/SKILL.md` for the other) with `mkdir -p` and `cp -p`. A flat `.claude/skills/<name>.md` is ignored.
+Create the stack's verify skill if absent: copy each `SKILL.md.tmpl` under `<skill-dir>/../scaffold/<stack>/template/.claude/skills/` (`next-verify` and `next-migrate`, `nest-verify`, `vite-verify` or `api-verify`) to `.claude/skills/<name>/SKILL.md` with `<name>` the template directory name as is (`next-verify` and `next-migrate`, `nest-verify`, `vite-verify` or `api-verify`; for example `.claude/skills/api-verify/SKILL.md`), using `mkdir -p` and `cp -p`. A flat `.claude/skills/<name>.md` is ignored.
 
 **Step 4f: Create `.claude/harness.json`**
 

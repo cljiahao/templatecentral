@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Sourced by defect-report.sh. Fixed in a230bd1e: the stacks send the framing headers from the portal origin, not as fixed values.
-# Limits: only the four files named in names are read, each by its template name. Another file that sets framing headers (a proxy, a gateway, a renamed file, nginx.conf) is not seen.
+# Sourced by defect-report.sh. The stacks send the framing headers from the portal origin, not as fixed values.
+# Limits: a wrapped value is seen only when the line with frame-ancestors ends in an opening bracket, paren, brace, colon or equals sign and 'none' is on the next line. Only the four files named in names are read, each by its template name. Another file that sets framing headers (a proxy, a gateway, a renamed file, nginx.conf) is not seen.
 # A file that names a portal-origin marker anywhere outside comments counts as current, even if it still sends a fixed value. A project that must not be framed matches too: verify before changing.
 # An unreadable candidate makes the run exit 2, never a clean result.
 export id=frame-ancestors
@@ -19,7 +19,11 @@ check() {
   case "$lower" in
     *portal_origin*|*tc_frame_ancestors*) return 0 ;;
   esac
-  n=$(printf '%s\n' "$lower" | awk 'index($0, "x-frame-options") || (index($0, "frame-ancestors") && index($0, "'"'"'none'"'"'")) { print NR; exit }')
+  n=$(printf '%s\n' "$lower" | awk -v none="'none'" '
+    index($0, "x-frame-options") { print NR; exit }
+    index($0, "frame-ancestors") && index($0, none) { print NR; exit }
+    pend && index($0, none) { print pend; exit }
+    { pend = (index($0, "frame-ancestors") && $0 ~ /[[({:=][ \t]*$/) ? NR : 0 }')
   [ -n "$n" ] || return 0
   echo "$1:$n"
 }

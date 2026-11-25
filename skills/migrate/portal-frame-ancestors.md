@@ -4,7 +4,7 @@
 
 # Portal framing (`APPCENTRAL_PORTAL_ORIGIN`)
 
-Run `defect-report.sh` first: the `frame-ancestors` entry lists the files that still send fixed framing headers. If the stack's file has customised headers, show the user the current lines before changing them.
+Run `defect-report.sh` first: the `frame-ancestors` entry lists the files that still send fixed framing headers. If the stack's file has customised headers, stop: show the user the current lines and change them only after the user confirms.
 
 The platform injects `APPCENTRAL_PORTAL_ORIGIN` at runtime. Unset or invalid → `frame-ancestors 'none'` and `X-Frame-Options: DENY`; one valid origin → `frame-ancestors <origin>` and no `X-Frame-Options`. The origin check is exactly `^https://[a-z0-9-]+(\.[a-z0-9-]+)+$`: it stops the variable injecting CSP directives or headers, so never loosen it and never accept `*` or a list.
 

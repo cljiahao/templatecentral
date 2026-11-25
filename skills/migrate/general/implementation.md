@@ -50,7 +50,7 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
   User A → proceed to Phase 4.
   User B → print "No changes made." Exit.
 
-**If the marker names a version before `@6.0.0`** → the file-existence rules above and below decide the route, not the version. Run `defect-report.sh` (see "Known-defect report"), then `harness-refresh` when `.claude/harness.json` exists, else the seed offer above.
+**If the marker names a version before `@6.0.0`** → the file-existence rules above and below decide the route, not the version. Run `harness-refresh` when `.claude/harness.json` exists, else the seed offer above, then `defect-report.sh` (see "Known-defect report"). A project from `@5.x` or earlier can carry hooks whose `command` in `.claude/settings.json` is an array: Claude Code skips them, so they never ran. `harness-refresh.sh` does not rewrite a `settings.json` it cannot match to a shipped hash; it writes `.claude/settings.json.templatecentral-new`, so replace every array-form hook with the exec form from that file when you merge it.
 
 ---
 

@@ -334,6 +334,18 @@ fa p3 next.config.ts "const h = [{ key: 'X-Frame-Options', value: 'DENY' }];"
 has "next.config.ts:1  frame-ancestors  check" "$OUT" "frame-ancestors: a fixed X-Frame-Options in next.config.ts is flagged"
 fa p4 src/config/setups/security.setup.ts "const f = { 'frame-ancestors': [\"'none'\"] };"
 has "security.setup.ts:1  frame-ancestors  check" "$OUT" "frame-ancestors: the older NestJS form is flagged"
+fa p6 src/config/setups/security.setup.ts "const f = { 'frame-ancestors': [
+  \"'none'\",
+] };"
+has "security.setup.ts:1  frame-ancestors  check" "$OUT" "frame-ancestors: a wrapped 'none' on the next line is flagged"
+fa p7 src/config/setups/security.setup.ts "const f = { 'frame-ancestors': [
+  \"'self'\",
+], 'object-src': [
+  \"'none'\",
+] };"
+lacks "frame-ancestors  " "$OUT" "frame-ancestors: a wrapped 'self' followed by a 'none' for another directive is not flagged"
+run "$REPO_ROOT/tests/fixtures/defects/frame-ancestors/old"
+has "security.setup.ts:8  frame-ancestors  check" "$OUT" "frame-ancestors: the older NestJS fixture is flagged"
 fa p5 next.config.ts "// X-Frame-Options DENY
 const h = [];"
 lacks "frame-ancestors  " "$OUT" "frame-ancestors: a comment naming X-Frame-Options is not flagged"
