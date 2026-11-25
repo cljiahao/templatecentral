@@ -54,6 +54,10 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 - [ ] A changelog fragment `changelog.d/<slug>.<added|changed|fixed|security>.md` is added; `CHANGELOG.md` is not edited (`bash scripts/changelog-check.sh origin/main` passes; format in `changelog.d/README.md`)
 - [ ] CI passes (frontmatter validation + `lint-patterns` job run automatically)
 
+## Release PR
+
+Normal PRs never edit `CHANGELOG.md`. The release PR runs `bash scripts/changelog-assemble.sh <N.N.N> <YYYY-MM-DD>`, bumps `version` in `.claude-plugin/plugin.json` and `templatecentral_version` in `.claude/harness.json`, and changes nothing else except the allow-listed release files (rules in `changelog.d/README.md`). `scripts/changelog-check.sh` replays the assemble and requires a byte-for-byte match.
+
 ## Commit Style
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):

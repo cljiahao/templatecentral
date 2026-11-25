@@ -99,6 +99,13 @@ mk sym; frag a.added.md; echo "- x" > "$R/t.txt"; ln -s ../t.txt "$R/changelog.d
 refuse "symlink fragment" "not a valid fragment" "${V[@]}"
 mk sub; frag a.added.md; mkdir "$R/changelog.d/d"; frag d/b.fixed.md; commit
 refuse "subdirectory" "subdirectory" "${V[@]}"
+mk fenced; frag a.added.md; frag b.fixed.md "- x
+  ~~~"; commit
+refuse "fence line in a fragment" "not a valid fragment" "${V[@]}"
+mk hashed; frag a.added.md; frag b.fixed.md "- x
+    # heading"; commit
+refuse "heading line in a fragment" "not a valid fragment" "${V[@]}"
+
 mk hidden; frag a.added.md; frag .hidden.added.md; commit
 refuse "hidden file" "not a valid fragment name" "${V[@]}"
 
@@ -119,6 +126,26 @@ mk nounrel; frag a.added.md; printf '# Changelog\n\n## [1.0.0] — x\n' > "$R/CH
 refuse "no Unreleased heading" "Unreleased" "${V[@]}"
 mk norel; frag a.added.md; printf '# Changelog\n\n## [Unreleased]\n- a\n' > "$R/CHANGELOG.md"; commit
 refuse "no release heading after Unreleased" "Unreleased" "${V[@]}"
+
+# Mode of CHANGELOG.md survives the replace.
+mk mode; frag a.added.md; chmod 755 "$R/CHANGELOG.md"; commit
+(cd "$R" && bash "$ASM" "${V[@]}" >/dev/null 2>&1)
+if [[ -x "$R/CHANGELOG.md" ]]; then ok; else fail "CHANGELOG.md lost its executable bit"; fi
+mk mode2; frag a.added.md; chmod 600 "$R/CHANGELOG.md"; commit
+(cd "$R" && bash "$ASM" "${V[@]}" >/dev/null 2>&1)
+if [[ ! -r "$R/CHANGELOG.md" || -n "$(find "$R/CHANGELOG.md" -perm -044)" ]]; then fail "CHANGELOG.md mode widened"; else ok; fi
+
+# A failed fragment delete leaves CHANGELOG.md updated; the re-run refuses, so nothing folds twice.
+if [[ $(id -u) -ne 0 ]]; then
+  mk rmfail; frag a.added.md; commit
+  chmod 555 "$R/changelog.d"
+  out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?
+  chmod 755 "$R/changelog.d"
+  if [[ $rc -eq 0 || "$out" != *"cannot delete"* ]]; then fail "failed delete not reported: $out"; else ok; fi
+  before=$(cat "$R/CHANGELOG.md")
+  refuse_out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?
+  if [[ $rc -eq 0 || "$refuse_out" != *"already has a section"* || "$(cat "$R/CHANGELOG.md")" != "$before" ]]; then fail "re-run after a failed delete folded again: $refuse_out"; else ok; fi
+fi
 
 # Two branches add fragments in the same category and merge without a conflict.
 mk merge; commit base

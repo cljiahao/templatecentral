@@ -16,6 +16,11 @@ mk() {
   git -C "$R" config commit.gpgsign false
   printf '# Changelog\n\n## [Unreleased]\n\n---\n\n## [1.0.0] — 2026-01-01\n\n### Added\n- old\n' > "$R/CHANGELOG.md"
   printf '# fragments\n' > "$R/changelog.d/README.md"
+  mkdir -p "$R/.claude-plugin" "$R/.claude" "$R/tests/golden" "$R/skills/scaffold/shared"
+  printf '{\n  "name": "x",\n  "version": "1.0.0"\n}\n' > "$R/.claude-plugin/plugin.json"
+  printf '{\n  "templatecentral_version": "1.0.0"\n}\n' > "$R/.claude/harness.json"
+  printf 'v1.0.0\n' > "$R/README.md"; printf 'v1.0.0\n' > "$R/skills/scaffold/shared/harness-kit-finalize.md"
+  printf 'h1\n' > "$R/tests/golden/nextjs-github.sha256"
   git -C "$R" add -A; git -C "$R" commit -qm base
   git -C "$R" checkout -q -b pr
 }
@@ -57,6 +62,18 @@ run "no bullet line" 1 "needs a bullet"
 mk emptybullet; printf -- '- \n' > "$R/changelog.d/a.added.md"; commit f
 run "bullet with no text" 1 "needs a bullet"
 
+mk fence1; printf -- '- ok\n  ```\n' > "$R/changelog.d/a.added.md"; commit f
+run "indented code fence in a fragment" 1 "needs a bullet"
+mk fence2; printf -- '- ok\n\t~~~\n' > "$R/changelog.d/a.added.md"; commit f
+run "indented tilde fence in a fragment" 1 "needs a bullet"
+mk heading2; printf -- '- ok\n  # H\n' > "$R/changelog.d/a.added.md"; commit f
+run "indented heading in a fragment" 1 "needs a bullet"
+mk contok; printf -- '- ok\n  continued text\n- two\n' > "$R/changelog.d/a.added.md"; commit f
+run "indented continuation text is fine" 0
+
+mk trailnl; frag $'a.added.md\n'; commit f
+run "name with a trailing newline" 1 "name must be"
+
 mk heading; printf -- '- ok\n## [9.9.9] — fake\n' > "$R/changelog.d/a.added.md"; commit f
 run "heading injected after a bullet" 1 "needs a bullet"
 
@@ -82,10 +99,10 @@ mk badname7; frag a.added.md.bak; commit f
 run "trailing suffix" 1 "name must be"
 
 mk clmod; frag a.added.md; echo "- sneaky" >> "$R/CHANGELOG.md"; commit f
-run "CHANGELOG.md edited with a fragment" 1 "CHANGELOG.md is modified"
+run "CHANGELOG.md edited with a fragment" 1 "release rule 2"
 
 mk clonly; echo "- sneaky" >> "$R/CHANGELOG.md"; commit f
-run "CHANGELOG.md edited alone" 1 "CHANGELOG.md is modified"
+run "CHANGELOG.md edited alone" 1 "release rule 2"
 
 mk addrm; frag a.added.md; commit f; git -C "$R" rm -q changelog.d/a.added.md; commit rm
 run "fragment added then deleted in the PR" 1 "no changelog fragment"
@@ -109,27 +126,72 @@ run "no merge base" 1 "no merge base"
 mk dashbase; frag a.added.md; commit f
 BASE=--all run "base ref starting with a dash" 1 "usage"
 
-# Release PR: fragments deleted, CHANGELOG.md edited. Base keeps the fragment.
+# Normal PR whose fragment changes type (T) or is a submodule (160000).
+mk typechg; git -C "$R" checkout -q main; frag old.added.md; commit old; git -C "$R" checkout -q -b pr2
+rm "$R/changelog.d/old.added.md"; ln -s -- "- x" "$R/changelog.d/old.added.md"; frag new.added.md; commit t
+run "fragment type-changed to a symlink (status T)" 1 "status T"
+
+mk submod; git -C "$R" update-index --add --cacheinfo "160000,$(git -C "$R" rev-parse HEAD),changelog.d/a.added.md"; git -C "$R" commit -qm s
+run "fragment as a submodule (mode 160000)" 1 "regular file"
+
+# Release PR: base holds two fragments; the branch runs the real assemble and bumps the version files.
+ASM="$REPO/scripts/changelog-assemble.sh"
 mkrel() {
   mk "$1"; git -C "$R" checkout -q main
   frag a.added.md; frag b.fixed.md; commit frags; git -C "$R" checkout -q -b rel
-  git -C "$R" rm -q changelog.d/a.added.md changelog.d/b.fixed.md
-  printf -- '- entry\n' >> "$R/CHANGELOG.md"
+  (cd "$R" && bash "$ASM" 1.1.0 2026-03-04 >/dev/null 2>&1) || echo "FAIL: setup — assemble failed in $1"
+  sed -i.bak 's/1\.0\.0/1.1.0/' "$R/.claude-plugin/plugin.json" "$R/.claude/harness.json"; rm -f "$R"/.claude*/*.bak
 }
-mkrel rel-ok; commit rel
-run "release PR passes" 0 "release PR"
+mkrel rel-ok
+printf 'v1.1.0\n' > "$R/README.md"; printf 'v1.1.0\n' > "$R/skills/scaffold/shared/harness-kit-finalize.md"; printf 'h2\n' > "$R/tests/golden/nextjs-github.sha256"
+commit rel
+run "control: realistic release PR (version files, README, marker, golden)" 0 "release PR 1.1.0"
 
-mkrel rel-missing; sed -i.bak '$d' "$R/CHANGELOG.md"; rm "$R/CHANGELOG.md.bak"; echo "- other" >> "$R/CHANGELOG.md"; commit rel
-run "release PR whose CHANGELOG lacks the fragment text" 1 "missing from CHANGELOG.md"
+mkrel rel-min; commit rel
+run "release PR with only the two version files" 0 "replay matches"
 
-mkrel rel-extra; echo x > "$R/extra.txt"; commit rel
-run "release PR touching another file" 1 "CHANGELOG.md is modified"
+# Abuse: a normal PR pretends to be a release.
+mk abuse-a; git -C "$R" checkout -q main; frag a.added.md; commit frag; git -C "$R" checkout -q -b abuse
+git -C "$R" rm -q changelog.d/a.added.md; printf '## [9.9.9] — fake\n- evil\n' >> "$R/CHANGELOG.md"; echo '- a' >> "$R/CHANGELOG.md"; commit abuse
+run "abuse: delete a fragment, append a fake release and the lines" 1 "release rule 5"
+mk abuse-b; git -C "$R" checkout -q main; frag a.added.md; commit frag; git -C "$R" checkout -q -b abuse
+git -C "$R" rm -q changelog.d/a.added.md; sed -i.bak 's/1.0.0 —/1.0.0 REWRITTEN —/' "$R/CHANGELOG.md"; rm "$R/CHANGELOG.md.bak"; echo '- a' >> "$R/CHANGELOG.md"; commit abuse
+run "abuse: delete a fragment and rewrite history" 1 "release rule"
+mk abuse-c; git -C "$R" checkout -q main; frag a.added.md; commit frag; git -C "$R" checkout -q -b abuse
+git -C "$R" rm -q changelog.d/a.added.md; printf '\n## [1.1.0] — 2026-03-04\n- evil\n' >> "$R/CHANGELOG.md"
+sed -i.bak 's/1\.0\.0/1.1.0/' "$R/.claude-plugin/plugin.json" "$R/.claude/harness.json"; rm -f "$R"/.claude*/*.bak; commit abuse
+run "abuse: versions bumped, heading malformed position" 1 "release rule"
 
+mkrel rel-left; frag b.fixed.md; commit rel
+run "release PR with one fragment left undeleted" 1 "release rule 2"
 mkrel rel-add; frag c.added.md; commit rel
-run "release PR that also adds a fragment" 1 "CHANGELOG.md is modified"
-
-mk rel-nodel; echo "- entry" >> "$R/CHANGELOG.md"; commit rel
-run "CHANGELOG edit with no fragment deleted is not a release PR" 1 "CHANGELOG.md is modified"
+run "release PR that also adds a fragment" 1 "release rule 2"
+mkrel rel-readme-del; git -C "$R" checkout -q main -- changelog.d/README.md 2>/dev/null; git -C "$R" rm -q -f changelog.d/README.md; commit rel
+run "release PR deleting changelog.d/README.md" 1 "release rule 2"
+mkrel rel-extra; echo x > "$R/extra.txt"; commit rel
+run "release PR touching a path outside the allow-list" 1 "extra.txt is not on the release allow-list"
+mkrel rel-nested; mkdir -p "$R/tests/golden/sub"; echo x > "$R/tests/golden/sub/x.sha256"; commit rel
+run "release PR with a nested golden path" 1 "release allow-list"
+mkrel rel-allowadd; echo x > "$R/tests/golden/new.sha256"; commit rel
+run "release PR adding an allow-listed file (status A)" 1 "may only be modified"
+mkrel rel-byte; printf ' ' >> "$R/CHANGELOG.md"; commit rel
+run "CHANGELOG.md one byte off the replay" 1 "release rule 5"
+mkrel rel-history; sed -i.bak 's/- old/- old REWRITTEN/' "$R/CHANGELOG.md"; rm "$R/CHANGELOG.md.bak"; commit rel
+run "history line rewritten in a release PR" 1 "release rule 5"
+mkrel rel-head; sed -i.bak 's/^## \[1.1.0\] — /## [1.1.0] - /' "$R/CHANGELOG.md"; rm "$R/CHANGELOG.md.bak"; commit rel
+run "heading with a hyphen instead of an em dash" 1 "release rule 4"
+mkrel rel-head2; sed -i.bak 's/^## \[1.1.0\]/## [1.1]/' "$R/CHANGELOG.md"; rm "$R/CHANGELOG.md.bak"; commit rel
+run "heading version malformed" 1 "release rule 4"
+mkrel rel-pv; sed -i.bak 's/1\.1\.0/1.0.0/' "$R/.claude-plugin/plugin.json"; rm "$R"/.claude*/*.bak; commit rel
+run "plugin.json version not bumped" 1 "plugin.json version"
+mkrel rel-hv; sed -i.bak 's/1\.1\.0/1.0.0/' "$R/.claude/harness.json"; rm "$R"/.claude*/*.bak; commit rel
+run "harness.json version not bumped" 1 "harness.json templatecentral_version"
+mkrel rel-cldel; rm "$R/CHANGELOG.md"; commit rel
+run "CHANGELOG.md deleted" 1 "release rule 1"
+mkrel rel-clsym; printf 'x\n' > "$R/real.md"; rm "$R/CHANGELOG.md"; ln -s real.md "$R/CHANGELOG.md"; commit rel
+run "CHANGELOG.md type-changed to a symlink" 1 "release rule 1"
+mk rel-nofrag; echo "- entry" >> "$R/CHANGELOG.md"; commit rel
+run "CHANGELOG edit with no fragments at the merge base" 1 "release rule 2"
 
 echo "changelog-check.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

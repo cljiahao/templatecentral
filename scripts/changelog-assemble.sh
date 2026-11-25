@@ -5,7 +5,9 @@
 #   Groups fragments by category (Added, Changed, Fixed, Security), sorts them by file name inside a
 #   category, inserts "## [version] — date" after the [Unreleased] block, then deletes the fragments.
 #   --dry-run prints the section and changes nothing. Every check runs before the first write; the
-#   file is replaced by one mv of a temp file from the same directory. Refuses (non-zero, no change)
+#   file is replaced by one mv of a temp file from the same directory (same mode as before). The
+#   fragments are deleted after that mv; if a delete fails the run exits non-zero with CHANGELOG.md
+#   already updated, and a re-run refuses (the version exists), so nothing is folded twice. Refuses (non-zero, no change)
 #   on: no fragments, an invalid fragment, an existing version heading, a bad version or date,
 #   CHANGELOG.md missing or a symlink, no [Unreleased] heading or no release heading after it.
 #   Entries still under [Unreleased] stay there; the owner folds them in by hand.
@@ -75,13 +77,13 @@ if [[ $dry -eq 1 ]]; then
 fi
 
 new=$(mktemp "$root/CHANGELOG.md.XXXXXX") || die "mktemp failed"
+cp -p CHANGELOG.md "$new" || die "cannot copy CHANGELOG.md mode"
 awk -v secf="$work/section" '
   /^## \[Unreleased\]/ { u = 1 }
   u && !done && /^## \[/ && !/^## \[Unreleased\]/ { while ((getline l < secf) > 0) print l; done = 1 }
   { print }
   END { exit done ? 0 : 1 }
 ' CHANGELOG.md > "$new" || die "cannot insert the section"
-chmod 644 "$new" || die "chmod failed"
 mv "$new" CHANGELOG.md || die "cannot replace CHANGELOG.md"
 new=""
 while IFS= read -r name; do
