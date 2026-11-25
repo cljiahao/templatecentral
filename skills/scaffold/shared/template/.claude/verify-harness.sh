@@ -56,6 +56,12 @@ while IFS='|' read -r gid lh ci || [ -n "$gid" ]; do
   if [ "$ci" != "-" ] && [ -n "$gh_text" ] && ! has "$gh_text" "$ci"; then echo "GATE MISSING: $gid is not run by .github/workflows/ci.yml (expects '$ci')" >&2; drift=1; fi
   if [ "$ci" != "-" ] && [ -n "$az_text" ] && ! has "$az_text" "$ci"; then echo "GATE MISSING: $gid is not run by the Azure pipeline files (expects '$ci')" >&2; drift=1; fi
 done < "$gates"
+# Review gate files: when gates.txt lists the review gate and lefthook exists, each file it needs must be present and non-empty.
+if [ -n "$hook_text" ] && grep -q '^review|' "$gates"; then
+  for f in scripts/check-review-record.sh scripts/record-review.sh .claude/review-checklist.txt .claude/review-checklist-stack.txt .claude/agents/code-reviewer.md; do
+    if [ ! -s "$f" ]; then echo "REVIEW GATE FILE MISSING: $f is missing or empty; restore it from git (git checkout <merge-base> -- $f)" >&2; drift=1; fi
+  done
+fi
 # Agent permission baseline: a blessed hash must not hide a deleted deny or ask rule.
 settings=".claude/settings.json"
 rule_in_list() {

@@ -398,5 +398,128 @@ for MODE in local ci; do
   suite
 done
 
+# ── wiring: a scaffolded project gets the gate, and the probes below must make verify-harness or the ratchet fail ──
+SHARED="$REPO_ROOT/skills/scaffold/shared"
+GUARDED_FILES=".claude/agents/code-reviewer.md .claude/review-checklist-stack.txt .claude/review-checklist.txt scripts/check-review-record.sh scripts/record-review.sh scripts/remove-harness.sh"
+CLEAN=(env -u CI -u GITHUB_ACTIONS -u TF_BUILD -u TC_REVIEW_BASE)
+GIT=(git -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false)
+
+# wf_scaffold <stack> <shared-dir> <target>: copies every part into <target>, commits it on main and branches to work; returns 1 when a part refuses.
+wf_scaffold() {
+  local st=$1 sh=$2 d=$3 part
+  rm -rf "$d"
+  mkdir -p "$d"
+  for part in stack base agents settings late; do
+    TC_STACK=$st TC_PART=$part bash "$sh/tc-copy.sh" "$d" > /dev/null 2>&1 || return 1
+  done
+  TC_STACK=$st TC_PART=ci TC_CI=github bash "$sh/tc-copy.sh" "$d" > /dev/null 2>&1 || return 1
+  TC_STACK=$st TC_PART=manifest bash "$sh/tc-copy.sh" "$d" > /dev/null 2>&1 || return 1
+  printf '# %s\n' "$st" > "$d/README.md"
+  git -C "$d" init -q -b main
+  git -C "$d" add -A
+  "${GIT[@]}" -C "$d" commit -q -m scaffold || return 1
+  git -C "$d" update-ref refs/remotes/origin/main main
+  git -C "$d" checkout -q -b work
+}
+
+# wf_reset: puts $W back on the scaffold commit.
+wf_reset() {
+  git -C "$W" checkout -q -f work
+  git -C "$W" reset -q --hard main
+  git -C "$W" clean -fdq
+}
+
+# wf_commit <message>: commits every change in $W.
+wf_commit() {
+  git -C "$W" add -A
+  "${GIT[@]}" -C "$W" commit -q --allow-empty -m "$1"
+}
+
+# wf_verify: runs verify-harness in $W; sets OUT and EC.
+wf_verify() {
+  OUT=$(cd "$W" && "${CLEAN[@]}" bash .claude/verify-harness.sh 2>&1)
+  EC=$?
+}
+
+# wf_ratchet: runs the gate ratchet against main in $W; sets OUT and EC.
+wf_ratchet() {
+  OUT=$(cd "$W" && "${CLEAN[@]}" bash scripts/gate-ratchet.sh auto 2>&1)
+  EC=$?
+}
+
+# wf_bless: re-hashes harness.json the way a human would, so only the structural checks can still fail.
+wf_bless() {
+  (cd "$W" && bash .claude/regen-harness.sh > /dev/null 2>&1)
+}
+
+for ST in nextjs nestjs vite-react fastapi; do
+  W="$T/wf-$ST"
+  if ! wf_scaffold "$ST" "$SHARED" "$W"; then check ok scaffold-failed "wiring[$ST]: scaffold copies every part"; continue; fi
+  for f in $GUARDED_FILES; do check yes "$([ -s "$W/$f" ] && echo yes || echo no)" "wiring[$ST]: scaffold seeds $f"; done
+  check yes "$(grep -q 'review-record' "$W/lefthook.yml" && echo yes || echo no)" "wiring[$ST]: lefthook carries the review gate"
+  check yes "$(sed -n '/^pre-push:/,$p' "$W/lefthook.yml" | grep -q 'scripts/check-review-record.sh' && echo yes || echo no)" "wiring[$ST]: the review gate runs in pre-push"
+  check yes "$(grep -q '^review|scripts/check-review-record.sh|-$' "$W/.claude/gates.txt" && echo yes || echo no)" "wiring[$ST]: gates.txt row is pre-push only"
+  check no "$(grep -q 'check-review-record' "$W/.github/workflows/ci.yml" && echo yes || echo no)" "wiring[$ST]: CI has no always-skipping review step"
+  check yes "$(git -C "$W" check-ignore -q .claude/review/abc.record && echo yes || echo no)" "wiring[$ST]: .gitignore covers .claude/review/"
+  guarded=$(cd "$W" && bash scripts/gate-ratchet.sh --list-guarded HEAD 2>&1)
+  for f in $GUARDED_FILES; do
+    check yes "$(printf '%s\n' "$guarded" | awk -F'\t' -v p="$f" '$2 == p && $3 == 1 { h = 1 } END { print h ? "yes" : "no" }')" "wiring[$ST]: $f is guarded and enforced"
+  done
+  for f in $GUARDED_FILES; do check 1 "$(grep -c "\"path\": \"$f\"" "$W/.claude/harness.json")" "wiring[$ST]: harness.json lists $f"; done
+
+  # clean control
+  wf_verify; check 0 "$EC" "wiring[$ST]: control, verify-harness passes ($OUT)"
+  wf_ratchet; check 0 "$EC" "wiring[$ST]: control, ratchet passes ($OUT)"
+
+  # (a) gate script removed, then emptied; the second case is blessed so only the structural check is left
+  wf_reset; git -C "$W" rm -q scripts/check-review-record.sh; wf_commit "remove gate"
+  wf_verify; check 1 "$EC" "wiring[$ST]: (a) removed gate script fails verify-harness"
+  has "check-review-record.sh" "$OUT" "wiring[$ST]: (a) the message names the script"
+  wf_bless; wf_verify; check 1 "$EC" "wiring[$ST]: (a) removed gate script still fails after re-hashing"
+  wf_reset; : > "$W/scripts/check-review-record.sh"; wf_commit "empty gate"
+  wf_verify; check 1 "$EC" "wiring[$ST]: (a) emptied gate script fails verify-harness"
+  wf_bless; wf_verify; check 1 "$EC" "wiring[$ST]: (a) emptied gate script still fails after re-hashing"
+  has "REVIEW GATE FILE MISSING" "$OUT" "wiring[$ST]: (a) the empty file is named"
+
+  # (b) lefthook pre-push line removed
+  wf_reset
+  awk '/^    review-record:/ { skip = 1; next } skip && /^    [a-z]/ { skip = 0 } skip && /^[a-z]/ { skip = 0 } !skip' "$W/lefthook.yml" > "$W/lefthook.new" && mv "$W/lefthook.new" "$W/lefthook.yml"
+  check no "$(grep -q 'check-review-record' "$W/lefthook.yml" && echo yes || echo no)" "wiring[$ST]: (b) the probe removed the lefthook line"
+  wf_commit "drop review hook"
+  wf_verify; check 1 "$EC" "wiring[$ST]: (b) removed lefthook line fails verify-harness"
+  wf_bless; wf_verify; check 1 "$EC" "wiring[$ST]: (b) removed lefthook line still fails after re-hashing"
+  has "GATE MISSING: review" "$OUT" "wiring[$ST]: (b) the review gate is named"
+
+  # (c) checklist edited in the change under review
+  wf_reset; printf 'nothing to see\n' > "$W/.claude/review-checklist.txt"; wf_commit "weaken checklist"
+  wf_verify; check 1 "$EC" "wiring[$ST]: (c) edited checklist fails verify-harness"
+  wf_ratchet; check 1 "$EC" "wiring[$ST]: (c) edited checklist fails the ratchet"
+  has ".claude/review-checklist.txt" "$OUT" "wiring[$ST]: (c) the ratchet names the checklist"
+  wf_bless; wf_verify; check 0 "$EC" "wiring[$ST]: (c) a re-hashed checklist passes verify-harness, the ratchet is the catch"
+  wf_ratchet; check 1 "$EC" "wiring[$ST]: (c) re-hashed checklist still fails the ratchet"
+  wf_reset; printf 'x\n' >> "$W/.claude/agents/code-reviewer.md"; wf_commit "edit reviewer"
+  wf_ratchet; check 1 "$EC" "wiring[$ST]: (c) edited reviewer agent fails the ratchet"
+  wf_reset; printf 'x\n' >> "$W/scripts/record-review.sh"; wf_commit "edit recorder"
+  wf_ratchet; check 1 "$EC" "wiring[$ST]: (c) edited record-review.sh fails the ratchet"
+done
+
+# (d) a manifest row missing for one stack: the copy refuses that stack and still seeds the other
+for ROW in template-ts/.claude/review-checklist-stack.txt template-py/.claude/review-checklist-stack.txt; do
+  ALT="$T/alt-$(basename "$(dirname "$(dirname "$ROW")")")"
+  rm -rf "$ALT"
+  mkdir -p "$ALT/skills"
+  cp -Rp "$REPO_ROOT/skills/scaffold" "$ALT/skills/scaffold"
+  cp -Rp "$REPO_ROOT/.claude-plugin" "$ALT/.claude-plugin"
+  grep -vF "$ROW " "$SHARED/template.manifest" > "$ALT/skills/scaffold/shared/template.manifest"
+  check 1 "$(grep -cF "$ROW " "$SHARED/template.manifest")" "wiring: manifest row $ROW exists"
+  if [ "$ROW" = template-ts/.claude/review-checklist-stack.txt ]; then BAD=nextjs OK=fastapi; else BAD=fastapi OK=nextjs; fi
+  wf_scaffold "$BAD" "$ALT/skills/scaffold/shared" "$T/alt-bad" && r=ok || r=refused
+  check refused "$r" "wiring: (d) missing row $ROW makes the $BAD copy refuse"
+  wf_scaffold "$OK" "$ALT/skills/scaffold/shared" "$T/alt-ok" && r=ok || r=refused
+  check ok "$r" "wiring: (d) control, the $OK copy is not affected by $ROW"
+done
+wf_scaffold nextjs "$SHARED" "$T/alt-full" && r=ok || r=refused
+check ok "$r" "wiring: (d) control, the unmodified manifest copies"
+
 echo "seeded-review-gate: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
