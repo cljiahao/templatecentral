@@ -152,12 +152,13 @@ blind_shell() {
 if blind_shell; then
   block "a shell fed from a pipe, stdin, here-string, heredoc or process substitution hides its commands from this guard. Run the commands directly."
 fi
-# Inline interpreter code is judged as text: found on the quote-masked scan, so a commit message or grep pattern naming python -c is not code; then quotes and brackets become spaces and the checks below treat it as a command line.
+# Inline interpreter code is judged as text: the interpreter must be in command position, so a commit message or grep pattern naming python -c is not code; then quotes and brackets become spaces and the checks below treat it as a command line.
 interp=""
 interp_norm=""
 scan_shell=$scan
 inline_re="${cpos}${wrap}(/[^[:space:]]*/)?((python|pypy)[0-9.]*|nodejs|node|bun|perl|ruby|deno)[[:space:]]+(-([A-Za-ln-z]|-)[^[:space:]]*([[:space:]]+[^-[:space:]][^[:space:]]*)?[[:space:]]+)*(-[A-Za-z]*[ceEp]|--eval|--print|eval)([[:space:]=]|\$)"
-if [[ "$scan" =~ $inline_re ]]; then
+# The scan unwraps eval "…", so a match on the raw command is the fallback (deno eval "…").
+if [[ "$scan" =~ $inline_re ]] || [[ "$cmd" =~ $inline_re ]]; then
   interp=${cmd#*"${BASH_REMATCH[0]}"}
   interp_norm=$(printf '%s' "$interp" | sed "s/[]\"${sq}[{}(),]/ /g")
   scan="$scan"$'\n'"$interp_norm"
