@@ -506,6 +506,16 @@ commit "$T/n2" plain
 out=$(run "$T/n2")
 absent "control, no own CI: no CI note" "next to the project's own CI" "$out"
 absent "control, no other hook manager: no hook note" "another git-hook manager" "$out"
+seed "$T/g1" nestjs
+rm "$T/g1/scripts/record-review.sh"
+grep -v '^\.claude/review/$' "$T/g1/.gitignore" >"$T/g1/.gitignore.new" && mv "$T/g1/.gitignore.new" "$T/g1/.gitignore"
+commit "$T/g1" no-review-ignore
+out=$(run "$T/g1")
+contains "review gate: a missing .gitignore line is named in a note" "note: the review gate is added but the refresh never edits .gitignore; add the line .claude/review/ to .gitignore" "$out"
+seed "$T/g2" nestjs
+rm "$T/g2/scripts/record-review.sh"
+commit "$T/g2" has-review-ignore
+absent "control, .gitignore already has the line: no note" "the refresh never edits .gitignore" "$(run "$T/g2")"
 
 # Pristine list: destination paths. The generator maps a manifest path to the project path like tc-copy.sh does.
 GENS="$ROOT/skills/migrate/general/gen-pristine-hashes.sh"
