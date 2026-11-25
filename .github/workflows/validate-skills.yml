@@ -22,6 +22,9 @@ on:
       - '.claude/**'
       - '.github/workflows/**'
   pull_request:
+    # labeled/unlabeled re-run the workflow so the "Fence snapshot unchanged" job re-reads the
+    # fence-snapshot-change label; without them a label added after the run began is never seen.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
       - 'skills/**'
       - 'scripts/**'
