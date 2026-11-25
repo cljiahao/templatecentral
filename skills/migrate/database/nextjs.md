@@ -3,11 +3,7 @@
      prereq: Stack = nextjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:migrate skill. -->
 ## Next.js Database Migration
 
-**Read `drizzle-to-kysely.md` first** — shared steps (1, 5 types, 8 migration body, 9 translation table, 10 env block, After Writing Code) live there.
-
-```bash
-cat "<skill-dir>/database/drizzle-to-kysely.md"
-```
+Load `<skill-dir>/database/drizzle-to-kysely.md` first: it holds the shared steps (1, 5 types, 8 migration body, 9 translation table, 10 env block, After Writing Code).
 
 **Before Step 1**, create a migration branch so every change below (packages, scripts, deletions) is reviewable and revertible as one unit:
 
@@ -56,15 +52,13 @@ curl -fsSL -o certs/rds-global-bundle.pem \
 
 Run `TC_PART=leaf TC_LEAF=migrate/database/nextjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/nextjs/template/` (listed in `<skill-dir>/database/nextjs/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-Copied verbatim from `<skill-dir>/database/nextjs/template/src/integrations/database/kysely-client.ts` by the copy step; do not re-type it.
-
 ### Step 5 — Create `src/integrations/database/types.ts`
 
 Use the shared types template from `drizzle-to-kysely.md` Step 5.
 
 ### Step 6 — Create `src/integrations/database/migrate.ts`
 
-Copied verbatim from `<skill-dir>/database/nextjs/template/src/integrations/database/migrate.ts` by the copy step; do not re-type it.
+The copy step wrote `src/integrations/database/migrate.ts`.
 
 ### Step 7 — Update `src/integrations/database/index.ts`
 

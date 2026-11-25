@@ -54,29 +54,7 @@ Record the first match (these are the files `templatecentral:add (database)` cre
 
 Auth is present when `proxy.ts` or `src/proxy.ts` imports from `better-auth` (`getSessionCookie`). A proxy that only calls `applyFrameProtection` (the scaffold default) is not auth.
 
-**Print the assessment:**
-
-```
-📋 Backend Extraction Assessment
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Project:          [project-name]  →  ../[project-name]-api ([BACKEND])
-
-API routes (move to [BACKEND]):
-  [list each route.ts with methods, e.g. src/app/api/users/route.ts  GET POST]
-
-Integrations to move (imported by API routes):
-  [list each file path]
-
-Integrations staying in Next.js:
-  [list each file path, or "None"]
-
-Database:         [see leaf for ORM variants]
-Auth:             [✓ proxy.ts detected / None detected]
-
-Next.js after migration: pure frontend — browser → /api/external (Next rewrite), server → BACKEND_URL
-New backend URL:  BACKEND_URL (server-only; http://localhost:[DEV_PORT] in dev)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
+**Print the assessment:** routes with methods, integrations to move and to keep, database, auth, and the target `../[project-name]-api`.
 
 ---
 
@@ -112,10 +90,7 @@ Follow the [BACKEND] scaffold steps (the leaf gives the `cat` paths) with `../[p
 
 ## Phase 8 — Rewire Next.js Frontend (autonomous)
 
-The browser never calls [BACKEND] directly: client components call same-origin `/api/external/*`, which a `rewrites()` entry forwards to `BACKEND_URL`; server components, layouts and `proxy.ts` call the server-only `BACKEND_URL`. There is **no** `NEXT_PUBLIC_*` backend variable. Cookie mode depends on this layout, defined in:
-```bash
-cat "<skill-dir>/../standards/full-stack-pairing/implementation.md"
-```
+The browser never calls [BACKEND] directly: client components call same-origin `/api/external/*`, which a `rewrites()` entry forwards to `BACKEND_URL`; server components, layouts and `proxy.ts` call the server-only `BACKEND_URL`. There is **no** `NEXT_PUBLIC_*` backend variable. Cookie mode depends on this layout, defined in `<skill-dir>/../standards/full-stack-pairing/implementation.md` (load it).
 
 0. **Rewire auth before deleting routes** (only if Phase 1g detected auth). The Phase 7 backend issues its own JWT and does not speak the better-auth protocol, so before deleting `src/app/api/auth/[...all]/route.ts`:
    - **Enable the backend's cookie mode** ("Browser Client (Cookie Mode)" in the [BACKEND] auth skill): the browser logs in with `POST /api/external/auth/session` and never holds a token. Never go cross-origin with `SameSite=None` or credentialed CORS
@@ -159,11 +134,7 @@ BACKEND_URL=http://localhost:[DEV_PORT]
 
 **[BACKEND] project (`../[project-name]-api`):** apply the leaf file's CORS config step.
 
-Phases 4–7 created folders after the Phase 3 README pass. Re-run the documentation kit over `../[project-name]-api` before Phase 10:
-```bash
-cd ../[project-name]-api
-cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
-```
+Phases 4–7 created folders after the Phase 3 README pass. Re-run `<skill-dir>/../scaffold/shared/documentation-kit.md` over `../[project-name]-api` before Phase 10.
 
 Update `../[project-name]-api/AGENTS.md` — prepend to Project-Specific Notes:
 ```
@@ -187,21 +158,4 @@ Run in sequence. Stop and report the exact error on first failure.
 
 Use the leaf file's verify commands.
 
-**If all pass**, print:
-
-```
-✓ Migration complete.
-
-Next.js frontend: [original-project-path]
-  → Pure frontend. Set BACKEND_URL in the build AND runtime environment (rewrites are baked at build).
-
-[BACKEND] backend:  ../[project-name]-api
-  → Reached same-origin via the Next.js rewrite. No CORS entry is needed for the frontend.
-
-Next steps:
-- Review proxy.ts: it gates /api/external/* before the rewrite forwards it, so keep the backend's public endpoints as exact paths
-- Set up Docker Compose if you want both services running locally with one command
-- Configure CI/CD pipelines for each repo independently
-```
-
-**If any command fails**, print the exact error output and stop. Do not continue to the next phase.
+**If all pass**, name both project paths, state that `BACKEND_URL` must be set at build and runtime (rewrites are baked at build), and that `proxy.ts` gates `/api/external/*` before the rewrite, so the backend's public endpoints stay exact paths. **If any command fails**, print the exact error and stop.

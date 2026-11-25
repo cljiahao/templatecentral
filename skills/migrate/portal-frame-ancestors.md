@@ -4,61 +4,16 @@
 
 # Portal framing (`APPCENTRAL_PORTAL_ORIGIN`)
 
-Since 6.2.0 a scaffolded app may be framed by its appCentral portal, and only by it. The platform
-injects `APPCENTRAL_PORTAL_ORIGIN` (e.g. `https://portal.example.com`) at runtime.
+Run `defect-report.sh` first: the `frame-ancestors` entry lists the files that still send fixed framing headers. If the stack's file has customised headers, stop: show the user the current lines and change them only after the user confirms.
 
-| `APPCENTRAL_PORTAL_ORIGIN` | `Content-Security-Policy` | `X-Frame-Options` |
-|---|---|---|
-| unset, or fails the origin check | `frame-ancestors 'none'` + the existing directives | `DENY` |
-| one valid origin | `frame-ancestors <origin>` + the existing directives | not sent |
+The platform injects `APPCENTRAL_PORTAL_ORIGIN` at runtime. Unset or invalid → `frame-ancestors 'none'` and `X-Frame-Options: DENY`; one valid origin → `frame-ancestors <origin>` and no `X-Frame-Options`. The origin check is exactly `^https://[a-z0-9-]+(\.[a-z0-9-]+)+$`: it stops the variable injecting CSP directives or headers, so never loosen it and never accept `*` or a list.
 
-The origin check is exactly `^https://[a-z0-9-]+(\.[a-z0-9-]+)+$`: one https origin, lowercase, no
-path, port, wildcard, quotes, whitespace, semicolons or newlines. It is what stops the variable from
-injecting CSP directives or headers — never loosen it, never accept `*` or a list.
+Copy the named sections **verbatim** from these template files (under `<skill-dir>/../scaffold/`):
 
-Dev behaviour does not change: the stacks that skip anti-clickjacking in dev still skip it.
-
-## Step 1 — Detect the stack and check the current headers
-
-Detect the stack (AGENTS.md "Stack Detection"). Confirm the stack's file below still sends the 6.1 defaults
-(`X-Frame-Options: DENY`, `frame-ancestors 'none'`). If either is customised, stop and show the user the current lines before changing them.
-
-## Step 2 — Apply the stack's change
-
-Read the stack's scaffold files and copy the named sections **verbatim**.
-
-FastAPI:
-
-```bash
-cat "<skill-dir>/../scaffold/fastapi/template/src/core/config.py"
-cat "<skill-dir>/../scaffold/fastapi/template/src/core/security_headers.py"
-cat "<skill-dir>/../scaffold/fastapi/template/test/test_utils/test_security_headers.py"
-```
-
-Next.js:
-
-```bash
-cat "<skill-dir>/../scaffold/nextjs/template/src/lib/security/frame-protection.ts"
-cat "<skill-dir>/../scaffold/nextjs/template/test/lib/frame-protection.test.ts"
-cat "<skill-dir>/../scaffold/nextjs/template/src/proxy.ts"
-cat "<skill-dir>/../scaffold/nextjs/template/next.config.ts"
-```
-
-NestJS:
-
-```bash
-cat "<skill-dir>/../scaffold/nestjs/template/src/config/env.config.ts"
-cat "<skill-dir>/../scaffold/nestjs/template/src/config/setups/security.setup.ts"
-cat "<skill-dir>/../scaffold/nestjs/template/test/config/security.setup.spec.ts"
-```
-
-Vite + React:
-
-```bash
-cat "<skill-dir>/../scaffold/vite-react/template/docker/15-frame-protection.envsh"
-cat "<skill-dir>/../scaffold/vite-react/template/Dockerfile"
-cat "<skill-dir>/../scaffold/vite-react/template/nginx.conf.template"
-```
+- FastAPI: `fastapi/template/src/core/config.py`, `src/core/security_headers.py`, `test/test_utils/test_security_headers.py`
+- Next.js: `nextjs/template/src/lib/security/frame-protection.ts`, `test/lib/frame-protection.test.ts`, `src/proxy.ts`, `next.config.ts`
+- NestJS: `nestjs/template/src/config/env.config.ts`, `src/config/setups/security.setup.ts`, `test/config/security.setup.spec.ts`
+- Vite + React: `vite-react/template/docker/15-frame-protection.envsh`, `Dockerfile`, `nginx.conf.template`
 
 **Next.js** — `headers()` resolves at build time, so the CSP and frame headers move to the runtime proxy, the only place the CSP is set.
 1. Add `src/lib/security/frame-protection.ts` and `test/lib/frame-protection.test.ts` (the first two files above).
@@ -103,12 +58,6 @@ cat "<skill-dir>/../scaffold/vite-react/template/nginx.conf.template"
 
 Next.js, NestJS and FastAPI: add the commented `APPCENTRAL_PORTAL_ORIGIN` line to `.env.example` (FastAPI: `src/.env.default`). Vite + React reads it only in nginx; its `.env.example` does not change.
 
-## Step 3 — Verify
+## Verify
 
-Run the project's verify gate (`.claude/skills/*-verify`, or `templatecentral` build + test). Then
-check both cases against a production-mode run (`curl -sI`):
-
-- variable unset → `X-Frame-Options: DENY` and `frame-ancestors 'none'`
-- `APPCENTRAL_PORTAL_ORIGIN=https://portal.example.com` → no `X-Frame-Options`, and
-  `frame-ancestors https://portal.example.com` with the other CSP directives intact
-- `APPCENTRAL_PORTAL_ORIGIN='https://a.example.gov.sg; script-src *'` → same as unset
+Run the project's verify gate, then check against a production-mode run (`curl -sI`): variable unset → `X-Frame-Options: DENY` and `frame-ancestors 'none'`; `APPCENTRAL_PORTAL_ORIGIN=https://portal.example.com` → no `X-Frame-Options`, `frame-ancestors https://portal.example.com` with the other CSP directives intact; `APPCENTRAL_PORTAL_ORIGIN='https://a.example.gov.sg; script-src *'` → same as unset.

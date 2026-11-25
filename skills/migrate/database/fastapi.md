@@ -5,10 +5,6 @@
 
 Moves SQLAlchemy password auth to AWS IAM auth. The app side is **config-only** (no schema or query changes). The Step 0 AWS prerequisites are not optional: without them connect fails with an opaque `PAM authentication failed`.
 
-> **Canonical source**: the session module (Step 2) and `alembic/env.py` block (Step 4) below
-> are duplicated verbatim from `add/database/python/sqlalchemy-iam.md` (canonical). The lint
-> fails if they drift: re-copy, never hand-edit, because they carry the `sslmode` / `sslrootcert` args.
-
 ### Step 0 — Prerequisites (AWS side, before any code change)
 
 Confirm all four with the user; this skill cannot do them:
@@ -157,6 +153,4 @@ All tests pass and the app connects.
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Run the build utility (`<skill-dir>/../build/SKILL.md`), then the review utility (`<skill-dir>/../review/SKILL.md`).

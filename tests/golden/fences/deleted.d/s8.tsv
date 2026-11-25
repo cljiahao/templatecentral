@@ -1,0 +1,9 @@
+# S8 skill pass: copy-verbatim fences deleted in f56427dc (loader, version-print and assessment prints, verify-skill templates).
+skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	1	c82dbfb6467a146ff1602a4677806983cd8ec80a873be1842a4fa319b8f2f58f
+skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	3	5772859fc7ebeb1b4882819a62d1748e4f691122216a198dedacc1e59b590e24
+skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	4	191264b140c96e5f745b5334a713313b474c4364cc159d89a89523d568886299
+skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	5	7430ac98d01b9381257298a87503cd8795c21c639a15d6d0b8179829689de063
+skills/migrate/general/phase-4-upgrade.md	Phase 4 — Upgrade to the current harness (agent, autonomous after Phase 0 gate)	1	9927eac45673a62f7f33c93c76d097fc948dc4fb1a4c8a623f408163d093f838
+skills/migrate/general/phase-4-upgrade.md	Phase 4 — Upgrade to the current harness (agent, autonomous after Phase 0 gate)	2	1b14ad6ef54edfb3096e056a0dc82a51f8b6f6149e7c354bcfe5cb538911c89f
+skills/migrate/nextjs-backend-extraction/common.md	Phase 1 — Assessment (autonomous)	0	232db5f669db552d12f33370a158ec793cfd7c097e331b18d5f9f97f9c29bbe5
+skills/migrate/nextjs-backend-extraction/common.md	Phase 10 — Verify (autonomous)	0	8d4b776c4204ad37ff9878e5a6bf488f67b39ece5c86aa28606b1264f8149be7
