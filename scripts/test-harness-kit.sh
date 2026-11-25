@@ -453,6 +453,8 @@ echo x | /usr/bin/env bash
 echo x | nohup sh
 echo x | sudo -E bash -s
 echo x | sh # c
+echo x | sh>out
+echo x | \sh>out
 echo x | sh 2>&1
 echo x | sh >out
 echo x | bash 2>/dev/null
@@ -462,6 +464,9 @@ echo x | sudo -u root sh
 echo x | stdbuf -o0 sh
 echo x | \sh
 echo git | xargs sh -c
+git commit -m "a;b" --no-verify
+git commit -m 'a|b' -n
+git commit -m "a|b" "--no-verify"
 echo x | xargs sh -c 'git commit --no-verify -m x'
 FOO=1 python3 -c "import os; os.system('git commit --no-verify -m x')"
 FOO=1 node -e "require('child_process').execSync('git commit --no-verify -m x')"
@@ -483,6 +488,7 @@ CASES
 expect_bash 2 "bash <<EOF${NL}git commit --no-verify -m x${NL}EOF"
 expect_bash 2 "echo x |${NL}sh"
 expect_bash 2 "echo x |${NL}  /bin/bash"
+expect_bash 2 "echo x | \\${NL}bash"
 for c in "python3 -c \"print(open('.env').read())\"" "node -e \"require('fs').readFileSync('.env')\"" "bash -c \"cat .env\"" \
   "python3 -c \"open('.env.new', 'w')\"" "python3 -c \"open('.env', 'w').write('x')\""; do
   expect_bash 2 "$c" "$SEC"
@@ -526,6 +532,7 @@ git log --format='%h|sh'
 grep "a|sh" file
 cat f | grep -E 'a|bash' | wc -l
 find . -name '*.sh' | xargs -n1 bash -n
+echo x | xargs sh script.sh
 echo x | xargs bash script.sh
 git ls-files | xargs grep -l bash
 echo done | tee log

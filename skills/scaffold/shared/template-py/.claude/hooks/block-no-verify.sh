@@ -6,11 +6,12 @@
 # code fed to an interpreter on stdin or from a heredoc (python3 <<EOF, node - <<EOF), argument shapes where the word after git is not the
 # subcommand (os.execvp('git', [...]), ['git'] + [...], Deno {args: [...]}, sh.git.commit(...)), file-by-file removal (os.remove loops,
 # Path.rmdir, os.removedirs), a secret name with no leading dot or slash inside inline code when the file does not exist, a shell reached
-# through a program not known as a wrapper (busybox sh, $SHELL, ssh host sh, docker exec -i c sh, kubectl exec), runners other than the listed
-# interpreters (npx tsx -e), and a removal target built by a call (path.join(root, 'src')) or an aliased import (from shutil import rmtree as r).
+# through a program not known as a wrapper (busybox sh, doas sh, setsid sh, $SHELL, ssh host sh, docker exec -i c sh, kubectl exec), a command that reaches
+# sh -c through an xargs placeholder or a variable (xargs -I{} sh -c '{}', sh -c "$CMD"), runners other than the listed interpreters (npx tsx -e), and a removal target built by a call (path.join(root, 'src')) or an aliased import (from shutil import rmtree as r).
 # Everything else on the list below is judged.
 # A shell in command position that the guard sees fed from a pipe, here-string, heredoc, `-s` or process substitution is blocked outright
-# (even `echo hi | sh`), also behind the known wrappers (sudo, env, timeout, nice, stdbuf, xargs, nohup, command, uv run) and ( ) or { }.
+# (even `echo hi | sh`), also behind the wrappers sudo, command, exec, nohup, time, nice, builtin, env, timeout, stdbuf, xargs and uv/poetry/pipenv/pdm run,
+# a leading FOO=1, ( ) or { }, and with a trailing redirect or comment. xargs sh script passes (the shell gets arguments); xargs sh -c with no readable string is blocked.
 # Inline code for python/node/perl/ruby/deno/bun (-c, -e, -p, --eval, eval) is scanned as text with the same checks as a shell command,
 # so python3 -c "print('rm -rf src')" and shutil.rmtree('./node_modules') are blocked by design.
 # Fallback only: hooks may be spawned from the session's original root, not a worktree.
@@ -155,12 +156,12 @@ wargs="([[:space:]]+(-[^[:space:]]+|-[uginIPLdsCkUDtEaoe][[:space:]]+[^-[:space:
 wrap_nx="(${asg}[[:space:]]+)*((/[^[:space:]]*/)?(${wnames})${wargs}[[:space:]]+)*"
 wrap="(${asg}[[:space:]]+)*((/[^[:space:]]*/)?(${wnames}|xargs)${wargs}[[:space:]]+)*"
 # Shells fed from a pipe, stdin, here-string, heredoc or process substitution hide their commands from this guard; the shell must be the command word, not an argument (grep sh < f).
-# Runs on the scan, where quoted text cannot contribute operators. Behind a pipe the shell may be followed by flags, redirects or a comment; xargs hands the shell its arguments, not stdin, so only xargs sh -c with no readable string is judged.
+# Runs on the scan, where quoted text cannot contribute operators; a trailing backslash or pipe joins the next line. Behind a pipe the shell may be followed by flags, redirects or a comment; xargs hands the shell its arguments, not stdin, so only xargs sh -c with no readable string is judged.
 blind_shell() {
   local w='\\?(/[^[:space:]]*/)?(bash|sh|zsh|dash|ksh)' f='([[:space:]]+-[^[:space:]]+)*' joined tl xa
-  tl='([[:space:]]+(#.*|[0-9]*>>?[[:space:]]*[^[:space:]]*|[0-9]*>&[0-9-]*|&>[^[:space:]]*))*[[:space:]]*($|[;&|)}])'
+  tl='([[:space:]]+#.*|[[:space:]]*([0-9]*>>?[[:space:]]*[^[:space:]]*|[0-9]*>&[0-9-]*|&>[^[:space:]]*))*[[:space:]]*($|[;&|)}])'
   xa="(/[^[:space:]]*/)?xargs${wargs}[[:space:]]+"
-  joined=$(printf '%s\n' "$scan" | awk '{ if (buf != "") $0 = buf " " $0; if ($0 ~ /\|[ \t]*$/) { buf = $0; next } print; buf = "" } END { if (buf != "") print buf }')
+  joined=$(printf '%s\n' "$scan" | awk '{ if (buf != "") $0 = buf " " $0; if ($0 ~ /\\$/) { sub(/\\$/, ""); buf = $0; next } if ($0 ~ /\|[ \t]*$/) { buf = $0; next } print; buf = "" } END { if (buf != "") print buf }')
   printf '%s\n' "$joined" | grep -qE "\\|[[:space:]]*([({][[:space:]]*)?${wrap_nx}${w}${f}${tl}" ||
     printf '%s\n' "$joined" | grep -qE "\\|[[:space:]]*([({][[:space:]]*)?${wrap_nx}${xa}${w}${f}[[:space:]]+-[A-Za-z]*c${tl}" ||
     printf '%s\n' "$joined" | grep -qE "${cpos}${wrap}${w}${f}[[:space:]]*<" ||
