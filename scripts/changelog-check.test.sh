@@ -66,6 +66,10 @@ mk fence1; printf -- '- ok\n  ```\n' > "$R/changelog.d/a.added.md"; commit f
 run "indented code fence in a fragment" 1 "needs a bullet"
 mk fence2; printf -- '- ok\n\t~~~\n' > "$R/changelog.d/a.added.md"; commit f
 run "indented tilde fence in a fragment" 1 "needs a bullet"
+mk quiet; frag bad.bogus.md; commit f
+out=$(cd "$R" && bash "$CHECK" main 2>&1)
+if [[ "$out" == *"release rule"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: normal PR output mentions release rules: $out"; else PASS=$((PASS + 1)); fi
+
 mk heading2; printf -- '- ok\n  # H\n' > "$R/changelog.d/a.added.md"; commit f
 run "indented heading in a fragment" 1 "needs a bullet"
 mk contok; printf -- '- ok\n  continued text\n- two\n' > "$R/changelog.d/a.added.md"; commit f

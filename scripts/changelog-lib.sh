@@ -7,12 +7,10 @@ CL_CATEGORIES="added changed fixed security"
 CL_DIR="changelog.d"
 export CL_CATEGORIES CL_DIR
 
-# Succeeds when the base name is a valid fragment name. Prints the category on stdout.
+# Succeeds when the base name is a valid fragment name. The regex is anchored at both ends and
+# bash matches the whole string, so a name with a newline anywhere fails. Prints the category on stdout.
 cl_name_category() {
   local name=$1 re='^[a-z0-9][a-z0-9-]*\.(added|changed|fixed|security)\.md$'
-  case $name in
-    *$'\n'*) return 1 ;;
-  esac
   [[ $name =~ $re ]] || return 1
   name=${name%.md}
   printf '%s\n' "${name##*.}"

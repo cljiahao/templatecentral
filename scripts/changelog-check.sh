@@ -40,6 +40,8 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 die() { echo "changelog-check: $*" >&2; exit 1; }
 bad() { echo "changelog-check: $*" >&2; n_bad=$((n_bad + 1)); }
 rel() { echo "changelog-check: release rule $1 failed: $2" >&2; n_rel=$((n_rel + 1)); }
+# Release findings found while reading the diff; shown only when this turns out to be a release PR.
+relq() { printf 'changelog-check: release rule %s failed: %s\n' "$1" "$2" >> "$work/relq"; n_relq=$((n_relq + 1)); }
 printable() { printf '%s' "${1//[^[:print:]]/?}"; }
 
 [[ $# -eq 1 && -n $1 && $1 != -* ]] || die "usage: changelog-check.sh <base-ref>"
@@ -54,8 +56,9 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/clcheck.XXXXXX") || die "mktemp failed"
 trap 'rm -rf "$work"' EXIT
 git diff --raw -z --no-renames --no-abbrev "$mb" HEAD > "$work/raw" || die "git diff failed"
 
-n_bad=0 n_rel=0 n_added=0 cl_status="" cl_mode="" cl_seen=0
+n_bad=0 n_rel=0 n_relq=0 n_added=0 cl_status="" cl_mode="" cl_seen=0
 : > "$work/deleted"
+: > "$work/relq"
 while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
   read -r _om nm _osha nsha st <<< "$meta"
   label=$(printable "$path")
@@ -68,11 +71,11 @@ while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
       if [[ $rest != */* ]] && cl_name_category "$rest" >/dev/null; then
         printf '%s\n' "$rest" >> "$work/deleted"
       else
-        rel 2 "$label: only valid fragments may be deleted"
+        relq 2 "$label: only valid fragments may be deleted"
       fi
       continue
     fi
-    rel 2 "$label: nothing under $CL_DIR/ may be added or modified in a release PR"
+    relq 2 "$label: nothing under $CL_DIR/ may be added or modified in a release PR"
     if [[ $rest == README.md ]]; then continue; fi
     if [[ $st != A ]]; then bad "$label: only adding a fragment is allowed here (status $st)"; continue; fi
     if [[ $rest == */* ]]; then bad "$label: fragments cannot live in a subdirectory"; continue; fi
@@ -88,8 +91,8 @@ while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
     tests/golden/*.sha256) if [[ ${path#tests/golden/} != */* ]]; then ok_path=1; else ok_path=0; fi ;;
     *) ok_path=0 ;;
   esac
-  if [[ $ok_path -eq 0 ]]; then rel 3 "$label is not on the release allow-list"
-  elif [[ $st != M ]]; then rel 3 "$label: release files may only be modified (status $st)"; fi
+  if [[ $ok_path -eq 0 ]]; then relq 3 "$label is not on the release allow-list"
+  elif [[ $st != M ]]; then relq 3 "$label: release files may only be modified (status $st)"; fi
 done < "$work/raw"
 
 if [[ $cl_seen -eq 0 ]]; then
@@ -100,7 +103,9 @@ if [[ $cl_seen -eq 0 ]]; then
 fi
 
 echo "changelog-check: CHANGELOG.md is in the diff, so this PR must be a release PR (a normal PR adds a fragment instead)" >&2
-if [[ $cl_status != M || ( $cl_mode != 100644 && $cl_mode != 100755 ) ]]; then
+cat "$work/relq" >&2
+n_rel=$n_relq
+if [[ $cl_mode != 100644 && $cl_mode != 100755 ]]; then
   rel 1 "CHANGELOG.md must be modified in place as a regular file (status $cl_status, mode $cl_mode)"
 fi
 [[ $n_bad -eq 0 && $n_rel -eq 0 ]] || die "not a valid release PR ($n_rel release rule failure(s), $n_bad invalid entry(ies))"
