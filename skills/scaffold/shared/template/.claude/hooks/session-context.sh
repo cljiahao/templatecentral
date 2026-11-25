@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SessionStart(startup|resume|clear|compact): AGENTS.md is already loaded, so print only what it cannot know.
-# Every source: a line when the checkout sits on a protected branch. Compact: three invariant lines.
+# Every source: a line when the checkout sits on a protected branch, and the gate-time note once per session when the gates are over budget. Compact: three invariant lines.
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
 input=$(cat)
 branch=$(git symbolic-ref --short -q HEAD 2>/dev/null)
@@ -12,4 +12,5 @@ if printf '%s' "$input" | grep -Eq '"source"[[:space:]]*:[[:space:]]*"compact"';
   echo "Run the quality gate before declaring a task done."
   echo "Binding invariants and the protected-file list: docs/CONSTITUTION.md."
 fi
+printf '%s' "$input" | bash .claude/gate-budget.sh hook 2>/dev/null
 exit 0

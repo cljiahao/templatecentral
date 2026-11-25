@@ -212,7 +212,7 @@ if [ "$PART" = manifest ]; then
     printf '%s\n' .claude/skills/skill-audit/SKILL.md
     (cd "$TGT" && find .claude/hooks -type f 2>/dev/null | LC_ALL=C sort)
     printf '%s\n' lefthook.yml .lefthook/commit-msg.sh .gitleaks.toml .claude/comment-hygiene-patterns.txt \
-      .github/workflows/ci.yml azure-pipelines/templatecentral-gates.yml azure-pipelines.yml .claude/ci-gates.sh .claude/gates.txt \
+      .github/workflows/ci.yml azure-pipelines/templatecentral-gates.yml azure-pipelines.yml .claude/ci-gates.sh .claude/gates.txt .claude/gate-budget.sh .claude/gate-budget.conf \
       .claude/verify-harness.sh .claude/regen-harness.sh scripts/check-docs.sh scripts/test-budget.sh scripts/gate-ratchet.sh \
       scripts/check-supply-chain.sh scripts/check-workflows.sh scripts/check-env-example.sh scripts/check-dockerfile.sh scripts/check-workarounds.sh scripts/scan-secrets.sh scripts/check-secret-scanner.sh .claude/registry-hosts.txt \
       .claude/skills/test-consolidate/SKILL.md docs/adr/0001-test-each-behaviour-once.md docs/harness.md .github/dependabot.yml

@@ -6,6 +6,15 @@ branch=${2:-}
 branch=${branch#refs/heads/}
 base="origin/$branch"
 
+# Times every gate but `list`: runs this script again as a child, records name, seconds and exit status, then passes the child's output and status on unchanged.
+if [ -z "${TC_GATE_TIMED:-}" ] && [ -n "$gate" ] && [ "$gate" != list ]; then
+  t0=$(date +%s)
+  TC_GATE_TIMED=1 bash "$0" "$@"
+  rc=$?
+  bash "$(dirname "$0")/gate-budget.sh" record "$gate" "$t0" "$(date +%s)" "$rc" >/dev/null 2>&1 || true
+  exit "$rc"
+fi
+
 fail() {
   if [ -n "${TF_BUILD:-}" ]; then echo "##vso[task.logissue type=error]$1"; else echo "::error::$1"; fi
   exit 1

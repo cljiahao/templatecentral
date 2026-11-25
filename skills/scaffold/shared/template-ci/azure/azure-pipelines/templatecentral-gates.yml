@@ -43,3 +43,7 @@ steps:
       bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Gate ratchet (no gate weaker than the base branch)
     env: { LABELS: $(LABELS) }
+  # Prints the gate-time note when the gates above ran over budget; exit 0 unless the budget file is broken.
+  - bash: bash .claude/gate-budget.sh check
+    displayName: Gate-time budget note
+    condition: always()

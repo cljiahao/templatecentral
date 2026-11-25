@@ -85,6 +85,10 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: bash .claude/ci-gates.sh secrets "$BASE_REF"
+      # Prints the gate-time note when this job's gates ran over budget; exit 0 unless the budget file is broken
+      - name: Gate-time budget note
+        if: always()
+        run: bash .claude/gate-budget.sh check
   test:
     needs: plan
     runs-on: ubuntu-latest

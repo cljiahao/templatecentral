@@ -6,6 +6,7 @@
 # Test scripts: every package.json script whose name has a test, coverage, lint, typecheck, build, check, verify, ci, format or audit word keeps its word list. Any change is a finding except these known-safe words: --reporter, --coverage.reporter, --outputFile (with or without a value), --coverage.reportsDirectory=, --silent, --color, --no-color. A script that is gone is a finding; a new script is covered by the flag checks and the CI and lefthook comparison.
 # pytest: any change to a [tool.pytest.ini_options] key or a new key is a finding, except raising --cov-fail-under and the markers, pythonpath and asyncio_default_fixture_loop_scope keys.
 # Type checkers: tsconfig and pyright strictness may tighten, never loosen; a new tsconfig or pyright config may not switch strictness off.
+# Gate-time budget: .claude/gate-budget.conf may not be deleted, and its three limits may not rise. A human can waive that with the allow-gate-change label.
 # Allow-lists: dep-audit-allow.txt may only lose lines; comment-hygiene-patterns.txt may only gain lines at the end.
 set -uo pipefail
 
@@ -70,6 +71,7 @@ kind_of() {
     .claude/registry-hosts.txt | */.claude/registry-hosts.txt) KIND=hosts ;;
     .claude/dep-audit-allow.txt | */.claude/dep-audit-allow.txt) KIND=allow ;;
     .claude/comment-hygiene-patterns.txt | */.claude/comment-hygiene-patterns.txt) KIND=patterns ;;
+    .claude/gate-budget.conf | */.claude/gate-budget.conf) KIND=gatetime ;;
     tsconfig.json | tsconfig.*.json | */tsconfig.json | */tsconfig.*.json) KIND=tsconfig ;;
     pyrightconfig.json | */pyrightconfig.json) KIND=pyright ;;
     pnpm-workspace.yaml | */pnpm-workspace.yaml) KIND=pnpmws ;;
@@ -1101,6 +1103,18 @@ function do_budget() {
   emit("max", "test-budget-ratio", num_in(substr(T, MS + 21, ML - 21)))
 }
 
+function do_gatetime(   i, n, L, line, k, v) {
+  n = split(T, L, "\n")
+  for (i = 1; i <= n; i++) {
+    line = L[i]
+    if (line == "" || line ~ /^#/) continue
+    if (line !~ /^[a-z_]+=[0-9]+$/) fail("gate-budget.conf line " i " is not key=integer")
+    k = substr(line, 1, index(line, "=") - 1); v = substr(line, index(line, "=") + 1)
+    if (k == "total_budget_seconds" || k == "per_gate_budget_seconds" || k == "regression_percent") emit("max", "gatetime:" k, v)
+    else if (k != "runs_kept") fail("gate-budget.conf line " i ": unknown key " k)
+  }
+}
+
 function do_hosts(   i, n, L, line) {
   n = split(T, L, "\n")
   for (i = 1; i <= n; i++) {
@@ -1202,6 +1216,7 @@ END {
   else if (K == "budget") do_budget()
   else if (K == "gates") do_gates()
   else if (K == "hosts") do_hosts()
+  else if (K == "gatetime") do_gatetime()
   else if (K == "pnpmws") do_pnpmws()
   else if (K == "dependabot") do_dependabot()
   else if (K == "npmrc") do_npmrc()
