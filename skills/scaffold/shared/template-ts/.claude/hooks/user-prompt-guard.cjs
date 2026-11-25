@@ -1,24 +1,8 @@
 #!/usr/bin/env node
-// UserPromptSubmit — OWASP LLM01 injection guard + LLM02 credential-leak detection. Exit 2 = block.
+// UserPromptSubmit — LLM02 credential-leak detection. Exit 2 = block.
 const input = require('fs').readFileSync(0, 'utf8');
 let prompt = '';
 try { prompt = (JSON.parse(input || '{}').prompt) || ''; } catch { process.exit(0); }
-const lower = prompt.toLowerCase();
-
-const injection = [
-  'ignore previous instructions',
-  'ignore all instructions',
-  'forget your instructions',
-  'pretend you have no restrictions',
-  'act as if you have no restrictions',
-];
-// Only the agent's own instructions count as the object; "override your config defaults" is ordinary work.
-const injectionRe = /\b(disregard|override)\s+(all\s+)?(of\s+)?your\s+((previous|prior|original|current)\s+)?(instructions|rules|system\s+prompt|guidelines)\b/;
-const hit = injection.find((p) => lower.includes(p)) || (lower.match(injectionRe) || [])[0];
-if (hit) {
-  process.stderr.write(`Blocked: prompt matches an injection pattern (OWASP LLM01): "${hit}"\n`);
-  process.exit(2);
-}
 
 const credentials = [
   [/AKIA[0-9A-Z]{16}/, 'AWS access key ID'],

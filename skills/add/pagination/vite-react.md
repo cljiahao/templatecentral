@@ -5,9 +5,7 @@
 
 Run `TC_PART=leaf TC_LEAF=add/pagination/vite-react bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/pagination/vite-react/template/` (listed in `<skill-dir>/pagination/vite-react/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**1. Pagination Hook**
-
-Copied verbatim from `<skill-dir>/pagination/vite-react/template/src/hooks/use-pagination.ts` by the copy step; do not re-type it.
+**1. Pagination Hook** (`src/hooks/use-pagination.ts`)
 
 **2. Export from the hooks barrel**
 
@@ -140,5 +138,3 @@ Run `pnpm test`, then `pnpm dev` and confirm: Previous is disabled on page 1, Ne
 - Set `placeholderData: keepPreviousData` on paginated queries, or each page click blanks the list
 - Drive loading/disabled UI off `isFetching` for page changes; `isPending` covers only the first load
 - Always throw `APIError`, never a generic `Error` — never put validation details in the thrown message
-- Always add the hook to the `src/hooks/index.ts` barrel
-- Use the shadcn `Button` for pagination controls — never a raw `<button>`
