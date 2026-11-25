@@ -5,8 +5,6 @@
 
 **1. Schemas live in `schemas/`, never in the component file**
 
-One definition for the service, the test and the form:
-
 ```ts
 // src/features/projects/schemas/create-project.schema.ts
 import { z } from 'zod';
@@ -249,11 +247,10 @@ export async function fetchProject(id: string): Promise<Project> {
 
 ## Rules
 
-- Schemas live in `schemas/`, not in component files
-- Call the backend through an `ApiClient` subclass, not raw `fetch` or a hardcoded `/api/...` path
-- Always validate route params / query values with Zod before use, and `encodeURIComponent` any value interpolated into a path
-- Throw `APIError`, never a generic `Error` — and never embed validation field detail in the thrown message
-- Do not render a backend error string to the user; log it and show a fixed generic message
+- Call the backend through an `ApiClient` subclass, not raw `fetch` or a hardcoded `/api/...` path (it maps non-2xx to `APIError` and adds the CSRF header)
+- Validate route params and query values with Zod, and `encodeURIComponent` any value interpolated into a path (`../` or `?` rewrites the URL)
+- Throw `APIError`, never a generic `Error`, and keep validation field detail out of the message (error handling is keyed on `APIError`)
+- Never render a backend error string; log it, show a fixed message (it can carry stack traces or SQL)
 
 ## Testing / Verification
 
@@ -261,10 +258,6 @@ export async function fetchProject(id: string): Promise<Project> {
 pnpm dev   # submit the form with invalid values — field errors render before any request
 pnpm test
 ```
-
-## See Also
-
-`templatecentral:add` (error-handling, logging, endpoint, form) and the stack's `code-standards`.
 
 ## After Writing Code
 

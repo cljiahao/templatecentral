@@ -303,7 +303,7 @@ export const POST = withLogging(async (request) => {
 
 **7. External API Response Validation**
 
-The validation shape is the point here; the full integration layer comes from `templatecentral:add (integration)`, which owns `src/integrations/services/github-service.ts`.
+Shape only; `templatecentral:add (integration)` owns the real layer (`src/integrations/services/github-service.ts`).
 
 ```ts
 // src/integrations/services/github-user.ts
@@ -348,13 +348,11 @@ export async function fetchGithubUser(username: string) {
 
 ## Rules
 
-- Schemas live in `schemas/`, not in component files
-- Always re-validate on the server; the client-side resolver is UX only and a crafted request skips it entirely
-- Always validate route params / query values with Zod before use, and `encodeURIComponent` any value interpolated into a path
-- Route failures go through `handleApiError`; a hand-rolled error body makes the error contract drift per route
-- Throw `APIError`, never a generic `Error` — and never embed validation field detail in the thrown message
-- Do not render a backend error string to the user; log it and show a fixed generic message
-- Every input needs `aria-invalid` and an `aria-describedby` pointing at its `role="alert"` error node
+- Re-validate on the server; the client resolver is UX only
+- Validate route params and query values with Zod, and `encodeURIComponent` any value interpolated into a path (`../` or `?` rewrites the URL)
+- Route failures go through `handleApiError`; a hand-rolled error body makes the contract drift per route
+- Throw `APIError`, never a generic `Error`, and keep validation field detail out of the message (error handling is keyed on `APIError`)
+- Never render a backend error string; log it, show a fixed message (it can carry stack traces or SQL)
 
 ## Testing / Verification
 
@@ -371,10 +369,6 @@ curl -X POST http://localhost:3000/api/sessions \
 
 pnpm test
 ```
-
-## See Also
-
-`templatecentral:add` (error-handling, logging, endpoint, form) and the stack's `code-standards`.
 
 ## After Writing Code
 
