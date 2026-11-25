@@ -278,7 +278,7 @@ test_stem() {
 covered_source() {
   local s
   test_stem "$1" || return 1
-  s=$(sed 's@^@/@' "$wd/tree.txt" | grep -E "$pat" | grep -vE '(^|/)(test|tests|__tests__)/|[.](test|spec)[.]|/test_|_test[.]py$' | head -n 1)
+  s=$(awk -v pat="$pat" -v excl='(^|/)(test|tests|__tests__)/|[.](test|spec)[.]|/test_|_test[.]py$' '{ p = "/" $0 } !done && p ~ pat && p !~ excl { print p; done = 1 }' "$wd/tree.txt")
   [ -n "$s" ] || return 1
   printf '%s\n' "${s#/}"
 }

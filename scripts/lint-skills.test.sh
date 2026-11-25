@@ -1307,6 +1307,189 @@ fails sonar_scope_spec_inclusion_dropped "$H_SONAR" sonar_drop_spec "coverage ex
 fails sonar_scope_py_sources_changed "$H_SONAR" sonar_py_sources "missing sonar.sources=src"
 passes sonar_scope_aligned "$H_SONAR" true
 
+# ── check_seeded_pipefail_readers ────────────────────────────────────────────────────────────
+H_PF="Seeded pipefail scripts do not pipe into an early-exit reader"
+PF_FIXTURE="scaffold/shared/template/scripts/zz-pipefail-fixture.sh"
+PF_YAML="scaffold/shared/template-ci/github-ts/.github/workflows/zz-pipefail-fixture.yml"
+# pf_script <pipefail line> <command>: writes a seeded fixture script whose command sits on line 3.
+pf_script() { printf '#!/usr/bin/env bash\n%s\n%s\n' "$1" "$2" > "$S/$PF_FIXTURE"; }
+pf_grep_q() { pf_script 'set -uo pipefail' 'printf x | grep -q x'; }
+pf_here_string() { pf_script 'set -uo pipefail' "grep -q x <<< \"\$v\""; }
+pf_no_pipefail() { pf_script 'set -u' 'printf x | grep -q x'; }
+pf_grep_Eq() { pf_script 'set -uo pipefail' 'printf x | grep -Eq x'; }
+pf_grep_iqE() { pf_script 'set -uo pipefail' 'if printf x | grep -iqE x; then :; fi'; }
+pf_grep_quiet() { pf_script 'set -uo pipefail' 'printf x | grep --quiet x'; }
+pf_grep_m1() { pf_script 'set -uo pipefail' "v=\$(printf x | grep -m1 x)"; }
+pf_grep_e_arg() { pf_script 'set -uo pipefail' 'printf x | grep -e q -E x'; }
+pf_grep_count() { pf_script 'set -uo pipefail' 'printf x | grep -c x'; }
+pf_grep_invert() { pf_script 'set -uo pipefail' 'printf x | grep -v y'; }
+pf_head() { pf_script 'set -uo pipefail' "v=\$(printf x | head -n 1)"; }
+pf_sed_q() { pf_script 'set -uo pipefail' "v=\$(printf x | sed '1q')"; }
+pf_sed_s() { pf_script 'set -uo pipefail' "v=\$(printf x | sed 's/x/q/')"; }
+pf_awk_exit() { pf_script 'set -uo pipefail' "printf x | awk '/x/ { exit }'"; }
+pf_awk_end_exit() { pf_script 'set -uo pipefail' "printf x | awk '/x/ { hit = 1 } END { exit !hit }'"; }
+pf_read() { pf_script 'set -uo pipefail' 'printf x | read -r v'; }
+pf_read_loop() { pf_script 'set -uo pipefail' 'printf x | while read -r v; do :; done'; }
+pf_multiline() { pf_script 'set -uo pipefail' 'printf x |
+  grep -q x'; }
+pf_in_subshell() { pf_script 'set -uo pipefail' "v=\$(printf x | grep -q x && echo y)"; }
+pf_quoted_pipe() { pf_script 'set -uo pipefail' "echo 'a | grep -q b'"; }
+pf_heredoc_body() { printf '#!/usr/bin/env bash\nset -uo pipefail\ncat <<EOF\nprintf x | grep -q x\nEOF\n' > "$S/$PF_FIXTURE"; }
+pf_comment() { pf_script 'set -uo pipefail' '# printf x | grep -q x'; }
+pf_unclosed_quote() { pf_script 'set -uo pipefail' "echo 'never closed"; }
+pf_yaml_run() { printf 'steps:\n  - run: |\n      set -o pipefail\n      printf x | grep -q x\n' > "$S/$PF_YAML"; }
+pf_yaml_clean() { printf 'steps:\n  - run: |\n      set -o pipefail\n      grep -q x <<< "%s"\n' "\$v" > "$S/$PF_YAML"; }
+pf_yaml_other_key() { printf 'steps:\n  - name: printf x | grep -q x\n    run: |\n      set -o pipefail\n      echo ok\n' > "$S/$PF_YAML"; }
+pf_drop_anchor_pipefail() { sed -i.bak 's/pipefail//' "$SH/template/.lefthook/commit-msg.sh"; }
+pf_delete_anchor() { rm -f "$SH/template/.lefthook/commit-msg.sh"; }
+fails pipefail_reader_grep_q "$H_PF" pf_grep_q "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_in_yaml_run_block "$H_PF" pf_yaml_run "zz-pipefail-fixture.yml:4: pipe into grep"
+fails pipefail_reader_fails_when_anchor_pipefail_dropped "$H_PF" pf_drop_anchor_pipefail "anchor script missing or no longer sets pipefail"
+fails pipefail_reader_fails_when_anchor_deleted "$H_PF" pf_delete_anchor "anchor script missing or no longer sets pipefail"
+passes pipefail_reader_here_string "$H_PF" pf_here_string
+
+pf_crash() { pf_script 'set -uo pipefail' "echo $(printf '%.0s\044(' {1..800})"; }
+pf_xargs() { pf_script 'set -uo pipefail' 'printf x | xargs grep -q x'; }
+pf_xargs_clean() { pf_script 'set -uo pipefail' 'printf x | xargs echo'; }
+pf_timeout() { pf_script 'set -uo pipefail' 'printf x | timeout 5 grep -q x'; }
+pf_timeout_clean() { pf_script 'set -uo pipefail' 'printf x | timeout 5 cat'; }
+pf_stdbuf() { pf_script 'set -uo pipefail' 'printf x | stdbuf -oL grep -q x'; }
+pf_sudo() { pf_script 'set -uo pipefail' 'printf x | sudo -n grep -q x'; }
+pf_group() { pf_script 'set -uo pipefail' 'printf x | { read -r v; }'; }
+pf_group_clean() { pf_script 'set -uo pipefail' 'printf x | { cat; }'; }
+pf_group_later() { pf_script 'set -uo pipefail' 'printf x | { cat > /dev/null; grep -q x; }'; }
+pf_group_closed() { printf '#!/usr/bin/env bash\nset -uo pipefail\nprintf x | { cat; }\ngrep -q x file\n' > "$S/$PF_FIXTURE"; }
+pf_subshell() { pf_script 'set -uo pipefail' 'printf x | (grep -q x)'; }
+pf_subshell_clean() { pf_script 'set -uo pipefail' 'printf x | (cat)'; }
+pf_loop_break() { pf_script 'set -uo pipefail' 'printf x | while read -r l; do break; done'; }
+pf_loop_exit() { pf_script 'set -uo pipefail' 'printf x | while read -r l; do exit 1; done'; }
+pf_loop_return() { pf_script 'set -uo pipefail' 'f() { printf x | while read -r l; do return 1; done; }'; }
+pf_loop_clean() { pf_script 'set -uo pipefail' "printf x | while read -r l; do echo \"\$l\"; done"; }
+pf_loop_inner_break() { pf_script 'set -uo pipefail' 'printf x | while read -r l; do for i in 1; do break; done; done'; }
+pf_loop_not_piped() { pf_script 'set -uo pipefail' 'while read -r l; do break; done < file'; }
+pf_abbrev() { pf_script 'set -uo pipefail' 'printf x | grep --max=1 x'; }
+pf_abbrev_quiet() { pf_script 'set -uo pipefail' 'printf x | grep --qu x'; }
+pf_abbrev_clean() { pf_script 'set -uo pipefail' 'printf x | grep --colour x'; }
+pf_pipe_amp() { pf_script 'set -uo pipefail' 'printf x |& grep -q x'; }
+pf_pipe_amp_clean() { pf_script 'set -uo pipefail' 'printf x |& cat'; }
+pf_qF() { pf_script 'set -uo pipefail' 'printf x | grep -qF x'; }
+pf_qF_clean() { pf_script 'set -uo pipefail' 'printf x | grep -F x'; }
+pf_if_not() { pf_script 'set -uo pipefail' 'if ! printf x | grep -q x; then :; fi'; }
+pf_if_not_clean() { pf_script 'set -uo pipefail' "if ! grep -q x <<< \"\$v\"; then :; fi"; }
+pf_awk_string() { pf_script 'set -uo pipefail' "printf x | awk '\$1 == \"exit\" { print }'"; }
+pf_awk_regex() { pf_script 'set -uo pipefail' "printf x | awk '/exit/ { print }'"; }
+pf_awk_real_exit() { pf_script 'set -uo pipefail' "printf x | awk '\$1 == \"exit\" { exit }'"; }
+pf_arith_shift() { printf '#!/usr/bin/env bash\nset -uo pipefail\n(( x = 1 << 2 ))\nprintf x | grep -q x\n' > "$S/$PF_FIXTURE"; }
+pf_arith_clean() { printf '#!/usr/bin/env bash\nset -uo pipefail\n(( x = 1 << 2 ))\ngrep -q x file\n' > "$S/$PF_FIXTURE"; }
+fails pipefail_reader_scanner_crash_fails_lint "$H_PF" pf_crash "the scanner stopped early"
+
+# Tokenizer cases run through the extracted scanner directly: one fixture file per case, one Python
+# run over all of them, instead of a full skills copy and a full lint per case. pfd <name> <fixture
+# function> <"LINE: message" | clean>. The end-to-end cases above cover the wiring (the hit shows up
+# in the section, the count guard, the anchors); these cover the tokenizer.
+pf_file_opt_clean() { pf_script 'set -uo pipefail' 'printf x | grep --file=pats x'; }
+pf_abbrev_m() { pf_script 'set -uo pipefail' 'printf x | grep --m=1 x'; }
+pf_abbrev_q() { pf_script 'set -uo pipefail' 'printf x | grep --q x'; }
+pf_loop_subshell_exit() { pf_script 'set -uo pipefail' 'printf x | while read -r l; do (exit 1); done'; }
+PFD_NAMES=()
+PFD_FNS=()
+PFD_WANT=()
+pfd() {
+  if [[ -n "${ONLY:-}" && ! "$1" =~ $ONLY ]]; then return 0; fi
+  PFD_NAMES+=("$1"); PFD_FNS+=("$2"); PFD_WANT+=("$3")
+}
+pfd pipefail_reader_grep_Eq pf_grep_Eq "3: pipe into grep"
+pfd pipefail_reader_grep_iqE pf_grep_iqE "3: pipe into grep"
+pfd pipefail_reader_grep_long_quiet pf_grep_quiet "3: pipe into grep"
+pfd pipefail_reader_grep_max_count pf_grep_m1 "3: pipe into grep"
+pfd pipefail_reader_head pf_head "3: pipe into head"
+pfd pipefail_reader_sed_q pf_sed_q "3: pipe into sed"
+pfd pipefail_reader_awk_exit pf_awk_exit "3: pipe into awk"
+pfd pipefail_reader_read pf_read "3: pipe into read"
+pfd pipefail_reader_multiline_pipe_names_reader_line pf_multiline "4: pipe into grep"
+pfd pipefail_reader_inside_command_substitution pf_in_subshell "3: pipe into grep"
+pfd pipefail_reader_unclosed_quote_fails pf_unclosed_quote "3: single quote is never closed"
+pfd pipefail_reader_no_pipefail_script pf_no_pipefail clean
+pfd pipefail_reader_grep_pattern_arg_named_q pf_grep_e_arg clean
+pfd pipefail_reader_grep_count pf_grep_count clean
+pfd pipefail_reader_grep_invert pf_grep_invert clean
+pfd pipefail_reader_sed_substitute pf_sed_s clean
+pfd pipefail_reader_awk_exit_in_end_block pf_awk_end_exit clean
+pfd pipefail_reader_while_read_loop pf_read_loop clean
+pfd pipefail_reader_pipe_inside_quotes pf_quoted_pipe clean
+pfd pipefail_reader_pipe_inside_heredoc_body pf_heredoc_body clean
+pfd pipefail_reader_pipe_inside_comment pf_comment clean
+pfd pipefail_reader_yaml_clean_block pf_yaml_clean clean
+pfd pipefail_reader_yaml_non_script_key pf_yaml_other_key clean
+pfd pipefail_reader_behind_xargs pf_xargs "3: pipe into grep"
+pfd pipefail_reader_behind_timeout pf_timeout "3: pipe into grep"
+pfd pipefail_reader_behind_stdbuf pf_stdbuf "3: pipe into grep"
+pfd pipefail_reader_behind_sudo pf_sudo "3: pipe into grep"
+pfd pipefail_reader_in_brace_group pf_group "3: pipe into read"
+pfd pipefail_reader_later_in_brace_group pf_group_later "3: pipe into grep"
+pfd pipefail_reader_in_subshell_group pf_subshell "3: pipe into grep"
+pfd pipefail_reader_piped_loop_break pf_loop_break "3: piped loop body can break"
+pfd pipefail_reader_piped_loop_exit pf_loop_exit "3: piped loop body can exit"
+pfd pipefail_reader_piped_loop_return pf_loop_return "3: piped loop body can return"
+pfd pipefail_reader_abbreviated_max_count pf_abbrev "3: pipe into grep"
+pfd pipefail_reader_abbreviated_quiet pf_abbrev_quiet "3: pipe into grep"
+pfd pipefail_reader_pipe_ampersand pf_pipe_amp "3: pipe into grep"
+pfd pipefail_reader_cluster_qF pf_qF "3: pipe into grep"
+pfd pipefail_reader_if_not_pipe pf_if_not "3: pipe into grep"
+pfd pipefail_reader_awk_real_exit_after_string pf_awk_real_exit "3: pipe into awk"
+pfd pipefail_reader_after_arithmetic_shift pf_arith_shift "4: pipe into grep"
+pfd pipefail_reader_xargs_clean pf_xargs_clean clean
+pfd pipefail_reader_timeout_clean pf_timeout_clean clean
+pfd pipefail_reader_brace_group_clean pf_group_clean clean
+pfd pipefail_reader_group_closed_does_not_leak pf_group_closed clean
+pfd pipefail_reader_subshell_clean pf_subshell_clean clean
+pfd pipefail_reader_piped_loop_clean pf_loop_clean clean
+pfd pipefail_reader_piped_loop_inner_break pf_loop_inner_break clean
+pfd pipefail_reader_loop_reading_a_file pf_loop_not_piped clean
+pfd pipefail_reader_abbreviation_clean pf_abbrev_clean clean
+pfd pipefail_reader_pipe_ampersand_clean pf_pipe_amp_clean clean
+pfd pipefail_reader_cluster_F_clean pf_qF_clean clean
+pfd pipefail_reader_if_not_here_string pf_if_not_clean clean
+pfd pipefail_reader_awk_exit_in_string pf_awk_string clean
+pfd pipefail_reader_awk_exit_in_regex pf_awk_regex clean
+pfd pipefail_reader_arithmetic_shift_is_not_a_heredoc pf_arith_clean clean
+pfd pipefail_reader_file_option_clean pf_file_opt_clean clean
+pfd pipefail_reader_abbreviated_m_equals pf_abbrev_m "3: pipe into grep"
+pfd pipefail_reader_abbreviated_q_long pf_abbrev_q "3: pipe into grep"
+pfd pipefail_reader_piped_loop_subshell_exit pf_loop_subshell_exit "3: piped loop body can exit"
+# run_pfd — write every registered fixture, run the scanner once, check each case's lines.
+run_pfd() {
+  local d="$T/pfd" py i f ext out want saveS=${S:-} savePF=$PF_FIXTURE saveY=$PF_YAML
+  [[ ${#PFD_NAMES[@]} -gt 0 ]] || return 0
+  py=$(awk '/^check_seeded_pipefail_readers\(\)/ { f = 1 } f && /read -r -d .. py <<.PY. \|\| true/ { on = 1; next } on && /^PY$/ { exit } on { print }' "$LINT")
+  [[ -n "$py" ]] || { FAIL=$((FAIL + 1)); echo "FAIL: pfd — could not extract the scanner from $LINT"; return 0; }
+  rm -rf "$d"; mkdir -p "$d"
+  S=$d
+  for i in "${!PFD_NAMES[@]}"; do
+    ext="sh"
+    [[ "${PFD_FNS[$i]}" == pf_yaml* ]] && ext=yml
+    PF_FIXTURE="${PFD_NAMES[$i]}.$ext"
+    PF_YAML="${PFD_NAMES[$i]}.$ext"
+    "${PFD_FNS[$i]}"
+  done
+  S=$saveS; PF_FIXTURE=$savePF; PF_YAML=$saveY
+  f=$(find "$d" -type f | LC_ALL=C sort)
+  out=$(xargs python3 -I -c "$py" <<<"$f" 2>&1 || true)
+  check "${#PFD_NAMES[@]}" "$(awk '/^DONE / { n += $2 } END { print n + 0 }' <<<"$out")" "pfd: the scanner finished every fixture"
+  for i in "${!PFD_NAMES[@]}"; do
+    ext="sh"
+    [[ "${PFD_FNS[$i]}" == pf_yaml* ]] && ext=yml
+    f="$d/${PFD_NAMES[$i]}.$ext"
+    want=${PFD_WANT[$i]}
+    if [[ "$want" == clean ]]; then
+      check "" "$(grep -F "$f:" <<<"$out" | grep -E '^(HIT|PARSE) ' || true)" "${PFD_NAMES[$i]} reports nothing"
+    else
+      check yes "$(grep -qE "^(HIT|PARSE) $f:$want" <<<"$out" && echo yes || echo no)" "${PFD_NAMES[$i]} reports [$want]"
+    fi
+  done
+}
+
+run_pfd
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

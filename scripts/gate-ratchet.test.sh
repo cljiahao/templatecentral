@@ -1445,5 +1445,83 @@ printf 'x\n' >> "$R/scripts/check-docs.sh"
 git_ commit -q -am "touch"
 expect 1 "control: a project without the folder still guards its scripts" "scripts/check-docs.sh"
 
+# bulk_main <count>: commit that many files with 700-character paths on main, so the tracked-path listing is far past one pipe buffer with few files.
+bulk_main() {
+  git_ checkout -q main
+  python3 - "$R" "$1" <<'PY'
+import os, sys
+root, n = sys.argv[1], int(sys.argv[2])
+d = os.path.join(root, "bulk", "d" * 240, "e" * 240)
+os.makedirs(d, exist_ok=True)
+for i in range(n):
+    with open(os.path.join(d, "file-%05d-%s.txt" % (i, "p" * 200)), "w") as fh:
+        fh.write("x\n")
+PY
+  git_ add -A
+  git_ commit -q -m bulk
+}
+
+# A repository whose tracked-path listing is over 100 KB: a weakened gate is still caught and never reads as first adoption.
+seed ts
+bulk_main 150
+listing=$(git_ ls-tree -r --name-only main | wc -c | tr -d ' ')
+check 1 "$([ "$listing" -gt 100000 ] && echo 1 || echo 0)" "bulk fixture listing is over 100 KB ($listing)"
+weakens eslint.config.mjs "['error', 15]" "['error', 25]" "long paths: complexity limit raised" "was 15" "now 25"
+if [[ "$OUT" == *"first adoption"* ]]; then check no yes "long paths: never reported as first adoption"; else check ok ok "long paths: never reported as first adoption"; fi
+git_ checkout -q -B work main
+ratchet
+check 0 "$EC" "long paths: unchanged branch passes ($OUT)"
+
+seed ts
+git_ rm -q -f .claude/gates.txt
+git_ commit -q -m "no gates file"
+bulk_main 150
+git_ checkout -q -B work main
+printf 'x\n' >> "$R/README.md"
+git_ add -A
+git_ commit -q -m "touch"
+expect 0 "long paths without gates.txt: still first adoption" "first adoption"
+
+# A git object that cannot be read stops the run with status 2 and a message, never a pass.
+seed ts
+edit tsconfig.json '"strict": true' '"strict": true, "noImplicitAny": true'
+blob=$(git_ rev-parse "main:tsconfig.json")
+rm -f "$R/.git/objects/${blob:0:2}/${blob:2}"
+ratchet
+check 2 "$EC" "missing base blob: exits 2 ($OUT)"
+has "cannot read tsconfig.json at the merge base" "$OUT" "missing base blob: names the unreadable file"
+
+seed ts
+git_ checkout -q -B work main
+printf 'x\n' >> "$R/README.md"
+git_ add -A
+git_ commit -q -m "touch"
+tree=$(git_ rev-parse "main^{tree}")
+rm -f "$R/.git/objects/${tree:0:2}/${tree:2}"
+ratchet
+check 2 "$EC" "missing base tree: exits 2 ($OUT)"
+if [[ "$OUT" == *"first adoption"* ]]; then check no yes "missing base tree: never reported as first adoption"; else check ok ok "missing base tree: never reported as first adoption"; fi
+
+# A competing config added where the listing is over 100 KB: both names sort before bulk/. On origin/main base_has was `printf paths | grep -Fxq`, a pipe whose writer died of SIGPIPE once grep quit at the first hit.
+seed ts
+bulk_main 150
+git_ checkout -q -B work main
+printf 'a.txt\n' > "$R/.gitleaksignore"
+git_ add -A
+git_ commit -q -m "add .gitleaksignore beside .gitleaks.toml"
+expect 1 "long paths: .gitleaksignore beside a tracked .gitleaks.toml" ".gitleaksignore" "competes"
+
+# A gitlink (a submodule) in the tree is no blob: it is left out of the path lists, so the run passes as it did before. The path carries a config name, so the per-file loop would reach it and `git show` would fail on it.
+seed ts
+git_ checkout -q main
+git_ update-index --add --cacheinfo "160000,$NEWSHA,vendor/eslint.config.js"
+git_ commit -q -m "add a submodule entry"
+git_ checkout -q -B work main
+printf 'x\n' >> "$R/README.md"
+git_ add -A
+git_ commit -q -m "touch"
+expect 0 "a gitlink in the tree: passes"
+weakens eslint.config.mjs "['error', 15]" "['error', 25]" "a gitlink in the tree: a weakened gate is still caught" "was 15" "now 25"
+
 echo "gate-ratchet.test: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]
