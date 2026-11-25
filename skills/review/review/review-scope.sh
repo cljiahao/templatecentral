@@ -9,13 +9,17 @@
 # Record mode: writes <project-dir>/.claude/review-baseline.md (last-reviewed-commit, stack, reviewed-at). A project with no
 #   commit yet gets no baseline and exit 0 with a note on stderr.
 # Exit codes: 0 done, 1 refused (the project or the baseline is not safe to use; nothing written), 2 usage error.
+# The baseline is written as a temp file inside .claude and renamed over the old one, so a failed write leaves the old baseline.
+# A --session path is relative to the project, or absolute or prefixed with <project-dir> (any trailing / on it is ignored);
+#   glob characters in it are literal.
 # Caught: not a git repo; baseline file unreadable, a symlink, not a regular file, or with a missing, repeated or malformed
-#   last-reviewed-commit line; baseline commit absent from the repo or not an ancestor of HEAD; .claude a symlink; a --session path
-#   that is absolute outside the project, holds .., is empty, holds a newline or has a symlink component; a changed file whose name
-#   holds a newline.
+#   last-reviewed-commit line (a CR counts as malformed); baseline commit absent from the repo or not an ancestor of HEAD (a
+#   shallow clone gets its own message); .claude a symlink; a --session path that is absolute outside the project, holds .., is
+#   empty, holds a newline, has a symlink component, or names a file that is neither in the project nor a deletion in HEAD; a
+#   changed file whose name holds a newline; a write or rename that fails (the old baseline stays).
 # Not caught: a baseline file that is not the one the previous review wrote (any 40 or 64 hex commit in history is accepted);
-#   a --session path that does not exist; a deleted file (git diff lists it, as before); a write that fails halfway after the checks pass.
-# Needs bash 3.2+, git, sort, date, mktemp.
+#   a deleted file (git diff lists it, as before); two reviews recording at the same moment (each rename is whole, the last wins).
+# Needs bash 3.2+, git, sort, date, mktemp, mv, chmod, stat.
 set -u
 
 die() { echo "review-scope: $1" >&2; exit 1; }
@@ -31,13 +35,21 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --record-baseline) RECORD=1 ;;
     --stack) shift; [ $# -gt 0 ] || usage; STACK=$1 ;;
-    --session) shift; [ $# -gt 0 ] || usage; [ -n "$1" ] || die "empty --session path"; SESSION=$SESSION$1$NL ;;
+    --session)
+      shift
+      [ $# -gt 0 ] || usage
+      [ -n "$1" ] || die "empty --session path"
+      case "$1" in *"$NL"*) die "a --session path holds a newline" ;; esac
+      SESSION=$SESSION$1$NL ;;
     -*) usage ;;
     *) [ -z "$PROJ" ] || usage; PROJ=$1 ;;
   esac
   shift
 done
 [ -n "$PROJ" ] || usage
+while [ "${#PROJ}" -gt 1 ]; do
+  case "$PROJ" in */) PROJ=${PROJ%/} ;; *) break ;; esac
+done
 if [ "$RECORD" -eq 1 ]; then
   [ -z "$SESSION" ] || usage
   case "$STACK" in nestjs | nextjs | vite-react | fastapi) ;; *) usage ;; esac
@@ -50,6 +62,7 @@ ROOT=$(cd -P -- "$PROJ" 2>/dev/null && pwd -P) || die "cannot enter $PROJ"
 case "$ROOT" in *"$NL"*) die "the project path holds a newline" ;; esac
 git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || die "$ROOT is not inside a git repository"
 
+SHALLOW=$(git -C "$ROOT" rev-parse --is-shallow-repository 2>/dev/null)
 HAS_COMMIT=1
 git -C "$ROOT" rev-parse --verify --quiet 'HEAD^{commit}' >/dev/null 2>&1 || HAS_COMMIT=0
 HEAD_SHA=
@@ -82,8 +95,14 @@ read_baseline() {
   esac
   case "${#BSHA}" in 40 | 64) ;; *) die "$BASE: last-reviewed-commit must be a full 40 or 64 digit commit id" ;; esac
   [ "$HAS_COMMIT" -eq 1 ] || die "$BASE names a commit but the repository has none"
-  git -C "$ROOT" cat-file -e "${BSHA}^{commit}" 2>/dev/null || die "baseline commit $BSHA is not in this repository's history"
-  git -C "$ROOT" merge-base --is-ancestor "$BSHA" "$HEAD_SHA" 2>/dev/null || die "baseline commit $BSHA is not an ancestor of HEAD (history was rewritten); delete $BASE to start a new baseline"
+  if ! git -C "$ROOT" cat-file -e "${BSHA}^{commit}" 2>/dev/null; then
+    if [ "$SHALLOW" = true ]; then die "baseline commit $BSHA is not in this shallow clone: fetch more history (git fetch --unshallow) and run again; $BASE was not touched"; fi
+    die "baseline commit $BSHA is not in this repository's history"
+  fi
+  if ! git -C "$ROOT" merge-base --is-ancestor "$BSHA" "$HEAD_SHA" 2>/dev/null; then
+    if [ "$SHALLOW" = true ]; then die "this is a shallow clone, so the history between baseline commit $BSHA and HEAD cannot be checked: fetch more history (git fetch --unshallow) and run again; $BASE was not touched"; fi
+    die "baseline commit $BSHA is not an ancestor of HEAD (history was rewritten); delete $BASE to start a new baseline"
+  fi
 }
 
 # session_path <path>: prints the project-relative form of a session path, or exits 1.
@@ -108,6 +127,13 @@ session_path() {
     acc=$acc/$part
     [ ! -L "$acc" ] || die "session path $p has a symlink component ($part)"
   done
+  if [ ! -e "$ROOT/$rel" ]; then
+    if [ "$HAS_COMMIT" -eq 1 ] && [ -n "$(git -C "$ROOT" ls-tree --name-only HEAD -- ":(literal)$rel" 2>/dev/null)" ]; then
+      :
+    else
+      die "session path $p is not in the project and is not a file deleted since HEAD"
+    fi
+  fi
   printf '%s\n' "$rel"
 }
 
@@ -119,14 +145,19 @@ if [ "$RECORD" -eq 1 ]; then
   read_baseline
   mkdir -p -- "$BASE_DIR" || die "cannot create $BASE_DIR"
   [ -d "$BASE_DIR" ] || die "$BASE_DIR is not a directory"
-  TMP=$(mktemp "${TMPDIR:-/tmp}/review-scope.XXXXXX") || die "cannot create a temp file"
+  TMP=$(mktemp "$BASE_DIR/.review-baseline.XXXXXX") || die "cannot create a temp file in $BASE_DIR; the old baseline stays"
   trap 'rm -f "$TMP"' EXIT
   {
     printf 'last-reviewed-commit: %s\n' "$HEAD_SHA"
     printf 'stack: %s\n' "$STACK"
     printf 'reviewed-at: %s\n' "$(date +%Y-%m-%d)"
-  } >"$TMP" || die "cannot write the baseline"
-  cat -- "$TMP" >"$BASE" || die "cannot write $BASE"
+  } >"$TMP" || die "cannot write the baseline; the old baseline stays"
+  MODE=644
+  if [ -f "$BASE" ]; then
+    if stat --version >/dev/null 2>&1; then MODE=$(stat -c %a -- "$BASE"); else MODE=$(stat -f %Lp -- "$BASE"); fi
+  fi
+  chmod "$MODE" "$TMP" || die "cannot set the mode of the new baseline; the old baseline stays"
+  mv -f -- "$TMP" "$BASE" || die "cannot replace $BASE; the old baseline stays"
   echo "review-scope: baseline written to $BASE"
   exit 0
 fi
@@ -142,13 +173,9 @@ if [ -n "$BSHA" ]; then
     printf '%s\n' "$f" >>"$TMP"
   done <"$TMP.diff"
 fi
-OLDIFS=$IFS
-IFS=$NL
-for s in $SESSION; do
-  IFS=$OLDIFS
+while IFS= read -r s; do
+  if [ -z "$s" ]; then continue; fi
   rel=$(session_path "$s") || exit 1
   printf '%s\n' "$rel" >>"$TMP"
-  IFS=$NL
-done
-IFS=$OLDIFS
+done <<<"$SESSION"
 LC_ALL=C sort -u "$TMP"

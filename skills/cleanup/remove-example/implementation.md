@@ -22,7 +22,9 @@ Needs the `<!-- templateCentral:` marker in `AGENTS.md` (it names the stack); wi
 
 A `BLOCK` line means the script refused the whole run and changed nothing: an example file differs from the scaffold's, or an expected line is missing. Show the user the line. Delete a modified example file only when the user names it, with `--force <path>`; fix a missing line by hand, then run the dry run again. A repeat run after a removal does nothing.
 
-What the script removes per stack is listed in `<skill-dir>/remove-example/<stack>.manifest`. The `/dashboard` route stays, with a heading only. What stays manual: any import of the example outside those files, found by the build below.
+What the script removes per stack is listed in `<skill-dir>/remove-example/<stack>.manifest`. The `/dashboard` route stays, with a heading only. For `nextjs` the manifest also edits `test/components/render.test.tsx` (four blocks and the `DashboardPage` import). What stays manual: any import of the example outside those files, found by the build below; the Verify step also catches a user test that still imports the example or `render.test.tsx` helpers.
+
+The script needs the scaffold's template tree beside the skill (`skills/scaffold/<stack>/template` in the same plugin): it proves every removed file and block against that copy. Without it the script fails closed and changes nothing. It is atomic: if a write fails halfway it restores every file it already changed and exits 1; a file whose mode was set is kept at that mode. A project seeded by an older plugin can differ from today's scaffold: the `BLOCK` output names both versions; compare each file, and do not `--force` a whole directory to get past it.
 
 > `src/features/auth/` is intentional scaffold code (auth context, `AuthProvider`, `ProtectedRoute`, `LoginCard`) — do **not** delete it. `templatecentral:add (auth)` replaces the dev stub with a real implementation.
 
