@@ -309,15 +309,9 @@ async def test_upstream_failure_maps_to_502(status: int, body: object) -> None:
 
 ### Rules
 
-- Use `httpx.AsyncClient`, not `requests`.
-- Validate every external response with Pydantic.
-- Client handles HTTP only — no business logic.
 - URL-encode every caller-supplied path segment with `quote(value, safe="")`.
 - Map `httpx.HTTPStatusError`, `httpx.RequestError`, and `ValidationError` in the service — never return upstream error bodies or validation details to the client.
 - Keep the 30 s timeout and `follow_redirects=False`. No automatic retries — add them only for idempotent GETs, with backoff.
-- Manage client lifecycle with a FastAPI dependency (create → yield → close).
-- Keep API tokens in environment variables / config — never hardcode.
-- Integration files go in `src/integrations/`, not `api/`.
 
 ### Validate
 

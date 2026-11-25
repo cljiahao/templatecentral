@@ -61,13 +61,9 @@ Run `TC_PART=leaf TC_LEAF=add/auth/vite-react bash "<skill-dir>/../scaffold/shar
 
 `csrfHeader()` is the single source for the CSRF header. It lives in `src/lib/clients/` (not the auth feature) because `ApiClient` (Step 3) needs it and `lib/` never imports from `features/`:
 
-`src/lib/clients/csrf.ts`:
+`src/lib/clients/csrf.ts`
 
-Copied verbatim from `<skill-dir>/auth/vite-react/template/src/lib/clients/csrf.ts` by the copy step; do not re-type it.
-
-`src/features/auth/api/auth-service.ts` (backend communication):
-
-Copied verbatim from `<skill-dir>/auth/vite-react/template/src/features/auth/api/auth-service.ts` by the copy step; do not re-type it.
+`src/features/auth/api/auth-service.ts` (backend communication)
 
 #### 3. Send the Session and CSRF Token from `ApiClient`
 
@@ -298,42 +294,9 @@ export function SignOutButton() {
 5. If a backend is configured (with cookie mode enabled), test the full login/logout flow — DevTools should show the session cookie as `HttpOnly` and every POST carrying `X-CSRF-Token`
 6. Run tests (`pnpm test`) — confirm no regressions
 
-### Dev Bypass Behavior
-
-When `ENV.IS_DEV` (`import.meta.env.DEV`) is true, `AuthProvider` starts with a dev user and skips the session check, and the "Dev login" button renders. Production builds tree-shake both.
-
-### Architecture
-
-```
-src/
-├── features/auth/
-│   ├── api/
-│   │   └── auth-service.ts          # Backend auth API calls
-│   ├── components/
-│   │   ├── auth-provider.tsx         # React context (user state, login/logout)
-│   │   ├── protected-route.tsx       # Route guard (redirects to /login)
-│   │   ├── login-card.tsx            # Login UI
-│   │   └── index.ts                  # Component barrel
-│   ├── hooks/
-│   │   ├── use-auth.ts              # useAuth() hook
-│   │   └── index.ts                  # Hook barrel
-│   ├── types.ts                      # AuthUser, AuthState
-│   └── index.ts                      # Feature barrel
-├── pages/login.tsx                    # Login page
-├── router.tsx                         # ProtectedRoute wrapping auth'd routes
-├── lib/clients/
-│   ├── csrf.ts                        # csrfHeader() — single source of X-CSRF-Token
-│   └── api-client.ts                  # ApiClient: credentials + CSRF on non-GET
-└── components/layout/
-    └── providers.tsx                  # AuthProvider wrapping the app
-```
-
 ### Rules
 
 - Do not store tokens in `localStorage`, where any injected script can read them; use HttpOnly cookies (set by the backend) or in-memory state
-- Keep the `ENV.IS_DEV` guard on the dev bypass so it exists only in development
-- Keep auth logic out of page components; use the `useAuth()` hook
 - Call the backend through `ApiClient` subclasses (Step 3), never a raw `fetch` — it is the one place that sends `credentials: 'include'` and, on every non-GET, `X-CSRF-Token`. The auth service's own three calls are the only exception
 - Redirect to `/login` on 401 — `ProtectedRoute` covers navigation; API calls must handle 401 too
-- Keep the dev bypass pattern: `ENV.IS_DEV` → auto-authenticated dev user + "Dev login" button
 - Role and ownership checks in the SPA only hide UI. The API must enforce them on every request

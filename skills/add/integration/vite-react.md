@@ -122,8 +122,4 @@ Build and tests pass; the integration works end-to-end in the browser.
 
 ### Rules
 
-- Keep business logic out of clients; client methods return `unknown`
-- Zod-validate every external response
-- Do not hardcode API URLs or secrets; centralize in `src/lib/constants/env.ts`
 - Throw `APIError` for HTTP failures, not a generic `Error`. `ZodError` from schema `parse()` is expected for validation failures and should propagate naturally.
-- Components reach integrations through React Query hooks in features
