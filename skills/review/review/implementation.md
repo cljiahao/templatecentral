@@ -31,7 +31,7 @@ If the scope is empty, report `No changes since last review — nothing to check
 
 ## Baseline
 
-After completing the review (whether violations were found or not), run `bash "<skill-dir>/review/review-scope.sh" "<project-dir>" --record-baseline --stack <detected stack>`. It replaces `.claude/review-baseline.md` (whole file or not at all) with the current commit, the stack and today's date. A project with no commit yet gets no baseline; that is always the case for the post-scaffold review, so the baseline is first written by the first review after the project's first commit.
+After completing the review (whether violations were found or not), run `bash "<skill-dir>/review/review-scope.sh" "<project-dir>" --record-baseline --stack <detected stack>`. It prints the commit it is scoped at on stderr (`scope computed at HEAD`); pass `--at <sha>` with `--record-baseline` to record only when HEAD is still that commit. It replaces `.claude/review-baseline.md` (whole file or not at all) with the current commit, the stack and today's date. A project with no commit yet gets no baseline; that is always the case for the post-scaffold review, so the baseline is first written by the first review after the project's first commit.
 
 ## What to check
 

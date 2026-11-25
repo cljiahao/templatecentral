@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016 # mutant patterns and grep needles are literal script text
 # Behavioural test for skills/review/review/review-scope.sh.
 # Real git fixtures in a temp dir. Every refusal has a clean control that passes, and a mutant of the script (one check removed)
 # that lets the bad input through, so the test proves each check is what stops it. No timing, no network.
@@ -19,7 +20,7 @@ SCRIPT=$T/review-scope.sh
 cp "$SRC" "$SCRIPT"
 run() { bash "$SCRIPT" "$@"; }
 # out <args>: stdout and stderr of a run, then its exit code on the last line
-out() { local o rc; o=$(run "$@" 2>&1); rc=$?; if [ -n "$o" ]; then printf '%s\nrc=%s' "$o" "$rc"; else printf 'rc=%s' "$rc"; fi; }
+out() { local o rc; o=$(run "$@" 2>&1); rc=$?; o=$(printf '%s\n' "$o" | grep -v '^review-scope: scope computed at HEAD ' || true); o=${o%"$NL"}; if [ -n "$o" ]; then printf '%s\nrc=%s' "$o" "$rc"; else printf 'rc=%s' "$rc"; fi; }
 g() { git -C "$1" -c user.email=t@t -c user.name=t -c core.hooksPath=/dev/null "${@:2}"; }
 sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 -- "$1"; else sha256sum -- "$1"; fi | cut -d' ' -f1; }
 treehash() { (cd "$1" && find . -path ./.git -prune -o \( -type f -o -type l \) -print | LC_ALL=C sort | while IFS= read -r f; do
@@ -208,8 +209,7 @@ bl "last-reviewed-commit: $H1
 
 # a relative project path with a trailing slash, with the session path relative to the cwd
 printf 'last-reviewed-commit: %s\n' "$H2" >"$P/.claude/review-baseline.md"
-check "project dir with a trailing slash, session path relative to the cwd" "src/a.ts
-rc=0" "$(cd "$T" && out proj/ --session proj/src/a.ts)"
+case "$(cd "$T" && out proj/ --session proj/src/a.ts)" in *"rc=1") echo "ok   relative project dir: a cwd-relative session path is refused (paths are relative to the project)" ;; *) echo "FAIL relative project dir: cwd-relative session path accepted"; fail=1 ;; esac
 check "project dir with a trailing slash, session path relative to the project" "src/a.ts
 rc=0" "$(cd "$T" && out proj/ --session src/a.ts)"
 bl "last-reviewed-commit: $H1
@@ -299,10 +299,10 @@ mutant() { # name sed-expr bad-args-run description
 }
 bl "last-reviewed-commit: $HS
 "
-mutant "no ancestor check" 's|git -C "[$]ROOT" merge-base --is-ancestor "[$]BSHA" "[$]HEAD_SHA" 2>/dev/null|true|' "$P"
+mutant "no ancestor check" 's|git -c core.warnAmbiguousRefs=false -C "[$]ROOT" merge-base --is-ancestor "[$]BSHA" "[$]HEAD_SHA" 2>/dev/null|true|' "$P"
 bl "last-reviewed-commit: $H1
 "
-mutant "no session outside check" 's|/\*) die "session path [$]p is outside the project" ;;|/*) rel=src/a.ts ;;|' "$P" --session /etc/passwd
+mutant "no session outside check" 's|die "session path [$]p is outside the project"|rel=src/a.ts|g' "$P" --session /etc/passwd
 mv "$P/.claude/review-baseline.md" "$T/real-baseline.md"; ln -s "$T/real-baseline.md" "$P/.claude/review-baseline.md"
 mutant "no symlink check" 's|\[ ! -L "[$]BASE" \] \|\| die "[$]BASE is a symlink"|true|' "$P"
 rm "$P/.claude/review-baseline.md"; mv "$T/real-baseline.md" "$P/.claude/review-baseline.md"
@@ -354,8 +354,12 @@ printf 'last-reviewed-commit: %s\n' "$H2" >"$P/.claude/review-baseline.md"
 cp "$SRC" "$T/mutant.sh"
 sed 's|case "[$]PROJ" in \*/) PROJ=[$]{PROJ%/} ;; \*) break ;; esac|break|' "$T/mutant.sh" >"$T/mutant2.sh"
 if cmp -s "$T/mutant.sh" "$T/mutant2.sh"; then echo "FAIL mutant trailing slash: sed matched nothing"; fail=1; fi
-r=$(cd "$T" && bash "$T/mutant2.sh" proj/ --session proj/src/a.ts 2>&1; echo "rc=$?")
-case "$r" in "src/a.ts"*"rc=0") echo "FAIL mutant without the PROJ normalisation still gives the right scope: [$r]"; fail=1 ;; *) echo "ok   mutant without the PROJ normalisation gets the cwd-relative session path wrong" ;; esac
+ln -s "$P" "$T/plink2"
+r=$(bash "$T/mutant2.sh" "$T/plink2/" --session "$T/plink2/src/a.ts" 2>&1; echo "rc=$?")
+case "$r" in *"rc=0") echo "FAIL mutant without the PROJ normalisation still accepts the prefix form with a trailing slash: [$r]"; fail=1 ;; *) echo "ok   mutant without the PROJ normalisation refuses the <project>/ prefix form" ;; esac
+check "control: a symlinked project path with a trailing slash and the prefix form" "src/a.ts
+rc=0" "$(out "$T/plink2/" --session "$T/plink2/src/a.ts")"
+rm "$T/plink2"
 bl "last-reviewed-commit: $H1
 "
 mutant "no existence check on a session path" 's|die "session path [$]p is not in the project and is not a file deleted since HEAD"|:|' "$P" --session src/never.ts
@@ -376,6 +380,147 @@ if [ "$NOTROOT" -eq 1 ]; then
   chmod u+w "$P/.claude"
   contains "mutant with the old in-place write overwrites the baseline in a read-only directory" "rc=0" "$r"
 fi
+
+
+# --- round 2: environment, relative project path, --at, directories, shapes
+# mutant_ne <name> <sed-expr> <expected> <args...>: the mutant must NOT give the expected output (stdout+stderr, rc line last)
+mutant_ne() {
+  local name=$1 expr=$2 want=$3; shift 3
+  cp "$SRC" "$T/mutant.sh"
+  sed "$expr" "$T/mutant.sh" >"$T/mutant2.sh"
+  if cmp -s "$T/mutant.sh" "$T/mutant2.sh"; then echo "FAIL mutant $name: sed expression matched nothing"; fail=1; return; fi
+  local o rc; o=$(cd "${MCWD:-.}" && bash "$T/mutant2.sh" "$@" 2>&1); rc=$?
+  o=$(printf '%s\n' "$o" | grep -v '^review-scope: scope computed at HEAD ' || true); o=${o%"$NL"}
+  if [ -n "$o" ]; then o=$o${NL}rc=$rc; else o=rc=$rc; fi
+  if [ "$o" = "$want" ]; then echo "FAIL mutant $name still gives the right answer: [$o]"; fail=1; else echo "ok   mutant $name gives a different answer"; fi
+}
+MCWD=.
+bl "last-reviewed-commit: $H1
+"
+WANT="dir with space/s p.ts${NL}src/a.ts${NL}src/c.ts
+rc=0"
+OTHER=$T/other
+mkrepo "$OTHER"; echo zz >"$OTHER/zz.ts"; g "$OTHER" add -A; g "$OTHER" commit -qm zz
+check "env: GIT_DIR pointing at another repo is ignored" "$WANT" "$(GIT_DIR=$OTHER/.git out "$P")"
+check "env: GIT_WORK_TREE and GIT_INDEX_FILE are ignored" "$WANT" "$(GIT_WORK_TREE=$OTHER GIT_INDEX_FILE=$OTHER/nope out "$P")"
+GIT_DIR=$OTHER/.git mutant_ne "no unset of GIT_DIR (env set)" 's|^unset CDPATH GIT_DIR.*$|:|' "$WANT" "$P"
+mkdir -p "$T/cd/proj"
+check "env: CDPATH is ignored for a relative project path" "$WANT" "$(cd "$T" && CDPATH=$T/cd out proj)"
+CDPATH=$T/cd MCWD=$T mutant_ne "no unset of CDPATH" 's|^unset CDPATH GIT_DIR.*$|:|' "$WANT" proj
+MCWD=.
+check "usage: the revision range ends with --" "1" "$(grep -c '"\$BSHA..HEAD" --' "$SRC")"
+g "$P" tag -f "$H1" -m x >/dev/null 2>&1 || true
+# a file named like the revision range must not be read as a path
+check "control: scope with a tag named like the baseline stays right" "$WANT" "$(out "$P")"
+
+# relative project path plus a session path that looks like the prefix form
+mkdir -p "$T/rel/app/app"
+mkrepo "$T/rel/app" >/dev/null 2>&1 || true
+mkdir -p "$T/rel/app/app"; echo x >"$T/rel/app/app/x.ts"; echo y >"$T/rel/app/x.ts"
+check "relative project, session path app/x.ts is the project's own app/x.ts" "app/x.ts
+rc=0" "$(cd "$T/rel" && out app --session app/x.ts)"
+MCWD=$T/rel mutant_ne "prefix form read for a relative project" 's|^    [*]) rel=[$]{p#./} ;;$|    *) rel=${p#"$PROJ"/}; rel=${rel#./} ;;|' "app/x.ts
+rc=0" app --session app/x.ts || true
+MCWD=.
+ln -s "$P" "$T/plink"
+check "absolute project path through a symlink: the <project>/ prefix form is read" "$WANT" "$(out "$T/plink" --session "$T/plink/src/a.ts")"
+expect_refuse "absolute project path: an absolute path outside it" "$P" --session "$T/other/zz.ts"
+rm "$T/plink"
+
+# a --session path naming a directory
+expect_refuse "session: a directory" "$P" --session src
+mutant "no directory check" 's|if \[ -d "[$]ROOT/[$]rel" \]; then die "session path [$]p is a directory: name its files"; fi|:|' "$P" --session src
+
+# --at
+printf 'last-reviewed-commit: %s\n' "$H1" >"$P/.claude/review-baseline.md"
+r=$(run "$P" 2>&1 >/dev/null)
+contains "scope: stderr names the HEAD the scope was computed at" "scope computed at HEAD $H2" "$r"
+oldb=$(sha "$P/.claude/review-baseline.md")
+expect_refuse "record --at: HEAD is another commit" "$P" --record-baseline --stack nextjs --at "$H1"
+check "record --at: a refused record leaves the baseline untouched" "$oldb" "$(sha "$P/.claude/review-baseline.md")"
+contains "record --at: the message names both commits" "$H1" "$(out "$P" --record-baseline --stack nextjs --at "$H1")"
+check "control: record --at HEAD works" "1" "$(out "$P" --record-baseline --stack nextjs --at "$H2" | grep -c 'baseline written')"
+printf 'last-reviewed-commit: %s\n' "$H1" >"$P/.claude/review-baseline.md"
+mutant "no --at check" 's|if \[ -n "[$]AT" \] \&\& \[ "[$]AT" != "[$]HEAD_SHA" \]; then die .*$|:|' "$P" --record-baseline --stack nextjs --at "$H1"
+check "usage: --at without record" "2" "$(run "$P" --at "$H2" >/dev/null 2>&1; echo $?)"
+check "usage: --at with a non-hex value" "2" "$(run "$P" --record-baseline --stack nextjs --at zz >/dev/null 2>&1; echo $?)"
+check "usage: --at without a value" "2" "$(run "$P" --record-baseline --stack nextjs --at >/dev/null 2>&1; echo $?)"
+
+# .claude shapes while recording
+mv "$P/.claude" "$T/claude-real"
+ln -s "$T/missing-claude" "$P/.claude"
+expect_refuse "record: .claude is a dangling symlink" "$P" --record-baseline --stack nextjs
+rm "$P/.claude"; : >"$P/.claude"
+expect_refuse "record: .claude is a regular file" "$P" --record-baseline --stack nextjs
+rm "$P/.claude"; mv "$T/claude-real" "$P/.claude"
+ln -s "$P/.claude" "$T/claude-link"
+mv "$P/.claude" "$T/claude-real2"; ln -s "$T/claude-real2" "$P/.claude"
+mutant "no .claude symlink check (scope)" 's|\[ ! -L "[$]BASE_DIR" \] \|\| die "[$]BASE_DIR is a symlink"|:|' "$P"
+rm "$P/.claude"; mv "$T/claude-real2" "$P/.claude"; rm -f "$T/claude-link"
+
+# detached HEAD
+DH=$T/detached
+git clone -q "file://$P" "$DH" 2>/dev/null
+g "$DH" checkout -q --detach "$H2"
+mkdir -p "$DH/.claude"; printf 'last-reviewed-commit: %s\n' "$H1" >"$DH/.claude/review-baseline.md"
+check "detached HEAD: scope works" "$WANT" "$(out "$DH")"
+contains "detached HEAD: record works" "baseline written" "$(out "$DH" --record-baseline --stack nextjs)"
+check "detached HEAD: the baseline holds the detached commit" "last-reviewed-commit: $H2" "$(sed -n 1p "$DH/.claude/review-baseline.md")"
+
+# project in a subdirectory of the repository
+MONO=$T/mono
+mkdir -p "$MONO/backend/src" "$MONO/other"; git init -q -b main "$MONO" 2>/dev/null || git init -q "$MONO"
+echo a >"$MONO/backend/src/a.ts"; echo b >"$MONO/other/b.ts"; g "$MONO" add -A; g "$MONO" commit -qm one
+M1=$(head_of "$MONO")
+echo a2 >>"$MONO/backend/src/a.ts"; echo b2 >>"$MONO/other/b.ts"; g "$MONO" add -A; g "$MONO" commit -qm two
+mkdir -p "$MONO/backend/.claude"; printf 'last-reviewed-commit: %s\n' "$M1" >"$MONO/backend/.claude/review-baseline.md"
+check "subdirectory project: only its own files, relative to it" "src/a.ts
+rc=0" "$(out "$MONO/backend")"
+mutant_ne "no --relative" 's|--name-only --relative -z|--name-only -z|' "src/a.ts
+rc=0" "$MONO/backend"
+contains "subdirectory project: record writes inside the project" "baseline written" "$(out "$MONO/backend" --record-baseline --stack nestjs)"
+check "subdirectory project: the baseline is in the subdirectory only" "0" "$(exists01 "$MONO/.claude/review-baseline.md")"
+
+# rename and deletion in the diff
+RD=$T/rd
+mkrepo "$RD"; RD1=$(head_of "$RD")
+g "$RD" mv src/a.ts src/renamed.ts; g "$RD" rm -q src/b.ts; g "$RD" commit -qm rd
+mkdir -p "$RD/.claude"; printf 'last-reviewed-commit: %s\n' "$RD1" >"$RD/.claude/review-baseline.md"
+check "rename and deletion in the diff: the new name and the deleted name" "src/b.ts${NL}src/renamed.ts
+rc=0" "$(out "$RD")"
+
+# baseline shapes: trailing text, extra spaces, a tab
+for shape in "x" "  " $'\t'; do
+  case "$shape" in x) v="$H1 trailing" ;; "  ") v=" $H1" ;; *) v="$shape$H1" ;; esac
+  bl "last-reviewed-commit: $v
+"
+  expect_refuse "baseline: odd shape [$(printf '%s' "$shape" | tr '\t' T)]" "$P"
+done
+bl "last-reviewed-commit:$H1
+"
+check "baseline: no space after the colon is accepted" "$WANT" "$(out "$P")"
+bl "last-reviewed-commit:"$'\t'"$H1
+"
+expect_refuse "baseline: a tab after the colon" "$P"
+bl "last-reviewed-commit: $H1
+"
+if [ "$NOTROOT" -eq 1 ]; then
+  chmod 000 "$P/.claude/review-baseline.md"
+  contains "baseline: unreadable gives the readable message" "is not readable" "$(out "$P")"
+  chmod 644 "$P/.claude/review-baseline.md"
+fi
+# the mode of a new baseline
+chmod 644 "$P/.claude/review-baseline.md"
+out "$P" --record-baseline --stack nextjs >/dev/null
+check "record: a 644 baseline stays 644" "644" "$(mode_of "$P/.claude/review-baseline.md")"
+cp "$SRC" "$T/mutant.sh"
+sed 's|chmod "[$]MODE" "[$]TMP" \|\| die "cannot set the mode of the new baseline; the old baseline stays"|:|' "$T/mutant.sh" >"$T/mutant2.sh"
+if cmp -s "$T/mutant.sh" "$T/mutant2.sh"; then echo "FAIL mutant no chmod: sed matched nothing"; fail=1; fi
+bash "$T/mutant2.sh" "$P" --record-baseline --stack nextjs >/dev/null 2>&1
+check "mutant without the chmod leaves the temp file's mode (600)" "600" "$(mode_of "$P/.claude/review-baseline.md")"
+chmod 644 "$P/.claude/review-baseline.md"
+bl "last-reviewed-commit: $H1
+"
 
 if [ "$fail" -ne 0 ]; then echo "review-scope tests FAILED"; exit 1; fi
 echo "review-scope tests passed"

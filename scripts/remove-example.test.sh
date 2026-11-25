@@ -3,6 +3,8 @@
 # Seeds each stack with tc-copy.sh into a temp dir. A refusal case has a clean control that passes, and a mutant of the script
 # (one check removed) that lets the bad input through, so the test proves that check is what stops it. A refusal that a second check also
 # backs up (an unreadable file, a special file, a newline name) has a mutant that shows its own message gone. No timing, no network.
+# Signals, mid-run changes, failing writes, unreadable directories and the manifest and usage clauses are in remove-example-edge.test.sh,
+# which runs its groups in parallel.
 # The manifest check asserts every path and line a manifest names exists in that stack's template tree.
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -19,9 +21,15 @@ check() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: expected 
 contains() { case "$3" in *"$2"*) echo "ok   $1" ;; *) echo "FAIL $1: [$2] not in [$3]"; fail=1 ;; esac; }
 absent() { case "$3" in *"$2"*) echo "FAIL $1: [$2] found in [$3]"; fail=1 ;; *) echo "ok   $1" ;; esac; }
 sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 -- "$1"; else sha256sum -- "$1"; fi 2>/dev/null | cut -d' ' -f1; }
-# listing <dir>: sorted "hash path" of every file and "L path target" of every symlink
-listing() { (cd "$1" && find . \( -type f -o -type l \) -print | LC_ALL=C sort | while IFS= read -r f; do
-  if [ -L "$f" ]; then printf 'L %s %s\n' "$f" "$(readlink "$f")"; else printf '%s %s\n' "$(sha "$f")" "$f"; fi; done); }
+# listing <dir>: sorted "hash path" of every file and "L path target" of every symlink. The hashes come from one batched
+# shasum call: a shasum per file cost about 6 s per listing (CPU time, perl start-up), a batch costs about 0.1 s.
+HASHER="shasum -a 256"
+if ! command -v shasum >/dev/null 2>&1; then HASHER=sha256sum; fi
+# shellcheck disable=SC2086 # HASHER is a command with its option, split on purpose
+listing() { (cd "$1" && {
+  find . -type f -exec $HASHER {} + 2>/dev/null | sed 's/^\([0-9a-f]*\)  */\1 /'
+  find . -type l -print | while IFS= read -r f; do printf 'L %s %s\n' "$f" "$(readlink "$f")"; done
+} | LC_ALL=C sort); }
 treehash() { listing "$1" | { shasum -a 256 2>/dev/null || sha256sum; } | cut -d' ' -f1; }
 exists01() { if [ -e "$1" ] || [ -L "$1" ]; then echo 1; else echo 0; fi; }
 changed01() { if [ "$1" != "$2" ]; then echo 1; else echo 0; fi; }
@@ -44,12 +52,17 @@ run() { bash "$SCRIPT" "$@" 2>&1; }
 out() { local o rc; o=$(run "$@"); rc=$?; if [ -n "$o" ]; then printf '%s\nrc=%s' "$o" "$rc"; else printf 'rc=%s' "$rc"; fi; }
 rcof() { run "$@" >/dev/null; echo "$?"; }
 
-seed() { # seed <dir> <stack>
+# seed <dir> <stack>: a seeded project. The three tc-copy runs happen once per stack (the master), every later seed is a copy.
+MASTER=$T/master
+seed() {
   local d=$1 s=$2 p
-  mkdir -p "$d"
-  for p in base stack agents; do
-    TC_STACK=$s TC_PART=$p bash "$COPY" "$d" >/dev/null 2>&1 || { echo "FAIL seed $s $p"; fail=1; return 1; }
-  done
+  if [ ! -d "$MASTER/$s" ]; then
+    mkdir -p "$MASTER/$s"
+    for p in base stack agents; do
+      TC_STACK=$s TC_PART=$p bash "$COPY" "$MASTER/$s" >/dev/null 2>&1 || { echo "FAIL seed $s $p"; fail=1; rm -rf "${MASTER:?}/$s"; return 1; }
+    done
+  fi
+  mkdir -p "$d" && cp -Rp "$MASTER/$s/." "$d/"
 }
 
 # per stack: example delete paths (files or directories), edited files with their line delta, a leftover pattern

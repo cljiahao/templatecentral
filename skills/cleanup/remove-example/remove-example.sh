@@ -18,24 +18,40 @@
 #   always a blocker (the plugin is damaged), and an edit row cannot be forced: change those lines by hand.
 # All checks run before the first write, and any blocker makes the whole run refuse: no file is deleted or edited.
 # Apply order: re-check every file against the copy taken during the checks, write each edited file as a temp file in its own
-#   directory (same mode) and rename it over the original, then delete the files, then the empty directories. On any failure
-#   everything already done is restored from the copies and the exit code is 1; if even the restore fails the copies are kept
-#   and their directory is printed.
+#   directory (same mode) and rename it over the original, then delete the files, then the empty directories. On any failure,
+#   and on INT, TERM or HUP after the apply started, everything already done is restored from the copies; the exit code is 1 for a
+#   failure and 130 (INT), 143 (TERM) or 129 (HUP) for a signal. If even the restore fails the copies are kept and their
+#   directory is printed. A signal before the apply started changes nothing.
 # Re-running after a removal is a no-op: a file whose expected lines are all absent counts as done only when every delete
-# path is already gone; otherwise it is reported as a mismatch.
-# Exit codes: 0 done, dry run clean, or nothing to remove; 1 refused or failed (a blocker or the failure was printed); 2 usage error.
-# Caught: no AGENTS.md marker; a manifest row that is malformed; a path outside the project, absolute, with . or .. segments, or
-#   with a symlink component; a symlink, special file, unreadable file or file name with a newline inside a deleted directory; an
-#   unreadable directory (find fails); a CR in an edited file; an expected line that is missing, matches twice, or sits in a file
-#   with no final newline; a block that differs from the scaffold's in any line; overlapping edits; a --force path that matches
-#   nothing; a file changed between the checks and the write; a write or delete that fails (rolled back).
+#   path is already gone; otherwise it is reported as a mismatch.
+# Output: stdout is the plan (the GONE, DELETE, FORCE, EDIT and DONE lines with the line ranges, then "dry run", "applied" or
+#   "nothing to remove"); stderr is every BLOCK line, the NOTE line, the summary of blockers, and every failure message.
+# Exit codes: 0 done, dry run clean, or nothing to remove; 1 refused or failed (a blocker or the failure was printed); 2 usage
+#   error; 129, 130, 143 stopped by a signal.
+# Caught: no AGENTS.md marker on line 1 naming a known stack; a manifest row that is malformed, a delete path that repeats or
+#   nests inside another, an edit of a file under a deleted path; a path outside the project, absolute, with . or .. or empty
+#   segments, or with a symlink component; a symlink, special file, unreadable file or file name with a newline inside a deleted
+#   directory; an unreadable directory (find fails); a delete root or edit target that is not a regular file or directory;
+#   a CR in an edited file; an expected line that is missing, matches twice, or sits in a file with no final newline; a block
+#   that differs from the scaffold's in any line; overlapping edits; a --force path that matches nothing; a deleted file (one not forced) or an
+#   edited file that changed between the checks and the apply; an edit target that became a directory or symlink; a write or
+#   delete that fails; INT, TERM or HUP during the apply (all rolled back); a CDPATH or a project path with a newline; a project path that is /.
 # Not caught: a file whose content changed but still equals the scaffold's current example (nothing is lost then); example code a
 #   user copied elsewhere; imports of the example from files the manifest does not name (the build and typecheck show these); a
 #   change made in the instant between the final re-check and the write; deleted directories come back with default modes after
 #   a rollback; a project seeded by an older plugin version: its example files can differ from today's scaffold (the BLOCK output
-#   names both versions; do not --force a whole directory to get past it, compare each file first).
+#   names both versions; do not --force a whole directory to get past it, compare each file first); SIGKILL or a power loss in
+#   the middle of the apply (no rollback runs: stray .remove-example.* temp files and a half-removed example stay, and the
+#   copies in the temp directory are the only originals); an edited file loses its owner, ACLs, extended attributes and hard
+#   links, because the rename replaces the inode (the mode is kept); a --force file changed between the checks and the apply (the
+#   copy is taken then, with nothing to compare it to); a "<!-- templateCentral: " line below line 1 is ignored on purpose.
+# Not probed: the check that the temp copy of an original could be written (a full disk); a rename that fails after the file
+#   guard (needs a race inside one mv call); owner and ACL loss (needs root and a second user); that awk reads the edit snapshot
+#   and not the live file (the re-check before the write catches the same change); the second to fourth unreadable-directory
+#   guards, which fire only when the earlier ones are disabled; SIGKILL and a power loss (nothing can run then).
 # Needs bash 3.2+, awk, chmod, cmp, cp, find, grep, mktemp, mv, rm, rmdir, sed, sort, stat, tail.
 set -u
+unset CDPATH
 
 NL='
 '
@@ -66,6 +82,7 @@ done
 [ -d "$PROJ" ] || die "$PROJ is not a directory"
 ROOT=$(cd -P -- "$PROJ" 2>/dev/null && pwd -P) || die "cannot enter $PROJ"
 case "$ROOT" in *"$NL"*) die "the project path holds a newline" ;; esac
+[ "$ROOT" != / ] || die "refusing to run on /"
 
 src=${BASH_SOURCE[0]:-$0}
 SH=$(cd -P -- "$(dirname -- "$src")" 2>/dev/null && pwd -P) || die "cannot locate the script directory"
@@ -75,17 +92,15 @@ AGENTS=$ROOT/AGENTS.md
 [ -f "$AGENTS" ] || die "no AGENTS.md: run templatecentral:migrate first"
 STACK=
 MARK_VER=
-while IFS= read -r line || [ -n "$line" ]; do
-  case "$line" in
-    '<!-- templateCentral: '*'@'*' -->')
-      STACK=${line#'<!-- templateCentral: '}
-      STACK=${STACK%%@*}
-      MARK_VER=${line#*@}
-      MARK_VER=${MARK_VER%' -->'}
-      break ;;
-  esac
-done <"$AGENTS"
-case "$STACK" in nestjs | nextjs | vite-react | fastapi) ;; *) die "AGENTS.md has no templateCentral marker naming a stack: run templatecentral:migrate first" ;; esac
+IFS= read -r line <"$AGENTS" || [ -n "$line" ] || line=
+case "$line" in
+  '<!-- templateCentral: '*'@'*' -->')
+    STACK=${line#'<!-- templateCentral: '}
+    STACK=${STACK%%@*}
+    MARK_VER=${line#*@}
+    MARK_VER=${MARK_VER%' -->'} ;;
+esac
+case "$STACK" in nestjs | nextjs | vite-react | fastapi) ;; *) die "AGENTS.md has no templateCentral marker naming a stack on line 1: run templatecentral:migrate first" ;; esac
 
 MANIFEST=$SH/$STACK.manifest
 TPL=$SH/../../scaffold/$STACK/template
@@ -101,15 +116,27 @@ fi
 
 STAGE=$(mktemp -d "${TMPDIR:-/tmp}/remove-example.XXXXXX") || die "cannot create a temp directory"
 KEEP_STAGE=0
+APPLYING=0
+DONE=0
+ROLLED=0
 : >"$STAGE/temps"
 cleanup() {
   local t
+  trap '' INT TERM HUP
+  if [ "$APPLYING" -eq 1 ] && [ "$DONE" -eq 0 ] && [ "$ROLLED" -eq 0 ]; then
+    echo "remove-example: stopped during the apply; restoring the project" >&2
+    rollback
+  fi
   while IFS= read -r t; do
     if [ -n "$t" ]; then rm -f -- "$t"; fi
   done <"$STAGE/temps"
   if [ "$KEEP_STAGE" -eq 0 ]; then rm -rf "$STAGE"; fi
 }
+on_signal() { trap '' INT TERM HUP; echo "remove-example: interrupted by SIG$1" >&2; exit "$2"; }
 trap cleanup EXIT
+trap 'on_signal INT 130' INT
+trap 'on_signal TERM 143' TERM
+trap 'on_signal HUP 129' HUP
 
 # safe_rel <path>: succeeds when the path is relative, clean and has no symlink component under the project.
 safe_rel() {
@@ -136,18 +163,27 @@ bad=$(awk -F'\t' '
   /^#/ || /^$/ { next }
   /\r/ { print "line " NR ": carriage return"; next }
   { t = $1; ok = 1 }
-  t == "delete"  { if (NF != 2 || $2 == "") ok = 0 }
+  t == "delete"  { if (NF != 2 || $2 == "") ok = 0; else { nd++; dp[nd] = $2; dl[nd] = NR } }
   t == "rmline"  { if (NF != 4 || $2 == "" || $3 == "" || $4 !~ /^(-|before|after)$/) ok = 0 }
   t == "rmblock" { if (NF != 6 || $2 == "" || $3 !~ /^[1-9][0-9]*$/ || $4 == "" || $5 == "" || $6 !~ /^(-|before|after)$/) ok = 0 }
   t == "subline" { if (NF != 4 || $2 == "" || $3 == "" || $4 == "" || $3 == $4) ok = 0 }
   t != "delete" && t != "rmline" && t != "rmblock" && t != "subline" { ok = 0 }
-  !ok { print "line " NR ": malformed row" }
+  !ok { print "line " NR ": malformed row"; next }
+  t != "delete" { ne++; ep[ne] = $2; el[ne] = NR }
+  END {
+    for (i = 1; i <= nd; i++) for (j = i + 1; j <= nd; j++)
+      if (dp[i] == dp[j] || index(dp[i], dp[j] "/") == 1 || index(dp[j], dp[i] "/") == 1)
+        print "line " dl[j] ": delete path " dp[j] " repeats or nests with the one on line " dl[i]
+    for (i = 1; i <= ne; i++) for (j = 1; j <= nd; j++)
+      if (ep[i] == dp[j] || index(ep[i], dp[j] "/") == 1)
+        print "line " el[i] ": edits " ep[i] ", which the delete row on line " dl[j] " removes"
+  }
 ' "$MANIFEST") || die "cannot read the manifest"
 [ -z "$bad" ] || die "manifest $MANIFEST is malformed:$NL$bad"
 
 blockers=0
 VERSION_NOTE=0
-block() { echo "BLOCK  $1"; blockers=$((blockers + 1)); }
+block() { echo "BLOCK  $1" >&2; blockers=$((blockers + 1)); }
 block_differs() { VERSION_NOTE=1; block "$1"; }
 
 FORCE_USED=
@@ -164,6 +200,7 @@ done <<<"$FORCE"
 : >"$STAGE/deletes"
 : >"$STAGE/editfiles"
 : >"$STAGE/delroots"
+: >"$STAGE/forced"
 : >"$STAGE/dirs"
 ALL_GONE=1
 
@@ -196,6 +233,7 @@ while IFS= read -r row || [ -n "$row" ]; do
       echo "DELETE $rel"
     elif is_forced "$rel" || is_forced "$p"; then
       printf '%s\n' "$rel" >>"$STAGE/deletes"
+      printf '%s\n' "$rel" >>"$STAGE/forced"
       echo "FORCE  $rel (differs from the scaffold example)"
     else
       block_differs "$rel differs from the scaffold example or is not part of it; keep it, or name it with --force $rel"
@@ -218,13 +256,16 @@ while IFS= read -r file; do
   seen=$seen$file$NL
   n=$((n + 1))
   safe_rel "$file" || { block "edit path '$file' is outside the project, unclean or has a symlink"; continue; }
+  if [ -e "$ROOT/$file" ] && [ ! -f "$ROOT/$file" ]; then block "$file to edit is not a regular file"; continue; fi
   if [ ! -f "$ROOT/$file" ]; then
     if [ "$ALL_GONE" -eq 1 ]; then echo "GONE   $file"; else block "$file to edit does not exist"; fi
     continue
   fi
   if [ ! -r "$ROOT/$file" ]; then block "$file is not readable"; continue; fi
-  if LC_ALL=C grep -q "$CR" "$ROOT/$file"; then block "$file has CR line endings; the scaffold text uses LF, so nothing can be proved: edit it by hand"; continue; fi
-  if [ -s "$ROOT/$file" ] && [ -n "$(tail -c1 "$ROOT/$file")" ]; then block "$file has no final newline"; continue; fi
+  snap=$STAGE/snapedit.$n
+  if ! cp -p -- "$ROOT/$file" "$snap"; then block "$file cannot be copied for the rollback"; continue; fi
+  if LC_ALL=C grep -q "$CR" "$snap"; then block "$file has CR line endings; the scaffold text uses LF, so nothing can be proved: edit it by hand"; continue; fi
+  if [ -s "$snap" ] && [ -n "$(tail -c1 "$snap")" ]; then block "$file has no final newline"; continue; fi
   awk -F'\t' -v f="$file" '/^#/ || /^$/ { next } $1 != "delete" && $2 == f { print }' "$MANIFEST" >"$STAGE/rows.$n"
   tplfile=/dev/null
   if [ -f "$TPL/$file" ]; then tplfile=$TPL/$file; fi
@@ -273,14 +314,11 @@ while IFS= read -r file; do
       for (i = 1; i <= nl; i++) { if (i in gone) continue; if (i in subs) print subs[i] >> out; else print L[i] >> out }
       close(out)
     }
-  ' "$STAGE/rows.$n" "$tplfile" "$ROOT/$file")
+  ' "$STAGE/rows.$n" "$tplfile" "$snap")
   rc=$?
   case "$rc" in
     0)
-      if [ "$APPLY" -eq 1 ]; then
-        if ! cp -p -- "$ROOT/$file" "$STAGE/snapedit.$n"; then block "$file cannot be copied for the rollback"; continue; fi
-      fi
-      echo "EDIT   $file"; printf '%s\n' "$res"; printf '%s\t%s\t%s\n' "$file" "$OUT" "$STAGE/snapedit.$n" >>"$STAGE/editfiles" ;;
+      echo "EDIT   $file"; printf '%s\n' "$res"; printf '%s\t%s\t%s\n' "$file" "$OUT" "$snap" >>"$STAGE/editfiles" ;;
     4) if [ "$ALL_GONE" -eq 1 ]; then echo "DONE   $file (already edited)"; else block "$file: none of the expected lines were found, but example files still exist"; fi ;;
     *) block "$file: $(printf '%s' "$res" | tr '\n' ';')" ;;
   esac
@@ -288,7 +326,7 @@ done <"$STAGE/names"
 
 if [ "$blockers" -gt 0 ]; then
   if [ "$VERSION_NOTE" -eq 1 ] && [ "$MARK_VER" != "$PLUGIN_VER" ]; then
-    echo "NOTE   the project marker says templateCentral $MARK_VER, this plugin is $PLUGIN_VER: example files seeded by an older plugin can differ from today's scaffold. Do not --force a whole directory to get past this; compare each file first."
+    echo "NOTE   the project marker says templateCentral $MARK_VER, this plugin is $PLUGIN_VER: example files seeded by an older plugin can differ from today's scaffold. Do not --force a whole directory to get past this; compare each file first." >&2
   fi
   echo "remove-example: $blockers blocker(s); nothing was changed" >&2
   exit 1
@@ -320,6 +358,8 @@ restore_file() {
 # rollback: undo what the apply did so far.
 rollback() {
   local bad=0 t s rel d
+  trap '' INT TERM HUP
+  ROLLED=1
   while IFS="$TAB" read -r t s; do
     if [ -z "$t" ]; then continue; fi
     if ! restore_file "$s" "$t"; then echo "remove-example: could not restore $t" >&2; bad=1; fi
@@ -353,6 +393,10 @@ while IFS= read -r rel; do
   if [ -z "$rel" ]; then continue; fi
   case "$rel" in */*) mkdir -p -- "$STAGE/snapdel/${rel%/*}" || die "cannot create a temp directory" ;; *) mkdir -p -- "$STAGE/snapdel" || die "cannot create a temp directory" ;; esac
   cp -p -- "$ROOT/$rel" "$STAGE/snapdel/$rel" || die "cannot copy $rel; nothing was changed"
+  case "$NL$(cat "$STAGE/forced")$NL" in
+    *"$NL$rel$NL"*) ;;
+    *) cmp -s -- "$STAGE/snapdel/$rel" "$TPL/$rel" || die "$rel changed while the script ran; nothing was changed" ;;
+  esac
 done <"$STAGE/deletes"
 
 # re-check: nothing changed since the checks
@@ -374,11 +418,16 @@ while IFS="$TAB" read -r file staged snap; do
   printf '%s\t%s\t%s\n' "$target" "$tmp" "$snap" >>"$STAGE/plan"
 done <"$STAGE/editfiles"
 
-# all edits before any delete
+# all edits before any delete; from here a signal rolls back
+APPLYING=1
 while IFS="$TAB" read -r target tmp snap; do
   if [ -z "$target" ]; then continue; fi
-  if ! mv -f -- "$tmp" "$target"; then fail_apply "cannot replace ${target#"$ROOT"/}"; fi
-  printf '%s\t%s\n' "$target" "$snap" >>"$STAGE/replaced"
+  if [ -f "$target" ] && [ ! -L "$target" ]; then
+    printf '%s\t%s\n' "$target" "$snap" >>"$STAGE/replaced"
+    if ! mv -f -- "$tmp" "$target"; then fail_apply "cannot replace ${target#"$ROOT"/}"; fi
+  else
+    fail_apply "${target#"$ROOT"/} is no longer a regular file"
+  fi
 done <"$STAGE/plan"
 
 while IFS= read -r rel; do
@@ -396,4 +445,5 @@ while IFS= read -r p; do
   if [ -z "$p" ]; then continue; fi
   if [ -e "$ROOT/$p" ]; then fail_apply "$p is still there after the removal"; fi
 done <"$STAGE/delroots"
+DONE=1
 echo "remove-example: applied"

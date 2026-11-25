@@ -256,6 +256,8 @@ jobs:
         run: bash scripts/review-scope.test.sh
       - name: Remove-example script tests
         run: bash scripts/remove-example.test.sh
+      - name: Remove-example edge tests
+        run: bash scripts/remove-example-edge.test.sh
       - name: Skill fence snapshot tests
         run: bash scripts/check-fences.test.sh
       - name: Fence snapshot freeze tests
