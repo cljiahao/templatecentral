@@ -117,7 +117,7 @@ Four user-invocable skills:
 | `templatecentral:standards` | Review code quality, naming, validation patterns, drift and full-stack type contracts |
 | `templatecentral:migrate` | Adopt the harness in a project built without templatecentral, upgrade to current conventions, switch the DB access layer, or extract a Next.js backend into NestJS / FastAPI |
 
-Four agent utilities, loaded internally and not invoked directly: `build`, `test`, `review`, `cleanup`.
+Three agent utilities, loaded internally and not invoked directly: `test`, `review`, `cleanup`.
 
 ## Works with
 

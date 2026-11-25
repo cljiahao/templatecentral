@@ -4,7 +4,7 @@
 # Usage: bash scripts/count-load.sh [--json] [--base REF] [--entry SKILL:NAME[@STACK]]... [--summary SKILL|all]...
 #   Starts at skills/scaffold/SKILL.md and follows every `cat "<skill-dir>/…"` line
 #   it finds in the files it loads. Files under skills/scaffold are the scaffold load;
-#   files elsewhere under skills/ (build/test/review/cleanup) are reported as utilities.
+#   files elsewhere under skills/ (test/review/cleanup) are reported as utilities.
 #   Sizes are UTF-8 bytes; tokens are bytes/4. --base REF adds the delta against the same walk run on that git ref.
 #
 # Other skills. --entry measures one realistic invocation of skills/add, skills/migrate or skills/standards:
@@ -18,11 +18,11 @@
 # router, which is <dir>.md for a leaf under <dir>/ or else <dir>/implementation.md; the standards
 # shared file (code-standards/comments.md or validation-patterns/patterns.md); the leaf; then every
 # `cat "<skill-dir>/…"` target of the leaf and of the skill files it loads. A router's own cat lines are
-# not followed (they list every leaf) unless they leave the skill folder (the add router's build,
-# review and test steps run after every guide, so those utilities always count), and an inline cat inside the skill's own folder is not followed
+# not followed (they list every leaf) unless they leave the skill folder (the add router's review
+# and test steps run after every guide, so those utilities always count), and an inline cat inside the skill's own folder is not followed
 # (it is a pointer, not a load). Targets under skills/add are not followed from other skills. @STACK
 # fills <stack> in those cat lines; without it a line that holds <stack> is skipped.
-# Files under skills/<SKILL> are the skill load; files elsewhere (build/review, scaffold, .claude/rules)
+# Files under skills/<SKILL> are the skill load; files elsewhere (test/review, scaffold, .claude/rules)
 # are utilities. --base REF adds the delta of the total against the same walk run on that ref.
 # --summary SKILL lists every entry of that skill (routers excluded) with its tokens; `all` lists all three.
 # Without --entry and --summary the scaffold report above is printed, unchanged.
@@ -150,7 +150,7 @@ def entry_walk(read, skill, name, stack):
         if text is not None:
             inside[rel] = len(text.encode("utf-8"))
     # A router's own cat lines are not followed, except those that leave the skill folder: a router step
-    # such as "then cat ../build/SKILL.md" runs after every guide, so those utilities are always loaded.
+    # such as "then cat ../review/SKILL.md" runs after every guide, so those utilities are always loaded.
     for rel in start:
         text = read(rel)
         for target in CAT_ANY.findall(text or ""):
