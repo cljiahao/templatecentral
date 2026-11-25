@@ -84,29 +84,6 @@ export const externalApiUserSchema = z.looseObject({
 });
 ```
 
-**Schema Composition:**
-
-```ts
-const projectWithAuthor = createProjectSchema.extend({
-  authorId: uuidSchema,
-});
-
-const projectUpdate = createProjectSchema.pick({ name: true });
-
-const projectPublic = createProjectSchema.omit({ description: true });
-
-const eventSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('user-created'),
-    userId: uuidSchema,
-  }),
-  z.object({
-    type: z.literal('project-updated'),
-    projectId: uuidSchema,
-  }),
-]);
-```
-
 ### Field-level error formatting
 
 ```ts

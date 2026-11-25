@@ -3,176 +3,15 @@
      prereq: Stack = vite-react. Do not invoke this file directly — it is loaded at runtime by the templatecentral:standards skill. -->
 ### Vite + React (TypeScript + React Hook Form + Zod)
 
-**1. Schemas live in `schemas/`, never in the component file**
+**1. Forms and uploads**
 
-```ts
-// src/features/projects/schemas/create-project.schema.ts
-import { z } from 'zod';
+Schemas live in `src/features/<name>/schemas/`, never in the component file, and are shared by the service, the test and the form (`zodResolver`). Cross-feature schemas (`passwordSchema`, `emailSchema`, `fileUploadSchema`, `paginationSchema`) are defined once in `src/lib/validation/schemas.ts` (`patterns.md`); import them, never copy them into a feature.
 
-export const createProjectSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100, 'Name must be under 100 characters'),
-  description: z.string().max(500, 'Description must be under 500 characters').optional(),
-});
+Use `CustomFormField` (`src/components/widgets/custom-form-field.tsx`: `name`, `label`, optional `description`, one input child); it wires the Controller, label and error message via `useFormContext()`. Do not wrap it in `FormField`/`FormControl`/`FormItem` or spread `{...field}` onto it. Show a fixed message on `APIError` and `logError` the backend text.
 
-export type CreateProjectData = z.input<typeof createProjectSchema>;
-```
+Upload forms: derive the `accept` attribute from `ALLOWED_UPLOAD_EXTENSIONS` so picker and validator agree, and read the first message from `z.flattenError(result.error).fieldErrors`. Client checks are fast feedback only; the server repeats them and adds the size cap, magic-byte sniff and server-generated storage key (see the backend stack's `validation-patterns` file).
 
-Cross-feature schemas (`passwordSchema`, `emailSchema`, `fileUploadSchema`, `paginationSchema`) are defined once in `src/lib/validation/schemas.ts` (`patterns.md`) — import them, never copy them into a feature.
-
-**2. Form Component with Validation**
-
-```tsx
-// src/features/projects/components/create-project-form.tsx
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Button } from '@/components/ui/button';
-import { Form } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { CustomFormField } from '@/components/widgets';
-import { APIError, logError } from '@/lib/errors';
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { createProject } from '../api/project-service';
-import { createProjectSchema, type CreateProjectData } from '../schemas/create-project.schema';
-
-export function CreateProjectForm() {
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const form = useForm<CreateProjectData>({
-    resolver: zodResolver(createProjectSchema),
-    defaultValues: { name: '', description: '' },
-  });
-
-  const onSubmit = async (data: CreateProjectData) => {
-    try {
-      setSubmitError(null);
-      await createProject(data);
-      form.reset();
-    } catch (error) {
-      if (error instanceof APIError) {
-        // The backend's error text can carry stack traces, SQL fragments or internal identifiers: log it, show a fixed string.
-        logError('CreateProjectForm: create failed', error);
-        setSubmitError('Failed to create project. Please try again.');
-        return;
-      }
-      setSubmitError('An unexpected error occurred');
-    }
-  };
-
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <CustomFormField name="name" label="Name">
-          <Input placeholder="Project name" />
-        </CustomFormField>
-
-        <CustomFormField name="description" label="Description">
-          <Input placeholder="Project description (optional)" />
-        </CustomFormField>
-
-        {submitError && <p role="alert" className="text-sm text-destructive">{submitError}</p>}
-
-        <Button
-          type="submit"
-          disabled={form.formState.isSubmitting}
-          className="w-full"
-        >
-          {form.formState.isSubmitting ? 'Creating...' : 'Create Project'}
-        </Button>
-      </form>
-    </Form>
-  );
-}
-```
-
-`CustomFormField` (`src/components/widgets/custom-form-field.tsx`) takes `name`, `label`, optional `description`, and a single input child — it wires the Controller, label, and error message internally via `useFormContext()`. Do not wrap it in `FormField`/`FormControl`/`FormItem` or spread `{...field}` onto it.
-
-**3. File Upload with Server-Side Validation (Critical)**
-
-Client checks are fast feedback only — the server must repeat them and add the size cap, magic-byte sniff, and server-generated storage key (see the backend stack's `validation-patterns` file).
-
-```tsx
-// src/features/projects/components/file-upload-form.tsx
-import { APIError, logError } from '@/lib/errors';
-import {
-  ALLOWED_UPLOAD_EXTENSIONS,
-  fileUploadSchema,
-} from '@/lib/validation/schemas';
-import { type ChangeEvent, useState } from 'react';
-import { z } from 'zod';
-import { uploadProjectFile } from '../api/project-service';
-
-// Derived from the same whitelist the schema checks, so picker and validator never disagree
-const ACCEPT_ATTRIBUTE = ALLOWED_UPLOAD_EXTENSIONS.map((ext) => `.${ext}`).join(',');
-
-export function FileUploadForm() {
-  const [error, setError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-
-  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.currentTarget.files?.[0];
-    if (!file) return;
-
-    try {
-      setError(null);
-      setIsUploading(true);
-
-      // Fast feedback only — the server repeats every one of these checks
-      const validation = fileUploadSchema.safeParse({
-        name: file.name,
-        size: file.size,
-        type: file.type,
-      });
-
-      if (!validation.success) {
-        const firstError = Object.values(z.flattenError(validation.error).fieldErrors)[0]?.[0];
-        setError(firstError || 'Invalid file');
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('file', file);
-      await uploadProjectFile(formData);
-    } catch (error) {
-      if (error instanceof APIError) {
-        // The backend's error text is for engineers, not users — log it, show a fixed string.
-        logError('FileUploadForm: upload failed', error);
-        setError('Upload failed. Please try again.');
-        return;
-      }
-      setError('An error occurred during upload');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <label htmlFor="file">Upload File</label>
-        <input
-          id="file"
-          type="file"
-          accept={ACCEPT_ATTRIBUTE}
-          onChange={handleFileChange}
-          disabled={isUploading}
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? 'file-error' : undefined}
-          className="w-full"
-        />
-        {error && (
-          <p id="file-error" role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
-        <p aria-live="polite" className="text-sm text-primary">
-          {isUploading ? 'Uploading...' : ''}
-        </p>
-      </div>
-    </div>
-  );
-}
-```
-
-**4. Service through `ApiClient`, with Response Validation**
+**2. Service through `ApiClient`, with Response Validation**
 
 Every call goes through `ApiClient` (`src/lib/clients/api-client.ts`, defined in `templatecentral:standards (full-stack-pairing)`): it maps non-2xx to `APIError`, passes `FormData` through, and — with `templatecentral:add (auth)` — sends the session cookie plus `X-CSRF-Token` on POSTs. These examples need a paired backend.
 
@@ -252,12 +91,7 @@ export async function fetchProject(id: string): Promise<Project> {
 - Throw `APIError`, never a generic `Error`, and keep validation field detail out of the message (error handling is keyed on `APIError`)
 - Never render a backend error string; log it, show a fixed message (it can carry stack traces or SQL)
 
-## Testing / Verification
-
-```bash
-pnpm dev   # submit the form with invalid values — field errors render before any request
-pnpm test
-```
+Verify: submit the form with invalid values (field errors render before any request); `pnpm test`.
 
 ## After Writing Code
 

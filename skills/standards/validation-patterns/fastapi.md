@@ -3,107 +3,11 @@
      prereq: Stack = fastapi. Do not invoke this file directly — it is loaded at runtime by the templatecentral:standards skill. -->
 ### FastAPI (Python + Pydantic)
 
-**1. Request Model with Validation**
+Schemas live in `src/api/schemas/request/` and `src/api/schemas/response/`, one module per resource, subclassing `BaseRequestSchema` / `BaseResponseSchema` (`api.schemas.base`). Bound pagination: `page` `le=10_000`, `limit` `le=100`, `sort` `max_length=64` with a pattern (the OFFSET cost grows with page). `EmailStr` needs `email-validator` in `requirements.in` (installed by `templatecentral:add (auth)`). Login accepts any non-empty password (`min_length=1`): the 12-character minimum is a signup rule, and enforcing it at login locks out existing accounts and discloses the policy.
 
-Schemas live under `src/api/schemas/request/` and `src/api/schemas/response/`, one module per resource.
+**1. Router validates, service decides**
 
-```python
-# src/api/schemas/request/project.py
-from pydantic import ConfigDict, Field
-
-from api.schemas.base import BaseRequestSchema
-
-
-class CreateProjectRequest(BaseRequestSchema):
-    name: str = Field(..., min_length=1, max_length=100)
-    description: str | None = Field(None, max_length=500)
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {"name": "My Project", "description": "A great project"}
-        }
-    )
-```
-
-```python
-# src/api/schemas/response/project.py
-from datetime import datetime
-
-from api.schemas.base import BaseResponseSchema
-
-
-class ProjectResponse(BaseResponseSchema):
-    id: str
-    name: str
-    description: str | None
-    created_at: datetime
-```
-
-`EmailStr` needs `email-validator` in `requirements.in` (installed by `templatecentral:add (auth)`).
-
-```python
-# src/api/schemas/request/auth.py
-from pydantic import EmailStr, Field
-
-from api.schemas.base import BaseRequestSchema
-
-
-class LoginRequest(BaseRequestSchema):
-    email: EmailStr
-    # Login accepts any non-empty password: the 12-char minimum is a signup rule, and enforcing it here locks out existing accounts and discloses the policy.
-    password: str = Field(..., min_length=1, max_length=128)
-```
-
-```python
-# src/api/schemas/request/pagination.py
-from pydantic import Field
-
-from api.schemas.base import BaseRequestSchema
-
-
-class PaginationQuery(BaseRequestSchema):
-    page: int = Field(default=1, ge=1, le=10_000)
-    limit: int = Field(default=10, ge=1, le=100)
-    sort: str | None = Field(None, max_length=64, pattern=r"^(asc|desc)_\w+$")
-```
-
-**2. Router validates, service decides**
-
-FastAPI validates bodies, query models and `UploadFile` before the handler; `src/error_handler.py` turns `RequestValidationError` into a sanitized 422. Every check beyond the schema lives in `api/services/`.
-
-```python
-# src/api/routers/projects.py
-from typing import Annotated
-
-from fastapi import APIRouter, File, Query, UploadFile, status
-
-from api.schemas.request.pagination import PaginationQuery
-from api.schemas.request.project import CreateProjectRequest
-from api.schemas.response.project import ProjectResponse
-from api.services import projects as project_service
-
-router = APIRouter(prefix="/projects", tags=["projects"])
-
-
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=ProjectResponse)
-async def create_project(req: CreateProjectRequest) -> ProjectResponse:
-    return await project_service.create_project(req)
-
-
-@router.get("", response_model=list[ProjectResponse])
-async def list_projects(
-    query: Annotated[PaginationQuery, Query()],
-) -> list[ProjectResponse]:
-    return await project_service.list_projects(query)
-
-
-@router.post("/upload", response_model=dict[str, dict[str, str]])
-async def upload_project_file(
-    file: Annotated[UploadFile, File()],
-) -> dict[str, dict[str, str]]:
-    storage_key = await project_service.store_project_file(file)
-    return {"data": {"storageKey": storage_key}}
-```
+FastAPI validates bodies, query models (`Annotated[PaginationQuery, Query()]`), `Form()` models and `UploadFile` before the handler; `src/error_handler.py` turns `RequestValidationError` into a sanitized 422, so a failed `Form()` login never echoes the password. Routers only call services; every check beyond the schema lives in `api/services/`.
 
 ```python
 # src/api/services/projects.py — upload excerpt
@@ -138,30 +42,7 @@ async def store_project_file(file: UploadFile) -> str:
 
 > Also cap the request body at the reverse proxy / ingress — `UploadFile` spools the whole part to disk before any of these checks run.
 
-**3. Form Data Validation**
-
-Annotate a Pydantic model with `Form()`; FastAPI validates it natively, and a failure goes through the same sanitized 422 handler, so the password is never echoed.
-
-```python
-# src/api/routers/auth.py
-from typing import Annotated
-
-from fastapi import APIRouter, Form, status
-
-from api.schemas.request.auth import LoginRequest
-from api.services import auth as auth_service
-
-router = APIRouter(prefix="/auth", tags=["auth"])
-
-
-@router.post(
-    "/login", response_model=dict[str, dict[str, str]], status_code=status.HTTP_200_OK
-)
-async def login(req: Annotated[LoginRequest, Form()]) -> dict[str, dict[str, str]]:
-    return await auth_service.login(req)
-```
-
-**4. External API Response Validation**
+**2. External API Response Validation**
 
 ```python
 # src/integrations/github_service.py
@@ -205,16 +86,7 @@ async def fetch_github_user(username: str) -> GitHubUser:
         raise RuntimeError("Invalid GitHub API response") from None
 ```
 
-## Testing / Verification
-
-```bash
-# Empty name → 422
-curl -X POST http://localhost:8000/projects \
-  -H "Content-Type: application/json" \
-  -d '{"name": ""}'
-
-python -m pytest test/ -v
-```
+Verify: an empty `name` posts to a 422; `python -m pytest test/ -v`.
 
 ## After Writing Code
 

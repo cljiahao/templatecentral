@@ -5,223 +5,25 @@
 
 Import shared schemas (`emailSchema`, `paginationSchema`, `fileUploadSchema`, …) from `src/lib/validation/schemas.ts` (`patterns.md`). The routes rely on `handleApiError`'s `ZodError` branch (400 + `fieldErrors` + `VALIDATION_ERROR`) from `templatecentral:add (error-handling)`; the scaffold default maps a `ZodError` to 500.
 
-**1. Form Schema with Client & Server Validation**
+**1. Forms**
 
-```ts
-// src/features/auth/schemas/login-form.ts
-import { z } from 'zod';
-import { emailSchema } from '@/lib/validation/schemas';
+Form schemas live in `src/features/<name>/schemas/`, never in the component file, and are shared by the client resolver (`zodResolver`), the server action and the route. Re-validate with `safeParse` in the server action; it returns a plain serializable value, not an HTTP response, so it does not use `handleApiError`:
 
-export const LoginFormSchema = z.object({
-  email: emailSchema,
-  password: z.string().min(1, 'Password is required'),
-  rememberMe: z.boolean().default(false),
-});
+`return { error: 'Validation failed', details: { fieldErrors: z.flattenError(parsed.error).fieldErrors, code: 'VALIDATION_ERROR' } }`
 
-export type LoginFormData = z.input<typeof LoginFormSchema>;
-```
+Client error text: log the backend's message, show a fixed string; navigate with `router.push`, never `window.location.href`.
 
-**2. React Hook Form + Client Validation**
-
-```tsx
-// src/features/auth/components/login-form.tsx
-'use client';
-
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'next/navigation';
-import { LoginFormSchema, type LoginFormData } from '../schemas/login-form';
-
-export function LoginForm() {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<LoginFormData>({
-    resolver: zodResolver(LoginFormSchema),
-  });
-
-  const onSubmit = async (data: LoginFormData) => {
-    try {
-      setError(null);
-      const response = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        // The backend's error text can carry stack traces, SQL fragments or internal identifiers: log it, show a fixed string.
-        const body = await response.json().catch(() => ({}));
-        console.error('Login failed', body.error ?? response.status);
-        setError('Login failed. Check your credentials and try again.');
-        return;
-      }
-
-      // router.push, never window.location.href: a full reload discards the App Router cache and client state
-      router.push('/dashboard');
-    } catch (err) {
-      console.error('Login request failed', err);
-      setError('An unexpected error occurred');
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <div>
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          placeholder="user@example.com"
-          aria-invalid={Boolean(errors.email)}
-          aria-describedby={errors.email ? 'email-error' : undefined}
-          {...register('email')}
-          className="w-full rounded border px-3 py-2"
-        />
-        {errors.email && (
-          <p id="email-error" role="alert" className="text-sm text-destructive">
-            {errors.email.message}
-          </p>
-        )}
-      </div>
-
-      <div>
-        <label htmlFor="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          aria-invalid={Boolean(errors.password)}
-          aria-describedby={errors.password ? 'password-error' : undefined}
-          {...register('password')}
-          className="w-full rounded border px-3 py-2"
-        />
-        {errors.password && (
-          <p id="password-error" role="alert" className="text-sm text-destructive">
-            {errors.password.message}
-          </p>
-        )}
-      </div>
-
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
-
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="w-full rounded bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-      >
-        {isSubmitting ? 'Logging in...' : 'Login'}
-      </button>
-    </form>
-  );
-}
-```
-
-**3. Server Action with Zod Validation**
-
-```ts
-// src/features/auth/actions/login.ts
-'use server';
-
-import { z } from 'zod';
-import { LoginFormSchema } from '../schemas/login-form';
-
-export async function loginAction(formData: unknown) {
-  // Re-validate server-side: the client resolver is UX only and a crafted request reaches this action with arbitrary input.
-  const parsed = LoginFormSchema.safeParse(formData);
-
-  if (!parsed.success) {
-    // Server actions return a plain serializable value, not an HTTP response, so this does not use handleApiError like the routes below
-    return {
-      error: 'Validation failed',
-      details: {
-        fieldErrors: z.flattenError(parsed.error).fieldErrors,
-        code: 'VALIDATION_ERROR',
-      },
-    };
-  }
-
-  // Call your auth logic here using parsed.data
-
-  return { success: true };
-}
-```
-
-**4. API Route with Request Body Validation**
+**2. API Route with Request Body Validation**
 
 > **Never name a route segment under `/api/auth/`.** better-auth (`templatecentral:add (auth)`) owns the catch-all `src/app/api/auth/[...all]/route.ts`; a static sibling there would bypass its handling and rate limiting. Hence `/api/sessions`.
 
-```ts
-// src/app/api/sessions/route.ts
-import { handleApiError } from '@/lib/errors';
-import { withLogging } from '@/lib/utils/with-logging';
-import { LoginFormSchema } from '@/features/auth/schemas/login-form';
-import { NextResponse } from 'next/server';
+Routes call `schema.safeParse(await request.json())` and return `handleApiError(msg, parsed.error)` on failure; its `ZodError` branch emits the 400 + `fieldErrors` + `VALIDATION_ERROR` shape. Wrap handlers in `withLogging`.
 
-export const POST = withLogging(async (request) => {
-  try {
-    const body = await request.json();
-    const parsed = LoginFormSchema.safeParse(body);
+**3. Query Parameter Validation**
 
-    if (!parsed.success) {
-      // handleApiError's ZodError branch emits the 400 + fieldErrors + VALIDATION_ERROR shape; never hand-roll it or the contract drifts per route
-      return handleApiError('Login failed', parsed.error);
-    }
+`searchParams.get()` returns `null` for a missing param and `z.coerce.number()` turns `null` into `0`, so coalesce each value with `?? undefined` before `paginationSchema.safeParse` for `.default()` to apply. Check `sort` against a field whitelist before it reaches an ORM `orderBy` (`templatecentral:add (pagination)` provides `parseSortParam`).
 
-    // Call your auth logic here using parsed.data
-
-    return NextResponse.json({ data: { success: true } }, { status: 200 });
-  } catch (error) {
-    return handleApiError('Login failed', error);
-  }
-});
-```
-
-**5. Query Parameter Validation**
-
-```ts
-// src/app/api/projects/route.ts
-import { handleApiError } from '@/lib/errors';
-import { withLogging } from '@/lib/utils/with-logging';
-import { paginationSchema } from '@/lib/validation/schemas';
-import { listProjects } from '@/features/projects/api/list-projects';
-import { NextResponse } from 'next/server';
-
-export const GET = withLogging(async (request) => {
-  try {
-    const { searchParams } = new URL(request.url);
-    // get() returns null for a missing param and z.coerce.number() turns null into 0, so coalesce to undefined for .default() to apply
-    const queryObj = {
-      page: searchParams.get('page') ?? undefined,
-      limit: searchParams.get('limit') ?? undefined,
-      sort: searchParams.get('sort') ?? undefined,
-    };
-
-    const parsed = paginationSchema.safeParse(queryObj);
-
-    if (!parsed.success) {
-      return handleApiError('Invalid query parameters', parsed.error);
-    }
-
-    const projects = await listProjects(parsed.data);
-
-    return NextResponse.json({ data: projects });
-  } catch (error) {
-    return handleApiError('Failed to fetch projects', error);
-  }
-});
-```
-
-> Check `sort` against a field whitelist before it reaches an ORM `orderBy` (`templatecentral:add (pagination)` provides `parseSortParam`).
-
-**6. File Upload Validation**
+**4. File Upload Validation**
 
 `file.name` and `file.type` are attacker-controlled; validating them is a usability filter, not the security control. The schema cannot:
 
@@ -301,50 +103,9 @@ export const POST = withLogging(async (request) => {
 });
 ```
 
-**7. External API Response Validation**
+**5. External API Response Validation**
 
-Shape only; `templatecentral:add (integration)` owns the real layer (`src/integrations/services/github-service.ts`).
-
-```ts
-// src/integrations/services/github-user.ts
-import { z } from 'zod';
-import { APIError } from '@/integrations/error';
-import { logError } from '@/lib/errors';
-
-const externalApiUserSchema = z.object({
-  id: z.number(),
-  login: z.string(),
-  email: z.email().nullable(),
-});
-
-export async function fetchGithubUser(username: string) {
-  // Encode every interpolated segment — an unencoded `../` walks off the intended path
-  const response = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}`);
-
-  if (!response.ok) {
-    // Integration layer always throws APIError — never generic Error
-    throw new APIError({ statusCode: response.status, data: { message: 'GitHub API error' } });
-  }
-
-  const data: unknown = await response.json();
-
-  const parsed = externalApiUserSchema.safeParse(data);
-
-  if (!parsed.success) {
-    // Field errors are a debugging aid, not a user message: log them and throw the generic APIError the app already renders.
-    logError(
-      'fetchGithubUser: response failed schema validation',
-      new Error(JSON.stringify(z.flattenError(parsed.error).fieldErrors))
-    );
-    throw new APIError({ statusCode: 502, data: { message: 'Invalid GitHub API response' } });
-  }
-
-  return {
-    id: parsed.data.id,
-    email: parsed.data.email,
-  };
-}
-```
+Shape only; `templatecentral:add (integration)` owns the real layer (`src/integrations/services/github-service.ts`). Encode every interpolated path segment (`encodeURIComponent`), throw `APIError` on a non-ok status, then `safeParse` the JSON. On a parse failure log `z.flattenError(parsed.error).fieldErrors` through `logError` and throw a generic `APIError` with status 502; never put the field detail in the thrown message.
 
 ## Rules
 
@@ -354,21 +115,7 @@ export async function fetchGithubUser(username: string) {
 - Throw `APIError`, never a generic `Error`, and keep validation field detail out of the message (error handling is keyed on `APIError`)
 - Never render a backend error string; log it, show a fixed message (it can carry stack traces or SQL)
 
-## Testing / Verification
-
-```bash
-# Test form validation (client-side error before server)
-pnpm dev
-# Fill form incorrectly, verify errors appear
-
-# Test API validation (server-side)
-# Invalid email → 400 with fieldErrors.email
-curl -X POST http://localhost:3000/api/sessions \
-  -H "Content-Type: application/json" \
-  -d '{"email": "not-an-email", "password": "x"}'
-
-pnpm test
-```
+Verify: `POST /api/sessions` with `{"email":"not-an-email","password":"x"}` returns 400 with `fieldErrors.email`; `pnpm test`.
 
 ## After Writing Code
 
