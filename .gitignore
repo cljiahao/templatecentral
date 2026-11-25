@@ -65,9 +65,6 @@ yarn-error.log*
 .vercel
 coverage/
 
-# Skills build directory exception (skills/build/ is a skill, not a build artifact)
-!skills/build/
-
 # Local planning docs (not part of project source)
 docs/specs/
 docs/superpowers/plans/

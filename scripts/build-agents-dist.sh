@@ -67,7 +67,7 @@ else
 fi
 
 # Un-namespace registered skill names: `name: templatecentral:<x>` -> `name: <x>`.
-# Agent-utility SKILL.md files (build/test/review/cleanup) carry a <!-- ref: --> header instead of
+# Agent-utility SKILL.md files (test/review/cleanup) carry a <!-- ref: --> header instead of
 # `name:` frontmatter, so they are untouched — they remain catted-by-path, which still resolves.
 renamed=0
 while IFS= read -r f; do

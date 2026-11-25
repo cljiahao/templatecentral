@@ -96,5 +96,5 @@ Verify: submit the form with invalid values (field errors render before any requ
 ## After Writing Code
 
 Dispatch in order:
-1. build utility (`cat "<skill-dir>/../build/SKILL.md"`) — validate compilation
+1. the project's check command (`pnpm build && pnpm check`) — validate compilation
 2. review utility (`cat "<skill-dir>/../review/SKILL.md"`) — check code standards
