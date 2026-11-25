@@ -24,7 +24,7 @@ If ambiguous → ask. For a **new** project with no stack named, `templatecentra
 | Add capability to existing project | `templatecentral:add` |
 | Adopt an existing project / retrofit the harness into a project built without templateCentral | `templatecentral:migrate` |
 | DB migration or framework upgrade | `templatecentral:migrate` |
-| Verify build compiles | build utility (`cat skills/build/SKILL.md` via plugin root) |
+| Verify build compiles | seeded `<stack>-verify` project skill (`pnpm check`; fastapi `python -m pyright src/ && ruff check src/`) |
 | Write and run tests | test utility (`cat skills/test/SKILL.md` via plugin root) |
 | Code review | review utility (`cat skills/review/SKILL.md` via plugin root) |
 | Standards drift check / validation patterns | `templatecentral:standards` |

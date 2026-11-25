@@ -60,5 +60,5 @@ Verify: an invalid body or non-UUID path param returns 400; `pnpm test`.
 ## After Writing Code
 
 Dispatch in order:
-1. build utility (`cat "<skill-dir>/../build/SKILL.md"`) — validate compilation
+1. the project's check command (`pnpm check`) — validate compilation
 2. review utility (`cat "<skill-dir>/../review/SKILL.md"`) — check code standards

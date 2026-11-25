@@ -43,7 +43,6 @@ templatecentral/
 │   ├── add/SKILL.md         # Router → skills/add/<capability>/<stack>.md
 │   ├── standards/SKILL.md   # Router → skills/standards/<check>/
 │   ├── migrate/SKILL.md     # Router → skills/migrate/<type>/
-│   ├── build/               # (de-registered utility) detect stack + run build command
 │   ├── test/                # (de-registered utility) write and run tests
 │   ├── review/              # (de-registered utility) code review + dependency updates
 │   └── cleanup/             # (de-registered utility) remove example code / task scaffolding

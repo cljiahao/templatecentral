@@ -4,7 +4,7 @@
 # Usage: bash scripts/count-load.sh [--json] [--base REF] [--entry SKILL:NAME[@STACK]]... [--summary SKILL|all]...
 #   Starts at skills/scaffold/SKILL.md and follows every `cat "<skill-dir>/…"` line
 #   it finds in the files it loads. Files under skills/scaffold are the scaffold load;
-#   files elsewhere under skills/ (build/test/review/cleanup) are reported as utilities.
+#   files elsewhere under skills/ (test/review/cleanup) are reported as utilities.
 #   Sizes are UTF-8 bytes; tokens are bytes/4. --base REF adds the delta against the same walk run on that git ref.
 #
 # Other skills. --entry measures one realistic invocation of skills/add, skills/migrate or skills/standards:
@@ -150,7 +150,7 @@ def entry_walk(read, skill, name, stack):
         if text is not None:
             inside[rel] = len(text.encode("utf-8"))
     # A router's own cat lines are not followed, except those that leave the skill folder: a router step
-    # such as "then cat ../build/SKILL.md" runs after every guide, so those utilities are always loaded.
+    # such as "then cat ../review/SKILL.md" runs after every guide, so those utilities are always loaded.
     for rel in start:
         text = read(rel)
         for target in CAT_ANY.findall(text or ""):

@@ -8,7 +8,7 @@ Review changed files against two layers: (1) the quality checks under **What to 
 
 ## Stack Detection
 
-Use the build utility's Stack Detection table (`<skill-dir>/../build/implementation.md`). If multiple markers are found (monorepo), ask the user which stack to review before continuing.
+Read the stack from the `<!-- templateCentral: <stack>@` marker on `AGENTS.md` line 1; absent, ask the user. If multiple markers are found (monorepo), ask the user which stack to review before continuing.
 
 ## Steps
 

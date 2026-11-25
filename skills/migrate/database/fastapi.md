@@ -153,4 +153,4 @@ All tests pass and the app connects.
 
 ## After Writing Code
 
-Run the build utility (`<skill-dir>/../build/SKILL.md`), then the review utility (`<skill-dir>/../review/SKILL.md`).
+Run the project's check command (`python -m pyright src/ && ruff check src/`), then the review utility (`<skill-dir>/../review/SKILL.md`).
