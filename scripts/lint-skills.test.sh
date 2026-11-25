@@ -565,8 +565,6 @@ with open(os.path.join(d, "zz-test.tsv"), "a", encoding="utf-8") as fh:
 PY
 }
 # shellcheck disable=SC2016  # the anchors are literal heading text with backticks
-IAM_A4=("add/database/python/sqlalchemy-iam.md" '### A4. Create `src/database/session.py`' python)
-# shellcheck disable=SC2016  # the anchors are literal heading text with backticks
 IAM_S2=("migrate/database/fastapi.md" '### Step 2 — Replace `src/database/session.py`' python)
 IAM_NEW_S=migrate/database/zz/template/session.py
 # shellcheck disable=SC2016  # the anchors are literal heading text with backticks
