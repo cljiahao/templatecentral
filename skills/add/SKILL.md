@@ -14,7 +14,7 @@ description: Use when adding any capability to a FastAPI, NestJS, Next.js, or Vi
 | `mutation-testing` (`mutation`) | fastapi→python, else typescript | `mutation-testing/<python\|typescript>.md` |
 | `ai-security`, `documentation` (`docs`, `readme`), `redaction` (`masking`, `dlp`) | all | `<capability>/implementation.md` |
 
-2. Need `<!-- templateCentral: <stack>@` on `AGENTS.md` line 1 (`redaction` and `documentation` need the harness instead; see their guide); if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
+2. Need `<!-- templateCentral: <stack>@` on `AGENTS.md` line 1 (`redaction`, `documentation`: the harness instead, see their guide). Absent: run `templatecentral:migrate`; still absent: stop, write nothing.
 3. Run `cat "<skill-dir>/<path>"` — `<skill-dir>` is this skill's "Base directory for this skill" (an absolute path, **not** a shell variable).
 4. Follow the loaded guide exactly; for `database` it names the next `cat`. In the guides, `<target>` is the project root: the directory whose `AGENTS.md` carries the templateCentral marker.
 5. When the code is written, `cat "<skill-dir>/../build/SKILL.md"`, then `cat "<skill-dir>/../review/SKILL.md"`. Then `cat "<skill-dir>/../test/SKILL.md"` and run the project's test suite through it, whatever the guide changed.

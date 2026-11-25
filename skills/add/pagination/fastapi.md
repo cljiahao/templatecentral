@@ -7,19 +7,13 @@
 
 Run `TC_PART=leaf TC_LEAF=add/pagination/fastapi bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/pagination/fastapi/template/` (listed in `<skill-dir>/pagination/fastapi/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**1. Request Schema**
+**1. Request Schema** (`src/api/schemas/request/pagination.py`)
 
-Copied verbatim from `<skill-dir>/pagination/fastapi/template/src/api/schemas/request/pagination.py` by the copy step; do not re-type it.
-
-**2. Response Schema**
-
-Copied verbatim from `<skill-dir>/pagination/fastapi/template/src/api/schemas/response/pagination.py` by the copy step; do not re-type it.
+**2. Response Schema** (`src/api/schemas/response/pagination.py`)
 
 `BaseResponseSchema` serializes `has_more` as `hasMore`, matching the other stacks' envelope.
 
-**3. Pagination Helpers**
-
-Copied verbatim from `<skill-dir>/pagination/fastapi/template/src/utils/pagination.py` by the copy step; do not re-type it.
+**3. Pagination Helpers** (`src/utils/pagination.py`)
 
 **4. Service + Router**
 

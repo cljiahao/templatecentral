@@ -161,9 +161,7 @@ Use as `Depends(require_role("admin"))`.
 
 Run `TC_PART=leaf TC_LEAF=add/logging/fastapi bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/logging/fastapi/template/` (listed in `<skill-dir>/logging/fastapi/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**Outbound HTTP calls** — the wrapper is `src/utils/http_client.py` (copied above):
-
-Copied verbatim from `<skill-dir>/logging/fastapi/template/src/utils/http_client.py` by the copy step; do not re-type it.
+**Outbound HTTP calls** — the wrapper is `src/utils/http_client.py` (copied above)
 
 **Key domain events** — log inside service-layer functions:
 
