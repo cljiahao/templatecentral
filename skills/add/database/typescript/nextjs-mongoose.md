@@ -13,9 +13,7 @@ pnpm add mongoose
 
 Run `TC_PART=leaf TC_LEAF=add/database/typescript/nextjs-mongoose bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/typescript/nextjs-mongoose/template/` (listed in `<skill-dir>/database/typescript/nextjs-mongoose/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**`src/integrations/database/mongoose-client.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nextjs-mongoose/template/src/integrations/database/mongoose-client.ts` by the copy step; do not re-type it.
+**`src/integrations/database/mongoose-client.ts`**
 
 > **Why the cached pattern**: Next.js hot-reloads modules in development. The `globalThis` cache prevents opening duplicate MongoDB connections.
 
@@ -63,9 +61,7 @@ MONGODB_DB_NAME=mydb
 
 #### C3. Create a Schema
 
-**`src/integrations/database/schemas/user.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nextjs-mongoose/template/src/integrations/database/schemas/user.ts` by the copy step; do not re-type it.
+**`src/integrations/database/schemas/user.ts`**
 
 > **Why `mongoose.models.User ??`**: Prevents the "Cannot overwrite model once compiled" error during hot-reload in development.
 >
@@ -73,9 +69,7 @@ Copied verbatim from `<skill-dir>/database/typescript/nextjs-mongoose/template/s
 
 #### C4. Create Barrel Export
 
-**`src/integrations/database/index.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nextjs-mongoose/template/src/integrations/database/index.ts` by the copy step; do not re-type it.
+**`src/integrations/database/index.ts`**
 
 #### C5. Configure Environment
 
@@ -131,11 +125,7 @@ Confirm the build succeeds with no type errors.
 
 ## Rules
 
-- **Opt-in only** — add a database only on request.
-- Client and schemas live in `src/integrations/database/`.
 - Keep the cached singleton — it prevents connection exhaustion on hot reload.
-- Do not hardcode credentials; keep connection config in `.env` / `.env.local` and document in `.env.example`.
-- Import database code only on the server, never in client components (`'use server'`, API routes, Server Components).
 - **Mongoose**: Always use `mongoose.models.X ?? mongoose.model()` to prevent model recompilation errors. For IAM auth, install `@aws-sdk/credential-providers` and use the `MONGODB-AWS` auth mechanism; schema and query code are unchanged.
 
 ---

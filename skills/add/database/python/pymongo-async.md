@@ -42,29 +42,21 @@ MONGODB_DB_NAME=mydb
 
 Run `TC_PART=leaf TC_LEAF=add/database/python/pymongo-async bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/python/pymongo-async/template/` (listed in `<skill-dir>/database/python/pymongo-async/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**`src/database/mongo.py`** (the copy also writes an empty `src/database/__init__.py`):
-
-Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/database/mongo.py` by the copy step; do not re-type it.
+**`src/database/mongo.py`** (the copy also writes an empty `src/database/__init__.py`)
 
 ### M4. Create a Model
 
 Domain models are plain Pydantic models in **`src/models/`** — `id` is the hex string of Mongo's `_id`, set by the repository.
 
-**`src/models/user.py`**:
-
-Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/models/user.py` by the copy step; do not re-type it.
+**`src/models/user.py`**
 
 ### M5. Create the Repositories
 
 Create the `api/repositories/` directory (with an empty `__init__.py`) if it does not already exist.
 
-**`src/api/repositories/base.py`**:
+**`src/api/repositories/base.py`**
 
-Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/api/repositories/base.py` by the copy step; do not re-type it.
-
-**`src/api/repositories/user_repository.py`**:
-
-Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/api/repositories/user_repository.py` by the copy step; do not re-type it.
+**`src/api/repositories/user_repository.py`**
 
 > **NoSQL injection:** build filters only from typed scalars (`{"email": email}` where `email: str` came through a Pydantic schema). Never pass a request dict — or `request.query_params` — into `find`/`find_one`/`update_*`: `{"email": {"$ne": ""}}` matches every document.
 
@@ -97,17 +89,11 @@ app = FastAPI(lifespan=lifespan, title=common_settings.PROJECT_NAME, ...)
 
 ### M7. Schemas, Service, Router
 
-**`src/api/schemas/request/user.py`**:
+**`src/api/schemas/request/user.py`**
 
-Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/api/schemas/request/user.py` by the copy step; do not re-type it.
+**`src/api/schemas/response/user.py`** — no `hashed_password` field; `model_validate(..., from_attributes=True)` copies only declared fields
 
-**`src/api/schemas/response/user.py`** — no `hashed_password` field; `model_validate(..., from_attributes=True)` copies only declared fields:
-
-Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/api/schemas/response/user.py` by the copy step; do not re-type it.
-
-**`src/api/services/user_service.py`**:
-
-Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/api/services/user_service.py` by the copy step; do not re-type it.
+**`src/api/services/user_service.py`**
 
 `core.security.hash_password` comes from `templatecentral:add` (auth); run it first. Without auth, create `src/core/security.py` from the password part of `<skill-dir>/auth/fastapi/template/src/core/security.py` (the `PasswordHasher`, `_VERIFY_ERRORS`, `hash_password` and `verify_password` definitions and their `argon2` imports; leave out the JWT code, which needs `SECRET_KEY`) and add `argon2-cffi` to `requirements.in`, then recompile with `uv pip compile requirements.in --universal --generate-hashes -o requirements.txt`.
 
@@ -203,13 +189,9 @@ def client() -> Generator[TestClient]:
     client.close()
 ```
 
-**`test/test_integration/conftest.py`** (the copy also writes an empty `__init__.py` beside it):
+**`test/test_integration/conftest.py`** (the copy also writes an empty `__init__.py` beside it)
 
-Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/test/test_integration/conftest.py` by the copy step; do not re-type it.
-
-**`test/test_integration/test_users.py`**:
-
-Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/test/test_integration/test_users.py` by the copy step; do not re-type it.
+**`test/test_integration/test_users.py`**
 
 CI runs these only if MongoDB is available: add a `mongo:8` service to the test job in `.github/workflows/ci.yml` and set `MONGODB_TEST_URL=mongodb://localhost:27017`. `ci.yml` is harness-seeded — recompute its `origin_hash` in `.claude/harness.json` (harness-kit-finalize.md Step E) so `verify-harness.sh` accepts the change.
 
@@ -228,10 +210,7 @@ Confirm all tests pass and the integration tests ran (not skipped).
 
 ## Rules
 
-- **Opt-in only** — add a database only on request.
 - Never add Motor (deprecated) or mongomock (no async PyMongo support).
-- Domain models in `src/models/`, data access in `src/api/repositories/`, `database/` holds connection infrastructure only.
-- Keep `MONGODB_URL` in `src/.env` ; do not hardcode credentials, and leave TLS on outside dev.
 - Never pass request dicts or query params into Mongo filters or update documents — typed scalars and `updatable_fields` only.
 - Every list query is bounded (`find_many` clamps to `MAX_PAGE_SIZE`); paginate further with `templatecentral:add` (pagination).
 - Create indexes in the lifespan (idempotent); uniqueness lives in the index, not in a find-then-insert check.

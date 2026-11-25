@@ -31,9 +31,7 @@ pymongo>=4.19.0
 
 Run `TC_PART=leaf TC_LEAF=add/database/python/beanie bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/python/beanie/template/` (listed in `<skill-dir>/database/python/beanie/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**`src/database/mongo.py`**:
-
-Copied verbatim from `<skill-dir>/database/python/beanie/template/src/database/mongo.py` by the copy step; do not re-type it.
+**`src/database/mongo.py`**
 
 ### B3. Add Configuration
 
@@ -123,17 +121,11 @@ This list is imported by `database/mongo.py` during `init_beanie()`.
 
 Documents are used directly (no session injection); construction and hashing live in a service, the router only maps HTTP.
 
-**`src/api/schemas/request/user.py`**:
+**`src/api/schemas/request/user.py`**
 
-Copied verbatim from `<skill-dir>/database/python/beanie/template/src/api/schemas/request/user.py` by the copy step; do not re-type it.
-
-**`src/api/schemas/response/user.py`** — no `hashed_password` field:
-
-Copied verbatim from `<skill-dir>/database/python/beanie/template/src/api/schemas/response/user.py` by the copy step; do not re-type it.
+**`src/api/schemas/response/user.py`** — no `hashed_password` field
 
 **`src/api/services/user_service.py`** — `core.security.hash_password` comes from `templatecentral:add` (auth); run it first. Without auth, create `src/core/security.py` from the password part of `<skill-dir>/auth/fastapi/template/src/core/security.py` (the `PasswordHasher`, `_VERIFY_ERRORS`, `hash_password` and `verify_password` definitions and their `argon2` imports; leave out the JWT code, which needs `SECRET_KEY`) and add `argon2-cffi` to `requirements.in`, then recompile with `uv pip compile requirements.in --universal --generate-hashes -o requirements.txt`.
-
-Copied verbatim from `<skill-dir>/database/python/beanie/template/src/api/services/user_service.py` by the copy step; do not re-type it.
 
 **`src/api/routers/users.py`** (register it in `src/api/routes.py` with a `USERS` tag). It has no auth of its own — keep it off deployed environments until Step D below (or your own guard) protects it:
 
@@ -350,11 +342,4 @@ Scope `get_user` to the caller's own id, or gate it on an admin role, before exp
 
 ## Rules
 
-- **Opt-in only** — add a database only on request.
-- Place document models in `src/models/` — not in `api/`.
 - Never put `from __future__ import annotations` in a Beanie model module — it silently breaks `Optional[Link["X"]]` and `BackLink` detection on every Python version.
-- `database/` holds infrastructure only (connection, init/close functions) — no business logic.
-- Keep `MONGODB_URL` in `src/.env` ; do not hardcode production credentials.
-- Always register document models in `DOCUMENT_MODELS` and call `init_beanie()` in the lifespan event.
-- Beanie uses Pydantic v2 natively — leverage field validators and computed fields.
-- Never return raw Beanie documents — always map to a Pydantic response schema.
