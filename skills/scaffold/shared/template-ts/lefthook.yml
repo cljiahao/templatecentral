@@ -105,7 +105,7 @@ pre-push:
       # Fails on a lint, type, coverage or test suppression this change adds, and on a deleted test whose source remains.
       run: bash scripts/check-workarounds.sh
     review-record:
-      # Fails when HEAD has no passing in-session review record (run scripts/record-review.sh); records are local, so CI skips it.
+      # Fails when HEAD has no passing in-session review record; run scripts/record-review.sh to make one. Records are local, so CI skips it.
       run: bash scripts/check-review-record.sh
     verify:
       # test:ci runs the 80% line floor that plain test skips.
