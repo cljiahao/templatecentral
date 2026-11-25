@@ -5,7 +5,7 @@ Each PR adds one file here instead of editing `CHANGELOG.md`. `scripts/changelog
 File name: `<short-slug>.<category>.md`
 
 - `slug`: lower-case letters, digits and `-`, starting with a letter or digit.
-- `category`: `added`, `changed`, `fixed` or `security`.
+- `category`: `added`, `changed`, `removed`, `fixed` or `security`. A release lists them in that order.
 - Content: one or more Markdown bullets, the text you would have put in `CHANGELOG.md`. The first line starts with `- `. Continuation lines are indented.
 
 Example, `changelog.d/sonar-parity-table.added.md`:
@@ -18,7 +18,11 @@ No subdirectories. `scripts/changelog-check.sh` rejects any other name or layout
 
 Every PR except the release PR adds a fragment, with no exemption: PRs with no user-facing change and bot PRs included. Describe the change in one bullet.
 
-Fragments cannot contain heading lines, code fences or rule lines. A line whose text (after the indent and any bullet marker) starts with `#`, three backticks or `~~~`, or is `---` or `===`, is rejected.
+Fragments cannot contain heading lines, code fences or thematic breaks. A line is rejected when, after the indent and any number of bullet markers, its text starts with `#`, three backticks or `~~~`, or is a break: three or more `-`, `=`, `*` or `_` (same character, spaces allowed, so `- - -` and `* * *` count). `- --flag is new` and `- **bold** text` are fine.
+
+A PR may add fragments only. It may not edit or delete a fragment that already exists on the base, because a fragment belongs to the PR that added it (status M or D is rejected). Only the release PR deletes fragments.
+
+A normal PR may edit `.claude-plugin/plugin.json` and `.claude/harness.json` but may not change the `version` or `templatecentral_version` value; that happens only in the release PR.
 
 `## [Unreleased]` in `CHANGELOG.md` stays empty. Put every entry in a fragment, never under that heading: `scripts/changelog-check.sh` fails a PR that leaves an entry there, and `scripts/changelog-assemble.sh` refuses to run while one is there. A PR that only moves existing `[Unreleased]` entries into fragments passes if every moved entry is a line of an added fragment.
 

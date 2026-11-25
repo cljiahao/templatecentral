@@ -3,7 +3,8 @@
 # Sourced, never run. One allow-list: the exact file-name pattern, the exact category set and
 # the content rules live here and nowhere else.
 
-CL_CATEGORIES="added changed fixed security"
+# Order is the section order of a release (Keep a Changelog, without Deprecated).
+CL_CATEGORIES="added changed removed fixed security"
 CL_DIR="changelog.d"
 export CL_CATEGORIES CL_DIR
 
@@ -11,21 +12,23 @@ export CL_CATEGORIES CL_DIR
 # bash matches the whole string, so a name with a newline anywhere fails.
 # Prints the category on stdout.
 cl_name_category() {
-  local name=$1 re='^[a-z0-9][a-z0-9-]*\.(added|changed|fixed|security)\.md$'
+  local name=$1 re='^[a-z0-9][a-z0-9-]*\.(added|changed|removed|fixed|security)\.md$'
   [[ $name =~ $re ]] || return 1
   name=${name%.md}
   printf '%s\n' "${name##*.}"
 }
 
 # Succeeds when the file is a regular, non-symlink file whose first non-blank line is a bullet
-# with text, and whose other non-blank lines are bullets or indented continuations. The text of
-# each line (indent and bullet marker stripped, nested bullets included) may not start with a
-# fence marker or a heading, and may not be a lone rule line (three or more - or = characters).
+# with text, and whose other non-blank lines are bullets or indented continuations. Each line is
+# peeled: indent, then any number of bullet markers. At every step the rest may not start with a
+# fence marker or a heading, and may not be a thematic break (three or more of - = * _, same
+# character, spaces allowed, so "- - -" and "* * *" count).
 cl_content_ok() {
   local f=$1 line t first=1 seen=0
   local re_blank='^[[:space:]]*$' re_bullet='^[-*][[:space:]]+[^[:space:]]'
-  local re_indent='^[[:space:]]'
-  local re_marker='^[-*][[:space:]]+' re_rule='^(-{3,}|={3,})[[:space:]]*$'
+  local re_indent='^[[:space:]]' re_marker='^[-*][[:space:]]+'
+  local re_rule='^((-[[:space:]]*){3,}|(=[[:space:]]*){3,}'
+  re_rule+='|(\*[[:space:]]*){3,}|(_[[:space:]]*){3,})$'
   if [[ -L $f || ! -f $f ]]; then return 1; fi
   while IFS= read -r line || [[ -n $line ]]; do
     if [[ $line =~ $re_blank ]]; then continue; fi
@@ -36,11 +39,14 @@ cl_content_ok() {
     fi
     if [[ ! $line =~ $re_bullet && ! $line =~ $re_indent ]]; then return 1; fi
     t=${line#"${line%%[![:space:]]*}"}
-    if [[ $t =~ $re_marker ]]; then t=${t#"${BASH_REMATCH[0]}"}; fi
-    case $t in
-      '```'*|'~~~'*|'#'*) return 1 ;;
-    esac
-    if [[ $t =~ $re_rule ]]; then return 1; fi
+    while :; do
+      case $t in
+        '```'*|'~~~'*|'#'*) return 1 ;;
+      esac
+      if [[ $t =~ $re_rule ]]; then return 1; fi
+      [[ $t =~ $re_marker ]] || break
+      t=${t#"${BASH_REMATCH[0]}"}
+    done
   done < "$f"
   [[ $seen -eq 1 ]]
 }

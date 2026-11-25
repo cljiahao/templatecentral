@@ -6,7 +6,8 @@
 #   a missing base ref or merge base is an error.
 #   Every PR: "## [Unreleased]" in CHANGELOG.md at HEAD has no entry. Entries live in fragments.
 #   Normal PR (CHANGELOG.md not in the diff): adds at least one valid fragment under changelog.d/
-#   and no invalid entry there. Deleting fragments is not counted.
+#   and no invalid entry there. It deletes no fragment and does not change the version value in
+#   .claude-plugin/plugin.json or .claude/harness.json (other edits to those files are fine).
 #   Migration PR (the only CHANGELOG.md change empties "## [Unreleased]"): the same as a normal
 #   PR, and every entry removed from CHANGELOG.md is a line of an added fragment.
 #   Release PR (any other CHANGELOG.md change): the diff must be exactly what
@@ -30,18 +31,22 @@
 #   pristine-hashes.txt is regenerated from the tag after the release, not in the release PR.
 #
 # Catches: no fragment added; unknown category; empty or whitespace-only fragment; no bullet line;
-#   heading, fence or rule line inside a fragment (also after a bullet marker); symlink, submodule
-#   or type-changed fragment; subdirectory; name outside the pattern (incl. spaces, newlines);
-#   fragment added then deleted in the same PR; README.md counted as a fragment; missing base ref
-#   or merge base; entries left under "## [Unreleased]"; a normal PR that edits CHANGELOG.md (it
+#   heading, fence or thematic-break line inside a fragment (also after any number of bullet
+#   markers); symlink, submodule or type-changed fragment; subdirectory; name outside the pattern
+#   (incl. spaces, newlines); fragment added then deleted in the same PR; README.md counted as a
+#   fragment; missing base ref or merge base; entries left under "## [Unreleased]"; in a normal
+#   PR a fragment deleted or modified (policy: a fragment belongs to the PR that added it) and a
+#   changed version value in plugin.json or harness.json; a normal PR that edits CHANGELOG.md (it
 #   must then pass the replay, so free edits, history rewrites and fake release headings fail); a
 #   release PR with a fragment left or added, a path off the allow-list (this includes the
 #   assemble script, the lib, this check and the workflow), an extra or duplicate key in a version
 #   file, a version that is not greater; CHANGELOG.md deleted or type-changed; a malformed heading.
 # Does not catch: a fragment whose text is wrong or meaningless; a fragment under the wrong
-#   category (a migration PR also does not compare the category); a normal PR that edits this
-#   script, changelog-assemble.sh, changelog-lib.sh or the workflow (the checks that run are the
-#   PR's own copies; only a release PR is held to the allow-list).
+#   category (a migration PR does not compare the category either); a normal PR that edits this
+#   script, changelog-assemble.sh, changelog-lib.sh, the tests or the workflow, because the checks
+#   that run are the PR's own copies and only a release PR is held to the allow-list; a normal PR
+#   that edits plugin.json or harness.json in any way other than the version value; a fragment
+#   that duplicates another fragment's text.
 set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
@@ -70,8 +75,9 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/clcheck.XXXXXX") || die "mktemp failed"
 trap 'rm -rf "$work"' EXIT
 git diff --raw -z --no-renames --no-abbrev "$mb" HEAD > "$work/raw" || die "git diff failed"
 
-n_bad=0 n_rel=0 n_added=0 cl_status="" cl_mode="" cl_seen=0
+n_bad=0 n_rel=0 n_added=0 n_del=0 cl_status="" cl_mode="" cl_seen=0
 : > "$work/deleted"
+: > "$work/verfiles"
 : > "$work/relq"
 : > "$work/fragtext"
 while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
@@ -83,6 +89,7 @@ while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
   if [[ $path == "$CL_DIR"/* ]]; then
     rest=${path#"$CL_DIR"/}
     if [[ $st == D ]]; then
+      n_del=$((n_del + 1))
       if [[ $rest != */* ]] && cl_name_category "$rest" >/dev/null; then
         printf '%s\n' "$rest" >> "$work/deleted"
       else
@@ -112,7 +119,8 @@ while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
     continue
   fi
   case $path in
-    .claude-plugin/plugin.json|.claude/harness.json) ;;
+    .claude-plugin/plugin.json|.claude/harness.json)
+      if [[ $st == M ]]; then printf '%s\n' "$path" >> "$work/verfiles"; fi ;;
     *) relq 3 "$label is not on the release allow-list"; continue ;;
   esac
   if [[ $st != M ]]; then relq 3 "$label: release files may only be modified (status $st)"; fi
@@ -149,7 +157,25 @@ if [[ $cl_seen -eq 1 && $cl_status == M && ! -s $work/entries && $n_added -ge 1 
   fi
 fi
 
+# Succeeds when the lines of <path> that carry the version <key> are the same at the merge base
+# and at HEAD. Used in a normal PR, where the version never changes.
+ver_same() {
+  local p=$1 key=$2 pat
+  pat='^[[:space:]]*"'$key'"[[:space:]]*:'
+  git cat-file blob "$mb:$p" 2>/dev/null | grep -E "$pat" > "$work/vb"
+  git cat-file blob "HEAD:$p" 2>/dev/null | grep -E "$pat" > "$work/vh"
+  cmp -s "$work/vb" "$work/vh"
+}
+
 if [[ $cl_seen -eq 0 || $migration -eq 1 ]]; then
+  if [[ $n_del -gt 0 ]]; then
+    bad "$n_del fragment deletion(s): only the release PR deletes fragments"
+  fi
+  while IFS= read -r p; do
+    key=version
+    if [[ $p == .claude/harness.json ]]; then key=templatecentral_version; fi
+    ver_same "$p" "$key" || bad "$p: the \"$key\" value changes only in a release PR"
+  done < "$work/verfiles"
   [[ $n_bad -eq 0 ]] || die "$n_bad invalid entry(ies)"
   [[ $n_added -ge 1 ]] \
     || die "no fragment added: create $CL_DIR/<slug>.<${CL_CATEGORIES// /|}>.md ($CL_DIR/README.md)"

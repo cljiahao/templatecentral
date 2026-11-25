@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# scripts/changelog-assemble.test.sh — changelog-assemble.sh builds the release section and refuses each planted defect.
+# scripts/changelog-assemble.test.sh — changelog-assemble.sh builds the release section and
+#   refuses each planted defect.
 # Each case builds a committed scratch repo; a refusal must leave `git status` empty.
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,7 +22,8 @@ mk() {
 }
 commit() { git -C "$R" add -A; git -C "$R" commit -qm "${1:-c}"; }
 frag() { printf '%s\n' "${2:-- entry $1}" > "$R/changelog.d/$1"; }
-# refuse <name> <msg fragment> [args...]: assembling must fail, print the message and change nothing.
+# refuse <name> <msg fragment> [args...]: assembling must fail, print the message and change
+#   nothing.
 refuse() {
   local n=$1 msg=$2; shift 2
   local out rc
@@ -36,7 +38,7 @@ V=(2.0.0 2026-03-04)
 mk control
 frag zeta.added.md; frag alpha.added.md "- alpha one
   continued
-- alpha two"; frag m.fixed.md; frag c.changed.md; frag s.security.md; frag blank.added.md "
+- alpha two"; frag m.fixed.md; frag c.changed.md; frag r.removed.md; frag s.security.md; frag blank.added.md "
 - blank-padded
 
 "
@@ -57,6 +59,9 @@ want='## [Unreleased]
 
 ### Changed
 - entry c.changed.md
+
+### Removed
+- entry r.removed.md
 
 ### Fixed
 - entry m.fixed.md
@@ -136,9 +141,11 @@ printf '# Changelog\n\n## [Unreleased]\n\n---\n\n## [1.0.0] — 2026-01-01\n' > 
 out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?
 if [[ $rc -eq 0 ]]; then ok; else fail "empty [Unreleased] control refused: $out"; fi
 
-# Lib screening: text after a bullet marker may not start a fence or heading, nor be a lone rule line.
+# Lib screening: text after a bullet marker may not start a fence or heading, nor be a lone rule
+#   line.
 n=0
-for body in '- ```js' '- # H' '- ok
+for body in '- - ```js' '- - # x' '- ***' '- - -' '* * *' '- ok
+  ___' '- ```js' '- # H' '- ok
 - # H' '- ok
   - ~~~' '- ok
   ---' '- ok
@@ -150,6 +157,11 @@ mk lib-ok; frag a.added.md; bt='`'; frag b.fixed.md "- use ${bt}x${bt}, see #12 
   - nested --flag"; commit
 out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?
 if [[ $rc -eq 0 ]]; then ok; else fail "lib control refused inline text: $out"; fi
+mk lib-ok2; frag a.added.md; frag b.fixed.md '- --flag is new
+- **bold** text
+  - _it_ and 3 - 2 = 1'; commit
+out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?
+if [[ $rc -eq 0 ]]; then ok; else fail "lib control refused flag, bold and italic text: $out"; fi
 
 # Mode of CHANGELOG.md survives the replace.
 mk mode; frag a.added.md; chmod 755 "$R/CHANGELOG.md"; commit

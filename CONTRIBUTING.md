@@ -51,7 +51,7 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 - [ ] `bash scripts/test-template-copy.sh` and `bash scripts/lint-skills.test.sh` pass locally if the template trees (`skills/scaffold/shared/template*`, `skills/scaffold/<stack>/template*`, or an add/migrate leaf's `template*`), a `template.manifest`, the Step 0 / Step B3 copy fences (including the `PART=stack` and `PART=agents` runs in a stack's `source-files.md`) or `scripts/lint-skills.sh` were touched
 - [ ] `bash scripts/pre-guard.test.sh` passes locally if a repo guard script was touched
 - [ ] README updated if the skill count, capability list, or stack list changed
-- [ ] A changelog fragment `changelog.d/<slug>.<added|changed|fixed|security>.md` is added; `CHANGELOG.md` is not edited (`bash scripts/changelog-check.sh origin/main` passes; format in `changelog.d/README.md`)
+- [ ] A changelog fragment `changelog.d/<slug>.<added|changed|removed|fixed|security>.md` is added; `CHANGELOG.md` is not edited (`bash scripts/changelog-check.sh origin/main` passes; format in `changelog.d/README.md`)
 - [ ] CI passes (frontmatter validation + `lint-patterns` job run automatically)
 
 ## Release PR

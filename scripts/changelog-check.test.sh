@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# scripts/changelog-check.test.sh — changelog-check.sh passes a clean PR and fails each planted defect.
-# Each case builds a scratch repo: main holds CHANGELOG.md and changelog.d/README.md, branch pr holds the change.
+# scripts/changelog-check.test.sh — changelog-check.sh passes a clean PR and fails each planted
+#   defect.
+# Each case builds a scratch repo: main holds CHANGELOG.md and changelog.d/README.md, branch pr
+#   holds the change.
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHECK="$REPO/scripts/changelog-check.sh"
@@ -26,28 +28,23 @@ mk() {
 }
 commit() { git -C "$R" add -A; git -C "$R" commit -qm "$1"; }
 frag() { printf '%s\n' "- entry" > "$R/changelog.d/$1"; }
-# run <name> <want rc> [msg fragment]: run the check in $R against main.
+# run <name> <want rc> [msg fragment] [text that must be absent]: run the check in $R against main.
 run() {
   local out rc
   out=$(cd "$R" && bash "$CHECK" "${BASE:-main}" 2>&1); rc=$?
   if [[ $rc -ne $2 ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $1 — want rc $2, got $rc: $out"
   elif [[ -n "${3:-}" && "$out" != *"$3"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $1 — output lacks '$3': $out"
+  elif [[ -n "${4:-}" && "$out" == *"$4"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $1 — output has '$4': $out"
   else PASS=$((PASS + 1)); fi
 }
 
 mk control; frag good-thing.added.md; commit f
 run "control: one valid fragment" 0 "ok"
 
-# runq <name> <want rc>: like run, and the output has no "release rule" text.
-runq() {
-  local out rc
-  out=$(cd "$R" && bash "$CHECK" "${BASE:-main}" 2>&1); rc=$?
-  if [[ $rc -ne $2 ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $1 — want rc $2, got $rc: $out"
-  elif [[ "$out" == *"release rule"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $1 — output has release rule text: $out"
-  else PASS=$((PASS + 1)); fi
-}
+# runq <name> <want rc> [msg fragment]: like run, and the output has no "release rule" text.
+runq() { run "$1" "$2" "${3:-}" "release rule"; }
 
-mk categories; for c in added changed fixed security; do frag "x-$c.$c.md"; done; commit f
+mk categories; for c in added changed removed fixed security; do frag "x-$c.$c.md"; done; commit f
 run "all four categories" 0
 
 mk none; echo x > "$R/other.txt"; commit f
@@ -102,13 +99,64 @@ run "bullet whose text is ---" 1 "first line"
 mk inline; printf -- '- use \x60x\x60 and a - b, see #12 and --- inside text\n  - nested --flag\n' > "$R/changelog.d/a.added.md"; commit f
 run "inline backticks, #, --- inside text are fine" 0
 
+# Peeling and thematic breaks: bad bodies fail, ordinary bullets stay fine.
+n=0
+while IFS= read -r body; do
+  n=$((n + 1)); mk "peel$n"; printf -- '%b\n' "$body" > "$R/changelog.d/a.added.md"; commit f
+  run "fragment body rejected: $body" 1 "first line"
+done <<'LIST'
+- - \x60\x60\x60js
+- - # x
+- - - ~~~
+- ok\n  - - - # x
+- ***
+- ___
+- - -
+- * * *
+- ok\n  * * *
+- ok\n    _ _ _
+- ok\n***
+- ok\n  - ***
+- ok\n  ----
+- ok\n  = = =
+LIST
+n=0
+while IFS= read -r body; do
+  n=$((n + 1)); mk "keep$n"; printf -- '%b\n' "$body" > "$R/changelog.d/a.added.md"; commit f
+  run "control, fragment body accepted: $body" 0
+done <<'LIST'
+- --flag is new
+- **bold** text
+- _italic_ text and a_b_c
+- 3 - 2 = 1
+- ok\n  - nested - - dash text
+- ok\n  **Bold:** more
+- ok\n  * star item here
+- ok\n  -- two dashes only
+LIST
+
 mk q-frag; frag a.added.md; commit f
 runq "normal PR adding a fragment prints no release rule text" 0
 mk q-readme; frag a.added.md; echo "- x" > "$R/changelog.d/README.md"; commit f
 runq "normal PR adding a fragment and editing changelog.d/README.md prints no release rule text" 0
 mk q-del; git -C "$R" checkout -q main; frag old.added.md; commit old; git -C "$R" checkout -q -b pr2
 git -C "$R" rm -q changelog.d/old.added.md; frag a.added.md; commit f
-runq "normal PR deleting one fragment and adding one prints no release rule text" 0
+runq "normal PR deleting another PR's fragment is refused" 1 "only the release PR deletes fragments"
+mk q-del-ctl; git -C "$R" checkout -q main; frag old.added.md; commit old; git -C "$R" checkout -q -b pr2
+frag a.added.md; commit f
+runq "control: normal PR adding a fragment beside an existing one" 0
+mk q-del-only; git -C "$R" checkout -q main; frag old.added.md; commit old; git -C "$R" checkout -q -b pr2
+git -C "$R" rm -q changelog.d/old.added.md; commit f
+runq "normal PR that only deletes a fragment" 1 "only the release PR deletes fragments"
+PJN=.claude-plugin/plugin.json; HJN=.claude/harness.json
+mk v-ctl; frag a.added.md; printf '{\n  "name": "x",\n  "description": "d",\n  "version": "1.0.0"\n}\n' > "$R/$PJN"; commit f
+runq "control: normal PR edits plugin.json but not the version" 0
+mk v-plugin; frag a.added.md; printf '{\n  "name": "x",\n  "version": "1.0.1"\n}\n' > "$R/$PJN"; commit f
+runq "normal PR bumps plugin.json version" 1 "\"version\" value changes only in a release PR"
+mk v-harness; frag a.added.md; printf '{\n  "templatecentral_version": "1.0.1"\n}\n' > "$R/$HJN"; commit f
+runq "normal PR bumps harness.json version" 1 "\"templatecentral_version\" value changes only in a release PR"
+mk v-dup; frag a.added.md; printf '{\n  "name": "x",\n  "version": "1.0.0",\n  "version": "1.0.0"\n}\n' > "$R/$PJN"; commit f
+runq "normal PR adds a second version line" 1 "\"version\" value changes only in a release PR"
 
 mk trailnl; frag $'a.added.md\n'; commit f
 run "name with a trailing newline" 1 "name must be"
@@ -216,7 +264,12 @@ run "CHANGELOG.md emptied with no fragment added" 1 "release rule"
 mkunrel mig-partial; migfrags; printf '%s' "$UNREL_BASE" | grep -vxF -- '- two' > "$R/CHANGELOG.md"; commit f
 run "migration PR that leaves entries under [Unreleased]" 1 "release rule"
 
-# Release PR: base holds two fragments; the branch runs the real assemble and bumps the version files.
+mkunrel mig-ver; migfrags; printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"
+printf '{\n  "name": "x",\n  "version": "2.0.0"\n}\n' > "$R/$PJN"; commit f
+runq "migration PR bumps plugin.json version" 1 "\"version\" value changes only in a release PR"
+
+# Release PR: base holds two fragments; the branch runs the real assemble and bumps the version
+#   files.
 # mkrel <name> [old version] [new version]: base version files hold the old version.
 ASM="$REPO/scripts/changelog-assemble.sh"
 PJ=.claude-plugin/plugin.json; HJ=.claude/harness.json
@@ -269,19 +322,27 @@ run "plugin.json version not bumped" 1 "release rule"
 # Abuse: a normal PR pretends to be a release. Each case names the rule that stops it.
 mk abuse-a; git -C "$R" checkout -q main; frag a.added.md; commit frag; git -C "$R" checkout -q -b abuse
 git -C "$R" rm -q changelog.d/a.added.md; printf '## [9.9.9] — fake\n- evil\n' >> "$R/CHANGELOG.md"; commit abuse
-run "abuse: delete a fragment, append a fake release at the end" 1 "release rule 4"
+run "abuse: delete a fragment, append a fake release at the end" 1 \
+  "release rule 4 failed: .claude-plugin/plugin.json \"version\" 1.0.0 is not greater than the merge-base 1.0.0"
 mk abuse-b; git -C "$R" checkout -q main; frag a.added.md; commit frag; git -C "$R" checkout -q -b abuse
 git -C "$R" rm -q changelog.d/a.added.md; sub "$R/CHANGELOG.md" 's/\[1.0.0\] —/[1.0.0] REWRITTEN —/'; commit abuse
-run "abuse: delete a fragment and rewrite the old heading" 1 "release rule 4"
+run "abuse: delete a fragment and rewrite the old heading" 1 \
+  "release rule 4 failed: the top release heading must be '## [N.N.N] — YYYY-MM-DD', got '## [1.0.0] REWRITTEN — 2026-01-01'"
 mk abuse-c; git -C "$R" checkout -q main; frag a.added.md; commit frag; git -C "$R" checkout -q -b abuse
 git -C "$R" rm -q changelog.d/a.added.md; printf '\n## [1.1.0] — 2026-03-04\n- evil\n' >> "$R/CHANGELOG.md"
 sub "$R/$PJ" 's/1\.0\.0/1.1.0/'; sub "$R/$HJ" 's/1\.0\.0/1.1.0/'; commit abuse
-run "abuse: versions bumped, fake release appended below the old one" 1 "release rule 4"
+run "abuse: versions bumped, fake release appended below the old one" 1 \
+  "release rule 4 failed: .claude-plugin/plugin.json \"version\" '1.1.0' does not equal the heading version 1.0.0"
 mk abuse-d; git -C "$R" checkout -q main; frag a.added.md; commit frag; git -C "$R" checkout -q -b abuse
 git -C "$R" rm -q changelog.d/a.added.md
 printf '# Changelog\n\n## [Unreleased]\n\n---\n\n## [1.1.0] — 2026-03-04\n\n### Added\n- evil\n\n---\n\n## [1.0.0] — 2026-01-01\n\n### Added\n- old\n' > "$R/CHANGELOG.md"
 sub "$R/$PJ" 's/1\.0\.0/1.1.0/'; sub "$R/$HJ" 's/1\.0\.0/1.1.0/'; commit abuse
-run "abuse: hand-written 1.1.0 section with the versions bumped" 1 "release rule 5"
+run "abuse: hand-written 1.1.0 section with the versions bumped" 1 \
+  "release rule 5 failed: CHANGELOG.md differs from the changelog-assemble.sh replay of the merge base"
+# Only the replay can catch a real release plus a fake older section appended at the end.
+mkrel abuse-e; printf '\n## [0.9.0] — 2025-01-01\n\n### Added\n- evil\n' >> "$R/CHANGELOG.md"; commit rel
+run "abuse: genuine release plus a fake section appended, versions consistent" 1 \
+  "release rule 5 failed: CHANGELOG.md differs from the changelog-assemble.sh replay of the merge base" "release rule 4"
 
 mkrel rel-left; frag b.fixed.md; commit rel
 run "release PR with one fragment left undeleted" 1 "release rule 2"

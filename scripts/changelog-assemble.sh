@@ -3,7 +3,7 @@
 # CHANGELOG.md.
 #
 # Usage: bash scripts/changelog-assemble.sh [--dry-run] <version N.N.N> <date YYYY-MM-DD>
-#   Groups fragments by category (Added, Changed, Fixed, Security), sorts them by file name
+#   Groups fragments by category (Added, Changed, Removed, Fixed, Security), sorts them by file name
 #   inside a category, inserts "## [version] — date" after the [Unreleased] block, then deletes
 #   the fragments. --dry-run prints the section and changes nothing.
 #   Every check runs before the first write. The file is replaced by one mv of a temp file from
