@@ -404,6 +404,16 @@ GUARDED_FILES=".claude/agents/code-reviewer.md .claude/review-checklist-stack.tx
 CLEAN=(env -u CI -u GITHUB_ACTIONS -u TF_BUILD -u TC_REVIEW_BASE)
 GIT=(git -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false)
 
+# yn <command>: prints yes when the command succeeds and no when it fails.
+yn() {
+  if "$@"; then echo yes; else echo no; fi
+}
+
+# wf_status <stack> <shared-dir> <target>: prints ok when the copy works and refused when a part refuses.
+wf_status() {
+  if wf_scaffold "$@"; then echo ok; else echo refused; fi
+}
+
 # wf_scaffold <stack> <shared-dir> <target>: copies every part into <target>, commits it on main and branches to work; returns 1 when a part refuses.
 wf_scaffold() {
   local st=$1 sh=$2 d=$3 part
@@ -455,12 +465,12 @@ wf_bless() {
 for ST in nextjs nestjs vite-react fastapi; do
   W="$T/wf-$ST"
   if ! wf_scaffold "$ST" "$SHARED" "$W"; then check ok scaffold-failed "wiring[$ST]: scaffold copies every part"; continue; fi
-  for f in $GUARDED_FILES; do check yes "$([ -s "$W/$f" ] && echo yes || echo no)" "wiring[$ST]: scaffold seeds $f"; done
-  check yes "$(grep -q 'review-record' "$W/lefthook.yml" && echo yes || echo no)" "wiring[$ST]: lefthook carries the review gate"
-  check yes "$(sed -n '/^pre-push:/,$p' "$W/lefthook.yml" | grep -q 'scripts/check-review-record.sh' && echo yes || echo no)" "wiring[$ST]: the review gate runs in pre-push"
-  check yes "$(grep -q '^review|scripts/check-review-record.sh|-$' "$W/.claude/gates.txt" && echo yes || echo no)" "wiring[$ST]: gates.txt row is pre-push only"
-  check no "$(grep -q 'check-review-record' "$W/.github/workflows/ci.yml" && echo yes || echo no)" "wiring[$ST]: CI has no always-skipping review step"
-  check yes "$(git -C "$W" check-ignore -q .claude/review/abc.record && echo yes || echo no)" "wiring[$ST]: .gitignore covers .claude/review/"
+  for f in $GUARDED_FILES; do check yes "$(yn test -s "$W/$f")" "wiring[$ST]: scaffold seeds $f"; done
+  check yes "$(yn grep -q 'review-record' "$W/lefthook.yml")" "wiring[$ST]: lefthook carries the review gate"
+  check 1 "$(sed -n '/^pre-push:/,$p' "$W/lefthook.yml" | grep -c 'run: bash scripts/check-review-record.sh')" "wiring[$ST]: the review gate runs in pre-push"
+  check yes "$(yn grep -q '^review|scripts/check-review-record.sh|-$' "$W/.claude/gates.txt")" "wiring[$ST]: gates.txt row is pre-push only"
+  check no "$(yn grep -q 'check-review-record' "$W/.github/workflows/ci.yml")" "wiring[$ST]: CI has no always-skipping review step"
+  check yes "$(yn git -C "$W" check-ignore -q .claude/review/abc.record)" "wiring[$ST]: .gitignore covers .claude/review/"
   guarded=$(cd "$W" && bash scripts/gate-ratchet.sh --list-guarded HEAD 2>&1)
   for f in $GUARDED_FILES; do
     check yes "$(printf '%s\n' "$guarded" | awk -F'\t' -v p="$f" '$2 == p && $3 == 1 { h = 1 } END { print h ? "yes" : "no" }')" "wiring[$ST]: $f is guarded and enforced"
@@ -480,11 +490,15 @@ for ST in nextjs nestjs vite-react fastapi; do
   wf_verify; check 1 "$EC" "wiring[$ST]: (a) emptied gate script fails verify-harness"
   wf_bless; wf_verify; check 1 "$EC" "wiring[$ST]: (a) emptied gate script still fails after re-hashing"
   has "REVIEW GATE FILE MISSING" "$OUT" "wiring[$ST]: (a) the empty file is named"
+  wf_reset; printf '\n  \n' > "$W/scripts/check-review-record.sh"; wf_commit "blank gate"
+  wf_bless; wf_verify; check 1 "$EC" "wiring[$ST]: (a) whitespace-only gate script fails after re-hashing"
+  has "REVIEW GATE FILE MISSING" "$OUT" "wiring[$ST]: (a) the whitespace-only file is named"
+  wf_reset; wf_bless; wf_verify; check 0 "$EC" "wiring[$ST]: (a) control, an untouched gate script passes after re-hashing"
 
   # (b) lefthook pre-push line removed
   wf_reset
   awk '/^    review-record:/ { skip = 1; next } skip && /^    [a-z]/ { skip = 0 } skip && /^[a-z]/ { skip = 0 } !skip' "$W/lefthook.yml" > "$W/lefthook.new" && mv "$W/lefthook.new" "$W/lefthook.yml"
-  check no "$(grep -q 'check-review-record' "$W/lefthook.yml" && echo yes || echo no)" "wiring[$ST]: (b) the probe removed the lefthook line"
+  check no "$(yn grep -q 'check-review-record' "$W/lefthook.yml")" "wiring[$ST]: (b) the probe removed the lefthook line"
   wf_commit "drop review hook"
   wf_verify; check 1 "$EC" "wiring[$ST]: (b) removed lefthook line fails verify-harness"
   wf_bless; wf_verify; check 1 "$EC" "wiring[$ST]: (b) removed lefthook line still fails after re-hashing"
@@ -503,23 +517,28 @@ for ST in nextjs nestjs vite-react fastapi; do
   wf_ratchet; check 1 "$EC" "wiring[$ST]: (c) edited record-review.sh fails the ratchet"
 done
 
-# (d) a manifest row missing for one stack: the copy refuses that stack and still seeds the other
-for ROW in template-ts/.claude/review-checklist-stack.txt template-py/.claude/review-checklist-stack.txt; do
-  ALT="$T/alt-$(basename "$(dirname "$(dirname "$ROW")")")"
+# (d) each new manifest row dropped in turn: the copy refuses every stack it feeds; a row only one stack uses leaves the other stack copying
+for ROW in template/.claude/agents/code-reviewer.md template/.claude/review-checklist.txt template/scripts/check-review-record.sh template/scripts/record-review.sh template/scripts/remove-harness.sh template-ts/.claude/review-checklist-stack.txt template-py/.claude/review-checklist-stack.txt; do
+  ALT="$T/alt-$(basename "$ROW")"
   rm -rf "$ALT"
   mkdir -p "$ALT/skills"
   cp -Rp "$REPO_ROOT/skills/scaffold" "$ALT/skills/scaffold"
   cp -Rp "$REPO_ROOT/.claude-plugin" "$ALT/.claude-plugin"
   grep -vF "$ROW " "$SHARED/template.manifest" > "$ALT/skills/scaffold/shared/template.manifest"
   check 1 "$(grep -cF "$ROW " "$SHARED/template.manifest")" "wiring: manifest row $ROW exists"
-  if [ "$ROW" = template-ts/.claude/review-checklist-stack.txt ]; then BAD=nextjs OK=fastapi; else BAD=fastapi OK=nextjs; fi
-  wf_scaffold "$BAD" "$ALT/skills/scaffold/shared" "$T/alt-bad" && r=ok || r=refused
-  check refused "$r" "wiring: (d) missing row $ROW makes the $BAD copy refuse"
-  wf_scaffold "$OK" "$ALT/skills/scaffold/shared" "$T/alt-ok" && r=ok || r=refused
-  check ok "$r" "wiring: (d) control, the $OK copy is not affected by $ROW"
+  case "$ROW" in
+    template-ts/*) BADS="nextjs nestjs vite-react"; OK=fastapi ;;
+    template-py/*) BADS="fastapi"; OK=nextjs ;;
+    *) BADS="nextjs nestjs vite-react fastapi"; OK="" ;;
+  esac
+  for BAD in $BADS; do
+    check refused "$(wf_status "$BAD" "$ALT/skills/scaffold/shared" "$T/alt-bad")" "wiring: (d) missing row $ROW makes the $BAD copy refuse"
+  done
+  if [ -n "$OK" ]; then
+    check ok "$(wf_status "$OK" "$ALT/skills/scaffold/shared" "$T/alt-ok")" "wiring: (d) control, the $OK copy is not affected by $ROW"
+  fi
 done
-wf_scaffold nextjs "$SHARED" "$T/alt-full" && r=ok || r=refused
-check ok "$r" "wiring: (d) control, the unmodified manifest copies"
+check ok "$(wf_status nextjs "$SHARED" "$T/alt-full")" "wiring: (d) control, the unmodified manifest copies"
 
 echo "seeded-review-gate: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
