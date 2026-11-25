@@ -127,7 +127,7 @@ jobs:
   shell-lint:
     name: Shellcheck repo scripts
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -171,8 +171,6 @@ jobs:
           find "$t" -path "$t/*/template*" \( -name '*.cjs' -o -name '*.mjs' \) -print0 | xargs -0 -r -n1 node --check
       - name: pre-guard.sh behavioral test
         run: bash scripts/pre-guard.test.sh
-      - name: Seeded harness-kit hook regression tests
-        run: bash scripts/test-harness-kit.sh
       - name: Seeded test budget script tests
         run: bash scripts/test-budget.test.sh
       - name: Seeded gate ratchet tests
@@ -181,6 +179,26 @@ jobs:
         run: bash scripts/supply-chain.test.sh
       - name: Seeded Dockerfiles pass the dockerfile gate with real hadolint
         run: bash scripts/seeded-dockerfiles.test.sh
+      - name: Every scripts/*.test.sh file is run by a workflow step
+        run: bash scripts/check-tests-wired.sh
+      - name: Wiring check tests
+        run: bash scripts/check-tests-wired.test.sh
+
+  seeded-gate-tests:
+    name: Seeded gate and golden tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Install zsh for the copy-guard shell tests
+        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Seeded harness-kit hook regression tests
+        run: bash scripts/test-harness-kit.sh
       - name: Seeded workaround detector, secret scan, nosonar and diff-coverage gates and hook messages
         run: bash scripts/seeded-gates.test.sh
       - name: Day-one proof, every stack and CI host passes its offline seeded gates
@@ -208,6 +226,25 @@ jobs:
         run: bash scripts/check-template-comments.sh
       - name: Template copy tests
         run: bash scripts/test-template-copy.sh
+
+  version-docs-tests:
+    name: Version, docs and load tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Install zsh for the copy-guard shell tests
+        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Install PyYAML for the CI template guard
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ci-templates-venv"
+          "$RUNNER_TEMP/ci-templates-venv/bin/pip" install "pyyaml==6.0.3"
+          echo "$RUNNER_TEMP/ci-templates-venv/bin" >> "$GITHUB_PATH"
       - name: Token counter tests
         run: bash scripts/count-load.test.sh
       - name: Outcome measurement tests
@@ -240,10 +277,6 @@ jobs:
           done
       - name: Quality baseline script tests
         run: bash scripts/quality-baseline.test.sh
-      - name: Harness live check tests
-        run: bash scripts/harness-live.test.sh
-      - name: Harness refresh tests
-        run: bash scripts/harness-refresh.test.sh
       - name: Skill fence snapshot tests
         run: bash scripts/check-fences.test.sh
       - name: Fence snapshot freeze tests
@@ -263,6 +296,92 @@ jobs:
             exit "$rc"
           fi
 
+  harness-tests:
+    name: Harness live and refresh tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Install zsh for the copy-guard shell tests
+        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Install PyYAML for the CI template guard
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ci-templates-venv"
+          "$RUNNER_TEMP/ci-templates-venv/bin/pip" install "pyyaml==6.0.3"
+          echo "$RUNNER_TEMP/ci-templates-venv/bin" >> "$GITHUB_PATH"
+      - name: Harness live check tests
+        run: bash scripts/harness-live.test.sh
+      - name: Harness refresh tests
+        run: bash scripts/harness-refresh.test.sh
+
+  sonar-parity-tests:
+    name: Sonar parity tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Install zsh for the copy-guard shell tests
+        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Install PyYAML for the CI template guard
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ci-templates-venv"
+          "$RUNNER_TEMP/ci-templates-venv/bin/pip" install "pyyaml==6.0.3"
+          echo "$RUNNER_TEMP/ci-templates-venv/bin" >> "$GITHUB_PATH"
+      - name: Sonar parity check tests
+        run: bash scripts/check-sonar-parity.test.sh
+
+  defect-report-tests:
+    name: Migrate defect report tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Install zsh for the copy-guard shell tests
+        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Install PyYAML for the CI template guard
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ci-templates-venv"
+          "$RUNNER_TEMP/ci-templates-venv/bin/pip" install "pyyaml==6.0.3"
+          echo "$RUNNER_TEMP/ci-templates-venv/bin" >> "$GITHUB_PATH"
+      - name: Migrate defect report tests
+        run: bash scripts/defect-report.test.sh
+
+  migrate-baseline-tests:
+    name: Migrate gate baseline tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Install zsh for the copy-guard shell tests
+        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Install PyYAML for the CI template guard
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ci-templates-venv"
+          "$RUNNER_TEMP/ci-templates-venv/bin/pip" install "pyyaml==6.0.3"
+          echo "$RUNNER_TEMP/ci-templates-venv/bin" >> "$GITHUB_PATH"
+      - name: Migrate gate baseline tests
+        run: bash scripts/migrate-baseline.test.sh
+
   lint-negative-tests:
     name: Lint check negative tests
     runs-on: ubuntu-24.04
@@ -275,6 +394,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y python3-yaml
       - name: Each lint check fails on an empty match and on a deleted anchor
         run: bash scripts/lint-skills.test.sh
+      - name: The probe pool of that test reports crashed, truncated and missing probes
+        run: bash scripts/lint-skills-pool.test.sh
 
   fence-snapshot-frozen:
     name: Fence snapshot unchanged
