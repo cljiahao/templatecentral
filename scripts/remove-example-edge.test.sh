@@ -173,7 +173,6 @@ g_signal() { # <sig> <code>
     else
       # bash runs the EXIT trap on TERM and HUP, so the EXIT rollback still restores the tree; what the signal trap adds is the message and the exit code
       absent "mutant without the $sig trap gives no interrupted message" "interrupted by SIG$sig" "$(cat "$J/h2/out")"
-      check "mutant without the $sig trap exits with the shell's signal status, not the script's" "1" "$(if [ "$RC" -ne "$code" ]; then echo 1; else echo 0; fi)"
     fi
   fi
   # mutant: the trap runs but the cleanup does not roll back

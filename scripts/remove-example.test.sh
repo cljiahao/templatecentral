@@ -484,7 +484,7 @@ mutate() { # name sed-expr
 D=$T/mut1
 seed "$D" nextjs
 printf '\n// local\n' >>"$D/src/features/example/index.ts"
-if mutate "no byte compare" 's|if \[ -f "[$]TPL/[$]rel" \] \&\& cmp -s -- "[$]abs" "[$]TPL/[$]rel"; then|if true; then|'; then
+if mutate "no byte compare" 's|if \[ -f "[$]TPL/[$]rel" \] \&\& cmp -s -- "[$]abs" "[$]TPL/[$]rel"; then|if true; then|;s#cmp -s -- "[$]STAGE/snapdel/[$]rel" "[$]TPL/[$]rel" || die "[^"]*" ;;#: ;;#'; then
   bash "$MUT" "$D" --apply >/dev/null 2>&1
   check "mutant without the byte compare deletes the modified file" "0" "$(exists01 "$D/src/features/example/index.ts")"
 fi
@@ -622,7 +622,7 @@ fi
 D=$T/mut-link-edit
 seed "$D" nextjs
 s_link_edit "$D"
-if mutate "symlink check (edit file)" 's|if \[ -L "[$]acc" \]; then return 1; fi|:|'; then
+if mutate "symlink check (edit file)" 's|if \[ -L "[$]acc" \]; then return 1; fi|:|;s#if \[ -f "[$]target" \] [&][&] \[ ! -L "[$]target" \]; then#if true; then#'; then
   mrun "$D" --apply >/dev/null
   check "mutant without the symlink check replaces the symlink with a file" "0" "$(if [ -L "$D/$PAGE" ]; then echo 1; else echo 0; fi)"
 fi
@@ -638,7 +638,7 @@ if [ "$NOTROOT" -eq 1 ]; then
   seed "$D" fastapi
   h=$(treehash "$D")
   chmod a-w "$D/src/api/services"
-  if mutate "rollback" 's|^  rollback$|  :|'; then
+  if mutate "rollback" 's|^ *rollback$|  :|'; then
     mrun "$D" --apply >/dev/null
     chmod u+w "$D/src/api/services"
     check "mutant without the rollback leaves the project half-done" "1" "$(changed01 "$h" "$(treehash "$D")")"
