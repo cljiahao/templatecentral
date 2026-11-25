@@ -1267,7 +1267,7 @@ END {
   for (i = 1; i <= no; i++) {
     k = order[i]; split(k, p, SUBSEP)
     if (!(k in hagg)) { printf "WEAKENED %s: %s %s was %s, now removed\n", F, p[1], p[2], label(p[1], bagg[k]); bad = 1 }
-    else if (p[1] == "max" && hagg[k] + 0 > bagg[k] + 0) { printf "WEAKENED %s: limit %s was %s, now %s\n", F, p[2], bagg[k], hagg[k]; bad = 1 }
+    else if (p[1] == "max" && hagg[k] + 0 > bagg[k] + 0) { printf "WEAKENED %s: limit %s was %s%s, now %s\n", F, p[2], bagg[k], (SEEDED + 0 ? " (seeded default)" : ""), hagg[k]; bad = 1 }
     else if (p[1] != "max" && hagg[k] + 0 < bagg[k] + 0) {
       printf "WEAKENED %s: %s %s was %s, now %s\n", F, (p[1] == "sev" ? "lint rule" : "threshold"), p[2], label(p[1], bagg[k]), label(p[1], hagg[k]); bad = 1
     }
@@ -1352,6 +1352,7 @@ while IFS=$'\t' read -r kind path _; do
   fi
   file_bad=0
   newfile=""
+  seeded=0
   if [ "$kind" != guard ] && [ "$kind" != allow ] && [ "$kind" != patterns ]; then
     if ! msg=$(awk -v K="$kind" -v B="$have_base" -f "$wd/facts.awk" "$wd/head" 2>&1 > "$wd/head.f"); then
       printf 'UNREADABLE %s: %s (fail closed)\n' "$path" "$msg"
@@ -1359,12 +1360,12 @@ while IFS=$'\t' read -r kind path _; do
       continue
     fi
     if [ "$have_base" -eq 0 ]; then
-      case "$kind" in tsconfig | pyright) newfile=1; : > "$wd/base.f" ;; conftest) : > "$wd/base.f" ;; gatetime) printf 'max\tgatetime:total_budget_seconds\t600\nmax\tgatetime:per_gate_budget_seconds\t180\nmax\tgatetime:regression_percent\t25\n' > "$wd/base.f" ;; *) continue ;; esac
+      case "$kind" in tsconfig | pyright) newfile=1; : > "$wd/base.f" ;; conftest) : > "$wd/base.f" ;; gatetime) seeded=1; printf 'max\tgatetime:total_budget_seconds\t600\nmax\tgatetime:per_gate_budget_seconds\t180\nmax\tgatetime:regression_percent\t25\n' > "$wd/base.f" ;; *) continue ;; esac
     elif ! msg=$(awk -v K="$kind" -v B="$have_base" -f "$wd/facts.awk" "$wd/base" 2>&1 > "$wd/base.f"); then
       printf 'NOTE %s: unreadable at the merge base (%s); compared with an empty baseline\n' "$path" "$msg"
       : > "$wd/base.f"
     fi
-    if ! awk -v F="$path" -v NEWFILE="$newfile" -f "$wd/compare.awk" "$wd/base.f" "$wd/head.f"; then
+    if ! awk -v F="$path" -v NEWFILE="$newfile" -v SEEDED="$seeded" -f "$wd/compare.awk" "$wd/base.f" "$wd/head.f"; then
       file_bad=1
     fi
   fi

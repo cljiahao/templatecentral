@@ -2,16 +2,16 @@
 # Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
 # Exception to the source commit: the seeded AGENTS.md, rules, tail, hooks and session-context.sh were trimmed to cap the per-session load (scripts/measure-seeded-load.sh).
 # Format: <sha256>  <path>
-523c9a613034ea90c5974fd1af04c5b30d38a6f2cdf2eae1b1b3e7360efbe30e  .claude/ci-gates.sh
+942055ea89f2022b047b2ccfad02bdbce28292e4b41a0f5894180a0922b381af  .claude/ci-gates.sh
 493e60c9326a091f17b62a1ddc088696825546f77f8214915360dd3616e3f392  .claude/comment-hygiene-patterns.txt
 7f468ec04debaa70989ed1c65771d06d89a5ab7a61b9becb6fbc3b77e4f6f0d0  .claude/gate-budget.conf
-79eb595b387213486a864704c5896234efa7771ccb7046fff393f93a5c05f5cd  .claude/gate-budget.sh
+51d8d5b9da4538539379924f6a86404048ac1166c33085b115d8f9c53bd12f97  .claude/gate-budget.sh
 ffd9e407ce34017ca93e75601289e53b0878d268853abcfa4601a16789e1de5a  .claude/gates.txt
 1c9d266eba46e23a9d1b4de01b2e7206e1194a68b58bd35e67c8c14757185835  .claude/hooks/block-no-verify.sh
 23c76185d22e65b7667096ed17d2982d96d7b9a36fec8408a2896547c8ca5465  .claude/hooks/post-edit-comment-check.sh
 8de078a5759a301c6a8929305356bdc592213269f87898a4892206ab4ec6721f  .claude/hooks/post-edit-typecheck.sh
-04d455f99d47a1c3e4043a51aaedb7bbe4a8730977b553cf82e3c959c2518e16  .claude/hooks/protect-files.sh
-aab9a7e2b808889b5ff80954734ec33a3f6290157a44a933df20d9ec33a3da90  .claude/hooks/session-context.sh
+c89943e2788762fa345bdecf10508a571093a2de6c9e11cd75c06f7b4e0023dd  .claude/hooks/protect-files.sh
+18a33b122d46248a120903d1c1c7408fdd865f920c4d3f52d42547465ff73f47  .claude/hooks/session-context.sh
 9310e36318fc6bfb3953a6366193a913329f759ac0ae15af5ce67f57079f0681  .claude/hooks/skill-usage-log.sh
 d997f39290833016bb42d7b079e961e78cc1469bfd185f1d7e768f373e71aa1b  .claude/hooks/stop-checks.sh
 d1f6e2de78928cdfbbfe01eb874fbd3d9c918c6132b28ab5dbab21dcbb56f373  .claude/hooks/subagent-stop.sh
@@ -45,7 +45,7 @@ c587baf49bdcd12005ef8c42d49269e6c53f51e46e8999097573b7e26897a113  docker-entrypo
 69928a70190e23d3a0624f98ddf56e67a96c9358b4b4e2c4e4fc937663fb4615  docs/CONSTITUTION.md
 f62f6d822cd73580c8ac858385aef13f627eca4aad0b54bdca2ec8d03001a142  docs/adr/0001-test-each-behaviour-once.md
 21a17d72154eb256f35b3ecbfab6aeaabd1f75b9cf9af3a0f7d23a29c5a9bb86  docs/architecture.md
-4b2f5ce0d394175084aae35f2f94a53785db40ff3df87483102393fc98c9f57d  docs/harness.md
+242130be4f2c58b716b294dbf1f45f31f7a97fd77b05f3ff83013a7bf5d0d078  docs/harness.md
 170749b25fd8d7335601dd3e38cb7f751ce41aa9e9879eb40b6f523fa889d013  eslint.config.mjs
 31d9d3bd20cb34b25b721fa702ee8535ed5e68af4c50798ecfb44bc90572afc9  lefthook.yml
 24ef3debcc1509fe691e0ae5a9dce3d00f6584e77ffc0801af0399bbe0a679b2  next.config.ts
@@ -62,7 +62,7 @@ e87336ac3c1719b2906e771d5e1f45cf49f3d7c40dd985fa6093d1f7afd7e3d2  scripts/check-
 e17f2d480f4e72cecc8976eee0356454cb249d3e361a924d1fee6d8704fa2405  scripts/check-supply-chain.sh
 4235f622c022fe6c674c1b66c1a9d12d3812242d88978fdf8cbb9e6622256e54  scripts/check-workarounds.sh
 1876cc963623b353c8b358a84ad32668e061b53444cd89a848097072f2ae61f5  scripts/check-workflows.sh
-833194c523be00df44eb4834339de0652f6906a9da6deb6a187d74b4f89d83f3  scripts/gate-ratchet.sh
+9d64d74507102820e4fe9d79cc34e08c45f887865fbaf720ef2fb530d2585313  scripts/gate-ratchet.sh
 4063966fec5a5021ed09906289f89c2e5935dd4dc680ae6625affb3aecfd2dee  scripts/scan-secrets.sh
 a7867419d93209a05e60bdd53aef39e95368a506bea94204925c1dd4d8150d32  scripts/test-budget.sh
 d39772d4a50380753708f4f7e84d36fa783d6918bf30f95f323c374f82768448  sonar-project.properties

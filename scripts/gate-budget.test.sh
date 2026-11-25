@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/gate-budget.test.sh — tests for the seeded gate-time budget (gate-budget.sh, its runner hook in ci-gates.sh, the ratchet kind and the session hook).
-# Every number is fed into the record; no test sleeps or reads a clock. Each guard probe runs on the real script (must pass) and on a copy with that guard removed (must fail).
+# Every number is fed into the record, and no test asserts on elapsed time. The few places that wait for a process (the signal probes, the closed-stdin probe) poll in 0.2 second steps with a fixed ceiling. Each guard probe runs on the real script (must pass) and on a copy with that guard removed (must fail).
 # Usage: bash scripts/gate-budget.test.sh
 set -uo pipefail
 
@@ -94,6 +94,7 @@ ratchet_proj() {
   mkdir -p "$P/.claude/hooks"
   cp "$REPO_ROOT/skills/scaffold/shared/template-ts/.claude/hooks/protect-files.sh" "$P/.claude/hooks/"
   if [ -n "${NOCONF:-}" ]; then rm -f "$P/.claude/gate-budget.conf"; fi
+  if [ -n "${PMUT:-}" ]; then sed -i.bak "$PMUT" "$P/.claude/hooks/protect-files.sh" && rm -f "$P/.claude/hooks/protect-files.sh.bak"; fi
   if [ -n "${RMUT:-}" ]; then sed -i.bak "$RMUT" "$P/scripts/gate-ratchet.sh" && rm -f "$P/scripts/gate-ratchet.sh.bak"; fi
   git -C "$P" init -q -b main
   RG add -A
@@ -132,12 +133,19 @@ probe_closed_stdin() {
 probe_conf_symlink() { printf '%s\n' total_budget_seconds=600 per_gate_budget_seconds=180 regression_percent=25 runs_kept=20 > "$P/real.conf"; rm -f "$P/.claude/gate-budget.conf"; ln -s ../real.conf "$P/.claude/gate-budget.conf"; rec_ok; chk; [ "$RC" = 2 ] && [[ "$OUT" == *"not a regular file"* ]]; }
 probe_conf_zero() { conf total_budget_seconds=0600 per_gate_budget_seconds=180 regression_percent=25 runs_kept=20; rec_ok; chk; [ "$RC" = 2 ] && [[ "$OUT" == *"whole number"* ]]; }
 probe_conf_crlf() { printf 'total_budget_seconds=600\r\nper_gate_budget_seconds=180\r\nregression_percent=25\r\nruns_kept=20\r\n' > "$P/.claude/gate-budget.conf"; rec_ok; chk; [ "$RC" = 2 ] && [[ "$OUT" == *"whole number"* ]]; }
+# A missing or failing gate-budget.sh costs the gate nothing but prints exactly one line.
 probe_runner_missing_budget() {
   printf 'exit 0\n' > "$P/scripts/test-budget.sh"; rm -f "$P/.claude/gate-budget.sh"
   local a_out a_rc b_out b_rc
-  a_out=$(cd "$P" && env -u GITHUB_ACTIONS -u TF_BUILD bash .claude/ci-gates.sh testbudget 2>&1); a_rc=$?
-  b_out=$(cd "$P" && TC_GATE_TIMED=1 env -u GITHUB_ACTIONS -u TF_BUILD bash .claude/ci-gates.sh testbudget 2>&1); b_rc=$?
-  [ "$a_rc" = 0 ] && [ "$a_rc" = "$b_rc" ] && [ "$a_out" = "$b_out" ] && [ -z "$a_out" ]
+  a_out=$(cd "$P" && TC_GATE_TIMED=1 env -u GITHUB_ACTIONS -u TF_BUILD bash .claude/ci-gates.sh testbudget 2>&1); a_rc=$?
+  b_out=$(cd "$P" && env -u GITHUB_ACTIONS -u TF_BUILD bash .claude/ci-gates.sh testbudget 2>&1); b_rc=$?
+  [ "$a_rc" = 0 ] && [ "$b_rc" = 0 ] && [ -z "$a_out" ] && [[ "$b_out" == *"gate-budget.sh is missing"* ]] && [ "$(printf '%s\n' "$b_out" | wc -l | tr -d ' ')" = 1 ]
+}
+probe_runner_record_fails() {
+  printf 'exit 0\n' > "$P/scripts/test-budget.sh"; printf 'exit 3\n' > "$P/.claude/gate-budget.sh"
+  local out rc
+  out=$(cd "$P" && env -u GITHUB_ACTIONS -u TF_BUILD bash .claude/ci-gates.sh testbudget 2>&1); rc=$?
+  [ "$rc" = 0 ] && [[ "$out" == *"recording the timing of testbudget failed (status 3)"* ]] && [ "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" = 1 ]
 }
 # The runner passes any exit status, stdout and stderr through unchanged; the gate body is made to end with the script's own status.
 probe_runner_codes() {
@@ -147,26 +155,123 @@ probe_runner_codes() {
     printf 'echo out; echo err >&2; exit %s\n' "$c" > "$P/scripts/test-budget.sh"
     a_out=$(cd "$P" && env -u GITHUB_ACTIONS -u TF_BUILD bash .claude/ci-gates.sh testbudget 2>&1); a_rc=$?
     b_out=$(cd "$P" && TC_GATE_TIMED=1 env -u GITHUB_ACTIONS -u TF_BUILD bash .claude/ci-gates.sh testbudget 2>&1); b_rc=$?
-    [ "$a_rc" = "$c" ] && [ "$b_rc" = "$c" ] && [ "$a_out" = "$b_out" ] && [ "$(awk -F'\t' 'END { print $3 }' "$P/.claude/gate-times.tsv")" = "$c" ] || return 1
+    if [ "$a_rc" = "$c" ] && [ "$b_rc" = "$c" ] && [ "$a_out" = "$b_out" ] && [ "$(awk -F'\t' 'END { print $3 }' "$P/.claude/gate-times.tsv")" = "$c" ]; then :; else return 1; fi
   done
 }
-# SIGTERM to the runner alone must end the gate it started and leave the row of a 143 exit.
-probe_runner_signal() {
-  printf 'exec sleep 30\n' > "$P/scripts/test-budget.sh"
-  local w inner leaf i=0 rc
-  (cd "$P" && exec env -u GITHUB_ACTIONS -u TF_BUILD bash .claude/ci-gates.sh testbudget > "$P/run.out" 2>&1) & w=$!
-  inner=""
-  while [ -z "$inner" ] && [ "$i" -lt 25 ]; do inner=$(pgrep -P "$w" 2>/dev/null | head -n 1); [ -n "$inner" ] || { sleep 0.2; i=$((i + 1)); }; done
-  [ -n "$inner" ] || { kill -9 "$w" 2>/dev/null; return 1; }
-  leaf=""; i=0
-  while [ -z "$leaf" ] && [ "$i" -lt 25 ]; do leaf=$(pgrep -P "$inner" 2>/dev/null | head -n 1); [ -n "$leaf" ] || { sleep 0.2; i=$((i + 1)); }; done
-  kill -TERM "$w" 2>/dev/null
-  wait "$w" 2>/dev/null; rc=$?
-  i=0; while kill -0 "$inner" 2>/dev/null && [ "$i" -lt 15 ]; do sleep 0.2; i=$((i + 1)); done
-  local alive=0
-  if kill -0 "$inner" 2>/dev/null; then alive=1; kill -9 "$inner" 2>/dev/null; fi
-  [ -z "$leaf" ] || kill -9 "$leaf" 2>/dev/null
-  [ "$alive" = 0 ] && [ "$rc" = 143 ] && [ ! -s "$P/run.out" ] && [ "$(awk -F'\t' 'END { print $1 ":" $3 }' "$P/.claude/gate-times.tsv")" = "testbudget:143" ]
+# --- signal probes -------------------------------------------------------------------------------
+# note <text>: why a probe failed, shown only on the real script (a removed guard is expected to fail).
+note() { if [ -z "${MUTATING:-}" ]; then echo "  note: $*"; fi; }
+# The launcher starts the runner in its own session with default signals (a background job of a script would ignore INT), reports the process id and the raw end status ("exit N" or "signal N").
+write_launcher() {
+  cat > "$T/launch.pl" <<'LEOF'
+use POSIX qw(setsid);
+my $dir = shift @ARGV;
+my $in;
+my $w;
+if ($ENV{LSTDIN}) { pipe($in, $w) or die "pipe"; }
+my $pid = fork();
+die "fork" unless defined $pid;
+if (!$pid) {
+  setsid();
+  $SIG{INT} = $SIG{TERM} = $SIG{HUP} = 'DEFAULT';
+  if ($in) { open(STDIN, '<&', $in) or die; } else { open(STDIN, '<', '/dev/null') or die; }
+  open(STDOUT, '>', "$dir/run.out") or die;
+  open(STDERR, '>&', \*STDOUT) or die;
+  chdir $dir;
+  exec @ARGV or die "exec";
+}
+open(my $f, '>', "$dir/wpid") or die; print $f "$pid\n"; close $f;
+waitpid($pid, 0);
+my $st = $?;
+my $r = ($st & 127) ? "signal " . ($st & 127) : "exit " . ($st >> 8);
+open($f, '>', "$dir/status.tmp") or die; print $f "$r\n"; close $f;
+rename "$dir/status.tmp", "$dir/status";
+LEOF
+}
+# await <file>: wait up to 15 seconds for a file to appear.
+await() { local i=0; while [ ! -e "$1" ] && [ "$i" -lt 75 ]; do sleep 0.2; i=$((i + 1)); done; [ -e "$1" ]; }
+# alive <pidfile>: sets ALIVE to 0 or 1; returns 1 (and says why) when the pid file does not hold a number, so liveness is unknown.
+alive() {
+  local pid
+  pid=$(cat "$1" 2>/dev/null)
+  case "$pid" in '' | *[!0-9]*) note "cannot tell whether the process in $1 is alive: no pid recorded"; return 1 ;; esac
+  if kill -0 "$pid" 2>/dev/null; then ALIVE=1; else ALIVE=0; fi
+}
+# fixture <A|C>: a gate script that records its pid and a background grandchild, then waits. C handles INT, TERM and HUP by stopping the grandchild and exiting 7.
+fixture() {
+  {
+    printf 'echo $$ > "$PIDS/gate"\n'
+    printf 'sleep 300 </dev/null >/dev/null 2>&1 &\n'
+    printf 'gc=$!\necho "$gc" > "$PIDS/gc"\n'
+    if [ "$1" = C ]; then printf "trap 'kill \"\$gc\" 2>/dev/null; exit 7' INT TERM HUP\n"; fi
+    printf 'echo up > "$PIDS/ready"\nwait\n'
+  } > "$P/scripts/test-budget.sh"
+}
+# sigrun <timed|plain> <A|C> <INT|TERM|HUP> <wrapper|group>: runs the gate, sends the signal, waits for the end. Sets SR_STATUS, SR_ROWS, SR_GATE, SR_GC (1 when still alive); returns 1 when the run cannot be judged.
+sigrun() {
+  local mode=$1 sig=$3 tgt=$4 wp
+  rm -rf "$P/pids" "$P/status" "$P/wpid" "$P/run.out" "$P/.claude/gate-times.tsv"; mkdir "$P/pids"
+  fixture "$2"
+  sed -i.bak 's/^    bash scripts\/test-budget.sh || fail .*$/    bash scripts\/test-budget.sh; exit $?/' "$P/.claude/ci-gates.sh" && rm -f "$P/.claude/ci-gates.sh.bak"
+  if [ "$mode" = plain ]; then
+    env -u GITHUB_ACTIONS -u TF_BUILD -u LSTDIN TC_GATE_TIMED=1 PIDS="$P/pids" perl "$T/launch.pl" "$P" bash .claude/ci-gates.sh testbudget >/dev/null 2>&1 </dev/null &
+  else
+    env -u GITHUB_ACTIONS -u TF_BUILD -u TC_GATE_TIMED -u LSTDIN PIDS="$P/pids" perl "$T/launch.pl" "$P" bash .claude/ci-gates.sh testbudget >/dev/null 2>&1 </dev/null &
+  fi
+  if ! await "$P/pids/ready"; then note "the gate never reported ready"; return 1; fi
+  wp=$(cat "$P/wpid" 2>/dev/null)
+  case "$wp" in '' | *[!0-9]*) note "no process id for the runner"; return 1 ;; esac
+  if [ "$tgt" = group ]; then kill -s "$sig" -- "-$wp"; else kill -s "$sig" "$wp"; fi
+  if ! await "$P/status"; then note "the runner did not end after $sig to the $tgt"; kill -9 -- "-$wp" 2>/dev/null; return 1; fi
+  sleep 0.6
+  SR_STATUS=$(cat "$P/status")
+  SR_ROWS=$(wc -l < "$P/.claude/gate-times.tsv" 2>/dev/null | tr -d ' '); SR_ROWS=${SR_ROWS:-0}
+  alive "$P/pids/gate" || return 1; SR_GATE=$ALIVE
+  alive "$P/pids/gc" || return 1; SR_GC=$ALIVE
+  # Cleanup only, after every observation is taken.
+  kill -9 "$(cat "$P/pids/gate")" "$(cat "$P/pids/gc")" 2>/dev/null
+  return 0
+}
+# sigcase <A|C> <sig> <target>: a timed run ends like an untimed one, leaves no gate process behind, and records exactly one row.
+sigcase() {
+  local fix=$1 sig=$2 tgt=$3 st gate gc rows exit_col want_gc=0
+  if [ "$fix" = A ] && [ "$sig" = INT ]; then want_gc=1; fi
+  sigrun timed "$fix" "$sig" "$tgt" || return 1
+  st=$SR_STATUS; gate=$SR_GATE; gc=$SR_GC; rows=$SR_ROWS
+  exit_col=$(awk -F'\t' 'END { print $3 }' "$P/.claude/gate-times.tsv" 2>/dev/null)
+  if [ "$rows" != 1 ]; then note "$fix $sig $tgt: $rows rows recorded, wanted 1"; return 1; fi
+  if [ "$gate" != 0 ]; then note "$fix $sig $tgt: the gate is still alive"; return 1; fi
+  # A background job of a script ignores INT, so fixture A keeps its grandchild after INT in an untimed run too.
+  if [ "$gc" != "$want_gc" ]; then note "$fix $sig $tgt: grandchild alive=$gc, wanted $want_gc"; return 1; fi
+  if [ "$exit_col" = 0 ]; then note "$fix $sig $tgt: a signalled gate recorded exit 0"; return 1; fi
+  # An untimed bash holds INT sent to it alone until the gate ends, so that one case has nothing to compare with.
+  if [ "$sig" = INT ] && [ "$tgt" = wrapper ]; then return 0; fi
+  sigrun plain "$fix" "$sig" "$tgt" || return 1
+  if [ "$SR_STATUS" != "$st" ]; then note "$fix $sig $tgt: untimed ended with [$SR_STATUS], timed with [$st]"; return 1; fi
+  if [ "$SR_ROWS" != 0 ]; then note "$fix $sig $tgt: an untimed run recorded a row"; return 1; fi
+  return 0
+}
+probe_sig_matrix() {
+  write_launcher
+  local f s t
+  for f in A C; do for s in INT TERM HUP; do for t in wrapper group; do
+    sigcase "$f" "$s" "$t" || return 1
+  done; done; done
+}
+probe_sig_term_wrapper() { write_launcher; sigcase A TERM wrapper; }
+probe_sig_int_group() { write_launcher; sigcase C INT group; }
+probe_sig_term_handler() { write_launcher; sigcase C TERM group; }
+probe_sig_hup_wrapper() { write_launcher; sigcase C HUP wrapper; }
+# The hook exits 0 even when a signal ends it.
+probe_hook_signal_exit() {
+  write_launcher
+  rm -rf "$P/status" "$P/wpid"
+  LSTDIN=1 perl "$T/launch.pl" "$P" bash .claude/gate-budget.sh hook >/dev/null 2>&1 </dev/null &
+  await "$P/wpid" || return 1
+  sleep 1
+  kill -s TERM -- "-$(cat "$P/wpid")"
+  await "$P/status" || { kill -9 -- "-$(cat "$P/wpid")" 2>/dev/null; return 1; }
+  [ "$(cat "$P/status")" = "exit 0" ]
 }
 probe_ignore_patterns() {
   git -C "$P" init -q -b main
@@ -184,7 +289,7 @@ probe_ignore_all_stacks() {
 }
 probe_ratchet_raise_per() { sed -i.bak 's/^per_gate_budget_seconds=180/per_gate_budget_seconds=900/' "$P/.claude/gate-budget.conf" && rm -f "$P/.claude/gate-budget.conf.bak"; RG commit -qam raise; ratchet_run; [ "$RC" = 1 ] && [[ "$OUT" == *"per_gate_budget_seconds was 180, now 900"* ]]; }
 probe_ratchet_raise_pct() { sed -i.bak 's/^regression_percent=25/regression_percent=90/' "$P/.claude/gate-budget.conf" && rm -f "$P/.claude/gate-budget.conf.bak"; RG commit -qam raise; ratchet_run; [ "$RC" = 1 ] && [[ "$OUT" == *"regression_percent was 25, now 90"* ]]; }
-probe_ratchet_new_high() { conf total_budget_seconds=86400 per_gate_budget_seconds=180 regression_percent=25 runs_kept=20; RG add -A; RG commit -qm new; ratchet_run; [ "$RC" = 1 ] && [[ "$OUT" == *"total_budget_seconds"* ]]; }
+probe_ratchet_new_high() { conf total_budget_seconds=86400 per_gate_budget_seconds=180 regression_percent=25 runs_kept=20; RG add -A; RG commit -qm new; ratchet_run; [ "$RC" = 1 ] && [[ "$OUT" == *"total_budget_seconds"* ]] && [[ "$OUT" == *"was 600 (seeded default)"* ]]; }
 probe_ratchet_new_default() { conf total_budget_seconds=600 per_gate_budget_seconds=180 regression_percent=25 runs_kept=20; RG add -A; RG commit -qm new; ratchet_run; [ "$RC" = 0 ]; }
 probe_protect_conf() {
   command -v node >/dev/null 2>&1 || return 0
@@ -196,6 +301,48 @@ probe_protect_conf() {
   [[ "$a" == *'"permissionDecision":"ask"'* ]] && [[ "$a" == *"gate-budget.conf"* ]] && [ -z "$b" ] && [[ "$k" == *$'gatetime\t.claude/gate-budget.conf\t0'* ]]
 }
 ratchet_proj_nc() { NOCONF=1; ratchet_proj; NOCONF=; }
+# An unreadable record is an error, never an empty history that the next record overwrites.
+probe_unreadable_record() {
+  if [ "$(id -u)" = 0 ]; then return 0; fi
+  rec deps 5; rec deps 6
+  local before out rc
+  before=$(cat "$P/.claude/gate-times.tsv")
+  chmod 000 "$P/.claude/gate-times.tsv"
+  out=$(cd "$P" && bash .claude/gate-budget.sh record deps 1 9 0 2>&1); rc=$?
+  chmod 600 "$P/.claude/gate-times.tsv"
+  [ "$rc" = 2 ] && [[ "$out" == *"cannot read"* ]] && [ "$(cat "$P/.claude/gate-times.tsv")" = "$before" ]
+}
+# One name rule: record takes 40 characters and refuses 41 with a clear error, and check never meets a name record wrote.
+probe_name_len() {
+  local n40 n41 o41 r41 r40
+  n40=$(printf 'a%.0s' $(seq 1 40)); n41="${n40}a"
+  printf '%s|x|y\n%s|x|y\n' "$n40" "$n41" >> "$P/.claude/gates.txt"
+  o41=$(cd "$P" && bash .claude/gate-budget.sh record "$n41" 1 2 0 2>&1); r41=$?
+  (cd "$P" && bash .claude/gate-budget.sh record "$n40" 1 2 0 >/dev/null 2>&1); r40=$?
+  chk
+  [ "$r41" = 2 ] && [[ "$o41" == *"at most 40 characters"* ]] && [ "$r40" = 0 ] && [ "$RC" = 0 ] && [ "$(rows | wc -l | tr -d ' ')" = 1 ]
+}
+probe_hook_script_missing() {
+  rm -f "$P/.claude/gate-budget.sh"
+  local out rc
+  out=$(cd "$P" && echo '{}' | CLAUDE_PROJECT_DIR="$P" bash .claude/session-context.sh 2>&1); rc=$?
+  [ "$rc" = 0 ] && [[ "$out" == *"gate-budget.sh is missing"* ]] && [ "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" = 1 ]
+}
+probe_hook_script_crash() {
+  printf 'echo boom >&2\nexit 9\n' > "$P/.claude/gate-budget.sh"
+  local out rc
+  out=$(cd "$P" && echo '{}' | CLAUDE_PROJECT_DIR="$P" bash .claude/session-context.sh 2>&1); rc=$?
+  [ "$rc" = 0 ] && [[ "$out" == *"exited with status 9"* ]] && [ "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" = 1 ]
+}
+probe_protect_script() {
+  command -v node >/dev/null 2>&1 || return 0
+  local a k
+  # The hook alone, in a folder without the ratchet, so its own list is what answers.
+  mkdir -p "$P/pf/.claude/hooks"; cp "$P/.claude/hooks/protect-files.sh" "$P/pf/.claude/hooks/"
+  a=$(cd "$P/pf" && printf '{"tool_input":{"file_path":"%s/pf/.claude/gate-budget.sh"}}' "$P" | CLAUDE_PROJECT_DIR="$P/pf" bash .claude/hooks/protect-files.sh 2>&1)
+  k=$(cd "$P" && bash scripts/gate-ratchet.sh --list-guarded HEAD)
+  [[ "$a" == *'"permissionDecision":"ask"'* ]] && [[ "$a" == *"gate-budget.sh"* ]] && [[ "$k" == *$'guard\t.claude/gate-budget.sh\t1'* ]]
+}
 
 # rguard <probe> <sed> <name>: like guard, but the ratchet is mutated before the base commit so the edit is not itself flagged.
 rguard() {
@@ -204,8 +351,20 @@ rguard() {
   run_probe "$setup" "$1" || bad "$3: probe fails on the real ratchet"
   RMUT=$2
   "$setup"
+  MUTATING=1
   if "$1"; then bad "$3: probe still passes with the guard removed"; else ok; fi
+  MUTATING=
   RMUT=""
+}
+# pguard <probe> <sed> <name>: like rguard, but the protect-files hook is the mutated file.
+pguard() {
+  run_probe ratchet_proj "$1" || bad "$3: probe fails on the real hook"
+  PMUT=$2
+  ratchet_proj
+  MUTATING=1
+  if "$1"; then bad "$3: probe still passes with the guard removed"; else ok; fi
+  MUTATING=
+  PMUT=""
 }
 # run_probe <setup> <probe>: setup is newproj or ratchet_proj.
 run_probe() { "$1"; "$2"; }
@@ -217,7 +376,9 @@ guard() {
   before=$(cat "$P/$3")
   mutate "$3" "$4"
   if [ "$(cat "$P/$3")" = "$before" ]; then bad "$5: the mutation changed nothing"; return; fi
+  MUTATING=1
   if "$2"; then bad "$5: probe still passes with the guard removed"; else ok; fi
+  MUTATING=
 }
 plain() { if run_probe "$1" "$2"; then ok; else bad "$2"; fi; }
 
@@ -226,10 +387,10 @@ for p in probe_clean probe_over_total probe_over_gate probe_regression probe_wit
   probe_symlink_record probe_dir_record probe_conf_text probe_conf_negative probe_conf_huge probe_conf_unknown probe_conf_missing_key probe_conf_missing_file probe_conf_duplicate \
   probe_once_per_session probe_hook_quiet probe_note_short probe_session_hook probe_runner_status probe_runner_list \
   probe_unlisted_row probe_unlisted_dropped probe_gates_missing probe_session_first probe_session_long probe_session_multiline probe_hook_error_throttled probe_hook_broken_exit probe_seen_dir \
-  probe_closed_stdin probe_conf_symlink probe_conf_zero probe_conf_crlf probe_runner_missing_budget probe_runner_codes probe_runner_signal probe_ignore_patterns; do
+  probe_closed_stdin probe_conf_symlink probe_conf_zero probe_conf_crlf probe_runner_missing_budget probe_runner_record_fails probe_runner_codes probe_sig_matrix probe_unreadable_record probe_name_len probe_hook_script_missing probe_hook_script_crash probe_hook_signal_exit probe_ignore_patterns; do
   plain newproj "$p"
 done
-for p in probe_ratchet_raise probe_ratchet_delete probe_ratchet_lower probe_ratchet_gate_removed probe_ratchet_script probe_ratchet_raise_per probe_ratchet_raise_pct probe_protect_conf; do
+for p in probe_ratchet_raise probe_ratchet_delete probe_ratchet_lower probe_ratchet_gate_removed probe_ratchet_script probe_ratchet_raise_per probe_ratchet_raise_pct probe_protect_conf probe_protect_script; do
   plain ratchet_proj "$p"
 done
 for p in probe_ratchet_new_high probe_ratchet_new_default; do
@@ -252,7 +413,7 @@ rguard probe_ratchet_raise 's/emit("max", "gatetime:" k, v)/emit("skip", k, v)/'
 rguard probe_ratchet_raise_per 's/k == "per_gate_budget_seconds" || //' "raised per-gate budget caught"
 rguard probe_ratchet_raise_pct 's/ || k == "regression_percent") emit/) emit/' "raised regression percent caught"
 rguard probe_ratchet_delete 's/if \[ "[$]have_head" -eq 0 \]; then/if false; then/' "deleted budget config caught by the removed-file path"
-rguard probe_ratchet_new_high "s/gatetime) printf .* > \"[\$]wd/gatetime) printf \"\" > \"${D}wd/" "new config held to the seeded defaults" ratchet_proj_nc
+rguard probe_ratchet_new_high "s/gatetime) seeded=1; printf .* > \"[\$]wd/gatetime) printf \"\" > \"${D}wd/" "new config held to the seeded defaults" ratchet_proj_nc
 rguard probe_protect_conf '/gate-budget.conf | \*\/.claude\/gate-budget.conf) KIND=gatetime/d' "protect-files asks about the budget config"
 guard newproj probe_unlisted_row .claude/gate-budget.sh '/index(listed, " " [$]1 " ") == 0 { next }/{N;/in n/s/^.*\n//;}' "check counts listed gates only"
 guard newproj probe_unlisted_dropped .claude/gate-budget.sh '/index(listed, " " [$]1 " ") == 0 { next }/{N;/line\[n\]/s/^.*\n//;}' "record drops unlisted rows"
@@ -266,8 +427,22 @@ guard newproj probe_closed_stdin .claude/gate-budget.sh '/-p \/dev\/stdin/d' "cl
 guard newproj probe_conf_symlink .claude/gate-budget.sh 's/if \[ -L "[$]conf" \] || /if /' "symlinked config rejected"
 guard newproj probe_conf_zero .claude/gate-budget.sh 's/ | 0?\*)/)/' "leading zero rejected"
 guard newproj probe_conf_crlf .claude/gate-budget.sh 's/ | \*\[!0-9\]\*//' "non-digit config value rejected"
-guard newproj probe_runner_missing_budget .claude/ci-gates.sh 's/ >\/dev\/null 2>&1 || true$/ || true/' "recording stays silent when the budget script is gone"
-guard newproj probe_runner_signal .claude/ci-gates.sh '/trap .kill -TERM/d' "signal reaches the gate"
+guard newproj probe_runner_missing_budget .claude/ci-gates.sh '/the timing of [$]gate was not recorded/d' "a missing budget script is reported once"
+guard newproj probe_runner_record_fails .claude/ci-gates.sh '/recording the timing of [$]gate failed/d' "a failing record is reported once"
+guard newproj probe_sig_int_group .claude/ci-gates.sh 's/^  set -m$/  :/' "the gate gets its own group with default INT"
+guard newproj probe_sig_term_wrapper .claude/ci-gates.sh "/^  trap 'forward TERM' TERM\$/d" "TERM to the runner reaches the gate"
+guard newproj probe_sig_term_wrapper .claude/ci-gates.sh 's/kill -s "[$]1" -- "-[$]child" 2>\/dev\/null || //' "the signal goes to the whole group"
+guard newproj probe_sig_term_handler .claude/ci-gates.sh 's/^    kill -s "[$]got" "[$][$]"$/    :/' "the runner ends by the signal like an untimed run"
+guard newproj probe_sig_int_group .claude/ci-gates.sh "/^  trap 'forward INT' INT\$/d" "INT to the runner and its group is forwarded"
+guard newproj probe_sig_hup_wrapper .claude/ci-gates.sh "/^  trap 'forward HUP' HUP\$/d" "HUP to the runner reaches the gate"
+guard newproj probe_hook_signal_exit .claude/gate-budget.sh 's/^  SIGEXIT=0$/  SIGEXIT=2/' "a signal ends the hook with status 0"
+guard newproj probe_name_len .claude/gate-budget.sh 's/^  \[ "[$]{#1}" -le "[$]NAME_MAX" \]$/  true/' "record refuses names longer than check accepts"
+guard newproj probe_hook_script_missing .claude/session-context.sh '/gate-budget.sh is missing; the gate-time note is off/d' "the session hook says when the script is missing"
+guard newproj probe_hook_script_crash .claude/session-context.sh '/the gate-time hook exited with status/d' "the session hook says when the script crashes"
+if [ "$(id -u)" != 0 ]; then
+  guard newproj probe_unreadable_record .claude/gate-budget.sh 's/ || fail "cannot read [$]rec; the history is kept, fix its permissions"//' "an unreadable record is not read as empty"
+fi
+pguard probe_protect_script 's/\.claude\/gate-budget\.sh|\*\/\.claude\/gate-budget\.sh|//' "protect-files asks about the budget script"
 guard newproj probe_ignore_patterns .gitignore '/gate-budget\.??????/d' "temp files git-ignored"
 
 echo "gate-budget.test.sh: $PASS passed, $FAIL failed"

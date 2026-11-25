@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Gate-time budget: gate-budget.sh <check|hook|record>. Local only: no account, key or service.
-#   record <gate> <start-epoch> <end-epoch> <exit>  ci-gates.sh calls this after each gate; appends one row to .claude/gate-times.tsv.
+#   record <gate> <start-epoch> <end-epoch> <exit>  ci-gates.sh calls this after each gate; appends one row to .claude/gate-times.tsv. A gate name is a to z, digits and dashes, starting with a letter, at most 40 characters (one rule for record and check). A record it cannot read is an error (exit 2) and is never replaced.
 #   check   prints nothing when within budget; prints a short note when over; prints "no data" when there is no record. Exit 0 unless the config, the gate list (.claude/gates.txt) or the record is broken (exit 2).
 #   hook    SessionStart: reads the hook JSON on stdin, runs check, prints the over-budget note once per session id, prints nothing without data. A broken config, gate list or record prints its error line on stdout, once per session id too, so it stays visible. Always exit 0.
 # Budgets live in .claude/gate-budget.conf (key=value, integers, allow-listed keys, no defaults in code). The gate ratchet fails a change that raises them or deletes the file; it is not an enforced kind, so a human-applied allow-gate-change label can waive a raise or a deletion by design.
@@ -19,7 +19,10 @@ cmd=${1:-}
 TMP=
 GATES=
 trap 'rm -f "${TMP:-}"' EXIT
-trap 'rm -f "${TMP:-}"; exit 2' HUP INT TERM
+# The hook always exits 0, so it sets SIGEXIT=0; every other subcommand exits 2 on a signal.
+SIGEXIT=2
+NAME_MAX=40
+trap 'rm -f "${TMP:-}"; exit "$SIGEXIT"' HUP INT TERM
 
 fail() {
   printf 'gate-budget: %s\n' "$1" >&2
@@ -70,13 +73,19 @@ load_gates() {
   GATES=$list
 }
 
+# True for a gate name that record writes and validate_record accepts: a to z, digits and dashes, starting with a letter, at most NAME_MAX characters. One rule, so a name that record takes never makes check fail for good.
+is_gate_name() {
+  case "$1" in '' | [!a-z]* | *[!a-z0-9-]*) return 1 ;; esac
+  [ "${#1}" -le "$NAME_MAX" ]
+}
+
 # Exit 3 with the first bad line when a record row is not: gate name, seconds, exit status, epoch, separated by single tabs.
 validate_record() {
-  awk -F'\t' '
+  awk -F'\t' -v nmax="$NAME_MAX" '
     function bad(why) { printf "gate-budget: record line %d: %s; delete .claude/gate-times.tsv to start over\n", NR, why > "/dev/stderr"; exit 3 }
     function num(v, max) { return v ~ /^(0|[1-9][0-9]*)$/ && length(v) <= 12 && v + 0 <= max }
     NF != 4 { bad("expected 4 tab-separated fields") }
-    $1 !~ /^[a-z][a-z0-9-]*$/ || length($1) > 40 { bad("bad gate name") }
+    $1 !~ /^[a-z][a-z0-9-]*$/ || length($1) > nmax { bad("bad gate name") }
     !num($2, 604800) { bad("seconds must be a whole number up to 604800") }
     !num($3, 255) { bad("exit status must be a whole number up to 255") }
     !num($4, 999999999999) { bad("epoch must be a whole number") }
@@ -150,8 +159,8 @@ run_check() {
 }
 
 do_record() {
-  local gate=${2:-} t0=${3:-} t1=${4:-} code=${5:-} secs
-  case "$gate" in '' | [!a-z]* | *[!a-z0-9-]*) fail "bad gate name" ;; esac
+  local gate=${2:-} t0=${3:-} t1=${4:-} code=${5:-} secs old
+  is_gate_name "$gate" || fail "bad gate name: use a to z, digits and dashes, starting with a letter, at most $NAME_MAX characters"
   load_gates
   case "$GATES" in *" $gate "*) ;; *) fail "'$gate' is not a listed gate" ;; esac
   is_int "$t0" || fail "start is not a whole number"
@@ -163,9 +172,11 @@ do_record() {
   [ "$secs" -le 604800 ] || secs=604800
   load_conf
   if [ -L "$rec" ] || [ -d "$rec" ]; then fail "$rec is a symlink or a directory"; fi
+  old=
+  if [ -e "$rec" ]; then old=$(cat "$rec") || fail "cannot read $rec; the history is kept, fix its permissions"; fi
   TMP=$(mktemp "$here/gate-times.XXXXXX") || fail "cannot create a temporary file"
   {
-    if [ -f "$rec" ]; then cat "$rec"; fi
+    if [ -n "$old" ]; then printf '%s\n' "$old"; fi
     printf '%s\t%s\t%s\t%s\n' "$gate" "$secs" "$code" "$t1"
   } | awk -F'\t' -v g="$gate" -v keep="$KEEP" -v listed="$GATES" '
     index(listed, " " $1 " ") == 0 { next }
@@ -206,6 +217,7 @@ hook_print() {
 
 do_hook() {
   local input sid out
+  SIGEXIT=0
   input=$(cat)
   sid=$(session_id "$input")
   out=$(run_check 2>&1)
