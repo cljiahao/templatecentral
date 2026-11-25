@@ -76,30 +76,6 @@ Use `@testing-library/user-event` for interactions. The scaffold does not ship i
 pnpm add -D @testing-library/user-event
 ```
 
-```tsx
-// src/features/project/components/project-form.test.tsx
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
-import { ProjectForm } from './project-form';
-
-describe('ProjectForm', () => {
-  it('calls onSubmit with form data', async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn();
-
-    render(<ProjectForm onSubmit={onSubmit} />);
-
-    await user.type(screen.getByLabelText('Name'), 'New Project');
-    await user.click(screen.getByRole('button', { name: /submit/i }));
-
-    expect(onSubmit).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'New Project' }),
-    );
-  });
-});
-```
-
 ### Service Tests
 
 In-memory services (like the scaffold's `ExampleService`) are tested by calling them directly — `src/features/example/api/example-service.test.ts` is the model. For services that call `fetch`, stub `fetch` at the boundary (`vite.config.ts` pins `VITE_API_BASE_URL` for tests, so `getApiBaseUrl()` resolves in CI):
@@ -188,28 +164,6 @@ describe('useProjects', () => {
 ### Integration Service Tests (External APIs)
 
 Integration services (`src/integrations/services/`) take their client by constructor injection — test them with a stub client, no module mocking:
-
-```ts
-// src/integrations/services/github-service.test.ts
-import { describe, expect, it, vi } from 'vitest';
-import type { GithubClient } from '../clients/github-client';
-import { GithubService } from './github-service';
-
-describe('GithubService', () => {
-  it('fetches and returns repos', async () => {
-    const mockRepos = [{ id: 1, name: 'alpha', full_name: 'me/alpha', private: false }];
-    const client = {
-      getRepos: vi.fn().mockResolvedValue(mockRepos),
-    } as unknown as GithubClient;
-
-    const service = new GithubService(client);
-
-    const result = await service.getRepos();
-    expect(result).toEqual(mockRepos);
-    expect(client.getRepos).toHaveBeenCalledOnce();
-  });
-});
-```
 
 ### Running Tests
 

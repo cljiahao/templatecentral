@@ -89,14 +89,6 @@ def db_client() -> Generator[TestClient]:
 
 - Functions: `test_<subject>_<scenario>`. No docstring or marker needed when the name says it; add a marker only to select a subset. `unit` and `integration` are registered in `pyproject.toml`; register any other in `markers` first.
 
-```python
-def test_example_rejects_invalid_payload(client: TestClient) -> None:
-    response = client.post("/example", json={})
-    assert response.status_code == 422
-    errors = response.json()["detail"]
-    assert any(e["loc"][-1] == "name" for e in errors)
-```
-
 ### Factories
 
 Create factory functions in `test/factories/` with sensible defaults:
@@ -114,17 +106,7 @@ def create_example_request(
 
 ### Parametrize
 
-Default for tests that differ only by input/output (never copy-paste siblings):
-
-```python
-@pytest.mark.parametrize(
-    "age, expected",
-    [(54, False), (55, True), (65, True)],
-    ids=["below-55", "at-55", "at-65"],
-)
-def test_is_eligible(age: int, expected: bool) -> None:
-    assert is_eligible(age) == expected
-```
+Default for tests that differ only by input/output (never copy-paste siblings) — `@pytest.mark.parametrize` with `ids=`.
 
 ### Running Tests
 
