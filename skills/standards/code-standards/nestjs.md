@@ -92,36 +92,11 @@ export class UpdateItemDto extends createZodDto(CreateItemSchema.partial()) {}
 - **Prettier** — single quotes, trailing commas.
 - **Vitest** — testing framework.
 - **Fastify `app.inject()`** — HTTP assertions for e2e tests (Supertest does not work with the Fastify adapter).
+- Vitest does not load `.env`: every required `envSchema` field gets a placeholder in `test.env` of both Vitest configs, and e2e suites without a live database override the DB provider (see the `add (database)` guide).
 
-### Backend Testing
+### Quality gate
 
-Test behaviour that can regress (`docs/CONSTITUTION.md` §4). Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`test/modules/*.spec.ts`; e2e per `templatecentral:add (endpoint)` / `templatecentral:add (test)`). Run `pnpm test` and `pnpm test:e2e` when request flows change. Vitest does not load `.env`: every required `envSchema` field gets a placeholder in `test.env` of both Vitest configs, and e2e suites without a live database override the DB provider (see the `add (database)` guide).
-
-### Comments
-
-- Follow `code-standards/comments.md`.
-- JSDoc only on public APIs the signature does not explain: see `comments.md`.
-- `eslint.config.mjs` gates comments and directives at `error`; every suppression must be scoped, used, and carry a `-- reason` (rule list: `comments.md` → Enforcement).
-
-### Quality gate (SonarQube default "Sonar way")
-
-Target: Sonar way on new code: 0 new issues, 100% security hotspots reviewed, coverage >= 80%, duplication <= 3%; cognitive complexity <= 15 per function. Local and CI mirror it:
-
-- `eslint.config.mjs` runs `sonarjs.configs.recommended` at `error`, with `sonarjs/cognitive-complexity` at 15 and `no-warning-comments` banning `NOSONAR`. Test files turn off `no-hardcoded-secrets` / `no-clear-text-protocols`. Fix findings; do not add disable comments or raise limits.
-- CI runs `jscpd` with the seeded `.jscpd.json` (duplication <= 3% on production source only; Sonar also measures production code, and duplicate tests fall under the test-value rule), Vitest sharded (GitHub `SHARD_COUNT`, Azure `shardCount`; default 2) with coverage merged from shard blob reports, then `diff-cover --fail-under=80` on changed lines.
-- There are no coverage exclusions: every changed line under `src` counts toward the 80% diff-coverage gate.
-
-### Sonar way profile notes
-
-Local checks match the default Sonar way profile. If your server flags a rule below, the fix is in the server's quality profile, not the code.
-
-- S1774 bans every ternary and is not in the default profile; remove it on the server. Nested ternaries (S3358) are default and covered locally.
-- S6480 (functions or `.bind()` in JSX props) was removed from the default profile.
-- S7728 (`for…of` over `.forEach`) is being removed from Sonar way.
-- The default profile changes with the server version, and findings from newly added rules are backdated onto existing code.
-- Security hotspots need manual review on the server; no local check closes them.
-- The server ignores the coverage and duplication conditions until the new code reaches 20 lines; local diff coverage has no such exemption.
-- Sonar has two built-in gates; the local checks target plain "Sonar way", not "Sonar way for agentic AI".
+Targets on new code, the SonarQube default gate: cognitive complexity 15, duplication 3%, coverage 80%. Enforced locally with no scanner or server: `sonarjs` rules in `eslint.config.mjs`, `.jscpd.json` and `diff-cover --fail-under=80`.
 
 ### Security (NestJS)
 
@@ -130,15 +105,11 @@ Local checks match the default Sonar way profile. If your server flags a rule be
 - Secrets (`JWT_SECRET`, `DATABASE_URL`) in `.env`; give them no hardcoded fallback like `'change-me'`, so boot fails when one is missing
 
 **Request Validation**
-- Global `ZodValidationPipe` validates all DTOs, so type every `@Body()` and `@Query()` with a DTO
-- Use `z.string().min(1)` and length constraints; do not accept unbounded strings
+- Global `ZodValidationPipe` validates only DTO-typed input, so type every `@Body()` and `@Query()` with a DTO
 
 **Security Headers**
 - `helmet` in `security.setup.ts`; do not remove or weaken CSP, HSTS or frame-ancestors
 - `frame-ancestors` is `'none'` + `frameguard: deny` unless `portalFrameAncestor()` accepts `APPCENTRAL_PORTAL_ORIGIN` (one https origin, never `*` or a list); do not loosen its regex
-
-**CORS**
-- Origins restricted to `CLIENT_URL`; do not use `origin: '*'` in production
 
 **Rate Limiting & Proxy Trust**
 - Auth and other abuse-prone routes are rate-limited with `@nestjs/throttler`, and `TRUST_PROXY` must be set correctly whenever the app sits behind a load balancer or reverse proxy — otherwise every client shares the proxy's IP and the limiter is either useless or spoofable via `X-Forwarded-For`. Both are mandatory; see `templatecentral:add (auth)` for the configuration.
@@ -146,9 +117,3 @@ Local checks match the default Sonar way profile. If your server flags a rule be
 
 **Auth**
 - Guard-based (Passport.js + JWT) — apply at controller or route level, not globally
-- Do not return password hashes, JWT secrets or sensitive internal fields
-- Use short-lived JWTs; add refresh tokens when sessions must outlive the access-token TTL
-
-**Least Privilege**
-- Controllers return DTOs, not raw entities
-- Do not log tokens, passwords or PII

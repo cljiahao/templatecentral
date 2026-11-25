@@ -42,36 +42,14 @@
 - No wildcard imports (`from module import *`).
 - Avoid barrel re-exports in `__init__.py` unless stable public API.
 
-### Comments & Docstrings
-
-- Follow `code-standards/comments.md`.
-- Docstrings only on public APIs the signature does not explain: see `comments.md`.
-- Keep Ruff's comment rules in `pyproject.toml` (`comments.md` → Enforcement).
-
 ### Function Design
 
 - Prefer small, pure, single-purpose functions; isolate mutation in `-> None` functions.
 - Dict dispatch over long `if/elif` for key-based branching.
 
-### Quality gate (SonarQube default "Sonar way")
+### Quality gate
 
-Target: Sonar way on new code: 0 new issues, 100% security hotspots reviewed, coverage >= 80%, duplication <= 3%; cognitive complexity <= 15 per function. Local and CI mirror it:
-
-- `ruff` `select` in `pyproject.toml` (not `extend-select`, which adds to ruff's large default set): `E4`/`E7`/`E9`/`F`, `I`, `B`, `S`, `FAST`, `SIM`/`C4`/`RET`, `PT`, `PIE`, `UP`, comment hygiene (`ERA`, `PGH003`, `PGH004`, `RUF100`, `TD005`), and an approximation of Sonar's Python rules (Sonar remains the gate): `C901` (max 15; cyclomatic, it approximates Sonar's cognitive complexity and does not match it), `PLR0911`/`PLR0912`/`PLR0913` (max 7 args, Sonar S107)/`PLR0915`, `ARG`, `PLW0602`/`PLW0603`/`PLW2901`, `PLR1714`, `PLR5501`. Fix findings; do not add `noqa` or raise limits. Prefix a deliberately unused argument with `_`. `S101`/`S105` are off under `test/**`.
-- CI runs `jscpd` with the seeded `.jscpd.json` (duplication <= 3% on production source only; Sonar also measures production code, and duplicate tests fall under the test-value rule; the CI step runs `npx --yes jscpd@<pinned>`, which pins jscpd but not its transitive dependencies, because this stack has no Node lockfile) and `python -m pytest` serially with pytest-cov (writes `coverage.xml`; xdist measured slower at this suite size), then `diff-cover --fail-under=80` on changed lines.
-- There are no coverage exclusions: every changed line under `src` counts toward the 80% diff-coverage gate.
-
-### Sonar way profile notes
-
-Local checks match the default Sonar way profile. If your server flags a rule below, the fix is in the server's quality profile, not the code.
-
-- S1774 bans every ternary and is not in the default profile; remove it on the server. Nested ternaries (S3358) are default and covered locally.
-- S6480 (functions or `.bind()` in JSX props) was removed from the default profile.
-- S7728 (`for…of` over `.forEach`) is being removed from Sonar way.
-- The default profile changes with the server version, and findings from newly added rules are backdated onto existing code.
-- Security hotspots need manual review on the server; no local check closes them.
-- The server ignores the coverage and duplication conditions until the new code reaches 20 lines; local diff coverage has no such exemption.
-- Sonar has two built-in gates; the local checks target plain "Sonar way", not "Sonar way for agentic AI".
+Targets on new code, the SonarQube default gate: cognitive complexity 15, duplication 3%, coverage 80%. Enforced locally with no scanner or server: ruff `select` in `pyproject.toml` (`C901` is cyclomatic, an approximation of cognitive complexity), `.jscpd.json` and `diff-cover --fail-under=80`.
 
 ### Constants
 
@@ -86,12 +64,7 @@ Local checks match the default Sonar way profile. If your server flags a rule be
 - **Pydantic v2** — API schemas with `BaseSchema` (camelCase aliases, `extra="forbid"`).
 - Do not use `@app.on_event("startup")` / `@app.on_event("shutdown")`: Starlette 1.0 removed them. Use the `lifespan` context manager (`@asynccontextmanager async def lifespan(app): ...`) passed to `FastAPI(lifespan=lifespan)` instead.
 - **Starlette floor** (the plugin's `<skill-dir>/../../.claude/rules/fastapi.md`): older Starlette lets a malformed `Host` header corrupt `request.url.path`, bypassing middleware path-matching auth. Prefer endpoint-level `Depends()`/`Security()` for auth-critical routes; read `scope["path"]` if middleware must match paths.
-
-### Backend Testing
-
-Test behaviour that can regress (`docs/CONSTITUTION.md` §4). Same-change pytest for new/changed routers, services, and API domain logic (`test/`, layout per `templatecentral:add (endpoint)`). Prefer `TestClient` for HTTP; unit-test pure logic directly. Run `python -m pytest test/ -q` from project root before handoff.
-
-Use `json=data` in test clients (not `content=json.dumps(data)`) — FastAPI enforces `Content-Type: application/json` by default (`strict_content_type=True`), and `json=` sets it automatically.
+- Use `json=data` in test clients (not `content=json.dumps(data)`) — FastAPI enforces `Content-Type: application/json` by default (`strict_content_type=True`), and `json=` sets it automatically.
 
 ### Dependency Rules
 
@@ -112,13 +85,11 @@ api/           →  models/
 
 **Environment & Secrets**
 - All config via Pydantic `BaseSettings` — env vars are loaded via `pydantic-settings`, which reads `src/.env` directly (works under both the direct `python src/main.py` and the Docker `uvicorn app:app --app-dir src` entry paths); do not read `os.environ` directly
-- Secrets (`SECRET_KEY`, `DATABASE_URL`, API keys) go in `src/.env`; do not commit or hardcode them
 - Use `src/.env.default` for non-sensitive defaults only; secrets must be blank or absent
 
 **Input Validation**
 - All request bodies validated by Pydantic schemas with `extra="forbid"`
 - Set `response_model` on every route; it filters outgoing data
-- Validate path/query params with FastAPI's type annotations
 
 **CORS**
 - In dev, `ALLOWED_CORS` is a fixed list of localhost origins — never `["*"]` with credentials
@@ -126,9 +97,3 @@ api/           →  models/
 
 **Auth**
 - Hash passwords with `argon2id` (`argon2-cffi` package) — never store plaintext. Do not use `passlib` (unmaintained).
-- JWT tokens: short expiry; use refresh tokens for long sessions
-- Do not return password hashes or internal IDs in API responses
-
-**Least Privilege**
-- Services return Pydantic `response_model` objects, not raw ORM objects (which can leak columns)
-- Do not log full request bodies; they may contain passwords or PII
