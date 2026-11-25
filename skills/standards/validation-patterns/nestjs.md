@@ -5,7 +5,7 @@
 
 The global `ZodValidationPipe` (`APP_PIPE`) validates every `createZodDto` `@Body()`/`@Query()` type. Plain-typed params (`@Param('id') id: string`) are not validated, so give them an explicit pipe.
 
-DTOs live in `src/modules/<feature>/dto/` as `createZodDto(schema)` classes. Bound pagination: `page` `.max(10_000)`, `limit` `.max(100)` with `z.coerce.number()` and defaults. Path ids: `@Param('id', new ZodValidationPipe(z.uuid()))`.
+DTOs live in `src/modules/<feature>/dto/` as `createZodDto(schema)` classes. Bound pagination: `z.coerce.number().int()` with `page` `.min(1).max(10_000).default(1)` and `limit` `.min(1).max(100).default(10)`. Path ids: `@Param('id', new ZodValidationPipe(z.uuid()))`.
 
 **1. File uploads and controller**
 

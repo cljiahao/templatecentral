@@ -105,3 +105,5 @@ Zod 4: use top-level `z.flattenError(err)` for field errors and `err.issues` for
 4. **No echo** — error responses carry neither raw validation paths nor user input
 5. **File uploads: cap, whitelist, sniff, rename** — cap body size before buffering, whitelist type/extension, verify magic bytes (the claimed type is attacker-controlled), generate the storage key server-side (a client filename can carry `../`). Untrusted uploaders: also scan for malware before storing or serving
 6. **Validate external API responses** — Zod `safeParse()`; an upstream contract break must fail loudly, not flow through as typed data
+7. **Parameterised queries only** — never build SQL by string concatenation; user input in a query string is injection
+8. **Cryptography and keys** — vetted, maintained libraries, never custom primitives; keys and secrets from a secrets manager (or env injected from one), never in code, and rotated; TLS in transit, storage-level encryption at rest

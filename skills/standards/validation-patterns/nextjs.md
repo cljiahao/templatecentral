@@ -7,11 +7,11 @@ Import shared schemas (`emailSchema`, `paginationSchema`, `fileUploadSchema`, â€
 
 **1. Forms**
 
-Form schemas live in `src/features/<name>/schemas/`, never in the component file, and are shared by the client resolver (`zodResolver`), the server action and the route. Re-validate with `safeParse` in the server action; it returns a plain serializable value, not an HTTP response, so it does not use `handleApiError`:
+Form schemas live in `src/features/<name>/schemas/`, never in the component file, and are shared by the client resolver (`zodResolver`), the server action and the route. Type form data `z.input<typeof Schema>`, not `z.infer`: `.default()` and `.optional()` differ between input and output under `zodResolver`. Re-validate with `const parsed = Schema.safeParse(formData)` in the server action; it returns a plain serializable value, not an HTTP response, so it does not use `handleApiError`:
 
 `return { error: 'Validation failed', details: { fieldErrors: z.flattenError(parsed.error).fieldErrors, code: 'VALIDATION_ERROR' } }`
 
-Client error text: log the backend's message, show a fixed string; navigate with `router.push`, never `window.location.href`.
+Hand-rolled inputs need `aria-invalid` plus `aria-describedby` pointing at a `role="alert"` error node. Client error text: log the backend's message, show a fixed string; navigate with `router.push`, never `window.location.href`.
 
 **2. API Route with Request Body Validation**
 
@@ -109,11 +109,8 @@ Shape only; `templatecentral:add (integration)` owns the real layer (`src/integr
 
 ## Rules
 
-- Re-validate on the server; the client resolver is UX only
 - Validate route params and query values with Zod, and `encodeURIComponent` any value interpolated into a path (`../` or `?` rewrites the URL)
-- Route failures go through `handleApiError`; a hand-rolled error body makes the contract drift per route
 - Throw `APIError`, never a generic `Error`, and keep validation field detail out of the message (error handling is keyed on `APIError`)
-- Never render a backend error string; log it, show a fixed message (it can carry stack traces or SQL)
 
 Verify: `POST /api/sessions` with `{"email":"not-an-email","password":"x"}` returns 400 with `fieldErrors.email`; `pnpm test`.
 

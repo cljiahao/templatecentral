@@ -5,7 +5,7 @@
 
 **1. Forms and uploads**
 
-Schemas live in `src/features/<name>/schemas/`, never in the component file, and are shared by the service, the test and the form (`zodResolver`). Cross-feature schemas (`passwordSchema`, `emailSchema`, `fileUploadSchema`, `paginationSchema`) are defined once in `src/lib/validation/schemas.ts` (`patterns.md`); import them, never copy them into a feature.
+Schemas live in `src/features/<name>/schemas/`, never in the component file, and are shared by the service, the test and the form (`zodResolver`). Type form data `z.input<typeof Schema>`, not `z.infer`: `.default()` and `.optional()` differ between input and output under `zodResolver`. Cross-feature schemas (`passwordSchema`, `emailSchema`, `fileUploadSchema`, `paginationSchema`) are defined once in `src/lib/validation/schemas.ts` (`patterns.md`); import them, never copy them into a feature.
 
 Use `CustomFormField` (`src/components/widgets/custom-form-field.tsx`: `name`, `label`, optional `description`, one input child); it wires the Controller, label and error message via `useFormContext()`. Do not wrap it in `FormField`/`FormControl`/`FormItem` or spread `{...field}` onto it. Show a fixed message on `APIError` and `logError` the backend text.
 

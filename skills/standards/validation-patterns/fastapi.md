@@ -3,7 +3,7 @@
      prereq: Stack = fastapi. Do not invoke this file directly — it is loaded at runtime by the templatecentral:standards skill. -->
 ### FastAPI (Python + Pydantic)
 
-Schemas live in `src/api/schemas/request/` and `src/api/schemas/response/`, one module per resource, subclassing `BaseRequestSchema` / `BaseResponseSchema` (`api.schemas.base`). Bound pagination: `page` `le=10_000`, `limit` `le=100`, `sort` `max_length=64` with a pattern (the OFFSET cost grows with page). `EmailStr` needs `email-validator` in `requirements.in` (installed by `templatecentral:add (auth)`). Login accepts any non-empty password (`min_length=1`): the 12-character minimum is a signup rule, and enforcing it at login locks out existing accounts and discloses the policy.
+Schemas live in `src/api/schemas/request/` and `src/api/schemas/response/`, one module per resource, subclassing `BaseRequestSchema` / `BaseResponseSchema` (`api.schemas.base`). Bound pagination: `page` default 1, `ge=1`, `le=10_000`; `limit` default 10, `ge=1`, `le=100`; `sort` `max_length=64` with pattern `^(asc|desc)_\w+$` (the OFFSET cost grows with page). `EmailStr` needs `email-validator` in `requirements.in` (installed by `templatecentral:add (auth)`). Login accepts any non-empty password (`min_length=1`): the 12-character minimum is a signup rule, and enforcing it at login locks out existing accounts and discloses the policy.
 
 **1. Router validates, service decides**
 
