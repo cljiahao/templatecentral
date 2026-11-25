@@ -414,6 +414,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('format, lint and typecheck', 'quality', 'run', 'pnpm run check'),
                          ('jscpd', 'quality', 'run', 'pnpm exec jscpd'),
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
+                         ('gate-time note', 'quality', 'run', 'bash .claude/gate-budget.sh check'),
                          ('tests',
                           'test',
                           'run',
@@ -478,6 +479,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           '--fail-under=80 | tee diff-cover.txt\n'),
                          ('diffcover empty-report check', 'quality', 'run', 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'),
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
+                         ('gate-time note', 'quality', 'run', 'bash .claude/gate-budget.sh check'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
                          ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
                          ('workarounds check', 'workarounds', 'run', 'bash .claude/ci-gates.sh workarounds "$BASE_REF"'),
@@ -601,7 +603,11 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                             '  trap \'rm -f "$tmp"\' EXIT\n'
                             '  if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
                             'fi\n'
-                            'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n')]}}
+                            'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n'),
+                           ('Gate-time budget note',
+                            '(gates include)',
+                            'bash',
+                            'bash .claude/gate-budget.sh check')]}}
 
 # Full pin of every job and step: for each job the exact non-step keys (runs-on, timeout, strategy, outputs, needs, if,
 # permissions, defaults, env, container) and the full ordered list of steps with every key except name/displayName; a
@@ -651,7 +657,8 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'pnpm run check'},
                                      {'run': 'pnpm exec jscpd'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
-                                      'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'}],
+                                      'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'},
+                                     {'run': 'bash .claude/gate-budget.sh check'}],
                          'test': [{'uses': 'actions/checkout', 'with': {'persist-credentials': False}},
                                   {'uses': 'pnpm/action-setup'},
                                   {'uses': 'actions/setup-node', 'with': {'node-version': '26', 'cache': 'pnpm'}},
@@ -812,7 +819,8 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                       {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                        'run': 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
-                                      'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'}],
+                                      'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'},
+                                     {'run': 'bash .claude/gate-budget.sh check'}],
                          'changelog': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
                                        {'env': {'BASE_REF': '${{ github.base_ref }}',
                                                 'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' ') "
@@ -885,7 +893,8 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                         '  if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
                                                         'fi\n'
                                                         'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n',
-                                                'env': {'LABELS': '$(LABELS)'}}]}}}
+                                                'env': {'LABELS': '$(LABELS)'}},
+                                               {'bash': 'bash .claude/gate-budget.sh check'}]}}}
 
 for _h, _p in PINNED.items():
     MANIFEST[_h]["pins"] = _p

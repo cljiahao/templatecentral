@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
 # Gate-time budget: gate-budget.sh <check|hook|record>. Local only: no account, key or service.
 #   record <gate> <start-epoch> <end-epoch> <exit>  ci-gates.sh calls this after each gate; appends one row to .claude/gate-times.tsv.
-#   check   prints nothing when within budget; prints a short note when over; prints "no data" when there is no record. Exit 0 unless the config or record is broken (exit 2).
-#   hook    SessionStart: reads the hook JSON on stdin, runs check, prints the note once per session id, prints nothing without data. Always exit 0.
-# Budgets live in .claude/gate-budget.conf (key=value, integers, allow-listed keys, no defaults in code). The gate ratchet fails a change that raises them or deletes the file.
-# A gate's time is its latest passing run, else its latest run, so a gate that fails fast never looks fast. A failed run is left out of the regression median. A regression needs three earlier passing runs and at least 5 seconds of growth. The total adds each gate's time.
-# Will not catch: hand edits of the git-ignored record (CI recomputes from its own run); slowness outside ci-gates.sh gates (tests, installs, deploys, queue and runner start); a machine slower than CI; two runs writing at once can lose a row (the write is atomic, never torn).
+#   check   prints nothing when within budget; prints a short note when over; prints "no data" when there is no record. Exit 0 unless the config, the gate list (.claude/gates.txt) or the record is broken (exit 2).
+#   hook    SessionStart: reads the hook JSON on stdin, runs check, prints the over-budget note once per session id, prints nothing without data. A broken config, gate list or record prints its error line on stdout, once per session id too, so it stays visible. Always exit 0.
+# Budgets live in .claude/gate-budget.conf (key=value, integers, allow-listed keys, no defaults in code). The gate ratchet fails a change that raises them or deletes the file; it is not an enforced kind, so a human-applied allow-gate-change label can waive a raise or a deletion by design.
+# A gate's time is its latest passing run, else its latest run, so a gate that fails fast never looks fast. A failed run is left out of the regression median. A regression needs three earlier passing runs and at least 5 seconds of growth. The total adds each gate's time. Only gates listed in .claude/gates.txt count: a gate removed from the list drops out of the total and of the next write.
+# In CI the record starts empty on every fresh checkout and holds only the gates that job ran, one row each: there the check covers the per-gate limit and the total of those gates only, and the regression check cannot fire. Local runs keep the history, so the regression check works there.
+# Will not catch: hand edits of the git-ignored record (CI recomputes from its own run); slowness outside ci-gates.sh gates (tests, installs, deploys, queue and runner start); a gate run with TC_GATE_TIMED=1 exported (that turns recording off); a CI total that covers only one job's gates and has no history to compare; a machine slower than CI; a waived or raised budget approved by a human; two runs writing at once can lose a row (the write is atomic, never torn).
 set -uo pipefail
 export LC_ALL=C
+# A closed stdin would hand the first pipe to `cat` as its own input and hang: give it /dev/null instead.
+[ -p /dev/stdin ] || [ -f /dev/stdin ] || [ -c /dev/stdin ] || [ -S /dev/stdin ] || exec 0</dev/null
 here=$(cd "$(dirname "$0")" && pwd) || exit 2
 conf="$here/gate-budget.conf"
 rec="$here/gate-times.tsv"
 seen="$here/gate-budget.seen"
 cmd=${1:-}
+TMP=
+GATES=
+trap 'rm -f "${TMP:-}"' EXIT
+trap 'rm -f "${TMP:-}"; exit 2' HUP INT TERM
 
 fail() {
   printf 'gate-budget: %s\n' "$1" >&2
@@ -52,6 +59,17 @@ load_conf() {
   done
 }
 
+# Sets GATES to the space-padded names listed in gates.txt; a missing or unreadable gate list is an error.
+load_gates() {
+  local line list=" " gl="$here/gates.txt"
+  if [ ! -f "$gl" ] || [ ! -r "$gl" ]; then fail "$gl is missing or unreadable; restore it from version control"; fi
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in '' | '#'*) continue ;; esac
+    list="$list${line%%|*} "
+  done < "$gl"
+  GATES=$list
+}
+
 # Exit 3 with the first bad line when a record row is not: gate name, seconds, exit status, epoch, separated by single tabs.
 validate_record() {
   awk -F'\t' '
@@ -67,7 +85,8 @@ validate_record() {
 
 # Prints the over-budget lines (nothing when within budget) for the record.
 report() {
-  awk -F'\t' -v total_b="$TOTAL" -v per_b="$PER" -v pct="$PCT" '
+  awk -F'\t' -v total_b="$TOTAL" -v per_b="$PER" -v pct="$PCT" -v listed="$GATES" '
+    index(listed, " " $1 " ") == 0 { next }
     { if (!($1 in n)) order[++g] = $1; n[$1]++; sec[$1, n[$1]] = $2 + 0; ex[$1, n[$1]] = $3 + 0 }
     END {
       for (i = 1; i <= g; i++) {
@@ -83,7 +102,7 @@ report() {
             med[name] = a[int((c + 1) / 2)]
             if (cur[name] * 100 > med[name] * (100 + pct) && cur[name] - med[name] >= 5) reg[name] = 1
           }
-          delete a
+          split("", a)
         }
       }
       for (i = 1; i <= g; i++) rank[i] = order[i]
@@ -116,6 +135,7 @@ NOTE
 run_check() {
   local out
   load_conf
+  load_gates
   if [ -L "$rec" ] || [ -d "$rec" ]; then fail "$rec is a symlink or a directory; remove it"; fi
   if [ ! -e "$rec" ] || [ ! -s "$rec" ]; then
     echo "gate-time: no timing data yet (run gates with .claude/ci-gates.sh); the budget was not checked."
@@ -130,9 +150,10 @@ run_check() {
 }
 
 do_record() {
-  local gate=${2:-} t0=${3:-} t1=${4:-} code=${5:-} secs tmp
+  local gate=${2:-} t0=${3:-} t1=${4:-} code=${5:-} secs
   case "$gate" in '' | [!a-z]* | *[!a-z0-9-]*) fail "bad gate name" ;; esac
-  if [ ! -f "$here/gates.txt" ] || ! grep -q "^$gate|" "$here/gates.txt"; then fail "'$gate' is not a listed gate"; fi
+  load_gates
+  case "$GATES" in *" $gate "*) ;; *) fail "'$gate' is not a listed gate" ;; esac
   is_int "$t0" || fail "start is not a whole number"
   is_int "$t1" || fail "end is not a whole number"
   is_int "$code" || fail "exit status is not a whole number"
@@ -142,40 +163,57 @@ do_record() {
   [ "$secs" -le 604800 ] || secs=604800
   load_conf
   if [ -L "$rec" ] || [ -d "$rec" ]; then fail "$rec is a symlink or a directory"; fi
-  tmp=$(mktemp "$here/gate-times.XXXXXX") || fail "cannot create a temporary file"
+  TMP=$(mktemp "$here/gate-times.XXXXXX") || fail "cannot create a temporary file"
   {
     if [ -f "$rec" ]; then cat "$rec"; fi
     printf '%s\t%s\t%s\t%s\n' "$gate" "$secs" "$code" "$t1"
-  } | awk -F'\t' -v g="$gate" -v keep="$KEEP" '
-    { line[NR] = $0; if ($1 == g) { c++; idx[c] = NR } }
-    END { drop = c - keep; for (i = 1; i <= drop; i++) skip[idx[i]] = 1; for (i = 1; i <= NR; i++) if (!(i in skip)) print line[i] }
-  ' > "$tmp" || { rm -f "$tmp"; fail "cannot write the record"; }
-  mv -f "$tmp" "$rec" || { rm -f "$tmp"; fail "cannot replace the record"; }
+  } | awk -F'\t' -v g="$gate" -v keep="$KEEP" -v listed="$GATES" '
+    index(listed, " " $1 " ") == 0 { next }
+    { n++; line[n] = $0; if ($1 == g) { c++; idx[c] = n } }
+    END { drop = c - keep; for (i = 1; i <= drop; i++) skip[idx[i]] = 1; for (i = 1; i <= n; i++) if (!(i in skip)) print line[i] }
+  ' > "$TMP" || fail "cannot write the record"
+  mv -f "$TMP" "$rec" || fail "cannot replace the record"
+  TMP=
 }
 
-# Session id from the hook JSON: letters, digits, dash and underscore only; empty when absent or odd.
+# Session id from the hook JSON: the first "session_id" key at a JSON key position (after { or ,), on one line, whitelisted to letters, digits, dash and underscore (1 to 100); empty when absent or odd.
 session_id() {
-  printf '%s' "$1" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([A-Za-z0-9_-]\{1,100\}\)".*/\1/p'
+  local v
+  v=$(printf '%s' "$1" | tr '\n\r' '  ' | awk '{
+    if (match($0, /[{,][ \t]*"session_id"[ \t]*:[ \t]*"[^"]*"/)) {
+      v = substr($0, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*"/, "", v); sub(/"$/, "", v)
+      if (v ~ /^[A-Za-z0-9_-]+$/ && length(v) <= 100) print v
+    }
+  }')
+  printf '%s' "$v"
+}
+
+# Prints $2 once per session id and kind $1 (over or err); a marker that is a directory or symlink is itself reported, every time.
+hook_print() {
+  local kind=$1 sid=$2 out=$3
+  if [ -d "$seen" ] || [ -L "$seen" ]; then
+    printf 'gate-budget: %s is a directory or symlink; remove it so the note shows once per session\n' "$seen"
+  elif [ -n "$sid" ]; then
+    if [ -f "$seen" ] && [ "$(cat "$seen" 2>/dev/null)" = "$kind:$sid" ]; then exit 0; fi
+    if TMP=$(mktemp "$here/gate-budget.XXXXXX" 2>/dev/null); then
+      printf '%s\n' "$kind:$sid" > "$TMP"
+      mv -f "$TMP" "$seen" || rm -f "$TMP"
+      TMP=
+    fi
+  fi
+  printf '%s\n' "$out"
 }
 
 do_hook() {
-  local input sid out tmp
+  local input sid out
   input=$(cat)
   sid=$(session_id "$input")
   out=$(run_check 2>&1)
   case "$out" in
-    "" | "gate-time: no timing data"*) exit 0 ;;
-    "gate-time: over budget"*)
-      if [ -n "$sid" ] && [ -f "$seen" ] && [ "$(cat "$seen" 2>/dev/null)" = "$sid" ]; then exit 0; fi
-      if [ -n "$sid" ]; then
-        if tmp=$(mktemp "$here/gate-budget.XXXXXX" 2>/dev/null); then
-          printf '%s\n' "$sid" > "$tmp"
-          mv -f "$tmp" "$seen" || rm -f "$tmp"
-        fi
-      fi
-      ;;
+    "" | "gate-time: no timing data"*) ;;
+    "gate-time: over budget"*) hook_print over "$sid" "$out" ;;
+    *) hook_print err "$sid" "$out" ;;
   esac
-  printf '%s\n' "$out"
   exit 0
 }
 

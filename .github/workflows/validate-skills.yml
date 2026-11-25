@@ -183,6 +183,8 @@ jobs:
         run: bash scripts/seeded-dockerfiles.test.sh
       - name: Seeded workaround detector, secret scan, nosonar and diff-coverage gates and hook messages
         run: bash scripts/seeded-gates.test.sh
+      - name: Seeded gate-time budget, record, check, hook and ratchet guards
+        run: bash scripts/gate-budget.test.sh
       - name: Day-one proof, every stack and CI host passes its offline seeded gates
         run: bash scripts/day-one.test.sh
       - name: Golden regeneration script tests

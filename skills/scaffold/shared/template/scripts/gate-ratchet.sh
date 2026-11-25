@@ -6,7 +6,7 @@
 # Test scripts: every package.json script whose name has a test, coverage, lint, typecheck, build, check, verify, ci, format or audit word keeps its word list. Any change is a finding except these known-safe words: --reporter, --coverage.reporter, --outputFile (with or without a value), --coverage.reportsDirectory=, --silent, --color, --no-color. A script that is gone is a finding; a new script is covered by the flag checks and the CI and lefthook comparison.
 # pytest: any change to a [tool.pytest.ini_options] key or a new key is a finding, except raising --cov-fail-under and the markers, pythonpath and asyncio_default_fixture_loop_scope keys.
 # Type checkers: tsconfig and pyright strictness may tighten, never loosen; a new tsconfig or pyright config may not switch strictness off.
-# Gate-time budget: .claude/gate-budget.conf may not be deleted, and its three limits may not rise. A human can waive that with the allow-gate-change label.
+# Gate-time budget: .claude/gate-budget.conf may not be deleted, and its three limits may not rise; a conf with no merge-base copy is held to the seeded defaults (600, 180, 25) and may not set a higher limit or leave one out. The kind is not enforced, so a human applying the allow-gate-change label can waive a raise or a deletion, by design.
 # Allow-lists: dep-audit-allow.txt may only lose lines; comment-hygiene-patterns.txt may only gain lines at the end.
 set -uo pipefail
 
@@ -1359,7 +1359,7 @@ while IFS=$'\t' read -r kind path _; do
       continue
     fi
     if [ "$have_base" -eq 0 ]; then
-      case "$kind" in tsconfig | pyright) newfile=1; : > "$wd/base.f" ;; conftest) : > "$wd/base.f" ;; *) continue ;; esac
+      case "$kind" in tsconfig | pyright) newfile=1; : > "$wd/base.f" ;; conftest) : > "$wd/base.f" ;; gatetime) printf 'max\tgatetime:total_budget_seconds\t600\nmax\tgatetime:per_gate_budget_seconds\t180\nmax\tgatetime:regression_percent\t25\n' > "$wd/base.f" ;; *) continue ;; esac
     elif ! msg=$(awk -v K="$kind" -v B="$have_base" -f "$wd/facts.awk" "$wd/base" 2>&1 > "$wd/base.f"); then
       printf 'NOTE %s: unreadable at the merge base (%s); compared with an empty baseline\n' "$path" "$msg"
       : > "$wd/base.f"

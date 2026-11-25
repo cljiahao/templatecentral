@@ -8,7 +8,7 @@ Vet a third-party `SKILL.md` like a package: never install one that hardcodes se
 No hook enforces these. Authenticate every route that reads or changes user data before its logic, and keep one unauthenticated-rejected test for it. Keep secrets out of code, logs and build output. Binding invariants live in `docs/CONSTITUTION.md`, read on demand, not injected at session start.
 
 ## Gate Time
-`.claude/ci-gates.sh` times every gate; a "gate-time: over budget" note at session start or in the CI log means the gates run too long.
+Gates run through `.claude/ci-gates.sh` are timed; a "gate-time: over budget" note at session start or in the CI log means they run too long.
 Revise the project to make them faster: dependency and build cache, independent gates in parallel, only affected tests locally while CI runs all, a smaller Docker build context with better layer order, faster test setup.
 Never remove, skip or weaken a check to save time.
 Budgets are in `.claude/gate-budget.conf`; only a human raises one.

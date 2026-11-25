@@ -71,7 +71,7 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: bash .claude/ci-gates.sh secrets "$BASE_REF"
-      # Prints the gate-time note when this job's gates passed over budget; exit 0 unless the budget file is broken
+      # Gate-time note for this job only: a fresh checkout holds one timing row per gate this job ran, so it checks the per-gate limit and the total of those gates, and cannot see a regression. Exits 0 (prints the note when over budget); exits 2 when the budget file, the gate list or the timing record is broken. Skipped when an earlier step fails.
       - name: Gate-time budget note
         run: bash .claude/gate-budget.sh check
   changelog:

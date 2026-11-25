@@ -6,11 +6,19 @@ branch=${2:-}
 branch=${branch#refs/heads/}
 base="origin/$branch"
 
-# Times every gate but `list`: runs this script again as a child, records name, seconds and exit status, then passes the child's output and status on unchanged.
+# Every gate but `list` is timed: this script runs again as a child with TC_GATE_TIMED set (an exported TC_GATE_TIMED turns the recording off), then records name, seconds and exit status through gate-budget.sh and exits with the child's status. stdin, stdout and stderr pass through; TERM, INT and HUP sent to this process go on to the child as TERM (a background child ignores INT).
 if [ -z "${TC_GATE_TIMED:-}" ] && [ -n "$gate" ] && [ "$gate" != list ]; then
   t0=$(date +%s)
-  TC_GATE_TIMED=1 bash "$0" "$@"
+  TC_GATE_TIMED=1 bash "$0" "$@" <&0 &
+  child=$!
+  trap 'kill -TERM "$child" 2>/dev/null' HUP INT TERM
+  wait "$child"
   rc=$?
+  while kill -0 "$child" 2>/dev/null; do
+    wait "$child"
+    rc=$?
+  done
+  trap - HUP INT TERM
   bash "$(dirname "$0")/gate-budget.sh" record "$gate" "$t0" "$(date +%s)" "$rc" >/dev/null 2>&1 || true
   exit "$rc"
 fi
