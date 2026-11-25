@@ -8,7 +8,7 @@ Review changed files against two layers: (1) the quality checks under **What to 
 
 ## Stack Detection
 
-Read the stack from the `<!-- templateCentral: <stack>@` marker on `AGENTS.md` line 1; absent, detect it from `next.config.*`, `vite.config.*`, `nest-cli.json` or `@nestjs/core` in `package.json`, or `fastapi` in `requirements.txt`, and ask only when that is ambiguous. If multiple markers are found (monorepo), ask the user which stack to review before continuing.
+Read the stack from the `<!-- templateCentral: <stack>@` marker on `AGENTS.md` line 1; absent, detect it from project files (`next.config.*` nextjs; `vite.config.*` without a `next.config.*` vite-react; `nest-cli.json` or `@nestjs/core` in `package.json` nestjs; `fastapi` in `requirements.txt` fastapi), none found: stop and report; ask the user when that is ambiguous (several stacks, as in a monorepo).
 
 ## Steps
 

@@ -6,7 +6,7 @@
 
 Apply patch and minor dependency bumps, roll back what breaks the build, report major bumps and advisories. Dependabot (seeded `dependabot.yml`) covers routine bumps; this operation is for an on-demand sweep.
 
-Read the stack from the `<!-- templateCentral: <stack>@` marker on `AGENTS.md` line 1; absent, detect it from `next.config.*`, `vite.config.*`, `nest-cli.json` or `@nestjs/core` in `package.json`, or `fastapi` in `requirements.txt`, and ask only when that is ambiguous.
+Read the stack from the `<!-- templateCentral: <stack>@` marker on `AGENTS.md` line 1; absent, detect it from project files (`next.config.*` nextjs; `vite.config.*` without a `next.config.*` vite-react; `nest-cli.json` or `@nestjs/core` in `package.json` nestjs; `fastapi` in `requirements.txt` fastapi), none found: stop and report; ask the user when that is ambiguous (several stacks, as in a monorepo).
 
 **Never break a pin or floor:** an exact pin (e.g. a pre-release like `"drizzle-orm": "1.0.0-rc.4"`) stays exact and is only moved deliberately, never to a `^` range; never lower a version below the security floor in the plugin's `.claude/rules/<stack>.md`; keep `pnpm-workspace.yaml` overrides at or above their floors.
 
@@ -15,7 +15,7 @@ Read the stack from the `<!-- templateCentral: <stack>@` marker on `AGENTS.md` l
 1. List outdated packages: `pnpm outdated --format json` (Node stacks), or `pip list --outdated --format json` cross-referenced with `requirements.in` (FastAPI).
 2. Apply patch and minor bumps only, keeping each specifier's style (`^` stays `^`, exact stays exact). Major bumps go to the report.
 3. Install: `pnpm install`; FastAPI: `uv pip compile requirements.in --universal --generate-hashes -o requirements.txt`, then `pip install --require-hashes -r requirements.txt`.
-4. Run the stack's check command (`pnpm build && pnpm check`; fastapi `ruff check src/ && python -m pyright src/`). On failure, restore the originals, re-apply all but one package and re-run it, rotating the excluded package until it passes; keep every update except the breaking one.
+4. Run the stack's check command (`pnpm build && pnpm check`; fastapi `ruff check src/ && python -m pyright src/`). On failure, restore the originals, re-apply all but one package and re-run it, rotating the excluded package until it passes; keep every update except the breaking one; report any other failure as `file:line — message`.
 5. Audit: `pnpm audit --audit-level=high`, or `pip-audit --requirement requirements.txt` when installed (the scaffold does not install it; do not install it, note "pip-audit not installed — security advisory check skipped"). A non-zero exit from found advisories is expected. Advisories are report-only; never auto-rollback for them. If the audit fails for a non-advisory reason (for example no network), report it as skipped, not as passed.
 6. List every entry in `.claude/dep-audit-allow.txt` and propose removing it once a fixed release exists or its documented reason no longer holds.
 
