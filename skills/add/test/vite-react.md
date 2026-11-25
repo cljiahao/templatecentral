@@ -70,7 +70,7 @@ describe('ProjectCard', () => {
 
 ### Component Tests with User Interaction
 
-Use `@testing-library/user-event` for interactions. The scaffold does not ship it:
+Use `userEvent.setup()` with `await user.*`, not `fireEvent`. The scaffold does not ship `@testing-library/user-event`:
 
 ```bash
 pnpm add -D @testing-library/user-event
@@ -163,7 +163,7 @@ describe('useProjects', () => {
 
 ### Integration Service Tests (External APIs)
 
-Integration services (`src/integrations/services/`) take their client by constructor injection — test them with a stub client, no module mocking:
+Integration services (`src/integrations/services/`) take their client by constructor injection — test them with a stub client, no module mocking. Stub the client as an object of `vi.fn()` methods cast to the client type, pass it to the constructor, and assert the client was called.
 
 ### Running Tests
 
@@ -184,3 +184,4 @@ Confirm the build succeeds and all tests pass.
 ### Rules
 
 - Reset in `afterEach`: `vi.resetAllMocks()` when the file uses `vi.fn()` / `vi.mock` (`vi.restoreAllMocks()` only undoes `vi.spyOn`, so queued values leak), `vi.restoreAllMocks()` for `vi.spyOn`, plus `vi.unstubAllGlobals()` after `vi.stubGlobal`
+- Query by role or text, not `querySelector`; create a fresh `QueryClient` per test

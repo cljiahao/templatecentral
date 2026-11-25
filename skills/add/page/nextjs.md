@@ -127,3 +127,7 @@ pnpm build
 ```
 
 Build passes; for a data-fetching page, the loading state renders in the browser.
+
+## Rules
+
+- `page.tsx` stays a server component: no `'use client'` (put interactivity in a feature component)

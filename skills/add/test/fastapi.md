@@ -114,3 +114,7 @@ Default for tests that differ only by input/output (never copy-paste siblings) â
 python -m pytest test/                    # All tests
 python -m pytest test/test_api/           # API tests only
 ```
+
+### Rules
+
+- Assert errors with `pytest.raises(..., match=...)`; prefer `monkeypatch` over `unittest.mock.patch`; mock only network, filesystem and time

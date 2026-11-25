@@ -197,6 +197,7 @@ export * from './api';
 After creating all files:
 1. Run `pnpm build` — confirm no TypeScript errors
 2. Verify imports resolve: `import { X } from '@/features/<name>'` works from outside the feature
+3. Verify each React Query key is unique across the project
 
 ## Rules
 
