@@ -5,7 +5,7 @@
 6ff0bc08732df11cda9adb7878d080787e553a3c79b7ae4e1b8465923a0dfa2d  .claude/ci-gates.sh
 493e60c9326a091f17b62a1ddc088696825546f77f8214915360dd3616e3f392  .claude/comment-hygiene-patterns.txt
 ffd9e407ce34017ca93e75601289e53b0878d268853abcfa4601a16789e1de5a  .claude/gates.txt
-e825ad07d0bcaeff4effe542b059b0d0fe74e92c3f5315e95d7e5d3d731bce14  .claude/hooks/block-no-verify.sh
+48889b1bcf44dc93ba49071b751ebd19d3fb0456f5542eefa9053b6cf7496977  .claude/hooks/block-no-verify.sh
 23c76185d22e65b7667096ed17d2982d96d7b9a36fec8408a2896547c8ca5465  .claude/hooks/post-edit-comment-check.sh
 8de078a5759a301c6a8929305356bdc592213269f87898a4892206ab4ec6721f  .claude/hooks/post-edit-typecheck.sh
 04d455f99d47a1c3e4043a51aaedb7bbe4a8730977b553cf82e3c959c2518e16  .claude/hooks/protect-files.sh

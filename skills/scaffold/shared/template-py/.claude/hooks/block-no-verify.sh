@@ -3,8 +3,11 @@
 # Best-effort tripwire, not a security boundary; the lefthook + CI layers are the backstop.
 # Closed list of what this text guard cannot see: variable indirection and command substitution (cat "$f", cat $(echo .env)),
 # strings built at run time inside an interpreter ('.e'+'nv', base64 decoded in Python), a script file written first and run second,
-# and code fed to an interpreter on stdin or from a heredoc. Everything else on the list below is judged.
-# A shell fed from a pipe, here-string, heredoc, `-s` or process substitution is blocked outright (even `echo hi | sh`).
+# code fed to an interpreter on stdin or from a heredoc (python3 <<EOF, node - <<EOF), argument shapes where the word after git is not the
+# subcommand (os.execvp('git', [...]), ['git'] + [...], Deno {args: [...]}, sh.git.commit(...)), file-by-file removal (os.remove loops,
+# Path.rmdir, os.removedirs), and a secret name with no leading dot or slash inside inline code when the file does not exist.
+# Everything else on the list below is judged.
+# A shell in command position fed from a pipe, here-string, heredoc, `-s` or process substitution is blocked outright (even `echo hi | sh`).
 # Inline code for python/node/perl/ruby/deno/bun (-c, -e, -p, --eval, eval) is scanned as text with the same checks as a shell command.
 # Fallback only: hooks may be spawned from the session's original root, not a worktree.
 orig_dir=$PWD
@@ -138,25 +141,32 @@ scan=$(printf '%s' "$cmd" | sed -E \
   -e "s/\"([^\"${sq}[:space:]]+)\"/\1/g" -e "s/\"[^\"]*\"/ Q /g" \
   -e "s/${sq}([^${sq}[:space:]]+)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g")
 
-# Interpreter and shell sources this guard cannot read: shells fed from a pipe, stdin, here-string, heredoc or process substitution are blocked.
+# Command position: line start, after ; & | ( { or a backtick, or after then/do/else; wrappers that run the next word (sudo, env, xargs, nohup, uv run) may follow.
+cpos='(^|[;&|(`{]|(^|[[:space:]])(then|do|else))[[:space:]]*'
+wrap='((/[^[:space:]]*/)?(sudo|command|exec|nohup|time|nice|builtin|env|xargs|(uv|poetry|pipenv|pdm)[[:space:]]+run)([[:space:]]+(-[^[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*))*[[:space:]]+)*'
+# Shells fed from a pipe, stdin, here-string, heredoc or process substitution hide their commands from this guard; the shell must be the command word, not an argument (grep sh < f).
 blind_shell() {
-  local w='(/[^[:space:]]*/)?(bash|sh|zsh|dash|ksh)' f='([[:space:]]+-[^[:space:]]+)*' pos='(^|[[:space:];&|(`])'
-  printf '%s\n' "$scan" | grep -qE "\\|[[:space:]]*(sudo[[:space:]]+|exec[[:space:]]+|env[[:space:]]+([A-Za-z_]+=[^[:space:]]*[[:space:]]+)*)?${w}${f}[[:space:]]*($|[;&|)])" ||
-    printf '%s\n' "$scan" | grep -qE "${pos}${w}${f}[[:space:]]*<" ||
-    printf '%s\n' "$scan" | grep -qE "${pos}${w}${f}[[:space:]]+(-[A-Za-z]*s[A-Za-z]*|-)([[:space:]]|$)" ||
-    printf '%s\n' "$scan" | grep -qE "${pos}(source|\\.)[[:space:]]+<\\("
+  local w='(/[^[:space:]]*/)?(bash|sh|zsh|dash|ksh)' f='([[:space:]]+-[^[:space:]]+)*' joined
+  joined=$(printf '%s\n' "$scan" | awk '{ if (buf != "") $0 = buf " " $0; if ($0 ~ /\|[ \t]*$/) { buf = $0; next } print; buf = "" } END { if (buf != "") print buf }')
+  printf '%s\n' "$joined" | grep -qE "\\|[[:space:]]*([({][[:space:]]*)?${wrap}${w}${f}[[:space:]]*(\$|[;&|)}])" ||
+    printf '%s\n' "$joined" | grep -qE "${cpos}${wrap}${w}${f}[[:space:]]*<" ||
+    printf '%s\n' "$joined" | grep -qE "${cpos}${wrap}${w}${f}[[:space:]]+(-[A-Za-z]*s[A-Za-z]*|-)([[:space:]]|\$)" ||
+    printf '%s\n' "$joined" | grep -qE "${cpos}(source|\\.)[[:space:]]+<\\("
 }
 if blind_shell; then
   block "a shell fed from a pipe, stdin, here-string, heredoc or process substitution hides its commands from this guard. Run the commands directly."
 fi
-# Inline interpreter code is judged as text: quotes and brackets become spaces, then the checks below treat it as a command line.
+# Inline interpreter code is judged as text: found on the quote-masked scan, so a commit message or grep pattern naming python -c is not code; then quotes and brackets become spaces and the checks below treat it as a command line.
 interp=""
-inline_re="(^|[[:space:];&|(])(/[^[:space:]]*/)?((python|pypy)[0-9.]*|nodejs|node|bun|perl|ruby|deno)[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(-[A-Za-z]*[ceEp]|--eval|--print|eval)([[:space:]=\"${sq}]|\$)"
-if [[ "$cmd" =~ $inline_re ]]; then
+interp_norm=""
+scan_shell=$scan
+inline_re="${cpos}${wrap}(/[^[:space:]]*/)?((python|pypy)[0-9.]*|nodejs|node|bun|perl|ruby|deno)[[:space:]]+(-([A-Za-ln-z]|-)[^[:space:]]*([[:space:]]+[^-[:space:]][^[:space:]]*)?[[:space:]]+)*(-[A-Za-z]*[ceEp]|--eval|--print|eval)([[:space:]=]|\$)"
+if [[ "$scan" =~ $inline_re ]]; then
   interp=${cmd#*"${BASH_REMATCH[0]}"}
-  scan="$scan"$'\n'"$(printf '%s' "$interp" | sed "s/[]\"${sq}[{}(),]/ /g")"
+  interp_norm=$(printf '%s' "$interp" | sed "s/[]\"${sq}[{}(),]/ /g")
+  scan="$scan"$'\n'"$interp_norm"
 fi
-# A secret-file name in inline code is blocked even when the file does not exist yet (open('.env', 'w')); bare module or attribute names stay clean.
+# A secret-file name in inline code is blocked even when the file does not exist yet (open('.env', 'w')); URLs, bare module and attribute names stay clean.
 interp_secret() {
   local tok b
   while IFS= read -r tok; do
@@ -164,7 +174,7 @@ interp_secret() {
     case "$b" in ''|.key|.pem|.p12|.pfx) continue ;; esac
     [[ "$b" == .* || "$tok" == */* || "$b" == credentials.json ]] || continue
     is_secret "$tok" && secret_block "$tok"
-  done < <(printf '%s' "$interp" | LC_ALL=C tr -c 'A-Za-z0-9._/~-' '\n')
+  done < <(printf '%s' "$interp" | sed -E "s#[A-Za-z][A-Za-z0-9+.-]*://[^[:space:]\"${sq})]*# #g" | LC_ALL=C tr -c 'A-Za-z0-9._/~-' '\n')
 }
 [ -n "$interp" ] && interp_secret
 
@@ -363,17 +373,27 @@ while IFS= read -r seg; do
   esac
 done <<< "$segments"
 
-# Guarded source directories, shared by the rm check and the interpreter removal check.
-srcdirs='(^|[[:space:]/"])(src|app|lib|test|\.claude|\.lefthook|\.git|node_modules)([[:space:]/"]|$)'
-# rm_src <text>: rm -rf on a guarded directory; judged on the raw command and on the unwrapped scan, so sh -c "rm -rf src" is seen.
+# Guarded source directories, defined once for the rm check and the interpreter removal check.
+srcnames='src|app|lib|test|\.claude|\.lefthook|\.git|node_modules'
+srcdirs="(^|[[:space:]/\"])(${srcnames})([[:space:]/\"]|\$)"
+# rm_src <text>: rm -rf on a guarded directory in one text; run on the raw command, on the unwrapped scan (sh -c "rm -rf src") and on each segment of inline code.
 rm_src() {
-  printf '%s\n' "$1" | grep -qE "(^|[[:space:]\"${sq};&|(\`])rm([[:space:]]|\$|[\"${sq}])" && printf '%s\n' "$1" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && printf '%s\n' "$1" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && printf '%s\n' "$1" | grep -qE "$srcdirs"
+  printf '%s\n' "$1" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && printf '%s\n' "$1" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && printf '%s\n' "$1" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && printf '%s\n' "$1" | grep -qE "$srcdirs"
 }
-if rm_src "$cmd" || rm_src "$scan"; then
+# interp_removes: inline code calls a recursive remover (shutil.rmtree, fs.rmSync with recursive, FileUtils.rm_rf) whose target is a guarded directory.
+interp_removes() {
+  local tgt="[[:space:]]+(\\./)?(${srcnames})(/|[[:space:]]|\$)"
+  printf '%s\n' "$interp_norm" | grep -qE "(rmtree|rimraf|rm_rf|rm_r|remove_entry|remove_dir|removeSync|emptyDirSync)${tgt}" && return 0
+  printf '%s\n' "$interp_norm" | grep -q 'recursive' || return 1
+  printf '%s\n' "$interp_norm" | grep -qE "(rmSync|rmdirSync|fs\\.rm|rmdir)${tgt}"
+}
+if rm_src "$cmd" || rm_src "$scan_shell"; then
   block "recursive rm on a source directory. Confirm with a human first."
 fi
-# Recursive removal through an interpreter call (shutil.rmtree, fs.rmSync with recursive, FileUtils.rm_rf) on a guarded directory.
-if [ -n "$interp" ] && printf '%s\n' "$scan" | grep -qE 'rmtree|rimraf|rm_rf|rm_r|remove_entry|remove_dir|removeSync|emptyDirSync|(rmSync|rmdirSync|fs\.rm|rmdir).*recursive' && printf '%s\n' "$scan" | grep -qE "$srcdirs"; then
-  block "recursive removal of a source directory through an interpreter. Confirm with a human first."
+if [ -n "$interp" ]; then
+  while IFS= read -r seg; do
+    rm_src "$seg" && block "recursive rm on a source directory. Confirm with a human first."
+  done < <(printf '%s\n' "$interp_norm" | tr ';|&' '\n\n\n')
+  interp_removes && block "recursive removal of a source directory through an interpreter. Confirm with a human first."
 fi
 exit 0
