@@ -19,7 +19,3 @@ If the target is unclear, ask:
 | NestJS | `cat "<skill-dir>/nextjs-backend-extraction/nestjs.md"` |
 | FastAPI | `cat "<skill-dir>/nextjs-backend-extraction/fastapi.md"` |
 | Other | Respond: "Not yet supported. Supported targets: NestJS, FastAPI." Exit, no changes. |
-
-## Step 3 — Execute
-
-Follow the loaded guide exactly.

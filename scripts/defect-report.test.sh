@@ -319,6 +319,54 @@ EOF
 run "$T/b3"
 has "vite-auth-csrf  high" "$OUT" "a comment naming X-CSRF-Token does not hide the match"
 
+# frame-ancestors: one case per pattern, per template file name, a clean control and an unreadable file.
+fa() { # fa <name> <relative file> <body>: writes the file and runs the report on it
+  local d="$T/fa-$1"
+  mkdir -p "$d/$(dirname "$2")"
+  printf '%s\n' "$3" > "$d/$2"
+  run "$d"
+}
+fa p1 src/core/security_headers.py "headers.append((b'content-security-policy', b\"frame-ancestors 'none'\"))"
+has "security_headers.py:1  frame-ancestors  check" "$OUT" "frame-ancestors: a fixed frame-ancestors 'none' is flagged"
+fa p2 nginx.conf.template '    add_header X-Frame-Options "DENY" always;'
+has "nginx.conf.template:1  frame-ancestors  check" "$OUT" "frame-ancestors: a fixed X-Frame-Options is flagged"
+fa p3 next.config.ts "const h = [{ key: 'X-Frame-Options', value: 'DENY' }];"
+has "next.config.ts:1  frame-ancestors  check" "$OUT" "frame-ancestors: a fixed X-Frame-Options in next.config.ts is flagged"
+fa p4 src/config/setups/security.setup.ts "const f = { 'frame-ancestors': [\"'none'\"] };"
+has "security.setup.ts:1  frame-ancestors  check" "$OUT" "frame-ancestors: the older NestJS form is flagged"
+fa p6 src/config/setups/security.setup.ts "const f = { 'frame-ancestors': [
+  \"'none'\",
+] };"
+has "security.setup.ts:1  frame-ancestors  check" "$OUT" "frame-ancestors: a wrapped 'none' on the next line is flagged"
+fa p7 src/config/setups/security.setup.ts "const f = { 'frame-ancestors': [
+  \"'self'\",
+], 'object-src': [
+  \"'none'\",
+] };"
+lacks "frame-ancestors  " "$OUT" "frame-ancestors: a wrapped 'self' followed by a 'none' for another directive is not flagged"
+run "$REPO_ROOT/tests/fixtures/defects/frame-ancestors/old"
+has "security.setup.ts:8  frame-ancestors  check" "$OUT" "frame-ancestors: the older NestJS fixture is flagged"
+fa p5 next.config.ts "// X-Frame-Options DENY
+const h = [];"
+lacks "frame-ancestors  " "$OUT" "frame-ancestors: a comment naming X-Frame-Options is not flagged"
+mkdir -p "$T/fa-clean"
+for src in skills/scaffold/nextjs/template/next.config.ts skills/scaffold/nestjs/template/src/config/setups/security.setup.ts \
+  skills/scaffold/fastapi/template/src/core/security_headers.py skills/scaffold/vite-react/template/nginx.conf.template; do
+  cp "$REPO_ROOT/$src" "$T/fa-clean/$(basename "$src")"
+done
+run "$T/fa-clean"
+check 0 "$EC" "frame-ancestors: the four current template files exit 0"
+lacks "frame-ancestors  " "$OUT" "frame-ancestors: the four current template files are not flagged"
+mkdir -p "$T/fa-unread"
+printf '%s\n' '    add_header X-Frame-Options "DENY" always;' > "$T/fa-unread/nginx.conf.template"
+chmod 000 "$T/fa-unread/nginx.conf.template"
+if [[ ! -r "$T/fa-unread/nginx.conf.template" ]]; then
+  run "$T/fa-unread"
+  check 2 "$EC" "frame-ancestors: an unreadable framing file exits 2, never clean"
+  has "nginx.conf.template (check frame-ancestors)" "$OUT" "frame-ancestors: the unreadable file is named"
+fi
+chmod 644 "$T/fa-unread/nginx.conf.template"
+
 # More shapes for the promise-retry check. xclient <name> <body> writes a client file and runs the report on it.
 xclient() {
   local d="$T/x-$1"

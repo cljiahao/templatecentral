@@ -83,50 +83,7 @@ Run this before Steps 4e and 4f. No documentation refresh is needed (the kit ski
 
 **Step 4e: Seed project skills**
 
-Create the stack's verify skill if absent. A project skill is a **directory** with `SKILL.md`; a flat `.claude/skills/<name>.md` is silently ignored. Run `mkdir -p .claude/skills/<stack>-verify` first, then write the skill file:
-
-| Stack | Skill file | Command |
-|-------|-----------|---------|
-| nextjs | `.claude/skills/next-verify/SKILL.md` | `pnpm check && pnpm test` |
-| nestjs | `.claude/skills/nest-verify/SKILL.md` | `pnpm check && pnpm test` |
-| vite-react | `.claude/skills/vite-verify/SKILL.md` | `pnpm check && pnpm test` |
-| fastapi | `.claude/skills/api-verify/SKILL.md` | `python -m pyright src/ && ruff check src/ && python -m pytest test/ -q` |
-
-Template for TypeScript stacks (replace `<stack>` and `<command>`):
-
-Take `<stack>-verify` from the table (`next-verify`, `nest-verify`, `vite-verify`, `api-verify`), not from the stack id. The `name:` frontmatter must match the directory name exactly.
-
-~~~markdown
----
-name: <stack>-verify
-description: Run typecheck, lint, and tests for this project in one pass
-allowed-tools: Bash(pnpm *)
----
-
-Run all quality checks in sequence:
-
-```bash
-<command>
-```
-
-Report failures with the exact error output. Fix before proceeding.
-~~~
-
-For nextjs only, also create `.claude/skills/next-migrate/SKILL.md` (`mkdir -p` first) if absent:
-```markdown
----
-name: next-migrate
-description: Run Drizzle push/migrate for this project with a safety gate.
-allowed-tools: Bash(pnpm *)
----
-
-Check that `src/integrations/database/` exists before running — database must be wired up first (`templatecentral:add (database)`).
-
-- `pnpm db:push` — dev only, no migration files generated (schema overwrite)
-- `pnpm db:migrate` — production-safe, generates migration files
-
-Before running against production: verify `DATABASE_URL` in `.env.local` points to the correct instance.
-```
+Create the stack's verify skill if absent: copy each `SKILL.md.tmpl` under `<skill-dir>/../scaffold/<stack>/template/.claude/skills/` (`next-verify` and `next-migrate`, `nest-verify`, `vite-verify` or `api-verify`) to `.claude/skills/<name>/SKILL.md` with `<name>` the template directory name as is (`next-verify` and `next-migrate`, `nest-verify`, `vite-verify` or `api-verify`; for example `.claude/skills/api-verify/SKILL.md`), using `mkdir -p` and `cp -p`. A flat `.claude/skills/<name>.md` is ignored.
 
 **Step 4f: Create `.claude/harness.json`**
 
@@ -140,11 +97,7 @@ Execute kit **Step E2**: it snapshots every seeded file into `.claude/.harness-b
 
 Execute kit **Step E3** over the full adopted project tree: it follows `documentation-kit.md` (loaded by the phase table in `implementation.md`) and writes the root `README.md`, `docs/architecture.md` and a `README.md` only at a package, service or feature-module boundary. It writes no README per folder.
 
-Then classify every existing per-folder `README.md` the project already has:
-- **Boundary doc**: says what the unit is for, how it fits, or how to use it. Keep it.
-- **File manifest**: mostly a list of the folder's files or exports. `scripts/check-docs.sh` fails on a README that lists every file of its folder, so these will block pre-push.
-
-Print both lists with the path and one reason each. Keep every README in place. For the manifests only, propose removal and ask the user to confirm; delete only the ones they confirm, and never a boundary doc.
+Existing READMEs stay in place. `scripts/check-docs.sh` fails on one that lists every file of its folder; remove such a file only after the user confirms.
 
 **Step 4f-2: Create `.agents` symlink**
 
