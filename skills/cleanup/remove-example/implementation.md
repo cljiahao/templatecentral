@@ -6,7 +6,7 @@
 
 Remove the example/demo code from a templateCentral-scaffolded project.
 
-Needs the `<!-- templateCentral:` marker in `AGENTS.md` (it names the stack); without it, run `templatecentral:migrate` first and stop if still absent. Verify the example code exists for that stack; if not, stop and tell the user: "No example code found — nothing to remove. The example may have already been removed."
+Needs the `<!-- templateCentral:` marker in `AGENTS.md` (it names the stack); without it, run `templatecentral:migrate` first and stop if still absent. When the script prints "No example code found — nothing to remove", stop and tell the user.
 
 | Stack | Example code |
 |---|---|
@@ -14,29 +14,17 @@ Needs the `<!-- templateCentral:` marker in `AGENTS.md` (it names the stack); wi
 | `fastapi` | `src/api/routers/example.py` |
 | `nestjs` | `src/modules/example/` |
 
-## Next.js
+## Remove
 
-1. Delete `src/features/example/`
-2. Edit `src/app/dashboard/(overview)/page.tsx` — remove the `ExampleList` import and usage; the `/dashboard` route stays, with placeholder content
+1. Dry run: `bash "<skill-dir>/remove-example/remove-example.sh" "<project-dir>"`. It reads the stack from the `AGENTS.md` marker and prints every file it would delete and every line it would edit; it writes nothing.
+2. Show the dry run to the user and ask before going on: this deletes project files.
+3. After the user confirms: run it again with `--apply`.
 
-## Vite + React
+A `BLOCK` line means the script refused the whole run and changed nothing: an example file differs from the scaffold's, or an expected line is missing. Show the user the line. Delete a modified example file only when the user names it, with `--force <path>`; fix a missing line by hand, then run the dry run again. A repeat run after a removal does nothing.
 
-1. Delete `src/features/example/`
-2. Edit `src/pages/dashboard.tsx` — remove the `ExampleList` import and usage; the `/dashboard` route stays, with placeholder content
+What the script removes per stack is listed in `<skill-dir>/remove-example/<stack>.manifest`. The `/dashboard` route stays, with a heading only. What stays manual: any import of the example outside those files, found by the build below.
 
 > `src/features/auth/` is intentional scaffold code (auth context, `AuthProvider`, `ProtectedRoute`, `LoginCard`) — do **not** delete it. `templatecentral:add (auth)` replaces the dev stub with a real implementation.
-
-## FastAPI
-
-1. Delete `src/api/routers/example.py`, `src/api/schemas/request/example.py`, `src/api/schemas/response/example.py`, `src/api/services/example.py`, `test/test_api/test_example.py`
-2. Edit `src/api/routes.py` — remove `from api.routers import example` and its `include_router(example.router, ...)` line
-3. Edit `src/api/tags.py` — remove `EXAMPLE` from `APITags` (keep `MISC` and `INFRASTRUCTURE`)
-
-## NestJS
-
-1. Delete `src/modules/example/`; in `test/app.e2e-spec.ts` delete the three example-module tests (invalid body, create/read/update/delete, OpenAPI document) and their `@nestjs/swagger` and `nestjs-zod` imports
-2. Edit `src/modules/index.ts` — remove `export * from './example/example.module'`
-3. Edit `src/app.module.ts` — remove `ExampleModule` from both the top-level `import` and the `@Module({ imports: [...] })` array
 
 ## Verify
 
