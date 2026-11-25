@@ -16,7 +16,7 @@
 - [ ] Any version floor/pin in a skill body matches `.claude/rules/<stack>.md` (the stack-version source of truth)
 - [ ] `bash scripts/lint-skills.sh skills/` passes locally
 - [ ] CI passes (frontmatter validation + lint-patterns)
-- [ ] `CHANGELOG.md` updated under `[Unreleased]`
+- [ ] Changelog fragment added under `changelog.d/` (see its `README.md`); `CHANGELOG.md` not edited
 - [ ] README updated if skill count changed
 
 ## Testing
