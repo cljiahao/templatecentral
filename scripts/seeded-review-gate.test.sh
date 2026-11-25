@@ -271,7 +271,9 @@ suite() {
   check 1 "$EC" "pass verdict with a blocker finding is refused"
   has "refused" "$OUT" "refusal message"
   has "1 blocker or major" "$OUT" "refusal counts findings"
-  check 0 "$([ -e "$D/.claude/review/$(cd "$D" && git rev-parse HEAD).record" ] && echo 1 || echo 0)" "refused pass wrote no record"
+  REC="$D/.claude/review/$(cd "$D" && git rev-parse HEAD).record"
+  if [ -e "$REC" ]; then REC_N=1; else REC_N=0; fi
+  check 0 "$REC_N" "refused pass wrote no record"
   reply "$T/x.txt" "b.txt:2 | major | logic: edge | fix" "VERDICT: pass"
   run record-review.sh "$T/x.txt"
   check 1 "$EC" "pass verdict with a major finding is refused"
