@@ -47,48 +47,13 @@ Version floors and the reasons for them live only in `.claude/rules/<stack>.md`.
 
 ## Section 2: Nesting Depth Rules
 
-### 2-Level (Default)
+### 2-Level (default)
 
-Use when a skill has **≤ 2 variants per stack**.
-
-```
-skills/
-  add/
-    auth/
-      fastapi.md            ← reference file (implementation)
-      nestjs.md             ← reference file (implementation)
-      nextjs.md             ← reference file (implementation)
-      vite-react.md         ← reference file (implementation)
-```
-
-Detection and routing live in `add/SKILL.md`; no sub-SKILL.md exists inside the capability dir.
-
-The chain is: `add/SKILL.md` → implementation file (1 `cat` call).
+Use when a stack has **≤ 2 variants**. `add/SKILL.md` routes straight to `add/<capability>/<stack>.md` (`add/auth/fastapi.md`): 1 `cat`, no sub-SKILL.md.
 
 ### 3-Level
 
-Use when a skill has **> 2 variants per stack** (e.g., multiple ORMs or drivers).
-
-```
-skills/
-  add/
-    SKILL.md                ← registered skill (detection + cat to stack router)
-    database/
-      python.md             ← stack router (detects DB variant + cat to leaf)
-      python/
-        sqlalchemy.md       ← leaf reference file
-        sqlalchemy-iam.md
-        pymongo-async.md
-        pymongo-async-auth.md   ← add-on leaf (loaded alongside its base guide)
-        beanie.md
-      typescript.md         ← stack router (detects DB variant + cat to leaf)
-      typescript/
-        nestjs-drizzle.md   ← leaf (stack-prefixed: subdir shared by two stacks, §7)
-        nextjs-kysely.md
-        …
-```
-
-The chain is: `add/SKILL.md` → stack router → leaf file (2 `cat` calls).
+Use when a stack has **> 2 variants** (several ORMs or drivers). `add/SKILL.md` → stack router `add/database/python.md` (detects the variant) → leaf `add/database/python/sqlalchemy.md`: 2 `cat` calls. A subdirectory shared by two stacks prefixes the stack (`nestjs-drizzle.md`, §7); an add-on leaf sits beside its base leaf.
 
 ### Hard Rules
 
@@ -101,253 +66,80 @@ The chain is: `add/SKILL.md` → stack router → leaf file (2 `cat` calls).
 
 ## Section 3: SKILL.md Constraints
 
-Every registered `SKILL.md` must obey these constraints:
+A registered `SKILL.md` has `name` and `description` frontmatter, a description of at most 150 characters and a body of at most 30 lines. Optional fields: `when_to_use`, `disable-model-invocation`, `allowed-tools` (scope tightly: `Bash(git add *)`, not `Bash`), `paths`, `argument-hint`; description plus `when_to_use` stay under 1,536 characters.
 
-| Constraint | Limit |
-|---|---|
-| Description length | ≤ 150 characters |
-| Body length (excluding frontmatter) | ≤ 30 lines |
-| Inline implementation | Not allowed |
-| Inline code blocks | Only `cat` commands and detection logic |
+The body holds only stack detection, a routing table or decision tree, `cat` commands to reference files and a one-line prerequisite. No implementation steps, file templates, numbered how-to lists or prose copied from another skill. A utility `SKILL.md` (build, test, review, cleanup) has no frontmatter and stays a router of at most 12 lines.
 
-### Frontmatter Fields
-
-```yaml
----
-name: skill-name
-description: "Use when <trigger phrase> — <stack list>."
-# optionally:
-when_to_use: "Extended trigger context — shown when Claude searches for the right skill."
-disable-model-invocation: true   # only user can invoke; prevents subagent preloading
-allowed-tools: "Bash(git *)"     # pre-approve specific tools without per-use prompts
-paths:                           # auto-activate only when working with matching files
-  - "src/features/**"
-argument-hint: "[feature-name]"  # shown during autocomplete
----
-```
-
-Required fields: `name`, `description`.
-Key optional fields:
-- `when_to_use` — additional trigger context appended to `description` in skill listings; combined cap of 1,536 chars
-- `disable-model-invocation: true` — only user can invoke; prevents preloading into subagents (use for destructive or scaffold-scope skills)
-- `allowed-tools` — pre-approve tools while skill is active (scope tightly: `Bash(git add *)` not `Bash`)
-- `paths` — glob patterns; skill auto-activates when Claude works with matching files
-- `argument-hint` — shown during `/` autocomplete (e.g. `[issue-number]`)
-
-### Body Content
-
-The body must contain only:
-1. Stack/variant detection logic (file existence checks, config sniffs)
-2. A routing table or decision tree
-3. `cat` commands pointing to reference files
-4. A brief "Prerequisites" note if needed (e.g., "Requires a project scaffolded with templatecentral:scaffold.")
-
-It must not contain: code blocks with implementation steps, file content templates, numbered how-to instructions, or prose duplicated from another skill.
+Enforced by `check_skillmd_description_length`, `check_skillmd_body_length` and `check_file_line_budget`.
 
 ---
 
 ## Section 4: Reference File Header Format
 
-Every reference file must begin with this comment block as its **first line**:
+Line 1 of every reference file is this block, with no blank line inside it:
 
 ```
 <!-- ref: <path relative to skills/>
-     loaded-by: <SKILL.md that triggers this>
-     prereq: <what must be known before this file is useful. End with: Do not invoke this file directly.> -->
+     loaded-by: <SKILL.md, or router → SKILL.md for a 3-level file>
+     prereq: <what must be known first>. Do not invoke this file directly — it is loaded at runtime by the templatecentral:<skill> skill. -->
 ```
 
-### 2-Level Example
-
-```
-<!-- ref: add/auth/fastapi.md
-     loaded-by: add/SKILL.md
-     prereq: Stack identified as FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
-```
-
-### 3-Level Stack Router Example
-
-```
-<!-- ref: add/database/python.md
-     loaded-by: add/SKILL.md
-     prereq: Stack identified as FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
-```
-
-### 3-Level Leaf Example
-
-```
-<!-- ref: add/database/python/sqlalchemy.md
-     loaded-by: add/database/python.md → add/SKILL.md
-     prereq: Stack = FastAPI, DB = SQL, compliance = standard. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
-```
-
-### Rules
-
-- The `ref:` path is always relative to the `skills/` directory.
-- The `loaded-by:` field lists the full chain from nearest parent to root SKILL.md (arrow-separated) for 3-level files.
-- The `prereq:` field must contain `Do not invoke this file directly` (as a phrase), followed by a note naming the skill that loads it: `— it is loaded at runtime by the templatecentral:<skill> skill.`
-- No blank lines between the opening `<!--` and closing `-->`.
-- Files inside a template tree (Section 1) are shipped content and take no ref header.
-
-### Agent-utility variant
-
-Reference files belonging to de-registered agent utilities (build/test/review/cleanup) use "— it is catted by agents via skills/<name>/SKILL.md (de-registered agent utility)." instead of the registered-skill suffix.
+- Utility reference files (build, test, review, cleanup) end `— it is catted by agents via skills/<name>/SKILL.md (de-registered agent utility).` instead.
+- Files inside a template tree take no header (Section 1).
+- Enforced by `check_ref_file_headers` and `check_ref_header_prereq_suffix`.
 
 ---
 
 ## Section 5: Description Writing Guide
 
-### Format
+Form: `Use when <trigger verb phrase> — <stack list>.` Stack order: FastAPI, NestJS, Next.js, Vite + React; list only stacks the skill supports. Front-load the trigger, use active verbs (`adding`, `scaffolding`, `migrating`), name what the user gets when it fits, drop articles when space is tight.
 
-```
-Use when <trigger verb phrase> — <stack list>.
-```
-
-- **Max 150 characters** (Unicode character count, not byte count — lint-enforced by `scripts/lint-skills.sh`).
-- **Front-load the trigger action.** The reader needs to know the "when" immediately.
-- **Stack list after the em-dash** (—). Only include stacks that are actually supported.
-- **Stack order:** FastAPI, NestJS, Next.js, Vite + React.
-
-### Forbidden Words
-
-Never use these words in a description: `covers`, `provides`, `ensures`, `delivers`, `helps with`. (Checked by `/tc-audit`, not by the lint.)
-
-### Bad vs Good Examples
-
-| Bad | Good |
-|---|---|
-| "Provides authentication for backend projects" | "Use when adding JWT auth or user login — FastAPI, NestJS." |
-| "Covers database setup and migration" | "Use when adding a database with migrations — FastAPI, NestJS, Next.js." |
-| "Helps with adding tests to your project" | "Use when adding unit or integration tests — FastAPI, NestJS, Next.js, Vite + React." |
-| "Ensures consistent code standards are followed" | "Use when writing or reviewing code — NestJS." |
-| "Delivers scaffold for a new API project" | "Use when scaffolding a new backend project — FastAPI." |
-
-### Tips
-
-- Use active verbs: `adding`, `scaffolding`, `connecting`, `validating`, `migrating`.
-- Be concrete: name what the user gets (JWT, Drizzle, Pydantic, etc.) if it fits within the character limit.
-- Omit articles ("a", "the") to save characters when space is tight.
+Never use `covers`, `provides`, `ensures`, `delivers` or `helps with` (checked by `/tc-audit`, not by the lint). The 150-character cap counts Unicode characters (lint-enforced).
 
 ---
 
 ## Section 6: Adding a New Framework
 
-This section describes the canonical process for adding a new framework (e.g., Django) to the templateCentral skill system.
+Never create `<framework>-add-auth` or similar registered skills. Add reference files inside the existing registered skills:
 
-> **Rule:** do not create `django-add-auth`, `django-add-database`, or similar registered skills. New frameworks are added as reference files inside existing registered skills under the new nested structure.
+1. Create `skills/<capability>/<name>/<framework>.md` for each capability the framework supports (3-level, Section 2, when a stack has more than 2 variants).
+2. Start each with its ref header (Section 4).
+3. Add the detection signal and `cat` row to the skill's `SKILL.md` routing table.
+4. Run `bash scripts/lint-skills.sh skills/`, then `/tc-audit`.
+5. Add the signal to the table below.
 
-### Step-by-Step: Adding Django
-
-**1. Create reference files inside existing skill directories.**
-
-For each skill that Django should support, create a new reference file:
-
-```
-skills/add/auth/django.md
-skills/add/test/django.md
-skills/add/database/django.md       ← if ≤ 2 DB variants
-skills/add/database/django/         ← if > 2 DB variants (3-level)
-  django-orm.md
-  sqlalchemy.md
-```
-
-**2. Add the ref header to each new file.**
-
-Every new file must start with the correct `<!-- ref: ... -->` header per Section 4.
-
-Example for `skills/add/auth/django.md`:
-```
-<!-- ref: add/auth/django.md
-     loaded-by: add/SKILL.md
-     prereq: Stack identified as Django. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
-```
-
-**3. Add stack detection signal and `cat` command to `skills/add/SKILL.md`.**
-
-In `skills/add/SKILL.md`, add Django to the routing table:
-
-```
-| Django | `manage.py` exists AND `requirements.txt` contains `django` | `cat "<skill-dir>/auth/django.md"` |
-```
-
-**4. Check variant count. If > 2 ORM/driver variants → promote to 3-level.**
-
-If Django will have more than 2 database variants, convert the skill to 3-level structure per Section 2.
-
-**5. Run `/tc-audit` to verify all constraints pass.**
-
-Run `bash scripts/lint-skills.sh skills/` first: it checks headers, description length, nesting depth, template trees against their manifests, the fence snapshot and version floors. The audit then adds line counts and the checks the lint does not cover.
-
-**6. Update CONVENTIONS.md Section 6 with the new framework's detection signal.**
-
-Add to the stack detection signals table below.
-
-### Stack Detection Signals
-
-| Framework | Detection Signal |
+| Framework | Detection signal |
 |---|---|
 | FastAPI | `requirements.txt` contains `fastapi` |
 | NestJS | `nest-cli.json` exists, or `@nestjs/core` in `package.json` |
-| Next.js | `next.config.ts` or `next.config.js` or `next.config.mjs` exists |
-| Vite + React | `vite.config.ts` or `vite.config.js` exists AND no `next.config.*` |
+| Next.js | `next.config.ts`, `.js` or `.mjs` exists |
+| Vite + React | `vite.config.ts` or `.js` exists and no `next.config.*` |
 
-When adding a new framework, define its detection signal clearly and add it to this table.
+### Line budget
+
+`check_file_line_budget` (`scripts/lint-skills.sh`) caps every `.md` under `skills/` outside template trees by class: utility router 12, stack router 40, scaffold kit and standards stack files 120, leaf 150 plus 50 prose lines outside fences, this file 150.
+Only an exact-path row in `tests/golden/line-budget.txt` lets a file exceed its cap; rows only shrink, and `scripts/check-line-budget-frozen.sh BASE_REF` fails CI when one grows. Cut the file, never raise its row.
 
 ---
 
 ## Section 7: Naming Conventions
 
-| Item | Naming Pattern | Example |
-|---|---|---|
-| Registered skill (top-level) | `skills/<capability>/` | `skills/add/`, `skills/scaffold/` |
-| 2-level reference file | `<stack>.md` inside capability dir | `add/auth/fastapi.md` |
-| 3-level stack router | `<stack>.md` inside capability dir | `add/database/python.md` |
-| 3-level leaf file | `<variant>.md` (plain) or `<stack>-<variant>.md` (when multiple stacks share the subdirectory) inside subdir | `add/database/python/sqlalchemy.md` |
-| Scaffold reference files (existing pattern) | `source-files.md` beside `template/`, `template-agents/`, `template-tail/`, `template.manifest` | `scaffold/nestjs/source-files.md` |
-
-### Notes
-
-- Stack names in file paths use lowercase with hyphens: `fastapi`, `nestjs`, `nextjs`, `vite-react`.
-- Variant names in leaf file paths use lowercase with hyphens: `sqlalchemy`, `drizzle`, `mongoose`.
-- When a single subdir is shared by multiple stacks (e.g., `typescript/` serves both NestJS and Next.js), prefix with the stack name to disambiguate: `nestjs-drizzle.md`, `nextjs-drizzle.md`.
-- Do not use `index.md` as a filename — every file should have a descriptive name. (Checked by `/tc-audit`, not by the lint.)
-- Scaffold reference files (`scaffold/<stack>/`, `scaffold/shared/`) follow their own internal structure; they are not subject to the shared-skill naming rule.
+- Registered skill: `skills/<capability>/`. Reference file: `<stack>.md` in the capability directory (`add/auth/fastapi.md`); a 3-level stack router is `<stack>.md` and its leaves sit in `<stack>/`.
+- Stack names: `fastapi`, `nestjs`, `nextjs`, `vite-react`. Variants: lowercase with hyphens (`sqlalchemy`, `drizzle`).
+- A subdirectory shared by two stacks prefixes the stack: `nestjs-drizzle.md`, `nextjs-drizzle.md`.
+- No `index.md` (checked by `/tc-audit`, not by the lint).
+- Scaffold files (`source-files.md`, the shared kits) keep their own layout.
 
 ---
 
-## Section 8: Audit Checklist (Manual Reference)
+## Section 8: Audit Checklist
 
-This checklist matches what `/tc-audit` checks; `scripts/lint-skills.sh` enforces a subset mechanically (description length, ref headers, nesting depth, template trees and manifests, fence snapshot, version floors). Use it for manual spot-checks before committing.
+`scripts/lint-skills.sh` enforces headers, description and body length, nesting depth, template trees and manifests, fence snapshot, version floors, `<skill-dir>` references and the line budget. `/tc-audit` adds what the lint cannot see:
 
-### Registered SKILL.md Files
-
-- [ ] All registered `SKILL.md` files: `description` ≤ 150 characters
-- [ ] All registered `SKILL.md` files: body ≤ 30 lines (excluding frontmatter)
-- [ ] All registered `SKILL.md` files: no inline implementation steps (no numbered how-to lists, no code templates, no file content)
-- [ ] All registered `SKILL.md` files: no prose duplicated from another registered skill
-
-### Reference Files
-
-- [ ] All reference files: `<!-- ref: ... loaded-by: ... prereq: ... -->` is the first line of the file
-- [ ] All reference files: `prereq:` contains `Do not invoke this file directly — it is loaded at runtime by the templatecentral:<skill> skill.`
-- [ ] All reference files: `loaded-by:` lists the full chain (arrow-separated) for 3-level files
-
-### Structural Rules
-
-- [ ] No reference file is also a registered skill (dual-role files are forbidden)
-- [ ] Maximum nesting depth: 3 levels (max 2 `cat` calls per chain)
-- [ ] No 4-level or deeper nesting exists anywhere under `skills/` (outside template trees)
-- [ ] Every template tree has a `template.manifest` that lists exactly its files, holds `SKILL.md.tmpl` rather than `SKILL.md`, and has no symlink or empty directory
-
-### Count Limit
-
-- [ ] Total registered skill count = 4: verify with `grep -rl '^name:' skills/*/SKILL.md | wc -l`
-
-> **Agent utilities** (`build`, `test`, `review`, `cleanup`) are not registered skills — their SKILL.md files have ref headers instead of `name:` frontmatter. They are catted directly by agents as needed. Skill directories = 8; registered skills = 4 (`add`, `migrate`, `scaffold`, `standards`).
-
-### Stack Detection
-
-- [ ] Every stack/variant referenced in a SKILL.md routing table has a corresponding reference file
-- [ ] Every reference file referenced in a `cat` command actually exists at that path
+- No reference file is also a registered skill.
+- No registered `SKILL.md` repeats prose from another one.
+- Registered skills = 4 (`add`, `migrate`, `scaffold`, `standards`); `build`, `test`, `review` and `cleanup` are utilities with ref headers, not `name:` frontmatter.
+- Every stack in a routing table has its reference file, and every `cat` target exists (`check_skilldir_refs_resolve`).
 
 ---
 
