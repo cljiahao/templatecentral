@@ -1,0 +1,1 @@
+- `scripts/test-harness-kit.sh` runs as four parallel groups of sections (about half the wall time) and fails when the groups' sections do not match the sections in the file; `TKIT_SERIAL=1` runs one process.

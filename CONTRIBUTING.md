@@ -56,7 +56,9 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 
 ## Release PR
 
-Normal PRs never edit `CHANGELOG.md`. The release PR runs `bash scripts/changelog-assemble.sh <N.N.N> <YYYY-MM-DD>`, bumps `version` in `.claude-plugin/plugin.json` and `templatecentral_version` in `.claude/harness.json`, and changes nothing else except the allow-listed release files (rules in `changelog.d/README.md`). `scripts/changelog-check.sh` replays the assemble and requires a byte-for-byte match.
+Normal PRs never edit `CHANGELOG.md`, and `## [Unreleased]` in it stays empty: an entry goes into a `changelog.d/` fragment, never under that heading. `scripts/changelog-check.sh` fails any PR that leaves an entry there, and `changelog-assemble.sh` refuses to run while one is there.
+
+The release PR runs `bash scripts/changelog-assemble.sh <N.N.N> <YYYY-MM-DD>` and bumps `version` in `.claude-plugin/plugin.json` and `templatecentral_version` in `.claude/harness.json`. It changes nothing else: those two files may differ from the merge base only in the version value, which must be higher. `scripts/changelog-check.sh` replays the assemble and requires a byte-for-byte match (rules in `changelog.d/README.md`).
 
 ## Commit Style
 

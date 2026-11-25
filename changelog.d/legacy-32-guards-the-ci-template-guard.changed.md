@@ -1,0 +1,1 @@
+- Guards: the CI-template guard pins the exact GitHub `on:` block and the Azure `trigger` and `pr` blocks (branch lists and extra keys such as `paths-ignore` fail), the dependabot guard rejects `open-pull-requests-limit`, `ignore:` and any other key beyond the weekly minor-and-patch group, and the harness kit drift check now covers the two `protect-files.sh` twins.

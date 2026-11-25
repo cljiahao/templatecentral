@@ -1,0 +1,1 @@
+- `scaffold-verify.yml` prints the Claude result text when the agent step fails, so an `is_error: true` run names its cause instead of ending with no detail.

@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# scripts/changelog-assemble.sh — fold changelog.d/ fragments into a new CHANGELOG.md release section.
+# scripts/changelog-assemble.sh — fold changelog.d/ fragments into a new release section of
+# CHANGELOG.md.
 #
 # Usage: bash scripts/changelog-assemble.sh [--dry-run] <version N.N.N> <date YYYY-MM-DD>
-#   Groups fragments by category (Added, Changed, Fixed, Security), sorts them by file name inside a
-#   category, inserts "## [version] — date" after the [Unreleased] block, then deletes the fragments.
-#   --dry-run prints the section and changes nothing. Every check runs before the first write; the
-#   file is replaced by one mv of a temp file from the same directory (same mode as before). The
-#   fragments are deleted after that mv; if a delete fails the run exits non-zero with CHANGELOG.md
-#   already updated, and a re-run refuses (the version exists), so nothing is folded twice. Refuses (non-zero, no change)
-#   on: no fragments, an invalid fragment, an existing version heading, a bad version or date,
-#   CHANGELOG.md missing or a symlink, no [Unreleased] heading or no release heading after it.
-#   Entries still under [Unreleased] stay there; the owner folds them in by hand.
+#   Groups fragments by category (Added, Changed, Fixed, Security), sorts them by file name
+#   inside a category, inserts "## [version] — date" after the [Unreleased] block, then deletes
+#   the fragments. --dry-run prints the section and changes nothing.
+#   Every check runs before the first write. The file is replaced by one mv of a temp file from
+#   the same directory, with the same mode as before. The fragments are deleted after that mv.
+#   If a delete fails, the run exits non-zero with CHANGELOG.md already updated; a re-run then
+#   refuses (the version exists), so nothing is folded twice.
+#   Refuses (non-zero, no change) on: no fragments, an invalid fragment, an existing version
+#   heading, a bad version or date, CHANGELOG.md missing or a symlink, no [Unreleased] heading
+#   or no release heading after it, any entry still under [Unreleased]. Entries belong in
+#   fragments, so move them there first.
 set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
@@ -38,8 +41,14 @@ trap 'rm -rf "$work"; if [[ -n $new ]]; then rm -f "$new"; fi' EXIT
 
 awk -v v="$version" 'index($0, "## [" v "]") == 1 { f = 1 } END { exit f ? 0 : 1 }' CHANGELOG.md \
   && die "CHANGELOG.md already has a section for $version"
-awk '/^## \[Unreleased\]/ { u = 1; next } u && /^## \[/ { f = 1 } END { exit f ? 0 : 1 }' CHANGELOG.md \
+awk '/^## \[Unreleased\]/ { u = 1; next }
+     u && /^## \[/ { f = 1 }
+     END { exit f ? 0 : 1 }' CHANGELOG.md \
   || die "CHANGELOG.md needs '## [Unreleased]' followed by a release heading"
+
+cl_unreleased_entries CHANGELOG.md > "$work/entries" || die "cannot read [Unreleased]"
+[[ ! -s $work/entries ]] \
+  || die "CHANGELOG.md has entries under '## [Unreleased]'; move them into $CL_DIR/ fragments first"
 
 find "$CL_DIR" -mindepth 1 -print0 > "$work/all" || die "cannot list $CL_DIR/"
 : > "$work/names"
@@ -47,10 +56,12 @@ nfrag=0
 while IFS= read -r -d '' p; do
   name=${p#"$CL_DIR"/}
   if [[ $name == README.md && -f $p && ! -L $p ]]; then continue; fi
-  label=${p//[^[:print:]]/?}
-  [[ $name != */* && ! ( -d $p && ! -L $p ) ]] || die "$label: fragments cannot live in a subdirectory"
+  label=${p//[[:cntrl:]]/?}
+  [[ $name != */* && ! ( -d $p && ! -L $p ) ]] \
+    || die "$label: fragments cannot live in a subdirectory"
   cl_name_category "$name" >/dev/null || die "$label: not a valid fragment name"
-  cl_content_ok "$p" || die "$label: not a valid fragment (bullet first, then bullets or indented lines)"
+  cl_content_ok "$p" \
+    || die "$label: not a valid fragment (bullet first, then bullets or indented lines)"
   printf '%s\n' "$name" >> "$work/names"
   nfrag=$((nfrag + 1))
 done < "$work/all"
@@ -80,7 +91,10 @@ new=$(mktemp "$root/CHANGELOG.md.XXXXXX") || die "mktemp failed"
 cp -p CHANGELOG.md "$new" || die "cannot copy CHANGELOG.md mode"
 awk -v secf="$work/section" '
   /^## \[Unreleased\]/ { u = 1 }
-  u && !done && /^## \[/ && !/^## \[Unreleased\]/ { while ((getline l < secf) > 0) print l; done = 1 }
+  u && !done && /^## \[/ && !/^## \[Unreleased\]/ {
+    while ((getline l < secf) > 0) print l
+    done = 1
+  }
   { print }
   END { exit done ? 0 : 1 }
 ' CHANGELOG.md > "$new" || die "cannot insert the section"

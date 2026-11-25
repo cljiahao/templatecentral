@@ -16,16 +16,18 @@ Example, `changelog.d/sonar-parity-table.added.md`:
 
 No subdirectories. `scripts/changelog-check.sh` rejects any other name or layout.
 
-Every PR adds a fragment, with no exemption: PRs with no user-facing change and bot PRs included. Describe the change in one bullet.
+Every PR except the release PR adds a fragment, with no exemption: PRs with no user-facing change and bot PRs included. Describe the change in one bullet.
 
-Fragments cannot contain heading lines or code fences. Continuation lines that start with `#`, three backticks or `~~~` are rejected.
+Fragments cannot contain heading lines, code fences or rule lines. A line whose text (after the indent and any bullet marker) starts with `#`, three backticks or `~~~`, or is `---` or `===`, is rejected.
+
+`## [Unreleased]` in `CHANGELOG.md` stays empty. Put every entry in a fragment, never under that heading: `scripts/changelog-check.sh` fails a PR that leaves an entry there, and `scripts/changelog-assemble.sh` refuses to run while one is there. A PR that only moves existing `[Unreleased]` entries into fragments passes if every moved entry is a line of an added fragment.
 
 ## Release PR
 
-The release PR is the only PR that edits `CHANGELOG.md`.
+The release PR is the only PR that edits `CHANGELOG.md` otherwise.
 
 1. Run `bash scripts/changelog-assemble.sh <N.N.N> <YYYY-MM-DD>`. It writes the release section and deletes every fragment.
-2. Bump `.claude-plugin/plugin.json` `version` and `.claude/harness.json` `templatecentral_version` to `N.N.N`.
-3. Touch nothing else except the allow-listed release files: `README.md`, `skills/scaffold/shared/harness-kit-finalize.md` and `tests/golden/<name>.sha256` (regenerated hashes). Header of `scripts/changelog-check.sh` has the rules.
+2. Bump `.claude-plugin/plugin.json` `version` and `.claude/harness.json` `templatecentral_version` to `N.N.N`, higher than before. Change nothing else in those files.
+3. Touch no other file. A release does not need one: golden hashes and the README do not carry the version.
 
-`scripts/changelog-check.sh` replays step 1 on the merge base and needs the result to match `CHANGELOG.md` byte for byte.
+`scripts/changelog-check.sh` replays step 1 on the merge base and needs the result to match `CHANGELOG.md` byte for byte. Its header has the numbered release rules; a failure names the rule.

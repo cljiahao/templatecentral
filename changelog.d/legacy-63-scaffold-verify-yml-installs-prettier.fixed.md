@@ -1,0 +1,1 @@
+- `scaffold-verify.yml` installs prettier into the FastAPI scaffold before the golden diff. That tree has no `node_modules`, so `check-golden.sh` could not format `AGENTS.md` and reported a mismatch.

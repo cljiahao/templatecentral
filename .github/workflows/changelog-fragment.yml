@@ -1,6 +1,8 @@
 name: Changelog Fragment
-# PR gate: every PR adds a changelog.d/ fragment and leaves CHANGELOG.md alone
-# (scripts/changelog-check.sh). The two test scripts run first so a broken checker cannot pass a PR.
+# PR gate: every PR adds a changelog.d/ fragment and leaves CHANGELOG.md alone, except the release
+# PR, which folds the fragments with scripts/changelog-assemble.sh and bumps the version in
+# plugin.json and harness.json (scripts/changelog-check.sh replays it and holds it to that).
+# The two test scripts run first so a broken checker cannot pass a PR.
 on:
   pull_request:
 permissions:

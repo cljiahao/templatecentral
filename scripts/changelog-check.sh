@@ -2,63 +2,78 @@
 # scripts/changelog-check.sh — PR check: a PR adds a changelog fragment, or is a release PR.
 #
 # Usage: bash scripts/changelog-check.sh <base-ref>
-#   Compares the merge base of <base-ref> and HEAD with HEAD (not commit by commit). Fails closed: a
-#   missing base ref or merge base is an error.
+#   Compares the merge base of <base-ref> and HEAD with HEAD (not commit by commit). Fails closed:
+#   a missing base ref or merge base is an error.
+#   Every PR: "## [Unreleased]" in CHANGELOG.md at HEAD has no entry. Entries live in fragments.
 #   Normal PR (CHANGELOG.md not in the diff): adds at least one valid fragment under changelog.d/
 #   and no invalid entry there. Deleting fragments is not counted.
-#   Release PR (CHANGELOG.md in the diff): the diff must be exactly what changelog-assemble.sh
-#   makes, plus the release files. Rules, each reported by name when it fails:
-#     1. CHANGELOG.md is modified in place (status M, regular file).
+#   Migration PR (the only CHANGELOG.md change empties "## [Unreleased]"): the same as a normal
+#   PR, and every entry removed from CHANGELOG.md is a line of an added fragment.
+#   Release PR (any other CHANGELOG.md change): the diff must be exactly what
+#   changelog-assemble.sh makes, plus the version bump. Rules, each reported by number when it
+#   fails:
+#     1. CHANGELOG.md is modified in place: status M, regular file.
 #     2. Nothing under changelog.d/ is added or modified; the deleted fragments equal the set at
 #        the merge base (all folded, none left).
-#     3. Changed paths are CHANGELOG.md, those deletions and this allow-list only. Chosen from the
-#        release commits (7.0.0 to 7.2.2): .claude-plugin/plugin.json and .claude/harness.json (the
-#        version bump, every release), README.md (version references), skills/scaffold/shared/
-#        harness-kit-finalize.md (version marker) and tests/golden/<name>.sha256 (regenerated
-#        hashes). All must be status M. Any other path fails.
-#     4. The new top release heading of CHANGELOG.md is "## [N.N.N] — YYYY-MM-DD", and plugin.json
-#        "version" and harness.json "templatecentral_version" at HEAD equal N.N.N.
+#     3. Changed paths are CHANGELOG.md, those deletions and the two version files only:
+#        .claude-plugin/plugin.json and .claude/harness.json, status M. Each equals its merge-base
+#        version except for the version value (one version line, same form); no other file.
+#     4. The new top release heading of CHANGELOG.md is "## [N.N.N] — YYYY-MM-DD"; plugin.json
+#        "version" and harness.json "templatecentral_version" at HEAD equal N.N.N and are greater
+#        than the merge-base values.
 #     5. Replay: the merge base CHANGELOG.md and fragments, run through changelog-assemble.sh with
 #        that version and date, equal HEAD's CHANGELOG.md byte for byte.
+#     6. "## [Unreleased]" has no entry at the merge base or at HEAD.
+#   Why only those two files: a dry-run bump on a clone, then the version gates (check-golden.sh
+#   8 of 8, regen-golden.sh no change, validate-manifest.sh, check-versions.sh, check-doc-sync.sh),
+#   changed nothing else. The golden hashes depend on template content, not on the version, and
+#   pristine-hashes.txt is regenerated from the tag after the release, not in the release PR.
 #
 # Catches: no fragment added; unknown category; empty or whitespace-only fragment; no bullet line;
-#   heading or fence line inside a fragment; symlink, submodule or type-changed fragment;
-#   subdirectory; name outside the pattern (incl. spaces, newlines); fragment added then deleted in
-#   the same PR; README.md counted as a fragment; missing base ref or merge base; a normal PR that
-#   edits CHANGELOG.md (it must then pass the replay, so free edits, history rewrites and fake
-#   release headings fail); a release PR with a fragment left, added, or a path outside the
-#   allow-list; CHANGELOG.md deleted or type-changed; a malformed heading; a version mismatch.
+#   heading, fence or rule line inside a fragment (also after a bullet marker); symlink, submodule
+#   or type-changed fragment; subdirectory; name outside the pattern (incl. spaces, newlines);
+#   fragment added then deleted in the same PR; README.md counted as a fragment; missing base ref
+#   or merge base; entries left under "## [Unreleased]"; a normal PR that edits CHANGELOG.md (it
+#   must then pass the replay, so free edits, history rewrites and fake release headings fail); a
+#   release PR with a fragment left or added, a path off the allow-list (this includes the
+#   assemble script, the lib, this check and the workflow), an extra or duplicate key in a version
+#   file, a version that is not greater; CHANGELOG.md deleted or type-changed; a malformed heading.
 # Does not catch: a fragment whose text is wrong or meaningless; a fragment under the wrong
-#   category; edits to allow-listed release files beyond the version match (README.md, the
-#   finalize marker, golden hashes); a PR author who edits this script, changelog-assemble.sh,
-#   changelog-lib.sh or the workflow in the same PR (the replay runs the PR's own assemble script).
+#   category (a migration PR also does not compare the category); a normal PR that edits this
+#   script, changelog-assemble.sh, changelog-lib.sh or the workflow (the checks that run are the
+#   PR's own copies; only a release PR is held to the allow-list).
 set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 . "$here/changelog-lib.sh"
 
+# die, bad and rel print a failure; relq holds a release finding until the PR is known to be a
+# release PR, so a normal PR never sees release text.
 die() { echo "changelog-check: $*" >&2; exit 1; }
 bad() { echo "changelog-check: $*" >&2; n_bad=$((n_bad + 1)); }
 rel() { echo "changelog-check: release rule $1 failed: $2" >&2; n_rel=$((n_rel + 1)); }
-# Release findings found while reading the diff; shown only when this turns out to be a release PR.
-relq() { printf 'changelog-check: release rule %s failed: %s\n' "$1" "$2" >> "$work/relq"; n_relq=$((n_relq + 1)); }
-printable() { printf '%s' "${1//[^[:print:]]/?}"; }
+relq() { printf 'changelog-check: release rule %s failed: %s\n' "$1" "$2" >> "$work/relq"; }
+# Control characters become "?"; other bytes pass, so the message reads the same in any locale.
+printable() { printf '%s' "${1//[[:cntrl:]]/?}"; }
 
 [[ $# -eq 1 && -n $1 && $1 != -* ]] || die "usage: changelog-check.sh <base-ref>"
 base=$1
 root=$(git rev-parse --show-toplevel 2>/dev/null) || die "not inside a git repository"
 cd "$root" || die "cannot enter $root"
-git rev-parse --verify --quiet "$base^{commit}" >/dev/null || die "base ref '$base' not found (fetch it first)"
-mb=$(git merge-base "$base" HEAD 2>/dev/null) || die "no merge base between '$base' and HEAD (shallow clone? use fetch-depth: 0)"
+git rev-parse --verify --quiet "$base^{commit}" >/dev/null \
+  || die "base ref '$base' not found (fetch it first)"
+mb=$(git merge-base "$base" HEAD 2>/dev/null) \
+  || die "no merge base between '$base' and HEAD (shallow clone? use fetch-depth: 0)"
 [[ -n $mb ]] || die "no merge base between '$base' and HEAD"
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/clcheck.XXXXXX") || die "mktemp failed"
 trap 'rm -rf "$work"' EXIT
 git diff --raw -z --no-renames --no-abbrev "$mb" HEAD > "$work/raw" || die "git diff failed"
 
-n_bad=0 n_rel=0 n_relq=0 n_added=0 cl_status="" cl_mode="" cl_seen=0
+n_bad=0 n_rel=0 n_added=0 cl_status="" cl_mode="" cl_seen=0
 : > "$work/deleted"
 : > "$work/relq"
+: > "$work/fragtext"
 while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
   read -r _om nm _osha nsha st <<< "$meta"
   label=$(printable "$path")
@@ -77,41 +92,87 @@ while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
     fi
     relq 2 "$label: nothing under $CL_DIR/ may be added or modified in a release PR"
     if [[ $rest == README.md ]]; then continue; fi
-    if [[ $st != A ]]; then bad "$label: only adding a fragment is allowed here (status $st)"; continue; fi
+    if [[ $st != A ]]; then
+      bad "$label: only adding a fragment is allowed here (status $st)"; continue
+    fi
     if [[ $rest == */* ]]; then bad "$label: fragments cannot live in a subdirectory"; continue; fi
-    if ! cl_name_category "$rest" >/dev/null; then bad "$label: name must be <slug>.<${CL_CATEGORIES// /|}>.md"; continue; fi
-    if [[ $nm != 100644 && $nm != 100755 ]]; then bad "$label: must be a regular file (mode $nm)"; continue; fi
+    if ! cl_name_category "$rest" >/dev/null; then
+      bad "$label: name must be <slug>.<${CL_CATEGORIES// /|}>.md"; continue
+    fi
+    if [[ $nm != 100644 && $nm != 100755 ]]; then
+      bad "$label: must be a regular file (mode $nm)"; continue
+    fi
     git cat-file blob "$nsha" > "$work/frag" || { bad "$label: cannot read blob"; continue; }
-    if ! cl_content_ok "$work/frag"; then bad "$label: needs a bullet line ('- text') first, then bullets or indented text (no heading or fence lines)"; continue; fi
+    if ! cl_content_ok "$work/frag"; then
+      bad "$label: first line '- text', then bullets or indented text (no heading, fence, rule)"
+      continue
+    fi
+    cat "$work/frag" >> "$work/fragtext"
     n_added=$((n_added + 1))
     continue
   fi
   case $path in
-    .claude-plugin/plugin.json|.claude/harness.json|README.md|skills/scaffold/shared/harness-kit-finalize.md) ok_path=1 ;;
-    tests/golden/*.sha256) if [[ ${path#tests/golden/} != */* ]]; then ok_path=1; else ok_path=0; fi ;;
-    *) ok_path=0 ;;
+    .claude-plugin/plugin.json|.claude/harness.json) ;;
+    *) relq 3 "$label is not on the release allow-list"; continue ;;
   esac
-  if [[ $ok_path -eq 0 ]]; then relq 3 "$label is not on the release allow-list"
-  elif [[ $st != M ]]; then relq 3 "$label: release files may only be modified (status $st)"; fi
+  if [[ $st != M ]]; then relq 3 "$label: release files may only be modified (status $st)"; fi
 done < "$work/raw"
 
+# Rule 6 at HEAD, every PR: no entry under [Unreleased].
+git cat-file blob "HEAD:CHANGELOG.md" > "$work/new" 2>/dev/null || cp /dev/null "$work/new"
+cl_unreleased_entries "$work/new" > "$work/entries"; es=$?
 if [[ $cl_seen -eq 0 ]]; then
-  [[ $n_bad -eq 0 ]] || die "$n_bad invalid entry(ies) under $CL_DIR/"
-  [[ $n_added -ge 1 ]] || die "no changelog fragment added: create $CL_DIR/<slug>.<${CL_CATEGORIES// /|}>.md (see $CL_DIR/README.md)"
+  [[ $es -eq 0 ]] || die "CHANGELOG.md at HEAD has no '## [Unreleased]' heading"
+  if [[ -s $work/entries ]]; then
+    first=$(sed -n '1p' "$work/entries")
+    bad "CHANGELOG.md has entries under '## [Unreleased]'; move each into a $CL_DIR/ fragment"
+    bad "first entry: $(printable "${first:0:80}")"
+  fi
+fi
+
+# Migration PR: the only CHANGELOG.md change empties [Unreleased] into the added fragments.
+migration=0
+if [[ $cl_seen -eq 1 && $cl_status == M && ! -s $work/entries && $n_added -ge 1 && $n_bad -eq 0 ]] \
+  && git cat-file blob "$mb:CHANGELOG.md" > "$work/base" 2>/dev/null; then
+  cl_unreleased_emptied "$work/base" > "$work/base.emptied"
+  cl_unreleased_entries "$work/base" > "$work/gone"
+  if [[ -s $work/gone ]] && cmp -s "$work/base.emptied" "$work/new"; then
+    migration=1
+    while IFS= read -r line; do
+      t=${line#"${line%%[![:space:]]*}"}
+      if [[ $t == '### '* ]]; then continue; fi
+      if ! grep -qxF -- "$line" "$work/fragtext"; then
+        bad "an entry removed from [Unreleased] is in no added fragment:"
+        bad "  $(printable "${line:0:80}")"
+      fi
+    done < "$work/gone"
+  fi
+fi
+
+if [[ $cl_seen -eq 0 || $migration -eq 1 ]]; then
+  [[ $n_bad -eq 0 ]] || die "$n_bad invalid entry(ies)"
+  [[ $n_added -ge 1 ]] \
+    || die "no fragment added: create $CL_DIR/<slug>.<${CL_CATEGORIES// /|}>.md ($CL_DIR/README.md)"
   echo "changelog-check: ok ($n_added fragment(s) added)"
   exit 0
 fi
 
-echo "changelog-check: CHANGELOG.md is in the diff, so this PR must be a release PR (a normal PR adds a fragment instead)" >&2
+echo "changelog-check: CHANGELOG.md is in the diff, so this PR must be a release PR" >&2
 cat "$work/relq" >&2
-n_rel=$n_relq
-if [[ $cl_mode != 100644 && $cl_mode != 100755 ]]; then
-  rel 1 "CHANGELOG.md must be modified in place as a regular file (status $cl_status, mode $cl_mode)"
+n_rel=$(wc -l < "$work/relq" | tr -d ' ')
+if [[ $cl_status != M || ( $cl_mode != 100644 && $cl_mode != 100755 ) ]]; then
+  rel 1 "CHANGELOG.md must be modified in place as a file (status $cl_status, mode $cl_mode)"
 fi
-[[ $n_bad -eq 0 && $n_rel -eq 0 ]] || die "not a valid release PR ($n_rel release rule failure(s), $n_bad invalid entry(ies))"
+if [[ $es -ne 0 ]]; then rel 6 "CHANGELOG.md at HEAD has no '## [Unreleased]' heading"; fi
+if [[ -s $work/entries ]]; then
+  rel 6 "CHANGELOG.md at HEAD has entries under '## [Unreleased]'"
+fi
+[[ $n_bad -eq 0 && $n_rel -eq 0 ]] \
+  || die "not a valid release PR ($n_rel release rule failure(s), $n_bad invalid entry(ies))"
 
-# Rule 2: deleted set equals the merge-base set.
-git ls-tree -r -z --name-only "$mb" -- "$CL_DIR" > "$work/basels" || die "cannot list $CL_DIR/ at the merge base"
+# Rule 2: the deleted set equals the merge-base set. Rule 6: no entry at the merge base.
+git ls-tree -r -z --name-only "$mb" -- "$CL_DIR" > "$work/basels" \
+  || die "cannot list $CL_DIR/ at the merge base"
 : > "$work/baseset"
 while IFS= read -r -d '' p; do
   name=${p#"$CL_DIR"/}
@@ -124,32 +185,82 @@ done < "$work/basels"
 LC_ALL=C sort "$work/baseset" > "$work/baseset.s" || die "sort failed"
 LC_ALL=C sort "$work/deleted" > "$work/deleted.s" || die "sort failed"
 [[ -s $work/baseset.s ]] || rel 2 "the merge base has no fragments to release"
-cmp -s "$work/baseset.s" "$work/deleted.s" || rel 2 "deleted fragments differ from the merge-base set (all must be folded, none left)"
+cmp -s "$work/baseset.s" "$work/deleted.s" \
+  || rel 2 "deleted fragments differ from the merge-base set (all must be folded, none left)"
+git cat-file blob "$mb:CHANGELOG.md" > "$work/base" 2>/dev/null \
+  || die "CHANGELOG.md is missing at the merge base"
+cl_unreleased_entries "$work/base" > "$work/baseentries"; bs=$?
+[[ $bs -eq 0 ]] || rel 6 "CHANGELOG.md at the merge base has no '## [Unreleased]' heading"
+[[ ! -s $work/baseentries ]] \
+  || rel 6 "CHANGELOG.md at the merge base has entries under '## [Unreleased]'"
 [[ $n_rel -eq 0 ]] || die "not a valid release PR ($n_rel release rule failure(s))"
 
-# Rule 4: heading and versions.
-git cat-file blob "HEAD:CHANGELOG.md" > "$work/new" || die "cannot read CHANGELOG.md at HEAD"
+# Rule 4: the heading.
 heading=$(awk '/^## \[Unreleased\]/ { u = 1; next } u && /^## \[/ { print; exit }' "$work/new")
 re_h='^## \[([0-9]+\.[0-9]+\.[0-9]+)\] — ([0-9]{4}-[0-9]{2}-[0-9]{2})$'
 if [[ ! $heading =~ $re_h ]]; then
-  rel 4 "the top release heading must be '## [N.N.N] — YYYY-MM-DD', got '$(printable "$heading")'"
+  shown=$(printable "$heading")
+  rel 4 "the top release heading must be '## [N.N.N] — YYYY-MM-DD', got '$shown'"
   die "not a valid release PR"
 fi
 version=${BASH_REMATCH[1]} date=${BASH_REMATCH[2]}
-json_version() { # json_version <path> <key>
-  git cat-file blob "HEAD:$1" 2>/dev/null | sed -n 's/.*"'"$2"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n '1p'
+
+# Succeeds when version $1 is greater than $2 (N.N.N, compared as numbers).
+semver_gt() {
+  local a1 a2 a3 b1 b2 b3
+  read -r a1 a2 a3 <<< "${1//./ }"
+  read -r b1 b2 b3 <<< "${2//./ }"
+  if (( 10#$a1 != 10#$b1 )); then (( 10#$a1 > 10#$b1 )); return; fi
+  if (( 10#$a2 != 10#$b2 )); then (( 10#$a2 > 10#$b2 )); return; fi
+  (( 10#$a3 > 10#$b3 ))
 }
-pv=$(json_version .claude-plugin/plugin.json version)
-hv=$(json_version .claude/harness.json templatecentral_version)
-[[ $pv == "$version" ]] || rel 4 "plugin.json version '$pv' does not equal the heading version $version"
-[[ $hv == "$version" ]] || rel 4 "harness.json templatecentral_version '$hv' does not equal the heading version $version"
+
+# Rules 3 and 4 for one version file: json_check <path> <key>. One version line in each copy,
+# the copies equal once the version value is masked, new version equals the heading and is
+# greater than the old one.
+json_check() {
+  local p=$1 key=$2 pat nb nh vb vh
+  pat='^[[:space:]]*"'$key'"[[:space:]]*:'
+  if ! git cat-file blob "$mb:$p" > "$work/jb" 2>/dev/null; then
+    rel 3 "$p: missing at the merge base"; return
+  fi
+  if ! git cat-file blob "HEAD:$p" > "$work/jh" 2>/dev/null; then
+    rel 3 "$p: missing at HEAD"; return
+  fi
+  nb=$(grep -cE "$pat" "$work/jb"); nh=$(grep -cE "$pat" "$work/jh")
+  if [[ $nb -ne 1 || $nh -ne 1 ]]; then
+    rel 3 "$p: needs exactly one \"$key\" line in each copy (merge base $nb, HEAD $nh)"; return
+  fi
+  local mask='s/^\([[:space:]]*"'$key'"[[:space:]]*:[[:space:]]*\)"[0-9][0-9.]*"/\1"V"/'
+  sed "$mask" "$work/jb" > "$work/jb.m"; sed "$mask" "$work/jh" > "$work/jh.m"
+  cmp -s "$work/jb.m" "$work/jh.m" \
+    || { rel 3 "$p: differs from the merge base by more than the \"$key\" value"; return; }
+  local ex='s/^[[:space:]]*"'$key'"[[:space:]]*:[[:space:]]*"\([0-9][0-9.]*\)".*/\1/p'
+  vb=$(sed -n "$ex" "$work/jb"); vh=$(sed -n "$ex" "$work/jh")
+  if [[ $vh != "$version" ]]; then
+    rel 4 "$p \"$key\" '$vh' does not equal the heading version $version"; return
+  fi
+  [[ -n $vb ]] || { rel 4 "$p: the merge-base \"$key\" is not N.N.N"; return; }
+  semver_gt "$vh" "$vb" || rel 4 "$p \"$key\" $vh is not greater than the merge-base $vb"
+}
+json_check .claude-plugin/plugin.json version
+json_check .claude/harness.json templatecentral_version
 [[ $n_rel -eq 0 ]] || die "not a valid release PR"
 
 # Rule 5: replay the assemble on the merge-base tree.
 mkdir "$work/replay" || die "mkdir failed"
-git archive "$mb" CHANGELOG.md "$CL_DIR" | tar -x -C "$work/replay" || die "cannot materialise the merge-base tree"
+git archive "$mb" CHANGELOG.md "$CL_DIR" | tar -x -C "$work/replay" \
+  || die "cannot materialise the merge-base tree"
 git -C "$work/replay" init -q || die "git init failed"
-(cd "$work/replay" && bash "$here/changelog-assemble.sh" "$version" "$date") > "$work/replay.log" 2>&1 \
-  || { cat "$work/replay.log" >&2; rel 5 "changelog-assemble.sh refuses the merge-base fragments"; die "not a valid release PR"; }
-cmp -s "$work/replay/CHANGELOG.md" "$work/new" || { rel 5 "CHANGELOG.md differs from the changelog-assemble.sh replay of the merge base"; die "not a valid release PR"; }
-echo "changelog-check: ok (release PR $version: replay matches, $(wc -l < "$work/deleted" | tr -d ' ') fragment(s) folded)"
+asm="$here/changelog-assemble.sh"
+if ! (cd "$work/replay" && bash "$asm" "$version" "$date") > "$work/replay.log" 2>&1; then
+  cat "$work/replay.log" >&2
+  rel 5 "changelog-assemble.sh refuses the merge-base tree"
+  die "not a valid release PR"
+fi
+if ! cmp -s "$work/replay/CHANGELOG.md" "$work/new"; then
+  rel 5 "CHANGELOG.md differs from the changelog-assemble.sh replay of the merge base"
+  die "not a valid release PR"
+fi
+nfold=$(wc -l < "$work/deleted" | tr -d ' ')
+echo "changelog-check: ok (release PR $version: replay matches, $nfold fragment(s) folded)"

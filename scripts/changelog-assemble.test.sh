@@ -16,7 +16,7 @@ mk() {
   git -C "$R" init -q -b main
   git -C "$R" config user.email t@example.com; git -C "$R" config user.name t
   git -C "$R" config commit.gpgsign false
-  printf '# Changelog\n\n---\n\n## [Unreleased]\n\n### Added\n- legacy\n\n---\n\n## [1.0.0] — 2026-01-01\n\n### Added\n- old\n' > "$R/CHANGELOG.md"
+  printf '# Changelog\n\n---\n\n## [Unreleased]\n\n---\n\n## [1.0.0] — 2026-01-01\n\n### Added\n- old\n' > "$R/CHANGELOG.md"
   printf '# fragments\n' > "$R/changelog.d/README.md"
 }
 commit() { git -C "$R" add -A; git -C "$R" commit -qm "${1:-c}"; }
@@ -43,9 +43,6 @@ frag zeta.added.md; frag alpha.added.md "- alpha one
 commit
 out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?
 want='## [Unreleased]
-
-### Added
-- legacy
 
 ---
 
@@ -126,6 +123,33 @@ mk nounrel; frag a.added.md; printf '# Changelog\n\n## [1.0.0] — x\n' > "$R/CH
 refuse "no Unreleased heading" "Unreleased" "${V[@]}"
 mk norel; frag a.added.md; printf '# Changelog\n\n## [Unreleased]\n- a\n' > "$R/CHANGELOG.md"; commit
 refuse "no release heading after Unreleased" "Unreleased" "${V[@]}"
+
+# [Unreleased] must be empty: entries there are refused, and the control passes without them.
+mk unrel-entry; frag a.added.md
+printf '# Changelog\n\n## [Unreleased]\n\n### Added\n- legacy\n\n---\n\n## [1.0.0] — 2026-01-01\n' > "$R/CHANGELOG.md"; commit
+refuse "entries under [Unreleased]" "entries under '## [Unreleased]'" "${V[@]}"
+mk unrel-entry2; frag a.added.md
+printf '# Changelog\n\n## [Unreleased]\n- x\n\n---\n\n## [1.0.0] — 2026-01-01\n' > "$R/CHANGELOG.md"; commit
+refuse "bullet right under [Unreleased]" "entries under '## [Unreleased]'" "${V[@]}"
+mk unrel-empty; frag a.added.md
+printf '# Changelog\n\n## [Unreleased]\n\n---\n\n## [1.0.0] — 2026-01-01\n' > "$R/CHANGELOG.md"; commit
+out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?
+if [[ $rc -eq 0 ]]; then ok; else fail "empty [Unreleased] control refused: $out"; fi
+
+# Lib screening: text after a bullet marker may not start a fence or heading, nor be a lone rule line.
+n=0
+for body in '- ```js' '- # H' '- ok
+- # H' '- ok
+  - ~~~' '- ok
+  ---' '- ok
+===' '- ---'; do
+  n=$((n + 1)); mk "lib-bad$n"; frag a.added.md; frag b.fixed.md "$body"; commit
+  refuse "lib rejects: ${body//$'\n'/ | }" "not a valid fragment" "${V[@]}"
+done
+mk lib-ok; frag a.added.md; bt='`'; frag b.fixed.md "- use ${bt}x${bt}, see #12 and --- inline
+  - nested --flag"; commit
+out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?
+if [[ $rc -eq 0 ]]; then ok; else fail "lib control refused inline text: $out"; fi
 
 # Mode of CHANGELOG.md survives the replace.
 mk mode; frag a.added.md; chmod 755 "$R/CHANGELOG.md"; commit
