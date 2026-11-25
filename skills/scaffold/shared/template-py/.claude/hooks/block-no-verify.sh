@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # PreToolUse(Bash) — block hook-bypass and destructive git/shell commands. Exit 2 = block.
 # Best-effort tripwire, not a security boundary; the lefthook + CI layers are the backstop.
-# A text guard cannot see variable indirection or command substitution (cat "$f", cat $(echo .env)); those stay open.
+# Closed list of what this text guard cannot see: variable indirection and command substitution (cat "$f", cat $(echo .env)),
+# strings built at run time inside an interpreter ('.e'+'nv', base64 decoded in Python), a script file written first and run second,
+# and code fed to an interpreter on stdin or from a heredoc. Everything else on the list below is judged.
+# A shell fed from a pipe, here-string, heredoc, `-s` or process substitution is blocked outright (even `echo hi | sh`).
+# Inline code for python/node/perl/ruby/deno/bun (-c, -e, -p, --eval, eval) is scanned as text with the same checks as a shell command.
 # Fallback only: hooks may be spawned from the session's original root, not a worktree.
 orig_dir=$PWD
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || { echo "BLOCKED: block-no-verify.sh cannot cd to the project root — refusing the command." >&2; exit 2; }
@@ -134,9 +138,40 @@ scan=$(printf '%s' "$cmd" | sed -E \
   -e "s/\"([^\"${sq}[:space:]]+)\"/\1/g" -e "s/\"[^\"]*\"/ Q /g" \
   -e "s/${sq}([^${sq}[:space:]]+)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g")
 
+# Interpreter and shell sources this guard cannot read: shells fed from a pipe, stdin, here-string, heredoc or process substitution are blocked.
+blind_shell() {
+  local w='(/[^[:space:]]*/)?(bash|sh|zsh|dash|ksh)' f='([[:space:]]+-[^[:space:]]+)*' pos='(^|[[:space:];&|(`])'
+  printf '%s\n' "$scan" | grep -qE "\\|[[:space:]]*(sudo[[:space:]]+|exec[[:space:]]+|env[[:space:]]+([A-Za-z_]+=[^[:space:]]*[[:space:]]+)*)?${w}${f}[[:space:]]*($|[;&|)])" ||
+    printf '%s\n' "$scan" | grep -qE "${pos}${w}${f}[[:space:]]*<" ||
+    printf '%s\n' "$scan" | grep -qE "${pos}${w}${f}[[:space:]]+(-[A-Za-z]*s[A-Za-z]*|-)([[:space:]]|$)" ||
+    printf '%s\n' "$scan" | grep -qE "${pos}(source|\\.)[[:space:]]+<\\("
+}
+if blind_shell; then
+  block "a shell fed from a pipe, stdin, here-string, heredoc or process substitution hides its commands from this guard. Run the commands directly."
+fi
+# Inline interpreter code is judged as text: quotes and brackets become spaces, then the checks below treat it as a command line.
+interp=""
+inline_re="(^|[[:space:];&|(])(/[^[:space:]]*/)?((python|pypy)[0-9.]*|nodejs|node|bun|perl|ruby|deno)[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(-[A-Za-z]*[ceEp]|--eval|--print|eval)([[:space:]=\"${sq}]|\$)"
+if [[ "$cmd" =~ $inline_re ]]; then
+  interp=${cmd#*"${BASH_REMATCH[0]}"}
+  scan="$scan"$'\n'"$(printf '%s' "$interp" | sed "s/[]\"${sq}[{}(),]/ /g")"
+fi
+# A secret-file name in inline code is blocked even when the file does not exist yet (open('.env', 'w')); bare module or attribute names stay clean.
+interp_secret() {
+  local tok b
+  while IFS= read -r tok; do
+    tok="${tok#./}"; b="${tok##*/}"
+    case "$b" in ''|.key|.pem|.p12|.pfx) continue ;; esac
+    [[ "$b" == .* || "$tok" == */* || "$b" == credentials.json ]] || continue
+    is_secret "$tok" && secret_block "$tok"
+  done < <(printf '%s' "$interp" | LC_ALL=C tr -c 'A-Za-z0-9._/~-' '\n')
+}
+[ -n "$interp" ] && interp_secret
+
 # Hook-layer bypass via environment or a persisted alias/config (whole-command checks).
 lower_cmd=$(printf '%s' "$cmd" | tr '[:upper:]' '[:lower:]')
-if printf '%s' "$scan" | grep -qE '(^|[^A-Za-z0-9_])LEFTHOOK(_EXCLUDE)?=' && printf '%s' "$scan" | grep -qE '(^|[^A-Za-z0-9_-])git([[:space:]]|$)'; then
+lh='(^|[^A-Za-z0-9_])LEFTHOOK(_EXCLUDE)?'
+if { printf '%s' "$scan" | grep -qE "${lh}=" || printf '%s' "$interp" | grep -qE "$lh"; } && printf '%s' "$scan" | grep -qE '(^|[^A-Za-z0-9_-])git([[:space:]]|$)'; then
   block "LEFTHOOK=0 / LEFTHOOK_EXCLUDE disables the pre-commit hook layer — the same bypass as --no-verify. Fix the failure instead."
 fi
 if printf '%s' "$lower_cmd" | grep -qE 'git_config_(parameters|key_[0-9]+)' && printf '%s' "$lower_cmd" | grep -q 'hookspath'; then
@@ -328,7 +363,17 @@ while IFS= read -r seg; do
   esac
 done <<< "$segments"
 
-if echo "$cmd" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && echo "$cmd" | grep -qE '(^|[[:space:]/"])(src|app|lib|test|\.claude|\.lefthook|\.git|node_modules)([[:space:]/"]|$)'; then
+# Guarded source directories, shared by the rm check and the interpreter removal check.
+srcdirs='(^|[[:space:]/"])(src|app|lib|test|\.claude|\.lefthook|\.git|node_modules)([[:space:]/"]|$)'
+# rm_src <text>: rm -rf on a guarded directory; judged on the raw command and on the unwrapped scan, so sh -c "rm -rf src" is seen.
+rm_src() {
+  printf '%s\n' "$1" | grep -qE "(^|[[:space:]\"${sq};&|(\`])rm([[:space:]]|\$|[\"${sq}])" && printf '%s\n' "$1" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && printf '%s\n' "$1" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && printf '%s\n' "$1" | grep -qE "$srcdirs"
+}
+if rm_src "$cmd" || rm_src "$scan"; then
   block "recursive rm on a source directory. Confirm with a human first."
+fi
+# Recursive removal through an interpreter call (shutil.rmtree, fs.rmSync with recursive, FileUtils.rm_rf) on a guarded directory.
+if [ -n "$interp" ] && printf '%s\n' "$scan" | grep -qE 'rmtree|rimraf|rm_rf|rm_r|remove_entry|remove_dir|removeSync|emptyDirSync|(rmSync|rmdirSync|fs\.rm|rmdir).*recursive' && printf '%s\n' "$scan" | grep -qE "$srcdirs"; then
+  block "recursive removal of a source directory through an interpreter. Confirm with a human first."
 fi
 exit 0
