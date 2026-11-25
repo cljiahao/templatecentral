@@ -118,7 +118,7 @@ If `CLAUDE.md` is created in this step, add its `seeded_files` entry before runn
 
 Then run these agent skills in order. They are **on by default** — skipping requires explicit user confirmation.
 
-1. the stack's check command (`pnpm check`; fastapi `python -m pyright src/ && ruff check src/`) — verify the scaffold compiles clean
+1. the stack's check command (`pnpm build && pnpm check`; fastapi `ruff check src/ && python -m pyright src/`) — verify the scaffold compiles clean
 2. the test utility — load it with: `cat "<skill-dir>/../test/SKILL.md"` — run the existing suite and confirm it passes. At scaffold time it writes no new tests and does not load `templatecentral:add (test)`: the template's tests already cover the copied code.
 3. the review utility (update operation) — load it with: `cat "<skill-dir>/../review/SKILL.md"` — freshen any deps that have newer compatible versions
 4. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — review only the files the agent edited by hand during the scaffold: the stack guide's Step 1 and Step 2 edits (project name, branding, settings), the filled-in `docs/CONSTITUTION.md` and the project docs (README, `docs/architecture.md`, boundary READMEs). The copied templates are not in scope; they are reviewed when the plugin is released. The project has no commit yet, so this review writes no `.claude/review-baseline.md`; the first review after the project's first commit writes it.
