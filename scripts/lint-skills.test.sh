@@ -736,9 +736,11 @@ owasp_section_deleted() { strip_token '### LLM10' '### LLX10' "$S/add/ai-securit
 # ── baseline ─────────────────────────────────────────────────────────────────
 if [[ -z "${ONLY:-}" ]]; then
   damage_and_lint "$T/base" none
-  [[ "$OUT" == *"=== All checks passed ==="* ]]; check 0 $? "baseline_passes: lint passes on the unmodified tree (${OUT##*$'\n'})"
+  if [[ "$OUT" == *"=== All checks passed ==="* ]]; then BASE_RC=0; else BASE_RC=1; fi
+  check 0 "$BASE_RC" "baseline_passes: lint passes on the unmodified tree (${OUT##*$'\n'})"
   SLASH=1; damage_and_lint "$T/base-slash" none; SLASH=
-  [[ "$OUT" == *"=== All checks passed ==="* ]]; check 0 $? "baseline_passes_with_a_trailing_slash: the command CI runs passes (${OUT##*$'\n'})"
+  if [[ "$OUT" == *"=== All checks passed ==="* ]]; then BASE_RC=0; else BASE_RC=1; fi
+  check 0 "$BASE_RC" "baseline_passes_with_a_trailing_slash: the command CI runs passes (${OUT##*$'\n'})"
 fi
 
 # ── template trees ───────────────────────────────────────────────────────────
@@ -1495,15 +1497,19 @@ run_pfd() {
 # lb_probe builds a tree that passes (the clean control), applies one mutation and expects the
 # named text. The function under test is cut out of $LINT, so reverting the check fails the probes.
 LB_FN=$(awk '/^(registered_skillmds|check_file_line_budget)\(\) \{/ { on = 1 } on { print } on && /^}/ { on = 0 }' "$LINT")
-LB_SH='set -euo pipefail; FAILED=0; header() { :; }; fail() { echo "FAIL: $*"; }; pass() { echo "OK:   $*"; }
+LB_HEAD=$(cat <<'EOF'
+set -euo pipefail; FAILED=0; header() { :; }; fail() { echo "FAIL: $*"; }; pass() { echo "OK:   $*"; }
 report() { if [[ -n "$1" ]]; then echo "$1"; fail "$2"; else pass "$3"; fi; }
-SKILLS_DIR=$1; while [[ ${#SKILLS_DIR} -gt 1 && "$SKILLS_DIR" == */ ]]; do SKILLS_DIR=${SKILLS_DIR%/}; done; '"$LB_FN"'; check_file_line_budget'
+SKILLS_DIR=$1; while [[ ${#SKILLS_DIR} -gt 1 && "$SKILLS_DIR" == */ ]]; do SKILLS_DIR=${SKILLS_DIR%/}; done
+EOF
+)
+LB_SH="$LB_HEAD"$'\n'"$LB_FN"$'\n''check_file_line_budget'
 LBD="$T/lb"
 lb_lines() { awk -v n="$2" 'BEGIN { for (i = 1; i <= n; i++) print "line " i }' > "$LBD/skills/$1"; }
 lb_leaf() { # lb_leaf <file> <fenced lines> <prose lines>
   { echo '<!-- ref: x -->'; echo '```bash'; awk -v n="$2" 'BEGIN { for (i = 1; i <= n; i++) print "code " i }'; echo '```'; awk -v n="$3" 'BEGIN { for (i = 1; i < n; i++) print "prose " i }'; } > "$LBD/skills/$1"
 }
-lb_rows() { printf '# header\n'"$1"; }
+lb_rows() { printf '# header\n'; printf '%b' "$1"; }
 lb_base() {
   rm -rf "$LBD"; mkdir -p "$LBD/tests/golden" "$LBD"/skills/{add/auth,add/database,build,standards/validation-patterns,scaffold/shared/template,scaffold/shared/template-ts,other}
   lb_lines CONVENTIONS.md 150
