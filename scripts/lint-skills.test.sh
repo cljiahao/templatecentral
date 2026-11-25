@@ -573,8 +573,8 @@ IAM_A6=("add/database/python/sqlalchemy-iam.md" '### A6. Update `alembic/env.py`
 # is left in the markdown to move or to damage; the canonical-side tests damage this file instead.
 IAM_NEW_A=add/database/python/sqlalchemy-iam/template/src/database/session.py
 iam_copy_moved() { iam_move "${IAM_S2[@]}" "$IAM_NEW_S"; }
-iam_canon_moved() { [[ -f "$S/$IAM_NEW_A" ]] || { echo "iam_canon_moved: $IAM_NEW_A is not in the tree" >&2; exit 1; }; }
-iam_both_moved() { iam_canon_moved; iam_copy_moved; }
+iam_canon_in_template() { [[ -f "$S/$IAM_NEW_A" ]] || { echo "iam_canon_in_template: $IAM_NEW_A is not in the tree" >&2; exit 1; }; }
+iam_copy_moved_canon_in_template() { iam_canon_in_template; iam_copy_moved; }
 iam_copy_moved_indented() { iam_move "${IAM_S2[@]}" "$IAM_NEW_S" 3; }
 # Indent the canonical fence by 3 spaces in the markdown: the opener, the body and the closer.
 iam_canon_fence_indented() { iam_canon_fence_indent 3; }
@@ -595,10 +595,10 @@ open(p, "w", encoding="utf-8").write("\n".join(lines))
 PY
 }
 iam_moved_file_byte_diff() { iam_copy_moved; printf '# drift\n' >> "$S/$IAM_NEW_S"; }
-iam_moved_both_byte_diff() { iam_both_moved; printf '# drift\n' >> "$S/$IAM_NEW_A"; }
+iam_moved_both_byte_diff() { iam_copy_moved_canon_in_template; printf '# drift\n' >> "$S/$IAM_NEW_A"; }
 iam_moved_file_no_trailing_newline() { iam_copy_moved; printf '%s' "$(cat "$S/$IAM_NEW_S")" > "$S/$IAM_NEW_S"; }
 iam_moved_file_deleted() { iam_copy_moved; rm -f "$S/$IAM_NEW_S"; }
-iam_canon_moved_file_deleted() { iam_canon_moved; rm -f "$S/$IAM_NEW_A"; }
+iam_canon_template_file_deleted() { iam_canon_in_template; rm -f "$S/$IAM_NEW_A"; }
 iam_moved_file_emptied() { iam_copy_moved; : > "$S/$IAM_NEW_S"; }
 iam_moved_file_symlinked() { iam_copy_moved; mv "$S/$IAM_NEW_S" "$S/$IAM_NEW_S.real"; ln -s session.py.real "$S/$IAM_NEW_S"; }
 iam_moved_outside_template() { iam_copy_moved; mkdir -p "$S/migrate/database/zz/plain"; mv "$S/$IAM_NEW_S" "$S/migrate/database/zz/plain/session.py"; iam_remap 4 skills/migrate/database/zz/plain/session.py; }
@@ -1203,8 +1203,8 @@ passes add_tree_hook_does_not_enter_the_migrate_inventory "migrate hook inventor
 IAMH="Duplicated IAM session/config blocks match"
 passes iam_pairs_pass_fence_vs_fence "$IAMH" none
 passes iam_pairs_pass_a_moved_copy_side "$IAMH" iam_copy_moved
-passes iam_pairs_pass_a_moved_canonical_side "$IAMH" iam_canon_moved
-passes iam_pairs_pass_when_both_sides_moved "$IAMH" iam_both_moved
+passes iam_pairs_pass_a_canonical_side_in_a_template "$IAMH" iam_canon_in_template
+passes iam_pairs_pass_when_the_copy_side_moved_too "$IAMH" iam_copy_moved_canon_in_template
 passes iam_pairs_pass_a_moved_side_with_an_indent_column "$IAMH" iam_copy_moved_indented
 passes iam_pairs_pass_an_indented_fence "$IAMH" iam_canon_fence_indented
 passes iam_pairs_pass_a_moved_middle_fence_with_typescript_siblings "$IAMH" iam_ky_mid_moved
@@ -1226,7 +1226,7 @@ fails iam_pairs_fail_on_a_moved_file_byte_diff "$IAMH" iam_moved_file_byte_diff 
 fails iam_pairs_fail_on_two_moved_files_byte_diff "$IAMH" iam_moved_both_byte_diff "has drifted"
 fails iam_pairs_fail_when_a_moved_file_has_no_trailing_newline "$IAMH" iam_moved_file_no_trailing_newline "must end in a newline"
 fails iam_pairs_fail_when_the_mapped_copy_file_is_missing "$IAMH" iam_moved_file_deleted "copy mapped file skills/migrate/database/zz/template/session.py"
-fails iam_pairs_fail_when_the_mapped_canonical_file_is_missing "$IAMH" iam_canon_moved_file_deleted "canonical mapped file skills/add/database/python/sqlalchemy-iam/template/src/database/session.py"
+fails iam_pairs_fail_when_the_mapped_canonical_file_is_missing "$IAMH" iam_canon_template_file_deleted "canonical mapped file skills/add/database/python/sqlalchemy-iam/template/src/database/session.py"
 fails iam_pairs_fail_on_an_empty_mapped_file "$IAMH" iam_moved_file_emptied "is empty"
 fails iam_pairs_fail_on_a_symlinked_mapped_file "$IAMH" iam_moved_file_symlinked "through a symlink"
 fails iam_pairs_fail_on_a_mapping_outside_a_template_directory "$IAMH" iam_moved_outside_template "outside a template* directory"
