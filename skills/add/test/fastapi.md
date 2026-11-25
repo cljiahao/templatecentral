@@ -118,3 +118,5 @@ python -m pytest test/test_api/           # API tests only
 ### Rules
 
 - Assert errors with `pytest.raises(..., match=...)`; prefer `monkeypatch` over `unittest.mock.patch`; mock only network, filesystem and time
+- One main concept per test; assert before and after when testing mutations
+- Tests share no mutable state and pass in any order

@@ -202,6 +202,7 @@ After creating all files:
 ## Rules
 
 - Do not import across features; promote code used by 2+ features to `components/widgets/` or `lib/` — no lint rule enforces this, and cross-feature imports create cycles
+- The barrel exports only the public API: export only what consumers outside the feature need
 
 ## Standalone Components
 
@@ -223,3 +224,5 @@ npx shadcn@latest add <component-name>
 ```
 
 It installs into `src/components/ui/`; never hand-create primitives there.
+
+Add the new component to its folder's `index.ts` barrel.

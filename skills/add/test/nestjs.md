@@ -176,3 +176,8 @@ pnpm test:watch  # unit, watch mode
 pnpm test:cov    # coverage report
 pnpm test:e2e    # e2e (vitest.config.e2e.mts)
 ```
+
+### Rules
+
+- Mock at boundaries: mock repositories in service tests; mock the service in controller tests only to exercise error paths
+- Tests share no state and pass in any order

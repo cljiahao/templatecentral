@@ -185,3 +185,5 @@ Confirm the build succeeds and all tests pass.
 
 - Reset in `afterEach`: `vi.resetAllMocks()` when the file uses `vi.fn()` / `vi.mock` (`vi.restoreAllMocks()` only undoes `vi.spyOn`, so queued values leak), `vi.restoreAllMocks()` for `vi.spyOn`, plus `vi.unstubAllGlobals()` after `vi.stubGlobal`
 - Query by role or text, not `querySelector`; create a fresh `QueryClient` per test
+- Mock only boundaries (not internal utilities or React internals); test your use of third-party code, not its behaviour; no snapshot or markup tests of static presentation
+- Tests share no state and pass in any order

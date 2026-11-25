@@ -234,3 +234,5 @@ function makeParams<T extends Record<string, string>>(values: T) {
 
 - Call `vi.resetAllMocks()` in `afterEach` — `vi.restoreAllMocks()` only restores `vi.spyOn` spies, so values queued on `vi.mock` factory `vi.fn()`s leak into the next test
 - One 500 test per handler pattern that asserts the body does not echo the internal error message; not one per route
+- Mock integration-layer services and clients (`src/integrations/`), not internal utilities; API route handlers only, no component tests here
+- Tests share no state and pass in any order

@@ -163,3 +163,5 @@ Build and tests pass; the route answers correctly via `curl` or the browser.
 ## Rules
 
 - **Authenticate in the handler.** `src/proxy.ts` (after `templatecentral:add` (auth)) only checks session-cookie *presence* — it does not validate the session. Every non-public handler must call `const session = await auth.api.getSession({ headers: request.headers })` and return `new Response(null, { status: 401 })` when it is `null`, then enforce ownership/role checks. Without auth added, every API route is public — run `templatecentral:add` (auth) first
+- Never return raw errors, stack traces or internal error details; use `handleApiError()`
+- Add every new API route to `src/lib/constants/routes.ts`
