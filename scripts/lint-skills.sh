@@ -297,6 +297,114 @@ check_skillmd_body_length() {
     "All registered SKILL.md bodies <=30 lines"
 }
 
+check_file_line_budget() {
+  # Every .md under skills/ outside template trees has a line cap by class (the classify function below
+  # is the one place the class comes from the path). A file over its cap passes only through its own
+  # exact-path row in tests/golden/line-budget.txt (path<TAB>max_lines<TAB>max_prose, `-` for max_prose
+  # on a non-leaf); add and migrate leaves also have 50 prose lines outside fences. Registered SKILL.md
+  # bodies stay with check_skillmd_body_length. A row may only shrink: scripts/check-line-budget-frozen.sh
+  # compares it with the base ref, because this check has no base. TIMELESS.
+  # Not caught: text quality; files in template trees; growth that stays under a file's own limit.
+  header "file line budget"
+  local ratchet files out
+  case "$SKILLS_DIR" in */*) ratchet=${SKILLS_DIR%/*} ;; *) ratchet=. ;; esac
+  ratchet="$ratchet/tests/golden/line-budget.txt"
+  files=$( (cd "$SKILLS_DIR" 2>/dev/null && find . -type f -name '*.md' ! -path '*/template/*' ! -path '*/template-*/*') || true)
+  files=$(LC_ALL=C sort <<<"$files")
+  if ! out=$(awk -v root="$SKILLS_DIR" -v ratchet="$ratchet" '
+    function bad(m) { print m }
+    function row_error(s, f,   n, k, a, i) {
+      n = split(s, f, "\t")
+      if (n != 3) return "needs exactly 3 tab-separated columns"
+      if (f[1] !~ "^[A-Za-z0-9._/-]+[.]md$") return "path must be A-Za-z0-9._/- ending in .md, no spaces"
+      k = split(f[1], a, "/")
+      for (i = 1; i <= k; i++) if (a[i] == "" || a[i] == "." || a[i] == "..") return "path has an empty, . or .. segment"
+      if (f[2] !~ "^[1-9][0-9]*$") return "max_lines must be a positive integer"
+      if (f[3] !~ "^([1-9][0-9]*|-)$") return "max_prose must be a positive integer or -"
+      return ""
+    }
+    function load_row(s,   e, f) {
+      nrows++
+      if (s ~ /^#/) return
+      e = row_error(s, f)
+      if (e != "") { bad(ratchet ":" nrows ": malformed row [" s "]: " e " — fix or delete the row"); return }
+      if (f[1] in lim) { bad(ratchet ":" nrows ": duplicate row for " f[1] " — delete one"); return }
+      lim[f[1]] = f[2] + 0; prs[f[1]] = f[3]; rowno[f[1]] = nrows
+    }
+    function fence_line(s,   sp, ch, len) {
+      sp = match(s, /[^ ]/) - 1
+      if (sp < 0 || sp > 3) return 0
+      ch = substr(s, sp + 1, 1)
+      if (ch != "`" && ch != "~") return 0
+      len = 0
+      while (substr(s, sp + 1 + len, 1) == ch) len++
+      if (len < 3) return 0
+      FCH = ch; FRUN = len; FREST = substr(s, sp + len + 1)
+      return 1
+    }
+    function classify(p, first,   n, a, base, top) {
+      n = split(p, a, "/"); base = a[n]; top = a[1]; LEAF = 0
+      if (p == "CONVENTIONS.md") return 150
+      if (base == "SKILL.md") return (first == "---") ? 0 : 12
+      if (p == "add/database/python.md" || p == "add/database/typescript.md" || p == "migrate/nextjs-backend-extraction.md") return 40
+      if (p == "standards/validation-patterns/patterns.md" || p == "standards/code-standards/comments.md") return 60
+      if ((top == "add" || top == "migrate") && (base == "implementation.md" || base ~ /^(fastapi|nestjs|nextjs|vite-react|python|typescript)[.]md$/)) { LEAF = 1; return 150 }
+      if (top == "scaffold" && ((a[2] == "shared" && n == 3) || base == "source-files.md")) return 120
+      if (top == "standards" && (a[2] == "code-standards" || a[2] == "validation-patterns" || a[2] == "drift-check" || a[2] == "full-stack-pairing")) return 120
+      return 150
+    }
+    BEGIN {
+      r = (getline s < ratchet)
+      if (r < 0) bad(ratchet ": missing — the line budget has no allowance file")
+      else if (r == 0) bad(ratchet ": empty — restore it from git")
+      else { load_row(s); while ((getline s < ratchet) > 0) load_row(s) }
+      close(ratchet)
+    }
+    $0 != "" {
+      p = $0; sub(/^\.\//, "", p); nfiles++; seen[p] = 1
+      path = root "/" p
+      nl = 0; prose = 0; infence = 0; fcnt = 0; first = ""
+      while ((r = (getline s < path)) > 0) {
+        nl++
+        if (nl == 1) first = s
+        sub(/\r$/, "", s)
+        if (infence) {
+          if (fence_line(s) && FCH == och && FRUN >= olen && FREST ~ /^[ \t]*$/) infence = 0
+          else if (s !~ /^[ \t]*$/) fcnt++
+        } else if (fence_line(s) && !(FCH == "`" && index(FREST, "`") > 0)) {
+          infence = 1; och = FCH; olen = FRUN; fcnt = 0
+        } else if (s !~ /^[ \t]*$/) prose++
+      }
+      close(path)
+      if (r < 0) { bad(p ": cannot read the file — fix its permissions"); next }
+      if (infence) prose += fcnt
+      cap = classify(p, first)
+      if (cap == 0) {
+        if (p in lim) bad(ratchet ":" rowno[p] ": row for registered " p " — delete it; its body is capped by the SKILL.md body check")
+        next
+      }
+      limit = cap; plimit = 50
+      if (p in lim) {
+        used[p] = 1; limit = lim[p]
+        if (LEAF && prs[p] == "-") bad(ratchet ":" rowno[p] ": " p " is an add/migrate leaf — max_prose must be a number")
+        else if (!LEAF && prs[p] != "-") bad(ratchet ":" rowno[p] ": " p " is not a leaf — max_prose must be -")
+        else if (LEAF) plimit = prs[p] + 0
+      }
+      if (nl > limit) bad(p ": " nl " lines, limit " limit " — cut the file; never raise its row in tests/golden/line-budget.txt")
+      if (LEAF && prose > plimit) bad(p ": " prose " prose lines outside fences, limit " plimit " — cut the file; never raise its row in tests/golden/line-budget.txt")
+    }
+    END {
+      for (p in lim) if (!(p in seen)) bad(ratchet ":" rowno[p] ": row for " p ", which is no file under skills/ or sits in a template tree — delete the row")
+      if (nfiles == 0) bad(root ": no .md file found — the line budget scanned nothing")
+    }' <<<"$files" 2>&1); then
+    out="line budget scanner failed: $out"
+  fi
+  out=$(LC_ALL=C sort <<<"$out")
+  report "$out" \
+    "A skill file is over its line budget — cut the file; the allowance in tests/golden/line-budget.txt only shrinks" \
+    "Every skill file is within its line budget"
+}
+
 check_nesting_depth() {
   # Skills nested more than 3 directory levels under skills/ are unreachable by templateCentral's
   # ref-file loader and indicate a structure drift from CONVENTIONS.md §1. TIMELESS.
@@ -2275,6 +2383,7 @@ check_owasp_llm_sections_complete
 check_skillmd_description_length
 check_ref_file_headers
 check_skillmd_body_length
+check_file_line_budget
 check_nesting_depth
 check_seeded_skills_scope_tools
 check_no_unscoped_bash_grant

@@ -292,6 +292,12 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           FENCE_SNAPSHOT_CHANGE_OK: ${{ contains(github.event.pull_request.labels.*.name, 'fence-snapshot-change') && '1' || '' }}
         run: bash scripts/check-fences-frozen.sh "origin/$BASE_REF"
+      - name: Fail when a line-budget allowance grew
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          bash scripts/check-line-budget-frozen.test.sh
+          bash scripts/check-line-budget-frozen.sh "origin/$BASE_REF"
 
   token-count:
     name: Scaffold load size
