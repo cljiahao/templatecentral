@@ -146,11 +146,9 @@ azure_rules() {
 
 azure_injection() {
   local f=$1 hit
-  hit=$(grep -nE '[$][(](Build[.]SourceBranch(Name)?|System[.]PullRequest[.](SourceBranch|SourceBranchName)|Build[.]SourceVersionMessage|Build[.]RequestedFor(Email)?)[)]' "$f" \
-    | grep -vE '^[0-9]+:[[:space:]]*#' | grep -vE '^[0-9]+:[[:space:]]*(-[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*:[[:space:]]|[A-Za-z_][A-Za-z0-9_]*:$)' \
-    | head -n 1)
+  hit=$(awk '!done && /[$][(](Build[.]SourceBranch(Name)?|System[.]PullRequest[.](SourceBranch|SourceBranchName)|Build[.]SourceVersionMessage|Build[.]RequestedFor(Email)?)[)]/ && !/^[[:space:]]*#/ && !/^[[:space:]]*(-[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*:[[:space:]]|[A-Za-z_][A-Za-z0-9_]*:$)/ { print NR ":" $0; done = 1 }' "$f")
   if [ -z "$hit" ]; then
-    hit=$(grep -nE '^[[:space:]]*(-[[:space:]]+)?(script|bash|powershell|pwsh|inlineScript):[[:space:]].*[$][(](Build[.]SourceBranch(Name)?|System[.]PullRequest[.](SourceBranch|SourceBranchName)|Build[.]SourceVersionMessage|Build[.]RequestedFor(Email)?)[)]' "$f" | head -n 1)
+    hit=$(awk '!done && /^[[:space:]]*(-[[:space:]]+)?(script|bash|powershell|pwsh|inlineScript):[[:space:]].*[$][(](Build[.]SourceBranch(Name)?|System[.]PullRequest[.](SourceBranch|SourceBranchName)|Build[.]SourceVersionMessage|Build[.]RequestedFor(Email)?)[)]/ { print NR ":" $0; done = 1 }' "$f")
   fi
   if [ -n "$hit" ]; then bad "$f:${hit%%:*}: a branch name or commit message is expanded inside a script and can inject shell commands. Map it under env: (NAME: \$(Build.SourceBranch)) and read \"\$NAME\"."; fi
 }

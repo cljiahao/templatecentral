@@ -40,7 +40,9 @@ if [ -z "$list_mode" ]; then
 
   # A PR must not rewrite the checker that judges it: run the merge-base copy when the base has one.
   if [ -z "${GATE_RATCHET_REEXEC:-}" ]; then
-    if git show "$mb:scripts/gate-ratchet.sh" > "$wd/base-ratchet.sh" 2>/dev/null; then
+    base_ratchet=$(git ls-tree --name-only "$mb" -- scripts/gate-ratchet.sh) || die "cannot list the merge base $mb"
+    if [ -n "$base_ratchet" ]; then
+      git show "$mb:scripts/gate-ratchet.sh" > "$wd/base-ratchet.sh" || die "cannot read scripts/gate-ratchet.sh at the merge base $mb"
       GATE_RATCHET_REEXEC=1 bash "$wd/base-ratchet.sh" "$base_ref"
       exit $?
     fi
@@ -78,6 +80,15 @@ kind_of() {
     conftest.py | */conftest.py) KIND=conftest ;;
     *) KIND="" ;;
   esac
+}
+
+# Runs a match test (grep or awk) and returns its 0 or 1 status; any other status is a tool failure and ends the run with status 2, so a failed test never reads as "no match". Under a command substitution the caller must pass a status of 2 on.
+gs_test() {
+  local rc
+  "$@"
+  rc=$?
+  [ "$rc" -le 1 ] || die "$1 failed with status $rc"
+  return "$rc"
 }
 
 # Runs grep and accepts its no-match status (1) as success; any other status, a real failure, is returned as failure.
@@ -138,26 +149,32 @@ enforced_kind() {
 # Reads paths on stdin and prints "kind<TAB>path<TAB>enforced" (1 or 0) for each one the ratchet compares, in one pass without a subshell per path.
 classify() {
   local g p e
-  awk 'NR == FNR { g[$0] = 1; next } { print (($0 in g) ? 1 : 0) "\t" $0 }' "$wd/guard.lst" - | while IFS=$'\t' read -r g p; do
+  awk 'NR == FNR { g[$0] = 1; next } { print (($0 in g) ? 1 : 0) "\t" $0 }' "$wd/guard.lst" - > "$wd/classify.in" || die "cannot mark the guarded paths (awk failed)"
+  while IFS=$'\t' read -r g p; do
     kind_of "$p"
     if [ -z "$KIND" ] && [ "$g" = 1 ]; then KIND=guard; fi
     [ -n "$KIND" ] || continue
     e=0
     if enforced_kind "$KIND"; then e=1; fi
     printf '%s\t%s\t%s\n' "$KIND" "$p" "$e"
-  done
+  done < "$wd/classify.in"
 }
 
 # True when the merge base tracked this exact path.
-base_has() { printf '%s\n' "$base_paths" | grep -Fxq -- "$1"; }
+base_has() { gs_test grep -Fxq -- "$1" "$wd/base.paths"; }
+
+# True when HEAD tracks this exact path.
+head_has() { gs_test grep -Fxq -- "$1" "$wd/head.paths"; }
 
 # True when any pyproject.toml the merge base tracked, at any depth, sets pytest or coverage options.
 py_settings() {
   local f
+  gs_grep -E '(^|/)pyproject[.]toml$' "$wd/base.paths" > "$wd/pyproject.lst" || die "cannot list the pyproject.toml files of the merge base"
   while IFS= read -r f; do
     [ -n "$f" ] || continue
-    if git show "$mb:$f" 2>/dev/null | grep -Eq '^[[:space:]]*[[]tool[.](pytest|coverage)'; then return 0; fi
-  done <<< "$(printf '%s\n' "$base_paths" | grep -E '(^|/)pyproject[.]toml$')"
+    git show "$mb:$f" > "$wd/py.txt" || die "cannot read $f at the merge base $mb"
+    if gs_test grep -Eq '^[[:space:]]*[[]tool[.](pytest|coverage)' "$wd/py.txt"; then return 0; fi
+  done < "$wd/pyproject.lst"
   return 1
 }
 
@@ -171,12 +188,12 @@ shadow_reason() {
     ruff.toml | .ruff.toml) if base_has "${dir}pyproject.toml"; then echo "ruff reads it instead of pyproject.toml"; return 0; fi ;;
     .coveragerc | pytest.ini | tox.ini | setup.cfg) if py_settings; then echo "pytest and coverage may read it instead of the pyproject.toml settings"; return 0; fi ;;
     .gitleaksignore) if base_has "${dir}.gitleaks.toml"; then echo "gitleaks reads it besides .gitleaks.toml"; return 0; fi ;;
-    .eslintignore) if printf '%s\n' "$base_paths" | grep -Eq "^${dir}eslint[.]config[.][^/]*$"; then echo "it adds ignores besides eslint.config"; return 0; fi ;;
+    .eslintignore) if gs_test grep -Eq "^${dir}eslint[.]config[.][^/]*$" "$wd/base.paths"; then echo "it adds ignores besides eslint.config"; return 0; fi ;;
     jscpd.json | .jscpdrc | .jscpdrc.json | .jscpd.yml | .jscpd.yaml | .jscpd.js) if base_has "${dir}.jscpd.json"; then echo "jscpd may read it instead of .jscpd.json"; return 0; fi ;;
-    sonar-project.properties | .sonarcloud.properties) if printf '%s\n' "$base_paths" | grep -Eq '(^|/)sonar-project[.]properties$'; then echo "sonar may read it besides the tracked sonar-project.properties"; return 0; fi ;;
+    sonar-project.properties | .sonarcloud.properties) if gs_test grep -Eq '(^|/)sonar-project[.]properties$' "$wd/base.paths"; then echo "sonar may read it besides the tracked sonar-project.properties"; return 0; fi ;;
     vitest.workspace.*)
       for f in vite.config. vitest.config. vitest.workspace.; do
-        if printf '%s\n' "$base_paths" | awk -v pre="${dir}${f}" 'index($0, pre) == 1 && index(substr($0, length(pre) + 1), "/") == 0 { hit = 1 } END { exit !hit }'; then
+        if gs_test awk -v pre="${dir}${f}" 'index($0, pre) == 1 && index(substr($0, length(pre) + 1), "/") == 0 { hit = 1 } END { exit !hit }' "$wd/base.paths"; then
           echo "a workspace file replaces the test projects of ${f}* and only one is read"
           return 0
         fi
@@ -187,7 +204,7 @@ shadow_reason() {
       fam=${name%%.config.*}
       case "$fam" in vite | vitest) fams="vite vitest" ;; *) fams=$fam ;; esac
       for f in $fams; do
-        if printf '%s\n' "$base_paths" | awk -v pre="${dir}${f}.config." 'index($0, pre) == 1 && substr($0, length(pre) + 1) ~ /^([cm]?[jt]s|json)$/ { hit = 1 } END { exit !hit }'; then
+        if gs_test awk -v pre="${dir}${f}.config." 'index($0, pre) == 1 && substr($0, length(pre) + 1) ~ /^([cm]?[jt]s|json)$/ { hit = 1 } END { exit !hit }' "$wd/base.paths"; then
           echo "a $f.config.* file already exists, and only one is read"
           return 0
         fi
@@ -1277,16 +1294,20 @@ if [ -n "$list_mode" ]; then
   exit 0
 fi
 
-base_paths=$(git ls-tree -r --name-only "$mb" 2>/dev/null)
-paths=$( { printf '%s\n' "$base_paths"; git ls-tree -r --name-only HEAD; } 2>/dev/null | sort -u)
-[ -n "$paths" ] || die "cannot list tracked files"
-if ! printf '%s\n' "$base_paths" | grep -Eq '(^|/)[.]claude/gates[.]txt$'; then
+# A gitlink (mode 160000, a submodule) is listed here but is no blob: `git show` cannot read it, so leave it out as guard_scan does.
+git ls-tree -r "$mb" > "$wd/base.tree" || die "cannot list the tracked files of the merge base $mb"
+git ls-tree -r HEAD > "$wd/head.tree" || die "cannot list the tracked files of HEAD"
+awk -F'\t' '$1 !~ /^160000 / { print substr($0, index($0, "\t") + 1) }' "$wd/base.tree" > "$wd/base.paths" || die "cannot read the tracked files of the merge base $mb"
+awk -F'\t' '$1 !~ /^160000 / { print substr($0, index($0, "\t") + 1) }' "$wd/head.tree" > "$wd/head.paths" || die "cannot read the tracked files of HEAD"
+sort -u "$wd/base.paths" "$wd/head.paths" > "$wd/paths.lst" || die "cannot merge the tracked file lists"
+[ -s "$wd/paths.lst" ] || die "cannot list tracked files"
+if ! gs_test grep -Eq '(^|/)[.]claude/gates[.]txt$' "$wd/base.paths"; then
   echo "gate-ratchet: first adoption: the merge base has no .claude/gates.txt, nothing to compare"
   exit 0
 fi
 guard_scan "$mb" || die "cannot derive the guarded set of the merge base $mb (a tracked file could not be read)"
-printf '%s\n' "$paths" | classify > "$wd/kinds.tsv"
-renames=$(git diff -M --name-status --diff-filter=R "$mb" HEAD 2>/dev/null)
+classify < "$wd/paths.lst" > "$wd/kinds.tsv"
+git diff -M --name-status --diff-filter=R "$mb" HEAD > "$wd/renames.txt" || die "cannot list the renames since the merge base $mb"
 
 weakened=0
 unreadable=0
@@ -1295,11 +1316,17 @@ while IFS=$'\t' read -r kind path _; do
   checked=$((checked + 1))
   : > "$wd/base"; : > "$wd/head"; : > "$wd/base.f"; : > "$wd/head.f"
   have_base=0; have_head=0
-  if git show "$mb:$path" > "$wd/base" 2>/dev/null; then have_base=1; fi
-  if git show "HEAD:$path" > "$wd/head" 2>/dev/null; then have_head=1; fi
+  if base_has "$path"; then
+    git show "$mb:$path" > "$wd/base" || die "cannot read $path at the merge base $mb"
+    have_base=1
+  fi
+  if head_has "$path"; then
+    git show "HEAD:$path" > "$wd/head" || die "cannot read $path at HEAD"
+    have_head=1
+  fi
   if [ "$have_head" -eq 0 ]; then
     if [ "$kind" = conftest ]; then continue; fi
-    moved=$(printf '%s\n' "$renames" | awk -F'\t' -v p="$path" '$2 == p { print $3; exit }')
+    moved=$(awk -F'\t' -v p="$path" '$2 == p { print $3; exit }' "$wd/renames.txt") || die "cannot read the renames since the merge base"
     if [ -n "$moved" ]; then
       printf 'WEAKENED %s: file was present at the merge base, now removed (renamed to %s; tools read the original name, so a rename counts as a removal)\n' "$path" "$moved"
     else
@@ -1341,10 +1368,13 @@ while IFS=$'\t' read -r kind path _; do
   if [ "$file_bad" -eq 1 ]; then weakened=1; fi
 done < "$wd/kinds.tsv"
 
-added=$(git diff --no-renames --name-only --diff-filter=A "$mb" HEAD 2>/dev/null)
+added=$(git diff --no-renames --name-only --diff-filter=A "$mb" HEAD) || die "cannot list the files added since the merge base $mb"
 while IFS= read -r path; do
   [ -n "$path" ] || continue
-  if why=$(shadow_reason "$path"); then
+  why=$(shadow_reason "$path")
+  src=$?
+  if [ "$src" -ge 2 ]; then die "cannot check $path against the ratcheted config files"; fi
+  if [ "$src" -eq 0 ]; then
     printf 'WEAKENED %s: new config file competes with a ratcheted one (%s)\n' "$path" "$why"
     weakened=1
   fi

@@ -121,7 +121,7 @@ case "$gate" in
       [ -f "$f" ] || continue
       while IFS= read -r content; do
         stripped=$(printf '%s' "$content" | sed -E 's@^[[:space:]]*(#|//|\*|"""|/\*\*?)[[:space:]]?@@')
-        if [ -n "$stripped" ] && printf '%s' "$stripped" | grep -qEf "$strict_patterns"; then
+        if [ -n "$stripped" ] && grep -qEf "$strict_patterns" <<< "$stripped"; then
           flagged="$flagged$nl  - $f: $stripped"
         fi
       done < <(git diff -U0 "$base"...HEAD -- "$f" | grep '^+' | grep -vE '^\+\+\+' | sed 's/^+//' | grep -E '^[[:space:]]*(#|//|\*|"""|/\*\*?)')
@@ -161,7 +161,7 @@ case "$gate" in
       if { printf '%s\n' "$enforced" | sed 's/^/E /'; printf '%s\n' "$findings"; } | awk '/^E / { E[substr($0, 3)] = 1; next } /^(WEAKENED|UNREADABLE) / { p = $0; sub(/^[A-Z]+ /, "", p); for (e in E) if (p == e ":" || substr(p, 1, length(e) + 2) == e ": ") hit = 1 } END { exit !hit }'; then
         fail "the allow-gate-change label cannot waive a change to the files that enforce the gates (listed above); it needs the owner review that branch protection requires."
       fi
-      if [ "$rc" -ne 1 ] || printf '%s\n' "$findings" | grep -q '^UNREADABLE '; then
+      if [ "$rc" -ne 1 ] || grep -q '^UNREADABLE ' <<< "$findings"; then
         fail "the allow-gate-change label cannot waive an unreadable config or a checker failure (output above); fix the cause."
       fi
       if bypassed allow-gate-change; then echo "gate-ratchet: the allow-gate-change label waived every finding printed above"; exit 0; fi
@@ -230,7 +230,7 @@ case "$gate" in
         line=${line#"${line%%[![:space:]]*}"}
         line=${line%"${line##*[![:space:]]}"}
         case "$line" in ''|'#'*) continue ;; esac
-        if ! printf '%s\n' "$line" | grep -qiE '^(GHSA-[A-Za-z0-9-]+|CVE-[0-9]{4}-[0-9]+|PYSEC-[0-9]{4}-[0-9]+)[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[^[:space:]]'; then
+        if ! grep -qiE '^(GHSA-[A-Za-z0-9-]+|CVE-[0-9]{4}-[0-9]+|PYSEC-[0-9]{4}-[0-9]+)[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[^[:space:]]' <<< "$line"; then
           echo "malformed allowlist line: $line" >&2
           fail "$allow has a malformed line. Format: <GHSA|CVE|PYSEC id> <YYYY-MM-DD expiry> <reason>"
         fi
@@ -332,7 +332,8 @@ JS
       pkg=${line%%|*}; rest=${line#*|}; sev=${rest%%|*}; ids=${rest#*|}
       covered=0
       for id in $ids; do
-        if printf '%s\n' "$id" | tr '[:lower:]' '[:upper:]' | grep -qxFf "$tmp/allowed" -; then covered=1; break; fi
+        id_upper=$(printf '%s' "$id" | tr '[:lower:]' '[:upper:]')
+        if grep -qxFf "$tmp/allowed" <<< "$id_upper"; then covered=1; break; fi
       done
       [ "$covered" -eq 1 ] || blocked="$blocked${blocked:+$'\n'}  - $pkg: $ids ($sev)"
     done < <(sort -u "$tmp/found")
