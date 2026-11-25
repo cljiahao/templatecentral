@@ -56,6 +56,14 @@ while IFS='|' read -r gid lh ci || [ -n "$gid" ]; do
   if [ "$ci" != "-" ] && [ -n "$gh_text" ] && ! has "$gh_text" "$ci"; then echo "GATE MISSING: $gid is not run by .github/workflows/ci.yml (expects '$ci')" >&2; drift=1; fi
   if [ "$ci" != "-" ] && [ -n "$az_text" ] && ! has "$az_text" "$ci"; then echo "GATE MISSING: $gid is not run by the Azure pipeline files (expects '$ci')" >&2; drift=1; fi
 done < "$gates"
+# Review gate files: when gates.txt lists the review gate and lefthook exists, every seeded file with review in its path must hold non-whitespace content.
+if [ -n "$hook_text" ] && grep -q '^review|' "$gates"; then
+  review_files=$(awk -F'\t' '$1 ~ /review/ { print $1 }' <<< "$entries")
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if ! grep -q '[^[:space:]]' "$f" 2>/dev/null; then echo "REVIEW GATE FILE MISSING: $f is missing or blank; restore it from git (git checkout <merge-base> -- $f)" >&2; drift=1; fi
+  done <<< "$review_files"
+fi
 # Agent permission baseline: a blessed hash must not hide a deleted deny or ask rule.
 settings=".claude/settings.json"
 rule_in_list() {
