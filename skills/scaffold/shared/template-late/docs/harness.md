@@ -8,7 +8,7 @@ Reference detail for the rules in `AGENTS.md` (`## AI Harness`, `## Skills Secur
 
 **SessionStart (startup/resume/clear/compact):** `AGENTS.md` is already loaded, so the hook prints only what it cannot say: a line when the checkout is on `main`/`uat`/`develop`, and on compact three invariant lines that point at `docs/CONSTITUTION.md`. The CONSTITUTION itself is read on demand, not injected.
 
-**UserPromptSubmit:** pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
+**UserPromptSubmit:** blocks a prompt that carries an inline credential (AWS/GitHub/Anthropic keys, PEM blocks, DB URLs with a password); exit 2 blocks the prompt.
 
 **PostToolUse:** an incremental type-check (the stack's command is in the `AGENTS.md` bullet) and a comment-hygiene scan (policy: the comments page of `templatecentral:standards`; patterns from `.claude/comment-hygiene-patterns.txt`) after every Edit/Write. Both are feedback-only: findings reach Claude as `additionalContext`, never a block.
 

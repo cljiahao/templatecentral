@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# UserPromptSubmit — OWASP LLM01 injection guard + LLM02 credential-leak detection. Exit 2 = block.
+# UserPromptSubmit — LLM02 credential-leak detection. Exit 2 = block.
 import json
 import re
 import sys
@@ -8,24 +8,6 @@ try:
     prompt = json.load(sys.stdin).get('prompt', '') or ''
 except Exception:
     sys.exit(0)
-lower = prompt.lower()
-
-injection = [
-    'ignore previous instructions',
-    'ignore all instructions',
-    'forget your instructions',
-    'pretend you have no restrictions',
-    'act as if you have no restrictions',
-]
-# Only the agent's own instructions count as the object; "override your config defaults" is ordinary work.
-injection_re = re.compile(r'\b(disregard|override)\s+(all\s+)?(of\s+)?your\s+((previous|prior|original|current)\s+)?(instructions|rules|system\s+prompt|guidelines)\b')
-hit = next((p for p in injection if p in lower), None)
-if hit is None:
-    m = injection_re.search(lower)
-    hit = m.group(0) if m else None
-if hit:
-    sys.stderr.write(f'Blocked: prompt matches an injection pattern (OWASP LLM01): "{hit}"\n')
-    sys.exit(2)
 
 credentials = [
     (r'AKIA[0-9A-Z]{16}', 'AWS access key ID'),
