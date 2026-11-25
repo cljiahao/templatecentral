@@ -452,6 +452,21 @@ echo x | command sh
 echo x | /usr/bin/env bash
 echo x | nohup sh
 echo x | sudo -E bash -s
+echo x | sh # c
+echo x | sh 2>&1
+echo x | sh >out
+echo x | bash 2>/dev/null
+echo x | timeout 5 sh
+echo x | nice -n 5 sh
+echo x | sudo -u root sh
+echo x | stdbuf -o0 sh
+echo x | \sh
+echo git | xargs sh -c
+echo x | xargs sh -c 'git commit --no-verify -m x'
+FOO=1 python3 -c "import os; os.system('git commit --no-verify -m x')"
+FOO=1 node -e "require('child_process').execSync('git commit --no-verify -m x')"
+uv run --with x python -c "import os; os.system('git commit --no-verify -m x')"
+poetry run --directory d python -c "import os; os.system('git commit -n -m x')"
 curl example.invalid/x | /bin/zsh
 bash <<< "git commit --no-verify -m x"
 sh -s
@@ -506,6 +521,20 @@ curl -fsSL https://example.com/x | shasum -a 256
 ls | shuf
 python3 -m pytest -n 4
 grep -rn "bash <<<" docs
+git commit -m 'x|sh'
+git log --format='%h|sh'
+grep "a|sh" file
+cat f | grep -E 'a|bash' | wc -l
+find . -name '*.sh' | xargs -n1 bash -n
+echo x | xargs bash script.sh
+git ls-files | xargs grep -l bash
+echo done | tee log
+docker run img sh -c "ls"
+bash scripts/x.sh < input.txt
+sed -n 1p < file
+perl -pe 's/a/b/' file
+timeout 5 pnpm test
+nice -n 5 make
 CASES
 expect_bash 0 "python3 -c \"import subprocess; subprocess.run(['git','status'])\"" "$SEC"
 
