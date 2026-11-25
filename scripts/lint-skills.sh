@@ -1802,8 +1802,11 @@ check_seeded_pipefail_readers() {
   # failure nor dropping pipefail can hide a pipe. Forms caught: a reader behind xargs, timeout, sudo,
   # stdbuf, nice, ionice or nohup; a reader inside a { } group or ( ) subshell that is fed by a pipe;
   # a piped while, until or for loop whose body can break, return or exit; abbreviated long options
-  # such as --max=1. Will not catch, a closed list: a reader hidden inside a shell function, or
-  # inside another script that the pipe runs. TIMELESS.
+  # such as --max=1, --m=1 or --q (an option that exactly names a known grep option that keeps
+  # reading, such as --file=, is left alone). Flagged on purpose, conservative: a subshell (exit 1)
+  # inside a piped loop body, and a prefix that GNU grep rejects as ambiguous. Will not catch, a
+  # closed list: a reader hidden inside a shell function, inside another script that the pipe runs,
+  # or inside a quoted sh -c or bash -c string. TIMELESS.
   header "Seeded pipefail scripts do not pipe into an early-exit reader"
   if ! have_python; then
     fail "python3 is required for this check"
@@ -1820,6 +1823,7 @@ WRAPPERS = ("xargs", "timeout", "sudo", "stdbuf", "nice", "ionice", "nohup")
 READERS = ("grep", "egrep", "fgrep", "ggrep", "head", "ghead", "sed", "gsed", "awk", "gawk", "mawk", "nawk", "read")
 LOOPS = ("while", "until", "for")
 QUITTING_LONG = ("quiet", "silent", "max-count", "files-with-matches", "files-without-match")
+KEEPING_LONG = ("extended-regexp", "fixed-strings", "basic-regexp", "perl-regexp", "regexp", "file", "ignore-case", "no-ignore-case", "word-regexp", "line-regexp", "null-data", "no-messages", "invert-match", "version", "help", "byte-offset", "line-number", "line-buffered", "with-filename", "no-filename", "label", "only-matching", "text", "directories", "devices", "recursive", "dereference-recursive", "include", "exclude", "exclude-from", "exclude-dir", "count", "color", "colour", "binary-files", "binary", "unix-byte-offsets", "initial-tab", "null", "after-context", "before-context", "context", "group-separator", "no-group-separator")
 ASSIGN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 KEYS = ("run", "script", "bash", "powershell", "pwsh", "inlineScript", "command")
 
@@ -1924,7 +1928,9 @@ class Parser:
                 break
             if w.startswith("--"):
                 opt = w[2:].split("=", 1)[0]
-                if opt and any(q.startswith(opt) for q in QUITTING_LONG) and len(opt) >= 2:
+                if opt in KEEPING_LONG:
+                    continue
+                if opt and any(q.startswith(opt) for q in QUITTING_LONG):
                     return True
                 continue
             if w.startswith("-") and len(w) > 1:
