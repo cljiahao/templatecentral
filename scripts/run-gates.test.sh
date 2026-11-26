@@ -24,9 +24,9 @@ has() { # has <text> <needle> <description>
 if [ -n "${RG_TEST_NESTED:-}" ]; then echo "run-gates.test.sh: nested run refused" >&2; exit 2; fi
 export RG_TEST_NESTED=1
 
-# lim <command...>: run it in its own process group and kill the group after 60 s, so a blocked run fails the check.
+# lim <command...>: run it in its own process group and kill the group after 60 s (LIM_S overrides), so a blocked run fails the check.
 lim() {
-  perl -e '$s = 60; setpgrp(0, 0); $p = fork; if (!$p) { exec @ARGV; exit 127 }
+  perl -e '$s = $ENV{LIM_S} || 60; setpgrp(0, 0); $p = fork; if (!$p) { exec @ARGV; exit 127 }
     $SIG{ALRM} = sub { kill "KILL", -$$; exit 124 }; alarm $s; waitpid($p, 0); exit($? >> 8)' "$@"
 }
 
@@ -48,6 +48,7 @@ build_template() {
   cp "$RG" "$R/scripts/run-gates.sh"
   stub a.sh <<'EOF'
 echo a >> "$RAN_LOG"
+if [ -n "${GIT_DIR:-}${GIT_NAMESPACE:-}${GIT_PREFIX:-}${GIT_INDEX_FILE:-}" ]; then echo leaked >> "$RAN_LOG.gitenv"; fi
 if IFS= read -r -t 1 _l; then echo got >> "$RAN_LOG.stdin"; fi
 EOF
   stub b.test.sh <<'EOF'
@@ -130,6 +131,11 @@ rg() {
   (cd "$R" && TMPDIR="$T/tmp" lim bash scripts/run-gates.sh "$@") > "$T/out" 2>&1
   echo $?
 }
+rgv() { # rgv <VAR=value> <args>: like rg, with one variable set for the run
+  : > "$RAN_LOG"
+  (cd "$R" && declare -x "$1" && TMPDIR="$T/tmp" lim bash scripts/run-gates.sh "${@:2}") > "$T/out" 2>&1
+  echo $?
+}
 ran() { tr '\n' ',' < "$RAN_LOG"; } # the gates that ran, in order, comma-terminated
 out() { cat "$T/out"; }
 put() { # put <relative path>: write a file in $R, making its directory
@@ -160,7 +166,9 @@ else FAIL=$((FAIL + 1)); echo "FAIL: cpu_column_counts_gate_cpu — no PASS line
 # a gate never reads the caller's stdin: with a pipe full of input on the script, the gate still sees EOF
 rm -f "$RAN_LOG.stdin"; mk; put skills/a/x.md
 check 0 "$(yes | rg --changed main)" "stdin_piped_exit"
-check "no" "$([ -e "$RAN_LOG.stdin" ] && echo yes || echo no)" "gate_stdin_is_not_the_callers"
+stdin_seen=no
+if [ -e "$RAN_LOG.stdin" ]; then stdin_seen=yes; fi
+check "no" "$stdin_seen" "gate_stdin_is_not_the_callers"
 if [[ "$(out)" =~ PASS\ \ bash\ scripts/a.sh\ +[0-9]+\.[0-9]s\ cpu ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: pass_line_has_name_and_cpu_seconds"; fi
 has "$(out)" "CI runs the full set" "summary_says_ci_is_the_authority"
 
@@ -335,17 +343,223 @@ mk; printf 'skills/a/*\tbash scripts/ghost.sh\n' >> "$R/scripts/run-gates.map"; 
 check 2 "$(rg --changed main)" "drift_stops_a_changed_run_exit"
 check "" "$(ran)" "drift_stops_a_changed_run_runs_nothing"
 
+# --- parser allow-list: a run line this runner cannot read exactly stops the run, naming file and line ---
+WF=".github/workflows/validate-skills.yml"
+probe() { # probe <name> <run line> <message fragment>: a workflow with that run line must stop --check with exit 2
+  mk; printf '      - run: %s\n' "$2" >> "$R/$WF"
+  check 2 "$(rg --check)" "parser_${1}_exit"
+  has "$(out)" "$3" "parser_${1}_message"
+  has "$(out)" "validate-skills.yml:" "parser_${1}_names_file_and_line"
+}
+FORM="used in a form this runner does not read"
+probe python_script 'python3 scripts/new_gate.py' "$FORM"
+probe two_spaces 'bash  scripts/x.sh' "$FORM"
+probe dot_slash 'bash ./scripts/x.sh' "$FORM"
+probe no_space_after_and 'true &&bash scripts/x.sh' "$FORM"
+probe sh_runner 'sh scripts/x.sh' "$FORM"
+probe node_in_scripts 'node scripts/x.mjs' "$FORM"
+probe cd_into_scripts 'cd scripts && bash x.sh' "a cd into scripts or adapters"
+probe pushd_into_adapters 'pushd adapters/opencode' "a cd into scripts or adapters"
+# clean controls: the same shapes in a form the runner reads
+mk; printf '      - run: bash scripts/a.sh\n' >> "$R/$WF"
+check 0 "$(rg --check)" "parser_clean_control_exit"
+# a path that only ends in scripts/ (a different word) is not a scripts/ token; the word before it decides
+mk; printf '      - run: echo see my-scripts/x.sh and docs_scripts/y.sh\n' >> "$R/$WF"
+check 0 "$(rg --check)" "parser_word_ending_in_scripts_is_not_a_token_exit"
+mk; printf '      - run: echo hi\n        working-directory: docs\n' >> "$R/$WF"
+check 0 "$(rg --check)" "parser_working_directory_elsewhere_control_exit"
+mk; printf '      - run: echo hi\n        working-directory: scripts\n' >> "$R/$WF"
+check 2 "$(rg --check)" "parser_working_directory_in_scripts_exit"
+has "$(out)" "working-directory in scripts or adapters" "parser_working_directory_in_scripts_message"
+# every pull_request workflow is scanned; one that does not trigger on pull_request is not
+mk; stub new-gate.sh <<< true
+printf 'name: o\non:\n  pull_request:\njobs:\n  j:\n    steps:\n      - run: bash scripts/new-gate.sh\n' > "$R/.github/workflows/other.yml"
+check 2 "$(rg --check)" "second_pr_workflow_is_scanned_exit"
+has "$(out)" "missing from the map: bash scripts/new-gate.sh" "second_pr_workflow_is_scanned_message"
+printf 'skills/a/*\tbash scripts/new-gate.sh\n' >> "$R/scripts/run-gates.map"
+check 0 "$(rg --check)" "second_pr_workflow_with_a_map_row_control_exit"
+mk; stub new-gate.sh <<< true
+printf 'name: o\non:\n  push:\njobs:\n  j:\n    steps:\n      - run: bash scripts/new-gate.sh\n' > "$R/.github/workflows/other.yml"
+check 0 "$(rg --check)" "push_workflow_is_ignored_exit"
+# an @skip row that no run line contains is stale
+mk; printf '@skip\tbash scripts/zzz.sh\tnever in a workflow\n' >> "$R/scripts/run-gates.map"
+check 2 "$(rg --check)" "unused_skip_row_exit"
+has "$(out)" "no workflow run line contains this @skip command" "unused_skip_row_message"
+
+# --- audit: a gate script that names a mapped path must be selected by that path's row ---
+mk; stub d.sh <<'EOF'
+cat docs/guide.md
+EOF
+printf '      - run: bash scripts/d.sh\n' >> "$R/$WF"
+printf 'scripts/d.sh\tbash scripts/d.sh\n' >> "$R/scripts/run-gates.map"
+check 2 "$(rg --check)" "audit_drift_exit"
+has "$(out)" 'audit: gate [bash scripts/d.sh] names "docs"' "audit_drift_message"
+printf 'docs/*\tbash scripts/d.sh\n' >> "$R/scripts/run-gates.map"
+check 0 "$(rg --check)" "audit_row_added_control_exit"
+cp "$R/scripts/run-gates.map" "$T/audit.map"
+grep -v -x -F "$(printf 'docs/*\tbash scripts/d.sh')" "$T/audit.map" > "$R/scripts/run-gates.map"
+printf '@noread\tbash scripts/d.sh\tdocs/*\n' >> "$R/scripts/run-gates.map"
+check 0 "$(rg --check)" "audit_noread_row_exit"
+printf 'docs/*\tbash scripts/d.sh\n' >> "$R/scripts/run-gates.map"
+check 2 "$(rg --check)" "audit_stale_noread_row_exit"
+has "$(out)" "@noread row is stale" "audit_stale_noread_row_message"
+mk; printf '@noread\tbash scripts/a.sh\tdocs/*\n' >> "$R/scripts/run-gates.map"
+check 2 "$(rg --check)" "audit_noread_that_matches_nothing_exit"
+
+# --- a renamed or deleted script named in the map: the message says which row and what to do ---
+mk; rm "$R/scripts/c.sh"
+check 2 "$(rg --list)" "list_with_a_deleted_script_exit"
+has "$(out)" "map row at line" "deleted_script_message_names_the_row"
+has "$(out)" "edit or remove that row" "deleted_script_message_says_what_to_do"
+# --list --changed prints the resolved base, not the placeholder
+mk; put docs/x.md
+check 0 "$(rg --list --changed main)" "list_changed_with_base_exit"
+has "$(out)" "bash scripts/frozen.sh main" "list_changed_prints_the_resolved_base"
+if [[ "$(out)" == *'{BASE}'* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: list_changed_leaves_no_placeholder"; else PASS=$((PASS + 1)); fi
+
+# --- base ref and history edge cases ---
+# a base that starts with a dash is refused as a base, not passed to git
+mk; put skills/a/x.md
+check 2 "$(rg --changed -x)" "dash_base_exit"
+check "run-gates: bad base ref: -x" "$(out)" "dash_base_message_is_the_guard_not_the_fetch_hint"
+# a base with no common ancestor
+mk; put skills/a/x.md
+( cd "$R" && git update-ref refs/heads/lone "$(git commit-tree "$(git mktree </dev/null)" -m lone </dev/null)" ) || exit 2
+check 2 "$(rg --changed lone)" "no_common_ancestor_exit"
+has "$(out)" "no merge base" "no_common_ancestor_message"
+check "" "$(ran)" "no_common_ancestor_runs_nothing"
+# a renamed file counts as a delete of the old path and an add of the new one
+mk; ( cd "$R" && put skills/a/r.md && git add -A && git commit -qm r && git update-ref refs/remotes/origin/main HEAD && git mv skills/a/r.md skills/c/r.md ) || exit 2
+check 0 "$(rg --changed main)" "rename_exit"
+check "a,b,c," "$(ran)" "rename_selects_the_gates_of_both_paths"
+
+# --- a foreign git environment is dropped, so the diff and the gates read this repo ---
+rm -f "$RAN_LOG.gitenv"
+mk; put skills/a/x.md
+check 0 "$(export GIT_NAMESPACE=zz GIT_PREFIX=zz; rg --changed main)" "git_env_control_exit"
+check "a,b," "$(ran)" "git_env_selects_this_repos_change"
+gl=no
+if [ -e "$RAN_LOG.gitenv" ]; then gl=yes; fi
+check "no" "$gl" "gate_sees_no_git_variables"
+rm -f "$RAN_LOG.gitenv"
+mk; put skills/a/x.md
+check 0 "$(export GIT_DIR="$T/no-such-git-dir" GIT_WORK_TREE="$T/no-such-tree" GIT_INDEX_FILE="$T/no-such-index"; rg --changed main)" "foreign_git_dir_exit"
+check "a,b," "$(ran)" "foreign_git_dir_does_not_move_the_diff"
+
+# --- the scratch dir inside the repo is not a change ---
+mk; put skills/a/x.md; mkdir -p "$R/tmpin"
+check 0 "$( (cd "$R" && TMPDIR="$R/tmpin" lim bash scripts/run-gates.sh --changed main) > "$T/out" 2>&1; echo $?)" "tmpdir_in_repo_exit"
+has "$(out)" "summary: 2 gates run" "tmpdir_inside_the_repo_does_not_select_all"
+if [[ "$(out)" == *"all gates selected"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: tmpdir_inside_the_repo_selects_no_all_message"; else PASS=$((PASS + 1)); fi
+
+# --- run state: a one-gate repo ---
+mini() { # mini: a repo with one gate, scripts/g.sh, whose body comes from stdin, and one changed path
+  mk
+  stub g.sh
+  printf 'name: s\non: [pull_request]\njobs:\n  j:\n    steps:\n      - run: bash scripts/g.sh\n' > "$R/$WF"
+  printf 'skills/*\tbash scripts/g.sh\nscripts/g.sh\tbash scripts/g.sh\n' > "$R/scripts/run-gates.map"
+  put skills/x/x.md
+}
+# a gate over the time limit fails, is named, and its whole process group dies
+rm -f "$RAN_LOG.sleeper"
+mini <<'EOF'
+sleep 300 &
+echo $! > "$RAN_LOG.sleeper"
+wait
+EOF
+check 1 "$(rgv RUN_GATES_TIMEOUT=1 --changed main)" "timeout_exit"
+has "$(out)" "timed out after 1s" "timeout_message"
+has "$(out)" "FAIL  bash scripts/g.sh" "timeout_is_reported_fail"
+sl=$(cat "$RAN_LOG.sleeper" 2>/dev/null)
+gone=yes
+if [ -n "$sl" ] && kill -0 "$sl" 2>/dev/null; then gone=no; kill -KILL "$sl" 2>/dev/null; fi
+check "yes" "$gone" "timeout_kills_the_gates_children"
+# control: a gate inside the limit passes and is not reported as timed out
+mini <<'EOF'
+exit 0
+EOF
+check 0 "$(rgv RUN_GATES_TIMEOUT=1 --changed main)" "timeout_control_exit"
+if [[ "$(out)" == *"timed out"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: timeout_control_is_not_timed_out"; else PASS=$((PASS + 1)); fi
+check 2 "$(rgv RUN_GATES_TIMEOUT=abc --all)" "bad_timeout_value_exit"
+has "$(out)" "RUN_GATES_TIMEOUT must be" "bad_timeout_value_message"
+check 0 "$(rgv RUN_GATES_TIMEOUT=5 --list --all)" "good_timeout_value_control_exit"
+# a gate killed by a signal fails, with the signal named
+mini <<'EOF'
+kill -9 $$
+EOF
+check 1 "$(rg --changed main)" "signal_killed_gate_exit"
+has "$(out)" "killed by signal 9" "signal_killed_gate_message"
+has "$(out)" "1 failed" "signal_killed_gate_summary"
+mini <<'EOF'
+exit 3
+EOF
+check 1 "$(rg --changed main)" "exit_code_gate_control_exit"
+has "$(out)" "(exit 3)" "exit_code_gate_control_message"
+# a passing gate that printed SKIP: lines is PASS-WITH-SKIPS, named, with the lines shown; exit stays 0
+mini <<'EOF'
+echo "SKIP: tool x is not installed"
+exit 0
+EOF
+check 0 "$(rg --changed main)" "skips_exit"
+has "$(out)" "PASS-WITH-SKIPS  bash scripts/g.sh" "skips_state_names_the_gate"
+has "$(out)" "SKIP: tool x is not installed" "skips_lines_are_shown"
+has "$(out)" "passed with skips" "skips_summary"
+mini <<'EOF'
+echo "all good, nothing skipped here"
+exit 0
+EOF
+check 0 "$(rg --changed main)" "skips_control_exit"
+if [[ "$(out)" == *"PASS-WITH-SKIPS"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: skips_control_is_a_plain_pass"; else PASS=$((PASS + 1)); fi
+has "$(out)" "PASS  bash scripts/g.sh" "skips_control_prints_pass"
+# a failing gate that also printed SKIP: stays a FAIL
+mini <<'EOF'
+echo "SKIP: tool x"
+exit 1
+EOF
+check 1 "$(rg --changed main)" "skips_with_failure_exit"
+has "$(out)" "FAIL  bash scripts/g.sh" "skips_with_failure_is_fail"
+# a SIGINT to the runner stops the gate and its children and removes the scratch dir
+rm -f "$RAN_LOG.sleeper"
+mini <<'EOF'
+sleep 300 &
+echo $! > "$RAN_LOG.sleeper"
+wait
+EOF
+rm -rf "$T/tmp3"; mkdir -p "$T/tmp3"
+set -m
+( cd "$R" && TMPDIR="$T/tmp3" exec bash scripts/run-gates.sh --changed main ) > "$T/out" 2>&1 &
+RP=$!
+set +m
+i=0
+while [ ! -s "$RAN_LOG.sleeper" ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
+kill -INT -- "-$RP" 2>/dev/null
+i=0
+while kill -0 "$RP" 2>/dev/null && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
+hung=no
+if kill -0 "$RP" 2>/dev/null; then hung=yes; kill -KILL -- "-$RP" 2>/dev/null; fi
+{ wait "$RP"; } 2>/dev/null
+st=$?
+sl=$(cat "$RAN_LOG.sleeper" 2>/dev/null)
+gone=yes
+if [ -n "$sl" ] && kill -0 "$sl" 2>/dev/null; then gone=no; kill -KILL "$sl" 2>/dev/null; fi
+check "no" "$hung" "sigint_stops_the_runner"
+check 130 "$st" "sigint_exit_status"
+check "yes" "$gone" "sigint_kills_the_gates_children"
+check "" "$(ls -A "$T/tmp3")" "sigint_removes_the_scratch_dir"
+has "$(cat "$T/out")" "interrupted by INT" "sigint_message"
+
 # --- the real workflow and the real map agree, in both directions ---
 check 0 "$(cd "$REAL" && lim bash "$RG" --check > "$T/out" 2>&1; echo $?)" "real_map_matches_real_workflow"
-RW="$REAL/.github/workflows/validate-skills.yml"
+RW="$REAL/.github/workflows"
 RM="$REAL/scripts/run-gates.map"
-rgreal() { # rgreal <workflow> <map>: --check on the real repo with other copies of the two files
-  (cd "$REAL" && RUN_GATES_WORKFLOW="$1" RUN_GATES_MAP="$2" lim bash "$RG" --check) > "$T/out" 2>&1
+rgreal() { # rgreal <workflow dir> <map>: --check on the real repo with other copies of the workflows and the map
+  (cd "$REAL" && RUN_GATES_WORKFLOWS="$1" RUN_GATES_MAP="$2" lim bash "$RG" --check) > "$T/out" 2>&1
   echo $?
 }
 check 0 "$(rgreal "$RW" "$RM")" "real_copies_control"
-cp "$RW" "$T/w.yml"; printf '      - run: bash scripts/brand-new-gate.sh\n' >> "$T/w.yml"
-check 2 "$(rgreal "$T/w.yml" "$RM")" "real_new_ci_gate_missing_from_map_exit"
+mkdir -p "$T/wf"; cp "$RW"/*.yml "$T/wf/"
+printf '      - run: bash scripts/brand-new-gate.sh\n' >> "$T/wf/validate-skills.yml"
+check 2 "$(rgreal "$T/wf" "$RM")" "real_new_ci_gate_missing_from_map_exit"
 has "$(out)" "missing from the map: bash scripts/brand-new-gate.sh" "real_new_ci_gate_missing_from_map_message"
 grep -v 'check-doc-sync.sh' "$RM" > "$T/m.map"
 check 2 "$(rgreal "$RW" "$T/m.map")" "real_map_missing_a_gate_exit"
@@ -358,7 +572,22 @@ check 2 "$(rgreal "$RW" "$T/m3.map")" "real_map_gate_not_in_workflow_exit"
 # the real map selects its own test and every gate in the workflow has a row
 check 0 "$(cd "$REAL" && lim bash "$RG" --list > "$T/out" 2>&1; echo $?)" "real_list_all_exit"
 has "$(out)" "bash scripts/run-gates.test.sh" "real_list_holds_this_test"
-has "$(out)" "bash scripts/check-fences-frozen.sh {BASE}" "real_list_holds_frozen_gate_with_base"
+has "$(out)" "bash scripts/check-fences-frozen.sh origin/main" "real_list_holds_frozen_gate_with_resolved_base"
+has "$(out)" "bash scripts/validate-scaffold-configs.sh" "real_list_holds_the_scaffold_parse_gate"
+# the audit on the real repo: a gate that reads CHANGELOG.md or the template-comment exemptions is selected by their rows
+check 1 "$(grep -c -x -F "$(printf 'skills/*\t@all')" "$RM")" "real_map_skills_select_all"
+drop() { # drop <path> <gate>: --check the real repo with the map row <path><TAB><gate> removed
+  grep -v -x -F "$(printf '%s\t%s' "$1" "$2")" "$RM" > "$T/drop.map"
+  rgreal "$RW" "$T/drop.map"
+}
+check 2 "$(drop CHANGELOG.md 'bash scripts/measure-seeded-load.test.sh')" "real_changelog_row_for_measure_seeded_load_exit"
+has "$(out)" 'audit: gate [bash scripts/measure-seeded-load.test.sh] names "CHANGELOG.md"' "real_changelog_row_for_measure_seeded_load_message"
+check 2 "$(drop CHANGELOG.md 'bash scripts/lint-skills.test.sh')" "real_changelog_row_for_lint_skills_test_exit"
+# the pool test reaches CHANGELOG.md through lint-skills.test.sh, so the audit cannot see it: the row is kept by hand
+check 1 "$(grep -c -x -F "$(printf 'CHANGELOG.md\tbash scripts/lint-skills-pool.test.sh')" "$RM")" "real_changelog_row_for_lint_skills_pool_test_present"
+check 2 "$(drop scripts/check-template-comments.exempt 'bash scripts/test-harness-kit.sh')" "real_exempt_row_for_harness_kit_exit"
+has "$(out)" 'names "scripts/check-template-comments.exempt"' "real_exempt_row_for_harness_kit_message"
+check 0 "$(rgreal "$RW" "$RM")" "real_audit_control_exit"
 
 echo "run-gates.test.sh: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
