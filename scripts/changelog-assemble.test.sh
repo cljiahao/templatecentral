@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016,SC2059  # fixtures hold literal backticks and printf escapes on purpose
 # scripts/changelog-assemble.test.sh — changelog-assemble.sh builds the release section and
 #   refuses each planted defect.
 # Each case builds a committed scratch repo; a refusal must leave `git status` empty.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016  # fixtures hold literal backticks on purpose
 # scripts/changelog-check.test.sh — changelog-check.sh passes a clean PR and fails each planted
 #   defect.
 # Each case builds a scratch repo: main holds CHANGELOG.md and changelog.d/README.md, branch pr
