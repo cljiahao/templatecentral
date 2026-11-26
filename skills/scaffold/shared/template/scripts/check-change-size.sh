@@ -144,7 +144,8 @@ lines=$(awk -F '\t' '{ s += $1 } END { print s + 0 }' "$tmp/counted.txt") || die
 if [ "$lines" -gt "$MAX_CHANGED_LINES" ] || [ "$files" -gt "$MAX_CHANGED_FILES" ]; then
   printf 'check-change-size: %s changed lines (budget %s) in %s files (budget %s) against %s. Lockfiles and files marked linguist-generated are not counted; untracked files and binaries (one line per 4 KB) are.\n' "$lines" "$MAX_CHANGED_LINES" "$files" "$MAX_CHANGED_FILES" "$base" >&2
   printf 'check-change-size: largest changes:\n' >&2
-  sort -rn "$tmp/counted.txt" | head -n 5 | while IFS="$tab" read -r n p; do printf 'check-change-size:   %s lines  %s\n' "$n" "$p" >&2; done
+  sort -rn "$tmp/counted.txt" > "$tmp/counted-sorted.txt"
+  head -n 5 "$tmp/counted-sorted.txt" | while IFS="$tab" read -r n p; do printf 'check-change-size:   %s lines  %s\n' "$n" "$p" >&2; done
   printf 'check-change-size: split the change into smaller pull requests that each do one thing. Raise CHANGE_SIZE_MAX_LINES or CHANGE_SIZE_MAX_FILES only for a reviewed exception.\n' >&2
   exit 1
 fi

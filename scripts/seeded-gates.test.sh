@@ -574,7 +574,7 @@ for st in ts py; do
   LISTED=$(cd "$R" && clean bash scripts/gate-ratchet.sh --list-guarded HEAD 2>&1)
   check 0 "$?" "[$st] --list-guarded exits 0"
   LISTED_PATHS=$(printf '%s\n' "$LISTED" | awk -F'\t' '{print $2}')
-  NAMED=$(cd "$R" && { grep -ho 'scripts/[A-Za-z0-9_-]*[.]sh' .claude/gates.txt lefthook.yml; find .claude/hooks -type f; printf '%s\n' .claude/settings.json .claude/dep-audit-allow.txt .claude/comment-hygiene-patterns.txt .claude/registry-hosts.txt .claude/gates.txt .claude/ci-gates.sh .claude/verify-harness.sh scripts/gate-ratchet.sh tsconfig.json pyrightconfig.json; } | sort -u)
+  NAMED=$(cd "$R" && { grep -ho 'scripts/[A-Za-z0-9_-]*[.]sh' .claude/gates.txt lefthook.yml; find .claude/hooks -type f; printf '%s\n' .claude/settings.json .claude/dep-audit-allow.txt .claude/comment-hygiene-patterns.txt .claude/registry-hosts.txt .claude/allowed-licences.txt .claude/licence-exceptions.txt .claude/change-size-exclude.txt .claude/bundle-budget.txt scripts/py-env.py .claude/gates.txt .claude/ci-gates.sh .claude/verify-harness.sh scripts/gate-ratchet.sh tsconfig.json pyrightconfig.json; } | sort -u)
   seen=0
   for f in $NAMED; do
     [ -f "$R/$f" ] || continue

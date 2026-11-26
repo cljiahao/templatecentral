@@ -62,6 +62,12 @@ while IFS='|' read -r gid lh ci || [ -n "$gid" ]; do
   if [ "$ci" != "-" ] && [ -n "$gh_text" ] && ! has "$gh_text" "$ci"; then echo "GATE MISSING: $gid is not run by .github/workflows/ci.yml (expects '$ci')" >&2; drift=1; fi
   if [ "$ci" != "-" ] && [ -n "$az_text" ] && ! has "$az_text" "$ci"; then echo "GATE MISSING: $gid is not run by the Azure pipeline files (expects '$ci')" >&2; drift=1; fi
 done < "$gates"
+# Every gate a CI file invokes by id must still be listed, so deleting a manifest row cannot silently drop a gate.
+used=$(grep -ohE 'bash \.claude/ci-gates\.sh [a-z]+' <<< "$gh_text"$'\n'"$az_text" || true)
+while read -r _ _ uid; do
+  [ -n "$uid" ] || continue
+  if ! awk -F'|' -v g="$uid" '$1 == g { f = 1 } END { exit !f }' "$gates"; then echo "GATE UNLISTED: CI runs gate '$uid' but $gates has no row for it; restore the row" >&2; drift=1; fi
+done <<< "$used"
 # Review gate files: when gates.txt lists the review gate and lefthook exists, every seeded file with review in its path must hold non-whitespace content.
 if [ -n "$hook_text" ] && grep -q '^review|' "$gates"; then
   review_files=$(awk -F'\t' '$1 ~ /review/ { print $1 }' <<< "$entries")

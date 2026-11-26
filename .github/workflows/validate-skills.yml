@@ -205,6 +205,30 @@ jobs:
       - name: Seeded CI template tests
         run: bash scripts/test-ci-templates.sh
 
+  keyless-gate-tests:
+    name: Keyless gate tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Enable the pnpm that each scaffold pins
+        run: corepack enable
+      - name: Seeded licence gate and its real scaffold runs
+        run: bash scripts/seeded-licences.test.sh
+      - name: Seeded SBOM gate and its real scaffold runs
+        run: bash scripts/seeded-sbom.test.sh
+      - name: Seeded bundle size gate and its real scaffold builds
+        run: bash scripts/seeded-bundle-size.test.sh
+      - name: Seeded change size gate
+        run: bash scripts/seeded-change-size.test.sh
+      - name: Seeded lock file parser fuzz against pip
+        run: bash scripts/seeded-lock-parser-fuzz.test.sh
+
   golden-tests:
     name: Golden scaffold tree tests
     runs-on: ubuntu-24.04
@@ -471,6 +495,7 @@ jobs:
       - plugin-validate
       - shell-lint
       - seeded-gate-tests
+      - keyless-gate-tests
       - golden-tests
       - template-copy-tests
       - version-docs-tests

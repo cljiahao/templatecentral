@@ -69,7 +69,8 @@ total_kb=$(((total + 1023) / 1024))
 if [ "$total" -gt "$budget" ]; then
   printf 'check-bundle-size: %s emits %s bytes gzip of JS and CSS (%s KB rounded up; budget %s KB in %s).\n' "$stack" "$total" "$total_kb" "$max_kb" "$budget_file" >&2
   printf 'check-bundle-size: biggest files:\n' >&2
-  sort -rn "$tmp/sizes.txt" | head -n 5 | while IFS="$(printf '\t')" read -r n p; do printf 'check-bundle-size:   %s KB  %s\n' "$(((n + 1023) / 1024))" "$p" >&2; done
+  sort -rn "$tmp/sizes.txt" > "$tmp/sizes-sorted.txt"
+  head -n 5 "$tmp/sizes-sorted.txt" | while IFS="$(printf '\t')" read -r n p; do printf 'check-bundle-size:   %s KB  %s\n' "$(((n + 1023) / 1024))" "$p" >&2; done
   printf 'check-bundle-size: lazy-load heavy routes with a dynamic import, or drop or swap the large dependency. Raise max_gzip_kb only after a human decision.\n' >&2
   exit 1
 fi

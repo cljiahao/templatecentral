@@ -22,7 +22,8 @@ seed() {
   local d=$1
   mkdir -p "$d/.claude/hooks" "$d/.lefthook" "$d/.github/workflows" "$d/scripts"
   cp "$SH/template/scripts/gate-ratchet.sh" "$d/scripts/gate-ratchet.sh"
-  cp "$SH/template/scripts/check-review-record.sh" "$SH/template/scripts/record-review.sh" "$d/scripts/"
+  cp -p "$SH"/template/scripts/* "$d/scripts/"
+  cp "$SH"/template/.claude/allowed-licences.txt "$SH"/template/.claude/licence-exceptions.txt "$SH"/template/.claude/change-size-exclude.txt "$SH"/template/.claude/bundle-budget.txt "$d/.claude/"
   mkdir -p "$d/.claude/agents"
   cp "$SH/template/.claude/review-checklist.txt" "$SH/template-ts/.claude/review-checklist-stack.txt" "$d/.claude/"
   cp "$SH/template/.claude/agents/code-reviewer.md" "$d/.claude/agents/"
@@ -36,7 +37,9 @@ seed() {
   (cd "$d" && python3 - <<'MAN'
 import hashlib, json, os
 paths = [os.path.join(r, f) for r, _, fs in os.walk(".claude/hooks") for f in fs]
-paths += ["scripts/check-review-record.sh", "scripts/record-review.sh", ".claude/review-checklist.txt", ".claude/review-checklist-stack.txt", ".claude/agents/code-reviewer.md"]
+paths += [os.path.join("scripts", f) for f in os.listdir("scripts")]
+paths += [".claude/allowed-licences.txt", ".claude/licence-exceptions.txt", ".claude/change-size-exclude.txt", ".claude/bundle-budget.txt"]
+paths += [".claude/review-checklist.txt", ".claude/review-checklist-stack.txt", ".claude/agents/code-reviewer.md"]
 paths += [".claude/ci-gates.sh", ".claude/gates.txt", ".claude/verify-harness.sh", ".claude/settings.json", "lefthook.yml", ".gitleaks.toml", ".github/workflows/ci.yml"]
 seeded = {p: {"path": p, "origin_hash": hashlib.sha256(open(p, "rb").read()).hexdigest()} for p in sorted(paths)}
 json.dump({"seeded_files": seeded}, open(".claude/harness.json", "w"))
@@ -450,9 +453,10 @@ for f in ("lefthook.yml", ".claude/gates.txt"):
 json.dump(m, open(".claude/harness.json", "w"))
 RH8
   ); }
+# gl_raw keeps every seeded gate id (needles blanked) so only the lefthook content under test can fail
 # gl_raw <name> <lefthook.yml content> <expected exit 0|1> <expected message fragment, or empty>
 gl_raw() {
-  seed "$T/$1"; printf '%s%s' "$2" $'pre-push:\n  commands:\n    p:\n      run: true\n' >"$T/$1/lefthook.yml"; printf 'harness|-|-\n' >"$T/$1/.claude/gates.txt"; gl_rehash "$T/$1"
+  seed "$T/$1"; printf '%s%s' "$2" $'pre-push:\n  commands:\n    p:\n      run: true\n' >"$T/$1/lefthook.yml"; awk -F'|' 'NF >= 3 { print $1 "|-|-" }' "$T/$1/.claude/gates.txt" >"$T/$1/.claude/gates.new" && mv "$T/$1/.claude/gates.new" "$T/$1/.claude/gates.txt"; gl_rehash "$T/$1"
   out=$(run "$T/$1"); check "raw $1 exit" "$3" $?
   [ -z "$4" ] || contains "raw $1 message" "$4" "$out"
 }

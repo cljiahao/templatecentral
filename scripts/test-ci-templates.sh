@@ -411,9 +411,13 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('workflows', 'quality', 'run', 'bash .claude/ci-gates.sh workflows'),
                          ('envexample', 'quality', 'run', 'bash .claude/ci-gates.sh envexample'),
                          ('dockerfile', 'quality', 'run', 'bash .claude/ci-gates.sh dockerfile'),
+                         ('licences', 'quality', 'run', 'bash .claude/ci-gates.sh licences'),
+                         ('sbom', 'quality', 'run', 'bash .claude/ci-gates.sh sbom'),
                          ('format, lint and typecheck', 'quality', 'run', 'pnpm run check'),
                          ('jscpd', 'quality', 'run', 'pnpm exec jscpd'),
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
+                         ('change size', 'quality', 'run', 'bash .claude/ci-gates.sh changesize "$BASE_REF"'),
+                         ('bundle size', 'quality', 'run', 'bash .claude/ci-gates.sh bundle'),
                          ('gate-time note', 'quality', 'run', 'bash .claude/gate-budget.sh check'),
                          ('tests',
                           'test',
@@ -468,6 +472,8 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('workflows', 'quality', 'run', 'bash .claude/ci-gates.sh workflows'),
                          ('envexample', 'quality', 'run', 'bash .claude/ci-gates.sh envexample'),
                          ('dockerfile', 'quality', 'run', 'bash .claude/ci-gates.sh dockerfile'),
+                         ('licences', 'quality', 'run', 'bash .claude/ci-gates.sh licences'),
+                         ('sbom', 'quality', 'run', 'bash .claude/ci-gates.sh sbom'),
                          ('lint and format', 'quality', 'run', 'ruff check src/ test/ && ruff format --check src/ test/'),
                          ('typecheck', 'quality', 'run', 'python -m pyright src/'),
                          ('jscpd', 'quality', 'run', 'npx --yes jscpd@${JSCPD_VERSION}'),
@@ -479,6 +485,8 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           '--fail-under=80 | tee diff-cover.txt\n'),
                          ('diffcover empty-report check', 'quality', 'run', 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'),
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
+                         ('change size', 'quality', 'run', 'bash .claude/ci-gates.sh changesize "$BASE_REF"'),
+                         ('bundle size', 'quality', 'run', 'bash .claude/ci-gates.sh bundle'),
                          ('gate-time note', 'quality', 'run', 'bash .claude/gate-budget.sh check'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
                          ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
@@ -581,6 +589,8 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                            ('Workflow hardening (pinned actions, token permissions, no injection)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh workflows'),
                            ('.env.example matches the variables the code reads', '(gates include)', 'bash', 'bash .claude/ci-gates.sh envexample'),
                            ('Dockerfile lint (digest pin, non-root USER, hadolint)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh dockerfile'),
+                           ('Licences (every installed dependency has an allowed licence)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh licences'),
+                           ('SBOM (CycloneDX bill of materials matches the lockfile)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh sbom'),
                            ('No suppression markers, no removed covering tests', '(gates include)', 'bash', 'bash .claude/ci-gates.sh workarounds "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'),
                            ('Changelog gate',
                             '(gates include)',
@@ -604,6 +614,8 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                             '  if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
                             'fi\n'
                             'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n'),
+                           ('Change size (the PR stays within the line and file budget)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh changesize "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'),
+                           ('Bundle size (gzip JS and CSS within .claude/bundle-budget.txt)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh bundle'),
                            ('Gate-time budget note',
                             '(gates include)',
                             'bash',
@@ -654,10 +666,15 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'bash .claude/ci-gates.sh workflows'},
                                      {'run': 'bash .claude/ci-gates.sh envexample'},
                                      {'run': 'bash .claude/ci-gates.sh dockerfile'},
+                                     {'run': 'bash .claude/ci-gates.sh licences'},
+                                     {'run': 'bash .claude/ci-gates.sh sbom'},
                                      {'run': 'pnpm run check'},
                                      {'run': 'pnpm exec jscpd'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                       'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'},
+                                     {'env': {'BASE_REF': '${{ github.base_ref }}'},
+                                      'run': 'bash .claude/ci-gates.sh changesize "$BASE_REF"'},
+                                     {'run': 'bash .claude/ci-gates.sh bundle'},
                                      {'run': 'bash .claude/gate-budget.sh check'}],
                          'test': [{'uses': 'actions/checkout', 'with': {'persist-credentials': False}},
                                   {'uses': 'pnpm/action-setup'},
@@ -797,8 +814,12 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                'cache-dependency-path': 'requirements*.txt'}},
                                      {'if': "hashFiles('uv.lock') != ''", 'uses': 'astral-sh/setup-uv'},
                                      {'run': 'set -euo pipefail\n'
-                                             'pip install --require-hashes -r requirements.txt\n'
-                                             'if [ -f requirements-dev.txt ]; then pip install -r '
+                                             '# The licence and SBOM gates read the project environment at .venv.\n'
+                                             'python -m venv .venv\n'
+                                             'echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"\n'
+                                             'echo "$PWD/.venv/bin" >> "$GITHUB_PATH"\n'
+                                             '.venv/bin/python -m pip install --require-hashes -r requirements.txt\n'
+                                             'if [ -f requirements-dev.txt ]; then .venv/bin/python -m pip install -r '
                                              'requirements-dev.txt; fi\n'},
                                      {'run': 'bash .claude/ci-gates.sh deps'},
                                      {'run': 'bash .claude/verify-harness.sh'},
@@ -809,6 +830,8 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'bash .claude/ci-gates.sh workflows'},
                                      {'run': 'bash .claude/ci-gates.sh envexample'},
                                      {'run': 'bash .claude/ci-gates.sh dockerfile'},
+                                     {'run': 'bash .claude/ci-gates.sh licences'},
+                                     {'run': 'bash .claude/ci-gates.sh sbom'},
                                      {'run': 'ruff check src/ test/ && ruff format --check src/ test/'},
                                      {'run': 'python -m pyright src/'},
                                      {'run': 'npx --yes jscpd@${JSCPD_VERSION}'},
@@ -820,6 +843,9 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                        'run': 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                       'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'},
+                                     {'env': {'BASE_REF': '${{ github.base_ref }}'},
+                                      'run': 'bash .claude/ci-gates.sh changesize "$BASE_REF"'},
+                                     {'run': 'bash .claude/ci-gates.sh bundle'},
                                      {'run': 'bash .claude/gate-budget.sh check'}],
                          'changelog': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
                                        {'env': {'BASE_REF': '${{ github.base_ref }}',
@@ -848,11 +874,15 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
               'steps': {'quality': [{'checkout': 'self', 'fetchDepth': 0},
                                     {'task': 'UsePythonVersion@0', 'inputs': {'versionSpec': '3.14'}},
                                     {'bash': 'set -euo pipefail\n'
-                                             'python -m pip install --require-hashes -r requirements.txt\n'
-                                             'if [ -f requirements-dev.txt ]; then python -m pip install -r '
+                                             '# The licence and SBOM gates read the project environment at .venv.\n'
+                                             'python -m venv .venv\n'
+                                             'echo "##vso[task.setvariable variable=VIRTUAL_ENV]$PWD/.venv"\n'
+                                             'echo "##vso[task.prependpath]$PWD/.venv/bin"\n'
+                                             '.venv/bin/python -m pip install --require-hashes -r requirements.txt\n'
+                                             'if [ -f requirements-dev.txt ]; then .venv/bin/python -m pip install -r '
                                              'requirements-dev.txt; fi\n'
                                              '# the deps gate exports uv.lock with uv\n'
-                                             'if [ -f uv.lock ]; then python -m pip install uv==0.13.7; fi\n'},
+                                             'if [ -f uv.lock ]; then .venv/bin/python -m pip install uv==0.13.7; fi\n'},
                                     {'template': 'azure-pipelines/templatecentral-gates.yml'},
                                     {'bash': 'ruff check src/ test/ && ruff format --check src/ test/'},
                                     {'bash': 'python -m pyright src/'},
@@ -874,6 +904,8 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                {'bash': 'bash .claude/ci-gates.sh workflows'},
                                                {'bash': 'bash .claude/ci-gates.sh envexample'},
                                                {'bash': 'bash .claude/ci-gates.sh dockerfile'},
+                                               {'bash': 'bash .claude/ci-gates.sh licences'},
+                                               {'bash': 'bash .claude/ci-gates.sh sbom'},
                                                {'bash': 'bash .claude/ci-gates.sh workarounds '
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'},
                                                {'bash': 'bash .claude/ci-gates.sh changelog '
@@ -894,6 +926,9 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                         'fi\n'
                                                         'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n',
                                                 'env': {'LABELS': '$(LABELS)'}},
+                                               {'bash': 'bash .claude/ci-gates.sh changesize '
+                                                        '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'},
+                                               {'bash': 'bash .claude/ci-gates.sh bundle'},
                                                {'bash': 'bash .claude/gate-budget.sh check'}]}}}
 
 for _h, _p in PINNED.items():
@@ -1340,7 +1375,21 @@ gate_fixture() { # gate_fixture <dir> <ts|py> <github|azure>
   fi
   echo x > "$d/.claude/hooks/a.sh"
   h=$(shasum -a 256 "$d/.claude/hooks/a.sh" | cut -d' ' -f1)
-  printf '{"seeded_files":{"a":{"path":".claude/hooks/a.sh","origin_hash":"%s"}}}' "$h" > "$d/.claude/harness.json"
+  # A gate whose lefthook needle names a script must have that script registered, so the fixture registers each one.
+  local entries gp gid lh ci
+  entries=$(printf '"a":{"path":".claude/hooks/a.sh","origin_hash":"%s"}' "$h")
+  while IFS='|' read -r gid lh ci; do
+    [[ -z "$gid" || "$gid" == \#* ]] && continue
+    case "$lh" in
+      scripts/*|.claude/*)
+        gp=${lh%% *}
+        mkdir -p "$d/$(dirname "$gp")"
+        [[ -f "$d/$gp" ]] || echo "$gid" > "$d/$gp"
+        entries="$entries,$(printf '"%s":{"path":"%s","origin_hash":"%s"}' "$gid" "$gp" "$(shasum -a 256 "$d/$gp" | cut -d' ' -f1)")"
+        ;;
+    esac
+  done < "$d/.claude/gates.txt"
+  printf '{"seeded_files":{%s}}' "$entries" > "$d/.claude/harness.json"
   # A real scaffold commits before it verifies; verify-harness derives its enforcement layer from HEAD
   if ! { git -C "$d" init -q -b main && git -C "$d" add -A \
     && git -C "$d" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m "chore: scaffold"; }; then
@@ -1365,6 +1414,16 @@ for st in ts py; do
         if out=$(gate_verify "$T/gmm"); then bad "mutation not caught: $st/$host $f drops gate $gid"; else ok "mutation caught: $st/$host $f drops gate $gid"; fi
       done
     done < "$SHARED/template/.claude/gates.txt"
+    # Dropping a keyless gate's manifest row while CI still calls it is drift: the row is the only thing that lists it.
+    for g in licences sbom changesize bundle; do
+      grep -q "^$g|" "$SHARED/template/.claude/gates.txt" || { bad "gate manifest: $g has no row in gates.txt"; continue; }
+      gate_fixture "$T/gmr" "$st" "$host"
+      sed -i.bak "/^$g|/d" "$T/gmr/.claude/gates.txt"
+      git -C "$T/gmr" add -A && git -C "$T/gmr" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m "drop $g row"
+      if out=$(gate_verify "$T/gmr"); then bad "mutation not caught: $st/$host drops the $g row from gates.txt"; else
+        case "$out" in *"GATE UNLISTED: CI runs gate '$g'"*) ok "mutation caught: $st/$host drops the $g row from gates.txt" ;; *) bad "$st/$host $g row removal failed for the wrong reason: $out" ;; esac
+      fi
+    done
   done
 done
 
