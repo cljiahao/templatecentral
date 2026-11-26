@@ -28,12 +28,14 @@
 # when it has `shell`, `continue-on-error` other than false, an `if` other than exactly
 # `github.event_name == 'pull_request'`, `defaults.run`, or such an `env`. A workflow with `defaults.run` or
 # such an `env` wires nothing. The closed list is the env names validate-skills.yml uses today: BASE_REF,
-# EVENT, FENCE_SNAPSHOT_CHANGE_OK, NEEDS, STRICT_DOC_SYNC (BASH_ENV, ENV, SHELLOPTS and the rest are out). A block folded with `>` is one line, so only its first command counts.
+# EVENT, FENCE_SNAPSHOT_CHANGE_OK, NEEDS, STRICT_DOC_SYNC (BASH_ENV, ENV, SHELLOPTS and the rest are out).
+# A block folded with `>` is one line, so only its first command counts.
 #
 # It fails closed: no test file, no workflow file, a workflow that cannot be parsed (even one that does not
 # run on pull requests) or is not a mapping, no workflow that counts, or no python3 with PyYAML.
 # Will not catch: a test script that runs but asserts nothing or skips itself on its arguments; an allowed
-# env name set to a value that changes what the script does; a job `needs` chain, a job `container`, a
+# env name set to a value that changes what the script does; a non-test step in the same job that writes
+# $GITHUB_ENV or $GITHUB_PATH and so changes the shell or the PATH of a later test step; a job `needs` chain, a job `container`, a
 # `matrix` or a `timeout-minutes` that keeps the step from running or ends it early; a `uses` step that
 # edits the tree before the run; and a test that only a `workflow_run`, schedule or manual trigger runs,
 # which is not counted.

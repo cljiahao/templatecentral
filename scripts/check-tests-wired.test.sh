@@ -485,6 +485,9 @@ check 1 "$RC" "bypass: pull_request with paths-ignore does not count"
 trig trig_types_no_reopened '  pull_request:
     types: [synchronize, opened, ready_for_review]'
 check 1 "$RC" "bypass: pull_request with types lacking reopened does not count"
+trig trig_types_exact3 '  pull_request:
+    types: [opened, synchronize, reopened]'
+check 1 "$RC" "bypass: pull_request with exactly opened, synchronize, reopened does not count (exact-list rule)"
 trig trig_types_labels '  pull_request:
     types: [unlabeled, opened, labeled, synchronize, reopened]'
 check 0 "$RC" "control: pull_request with the validate-skills types list (any order) counts"
@@ -556,6 +559,12 @@ envcase env_step_bad '' '' 'env: {BASH_ENV: /tmp/x}'
 check 1 "$RC" "bypass: step env BASH_ENV leaves that step unwired (a.test.sh)"
 check yes "$(has "$OUT" "scripts/a.test.sh is not run")" "step env: a.test.sh named"
 check no "$(has "$OUT" "scripts/b.test.sh is not run")" "step env: the clean step still wires b.test.sh"
+envcase env_wf_expr_bad "env: \${{ fromJSON(x) }}
+" '' 'name: t'
+check 1 "$RC" "bypass: a workflow env that is an expression wires nothing"
+envcase env_wf_empty_bad 'env: ""
+' '' 'name: t'
+check 1 "$RC" "bypass: a workflow env that is an empty string wires nothing"
 envcase env_str_bad '' '    env: not-a-mapping
 ' 'name: t'
 check 1 "$RC" "bypass: a job env that is a string wires nothing"
