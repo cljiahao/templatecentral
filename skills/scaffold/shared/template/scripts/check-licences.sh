@@ -4,7 +4,7 @@
 # A project with both manifests is checked for both. Dependencies must be installed first: a missing node_modules or Python environment fails, it never passes.
 # Python needs the project environment (VIRTUAL_ENV, else .venv) and every package named in requirements.txt must be installed in it.
 # LICENCES_SCOPE=prod|all defaults to prod because dev tools are not shipped: pnpm gets --prod, and Python checks only the packages named in the hashed requirements.txt (the environment may also hold dev tools). all checks everything installed.
-# The Python reading lives in py-env.py next to this script, shared with generate-sbom.sh. In GitHub Actions and Azure Pipelines the list-path overrides are refused.
+# The Python reading lives in scripts/py-env.py next to this script, shared with generate-sbom.sh. In GitHub Actions and Azure Pipelines the list-path overrides are refused.
 # Strict by design: several Python licence classifiers on one package are joined with AND, so a dual-licensed package that lists two classifiers needs both allowed.
 # Exit: 0 ok, 1 a licence is not allowed, 2 the check could not run.
 # Usage: bash scripts/check-licences.sh        Env: ALLOWED_LICENCES_FILE, LICENCE_EXCEPTIONS_FILE override the list paths.

@@ -107,6 +107,22 @@ pre-push:
     review-record:
       # Fails when HEAD has no passing in-session review record; run scripts/record-review.sh to make one. Records are local, so CI skips it.
       run: bash scripts/check-review-record.sh
+    licences:
+      # Fails when an installed dependency has a licence that .claude/allowed-licences.txt does not list. Install the dependencies first.
+      run: bash scripts/check-licences.sh
+    sbom:
+      # Writes the CycloneDX bill of materials to dist/sbom and fails when it does not match the lockfile.
+      run: bash scripts/generate-sbom.sh
+    change-size:
+      # Fails when the branch changes more lines or files than the change-size budget, so reviews stay small.
+      run: bash scripts/check-change-size.sh
+    bundle-size:
+      # Builds, then fails when the gzip size of the emitted JS and CSS is over .claude/bundle-budget.txt. Only Next.js and Vite projects emit a bundle, other stacks skip the build.
+      run: |
+        for f in next.config.* vite.config.*; do
+          if [ -e "$f" ]; then pnpm run build || exit 1; break; fi
+        done
+        bash scripts/check-bundle-size.sh
     verify:
       # test:ci runs the 80% line floor that plain test skips.
       run: pnpm run check && pnpm run test:ci

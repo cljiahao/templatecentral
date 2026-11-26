@@ -56,6 +56,10 @@ template/.claude/comment-hygiene-patterns.txt 644 - -
 template/.claude/gates.txt 644 - -
 template/.claude/gate-budget.sh 755 - -
 template/.claude/gate-budget.conf 644 - -
+template/.claude/allowed-licences.txt 644 - -
+template/.claude/bundle-budget.txt 644 - -
+template/.claude/change-size-exclude.txt 644 - -
+template/.claude/licence-exceptions.txt 644 - -
 template/.claude/hooks/session-context.sh 755 - -
 template/.claude/hooks/skill-usage-log.sh 755 - -
 template/.claude/regen-harness.sh 755 - -
@@ -76,4 +80,9 @@ template/scripts/record-review.sh 755 - -
 template/scripts/remove-harness.sh 755 - -
 template/scripts/check-workarounds.sh 755 - -
 template/scripts/scan-secrets.sh 755 - -
+template/scripts/check-bundle-size.sh 755 - -
+template/scripts/check-change-size.sh 755 - -
+template/scripts/check-licences.sh 755 - -
+template/scripts/generate-sbom.sh 755 - -
+template/scripts/py-env.py 644 - -
 template/.claude/registry-hosts.txt 644 - -

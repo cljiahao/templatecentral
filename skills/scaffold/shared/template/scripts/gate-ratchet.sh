@@ -72,6 +72,8 @@ kind_of() {
     .claude/dep-audit-allow.txt | */.claude/dep-audit-allow.txt) KIND=allow ;;
     .claude/comment-hygiene-patterns.txt | */.claude/comment-hygiene-patterns.txt) KIND=patterns ;;
     .claude/gate-budget.conf | */.claude/gate-budget.conf) KIND=gatetime ;;
+    .claude/allowed-licences.txt | */.claude/allowed-licences.txt | .claude/licence-exceptions.txt | */.claude/licence-exceptions.txt | .claude/change-size-exclude.txt | */.claude/change-size-exclude.txt) KIND=lines ;;
+    .claude/bundle-budget.txt | */.claude/bundle-budget.txt) KIND=bundle ;;
     tsconfig.json | tsconfig.*.json | */tsconfig.json | */tsconfig.*.json) KIND=tsconfig ;;
     pyrightconfig.json | */pyrightconfig.json) KIND=pyright ;;
     pnpm-workspace.yaml | */pnpm-workspace.yaml) KIND=pnpmws ;;
@@ -142,9 +144,9 @@ guard_scan() {
   sort -u -o "$wd/guard.lst" "$wd/guard.lst" || return 1
 }
 
-# The content-frozen kinds (guard, budget, ci, gates, hosts, gitleaks, patterns), which the allow-gate-change label can never waive and verify-harness.sh hashes; ci-gates.sh and verify-harness.sh read this as the third column of --list-guarded.
+# The content-frozen kinds (guard, budget, ci, gates, hosts, lines, bundle, gitleaks, patterns), which the allow-gate-change label can never waive and verify-harness.sh hashes; ci-gates.sh and verify-harness.sh read this as the third column of --list-guarded.
 enforced_kind() {
-  case "$1" in guard | budget | ci | gates | hosts | gitleaks | patterns) return 0 ;; esac
+  case "$1" in guard | budget | ci | gates | hosts | lines | bundle | gitleaks | patterns) return 0 ;; esac
   return 1
 }
 
@@ -1124,6 +1126,30 @@ function do_hosts(   i, n, L, line) {
   }
 }
 
+# Licence allow-list, licence exceptions and change-size exclude list: each non-comment line is one set member, compared exactly, so a new line is a finding.
+function do_lines(   i, n, L, line) {
+  n = split(T, L, "\n")
+  for (i = 1; i <= n; i++) {
+    line = L[i]; gsub(/^[ \t]+|[ \t]+$/, "", line)
+    if (line == "" || line ~ /^#/) continue
+    emit("set", "list-line", line)
+  }
+}
+
+# Bundle budget: the max_gzip_kb value may not rise; a file without one valid line is unreadable and fails closed.
+function do_bundle(   i, n, L, line, v, seen) {
+  n = split(T, L, "\n")
+  for (i = 1; i <= n; i++) {
+    line = L[i]; sub(/#.*$/, "", line); gsub(/^[ \t]+|[ \t]+$/, "", line)
+    if (line == "") continue
+    if (line !~ /^max_gzip_kb[ \t]+[0-9]+$/) fail("bundle-budget.txt line " i " is not 'max_gzip_kb <whole number>'")
+    if (seen) fail("bundle-budget.txt has more than one max_gzip_kb line")
+    v = line; sub(/^max_gzip_kb[ \t]+/, "", v); seen = 1
+    emit("max", "bundle-max-gzip-kb", v + 0)
+  }
+  if (!seen) fail("bundle-budget.txt has no max_gzip_kb line")
+}
+
 function yes(v) { return v ~ /^[Tt][Rr][Uu][Ee]$/ }
 function no(v) { return v ~ /^[Ff][Aa][Ll][Ss][Ee]$/ }
 function norm_yaml(line) {
@@ -1216,6 +1242,8 @@ END {
   else if (K == "budget") do_budget()
   else if (K == "gates") do_gates()
   else if (K == "hosts") do_hosts()
+  else if (K == "lines") do_lines()
+  else if (K == "bundle") do_bundle()
   else if (K == "gatetime") do_gatetime()
   else if (K == "pnpmws") do_pnpmws()
   else if (K == "dependabot") do_dependabot()

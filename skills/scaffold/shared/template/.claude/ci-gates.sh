@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|list> [base-branch]
+# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle|list> [base-branch]
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -119,7 +119,7 @@ pr_only() {
 }
 
 case "$gate" in
-  secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover)
+  secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle)
     gate_listed "$gate" || fail "gate '$gate' is not listed in .claude/gates.txt"
     ;;
   list)
@@ -463,8 +463,29 @@ JS
     fi
     bash scripts/check-dockerfile.sh || fail "Dockerfile check failed (output above)."
     ;;
+  licences)
+    [ -f scripts/check-licences.sh ] || fail "scripts/check-licences.sh is missing"
+    bash scripts/check-licences.sh || fail "licence check failed (output above). Install the dependencies first; change .claude/allowed-licences.txt only after a licence review."
+    ;;
+  sbom)
+    [ -f scripts/generate-sbom.sh ] || fail "scripts/generate-sbom.sh is missing"
+    bash scripts/generate-sbom.sh || fail "SBOM generation failed (output above). Install the dependencies first."
+    ;;
+  changesize)
+    pr_only
+    [ -f scripts/check-change-size.sh ] || fail "scripts/check-change-size.sh is missing"
+    bash scripts/check-change-size.sh "$base" || fail "this change is over the size budget, or could not be measured (output above). Split it into smaller reviewed changes."
+    ;;
+  bundle)
+    [ -f scripts/check-bundle-size.sh ] || fail "scripts/check-bundle-size.sh is missing"
+    # Only a project with a Next.js or Vite config emits a browser bundle; any other stack skips the build and the script reports why.
+    if compgen -G 'next.config.*' >/dev/null || compgen -G 'vite.config.*' >/dev/null; then
+      pnpm run build || fail "the build failed, so the bundle size cannot be measured (output above)."
+    fi
+    bash scripts/check-bundle-size.sh || fail "bundle size check failed (output above). Lazy-load heavy routes or drop the large dependency; raise .claude/bundle-budget.txt only after a human decision."
+    ;;
   *)
-    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|list> [base-branch]" >&2
+    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle|list> [base-branch]" >&2
     exit 2
     ;;
 esac

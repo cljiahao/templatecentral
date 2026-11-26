@@ -103,6 +103,18 @@ pre-push:
     review-record:
       # Fails when HEAD has no passing in-session review record; run scripts/record-review.sh to make one. Records are local, so CI skips it.
       run: bash scripts/check-review-record.sh
+    licences:
+      # Fails when an installed dependency has a licence that .claude/allowed-licences.txt does not list. Install the dependencies first.
+      run: bash scripts/check-licences.sh
+    sbom:
+      # Writes the CycloneDX bill of materials to dist/sbom and fails when it does not match the lockfile.
+      run: bash scripts/generate-sbom.sh
+    change-size:
+      # Fails when the branch changes more lines or files than the change-size budget, so reviews stay small.
+      run: bash scripts/check-change-size.sh
+    bundle-size:
+      # A Python project emits no browser bundle, so this reports a skip; it stays listed so the manifest is one list for every stack.
+      run: bash scripts/check-bundle-size.sh
     verify:
       # --cov applies the 80% line floor set as fail_under in pyproject.toml.
       run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; ruff check src/ test/ && python -m pyright src/ && python -m pytest test/ --cov=src -q'
