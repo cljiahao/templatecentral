@@ -3,7 +3,7 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:scaffold skill. -->
 ## Template notes — config and source files
 
-The config and source files are real files in `<skill-dir>/nestjs/template/` (`AGENTS.md` in `<skill-dir>/nestjs/template-agents/`), listed in `<skill-dir>/nestjs/template.manifest`. Steps 1, 4 and 6 copy them (stack, base and agents parts); do not re-type or modify them. Notes:
+The config and source files are real files in `<skill-dir>/nestjs/template/` (`AGENTS.md` in `<skill-dir>/nestjs/template-agents/`, the verify skill at `.claude/skills/nest-verify/SKILL.md`, which kit Step E hashes), listed in `<skill-dir>/nestjs/template.manifest`. Steps 1, 4 and 6 copy them (stack, base and agents parts); do not re-type or modify them. Notes:
 
 - `package.json` — Step 1 sets `"name"`. Versions are caret floors aligned with the plugin's `<skill-dir>/../../.claude/rules/nestjs.md`; `pnpm install` resolves the newest compatible; extra test tooling is omitted (`templatecentral:add (test)` adds it). Freshen pins post-scaffold with the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`). `engines.node` is the Node 26 floor from `versions.txt` (the template's choice; Nest 11 needs less). Nest and Swagger stay on major 11 so `nestjs-zod` runs inside its declared peers and `pnpm install` prints no peer warning (see `.claude/rules/nestjs.md`). The project is CommonJS (no `"type": "module"`), so no `.js` import suffixes are needed.
 - `pnpm-workspace.yaml` — If `pnpm install` reports `ERR_PNPM_IGNORED_BUILDS` or rewrites it with unexpected entries, set each listed package under `allowBuilds` to `true` or `false` and re-run `pnpm install`.
@@ -65,9 +65,7 @@ pnpm test
 pnpm test:e2e
 ```
 
-`pnpm test:e2e` and `vitest.config.e2e.mts` remain for local use; CI runs the single combined suite (`test:ci`).
-
-If any command fails, fix it before proceeding.
+`pnpm test:e2e` is for local use; CI runs the single combined suite (`test:ci`). Fix any failure before proceeding. The gate does not open `/docs`: before handing off, also check that the Swagger docs render.
 
 ### 6. Write project AGENTS.md
 
@@ -89,49 +87,25 @@ cat "<skill-dir>/shared/harness-kit-enforcement.md"
 cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
-Kit Step **0** (`TC_PART=base`) already ran. Execute kit Steps **A through D** now (settings.json with `TC_PART=settings`, the hook notes, then FUTURE.md, CONSTITUTION.md and the `/skill-audit` skill with `TC_PART=late`; each run of `tc-copy.sh` names `TC_STACK=nestjs`).
+Kit Step **0** (`TC_PART=base`) already ran. Execute kit Steps **A through D** now (each `tc-copy.sh` run with `TC_STACK=nestjs`).
 
-### 6c. Project skill file (`.claude/skills/`)
+### 7. `CLAUDE.md` and task management (optional)
 
-`.claude/skills/nest-verify/SKILL.md` was copied in Step 1 (Step E requires it). A project skill is a **directory** with `SKILL.md` as the entrypoint; flat `.claude/skills/<name>.md` files are silently ignored.
-
-### 6d. Seed additional project skills
-
-Use the scaffold Step 1 answer on extra project skills; ask the user only if scaffold Step 1 did not settle it. Common candidates: `nest-migrate` (DB migration with a safety gate, if Drizzle/Kysely is wired up) and `nest-module` (a new feature module: controller + service + DTO + test). For each workflow the user named, create a skill in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
-
-### 7. Generate `CLAUDE.md` (optional — Claude Code users only)
-
-Use the scaffold Step 1 answer on `CLAUDE.md`; ask only if scaffold Step 1 did not settle it. Skip this step if the user does not use Claude Code — `AGENTS.md` is enough. Create `CLAUDE.md` at the project root with exactly one line:
+Use the scaffold Step 1 answers. If `CLAUDE.md` is wanted, create `CLAUDE.md` at the project root with exactly one line (kit Step E hashes it into `seeded_files`):
 
 ```
 @AGENTS.md
 ```
 
-Do not duplicate commands or conventions here — everything lives in `AGENTS.md`. Step E hashes it into `seeded_files`.
-
-### 7b. Optional: Task management
-
-Use the scaffold Step 1 answer on task management; ask only if scaffold Step 1 did not settle it. If yes, append the task-management section to `AGENTS.md`:
+If task management is wanted, append its section to `AGENTS.md` (the command does not read the file):
 
 ```bash
 printf '\n' >> AGENTS.md
 cat "<skill-dir>/nestjs/template-tail/task-management.md" >> AGENTS.md
 ```
 
-#### Finish the harness (required, whatever the answer above)
+Then, whatever the answers above, run kit Steps **E through H**: the scaffold is not finished until Step H is done or skipped.
 
-Execute kit Steps **E through H** using the **nestjs** row: harness.json (Step E, with the `nest-verify` hash), the base snapshot (E2), project docs (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done or skipped.
+### 8. Remove example code (optional)
 
-### 8. Remove Example Code (Optional)
-
-Use the scaffold Step 1 answer on removing example code; ask only if scaffold Step 1 did not settle it. If yes, once the user confirms the project runs, use the cleanup utility (`cat "<skill-dir>/../cleanup/SKILL.md"`). NestJS-specific steps: delete `src/modules/example/`, delete the three example-module tests in `test/app.e2e-spec.ts` (invalid body, create/read/update/delete, OpenAPI document) with their `@nestjs/swagger` and `nestjs-zod` imports, and remove `ExampleModule` from `src/modules/index.ts` and the `imports` array in `src/app.module.ts`.
-
-## Rules
-
-- Global pipes and filters go in `app.module.ts`; auth guards at controller/route level (not global, so health checks remain unprotected)
-- Verify the API starts and Swagger docs at `/docs` render before handing off to the user
-- Do not commit real secrets or put JWT/DB credentials in `AGENTS.md` / `CLAUDE.md`; both are committed and read by every agent
-- Leave `node_modules/`, `dist/` and `.env` out of the scaffold; they are installed, built or local
-- The scaffold is complete only once the project `AGENTS.md` exists; check for it before handing off
-- Keep the `base/` module (health check) and the `test/` directory structure; CI and the e2e tests depend on them
-- Install packages with pnpm inside the project, not globally
+Use the scaffold Step 1 answer on removing example code. If yes, once the user confirms the project runs, load the cleanup utility with `cat "<skill-dir>/../cleanup/SKILL.md"`.
