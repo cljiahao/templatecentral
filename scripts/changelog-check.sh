@@ -33,12 +33,16 @@
 #   changed nothing else. The golden hashes depend on template content, not on the version, and
 #   pristine-hashes.txt is regenerated from the tag after the release, not in the release PR.
 #
-# Catches: no fragment added; unknown category; empty or whitespace-only fragment; a fragment
-#   line outside the line grammar (changelog-lib.sh, cl_content_ok): a line is only "- text", then
-#   "  - text" or "  text" (two spaces); text starts with a letter, digit, backtick, [ ( " ' or #
-#   and a digit (a PR reference), holds a letter or digit, is not a list marker (1. or 1)) or
-#   three backticks, and has no < before a letter or / outside backticks. So a heading, quote,
-#   fence, thematic break, setext underline, table, list-marker line or HTML block is rejected;
+# Catches: no fragment added; unknown category; empty fragment; a fragment that breaks the rules of
+#   changelog-lib.sh, cl_content_ok. Bytes: any control byte but LF (CR, TAB, NUL, ESC, DEL), a
+#   last line with no newline. Lines: a blank line; a line that is not "- text" (first line and
+#   after), "  - text" or "  text" (two spaces). Text: starts with anything but a letter, digit,
+#   backtick, [ ( " ' or # and a digit (a PR reference); has no letter or digit; starts like a
+#   list marker (1. or 1)); matches [label]: (link reference definition). Backticks: odd count
+#   on a line, two in a row, one after a backslash. Outside backtick spans: < before a letter,
+#   / ! or ? (raw HTML, comment, CDATA, PI, autolink), "](" or "][" (link destination or label).
+#   So a heading, quote, fence, thematic break, setext underline, table or HTML block is
+#   rejected, and the script and Markdown agree on every line break and every code span;
 #   symlink, submodule or type-changed fragment; subdirectory; name outside the pattern (incl.
 #   spaces, newlines); fragment added then deleted in the same PR; README.md counted as a
 #   fragment; missing base ref or merge base; entries left under "## [Unreleased]"; in a normal
@@ -50,7 +54,10 @@
 #   lib, this check and the workflow), an extra or duplicate key in a version file, a version
 #   that is not greater; CHANGELOG.md deleted or type-changed; a malformed heading.
 # Does not catch: a fragment whose text is wrong or meaningless; inline Markdown inside a valid
-#   line (emphasis, links, link reference definitions, task boxes, entities); a fragment under
+#   line that cannot open a block or hide a backtick: emphasis, entity references (&lt;), a bare
+#   URL of any scheme (javascript: too; some renderers link it), a task box ([ ] x), a
+#   backslash before another character, a "[text]" that a "[text]:" definition elsewhere in
+#   CHANGELOG.md turns into a link, trailing spaces (a hard break); a fragment under
 #   the wrong category (a migration PR does not compare the category either); a fragment that
 #   duplicates another fragment's text; a normal PR that edits this script,
 #   changelog-assemble.sh, changelog-lib.sh, the tests or the workflow, because the checks that
@@ -90,6 +97,7 @@ n_bad=0 n_rel=0 n_added=0 n_del=0 cl_status="" cl_mode="" cl_seen=0
 : > "$work/verbad"
 : > "$work/relq"
 : > "$work/fragtext"
+: > "$work/fragpairs"
 while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
   read -r _om nm _osha nsha st <<< "$meta"
   label=$(printable "$path")
@@ -124,7 +132,8 @@ while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
       bad "$label: $why"
       continue
     fi
-    tr -d '`' < "$work/frag" >> "$work/fragtext"
+    cat "$work/frag" >> "$work/fragtext"
+    awk '{ o = $0; gsub(/`/, ""); print $0 "\t" o }' "$work/frag" >> "$work/fragpairs"
     n_added=$((n_added + 1))
     continue
   fi
@@ -154,6 +163,25 @@ fi
 
 # Migration PR: the only CHANGELOG.md change empties [Unreleased] into the added fragments.
 migration=0 bt=$(printf '\x60')
+# Succeeds when the removed line $1 is a reworded fragment line: the same text once backticks are
+# dropped, and every code span of the removed line kept as it was (a reword may add spans, it may
+# not drop, move or change one). Odd backtick counts fail closed. Used only when no fragment line
+# equals the removed line exactly.
+reword_ok() {
+  local line=$1 cand i only parts
+  only=${line//[!$bt]/}
+  if [[ $(( ${#only} % 2 )) -ne 0 ]]; then return 1; fi
+  IFS=$bt read -r -a parts <<< "$line"
+  while IFS= read -r cand; do
+    i=1
+    while [[ $i -lt ${#parts[@]} ]]; do
+      [[ $cand == *"$bt${parts[$i]}$bt"* ]] || break
+      i=$((i + 2))
+    done
+    if [[ $i -ge ${#parts[@]} ]]; then return 0; fi
+  done < <(S="${line//"$bt"/}" awk -F '\t' '$1 == ENVIRON["S"] { print $2 }' "$work/fragpairs")
+  return 1
+}
 if [[ $cl_seen -eq 1 && $cl_status == M && ! -s $work/entries && $n_added -ge 1 && $n_bad -eq 0 ]] \
   && git cat-file blob "$mb:CHANGELOG.md" > "$work/base" 2>/dev/null; then
   cl_unreleased_emptied "$work/base" > "$work/base.emptied"
@@ -163,7 +191,8 @@ if [[ $cl_seen -eq 1 && $cl_status == M && ! -s $work/entries && $n_added -ge 1 
     while IFS= read -r line; do
       t=${line#"${line%%[![:space:]]*}"}
       if [[ $t == '### '* ]]; then continue; fi
-      if ! grep -qxF -- "${line//"$bt"/}" "$work/fragtext"; then
+      if grep -aqxF -- "$line" "$work/fragtext"; then continue; fi
+      if ! reword_ok "$line"; then
         bad "an entry removed from [Unreleased] is in no added fragment:"
         bad "  $(printable "${line:0:80}")"
       fi

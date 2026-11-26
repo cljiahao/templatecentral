@@ -60,10 +60,15 @@ mk emptyfile; : > "$R/changelog.d/a.added.md"; commit f
 run "empty fragment" 1 "no bullet line"
 
 mk blank; printf '  \n\n\t\n' > "$R/changelog.d/a.added.md"; commit f
-run "whitespace-only fragment" 1 "no bullet line"
+run "whitespace-only fragment" 1 "breaks the rule"
 
 mk nobullet; printf 'just words\n' > "$R/changelog.d/a.added.md"; commit f
 run "no bullet line" 1 "breaks the rule"
+
+mk nonl; printf -- '- ok' > "$R/changelog.d/a.added.md"; commit f
+run "no newline at the end" 1 "breaks the rule"
+mk spaces; printf '  \n\n' > "$R/changelog.d/a.added.md"; commit f
+run "spaces-only fragment" 1 "breaks the rule"
 
 mk emptybullet; printf -- '- \n' > "$R/changelog.d/a.added.md"; commit f
 run "bullet with no text" 1 "breaks the rule"
@@ -187,6 +192,32 @@ done <<'LIST'
 - ok\n+ plus bullet
 - ok\n3. numbered bullet
 - ok\n1. # x
+- a\r## [9.9.9] — 2099-01-01\r- b
+- a\r\n- b\r
+- a\r  ---
+- a\r> x
+- a\r<script>
+- a\0b
+- ok\ttab
+- ok\x1b[0m escape
+- ok\x7f del
+- x \\\x60<b>\\\x60 y
+- a \x60 b\n  c \x60<script>\x60 d \x60 e
+- a \x60b
+- a \x60\x60b\x60\x60 c
+- a <!-- b\n  c -->
+- a <?x ?>
+- a <![CDATA[
+- [x]: http://example.invalid
+- [Unreleased]: http://example.invalid
+- ok\n  [x]: http://example.invalid
+- ok\n  - [x]: http://example.invalid
+- ok\n\n  [x]: http://example.invalid
+- ok\n\n- b
+- ok\n  \n- b
+- see [t](http://example.invalid)
+- see [t][ref]
+- b\x60c) \x60<i>\x60 d\x60 e
 LIST
 # Controls: every allowed first character, as bullet, nested bullet and continuation.
 n=0
@@ -197,7 +228,12 @@ done <<'LIST'
 - letter first
 - 3 - 2 = 1
 - \x60code\x60 first
-- [link](#x) first
+- [link] first
+- use \x60<b>\x60 in a span
+- two \x60a\x60 and \x60<b>\x60 spans
+- ok\n  - nested \x60x\x60
+- \x60arr[0](1)\x60 inside a span
+- see #96 and (a) "b" 'c'
 - (paren) first
 - "quoted" first
 - 'single quoted' first
@@ -213,7 +249,6 @@ done <<'LIST'
 - ok\n  - nested letter
 - ok\n  - nested \x60code\x60
 - ok\n  - nested #12
-- ok\n\n- blank line between bullets
 - ok\n  - nested - - dash text
 - see #12, a - b and --- inside text\n  - nested --flag
 - use \x60<h2>\x60 and \x60</div>\x60 in text
@@ -367,6 +402,26 @@ sub "$R/CHANGELOG.md" 's/^- two$/- two in <version> here/'; commit lt; git -C "$
 migfrags; printf -- '- two on \x60<version>\x60 here\n' > "$R/changelog.d/two.added.md"
 printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
 run "migration PR changes a word beside the backticks" 1 "in no added fragment"
+mkunrel mig-bt3; git -C "$R" checkout -q main
+sub "$R/CHANGELOG.md" 's/^- two$/- two `a` in <version> here/'; commit lt; git -C "$R" checkout -q -B pr2
+migfrags; printf -- '- two a in \x60<version>\x60 here\n' > "$R/changelog.d/two.added.md"
+printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
+run "migration PR drops a code span of the removed line" 1 "in no added fragment"
+mkunrel mig-bt4; git -C "$R" checkout -q main
+sub "$R/CHANGELOG.md" 's/^- two$/- two `a b` in <version> here/'; commit lt; git -C "$R" checkout -q -B pr2
+migfrags; printf -- '- two \x60a\x60 b in \x60<version>\x60 here\n' > "$R/changelog.d/two.added.md"
+printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
+run "migration PR moves the edge of a code span" 1 "in no added fragment"
+mkunrel mig-bt5; git -C "$R" checkout -q main
+sub "$R/CHANGELOG.md" 's/^- two$/- two `a` in <version> here/'; commit lt; git -C "$R" checkout -q -B pr2
+migfrags; printf -- '- two \x60a\x60 in \x60<version>\x60 here\n' > "$R/changelog.d/two.added.md"
+printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
+runq "migration PR keeps a span and wraps a < in backticks" 0
+mkunrel mig-bt6; git -C "$R" checkout -q main
+sub "$R/CHANGELOG.md" 's/^- two$/- two `a in <version> here/'; commit lt; git -C "$R" checkout -q -B pr2
+migfrags; printf -- '- two \x60a in <version> here\x60\n' > "$R/changelog.d/two.added.md"
+printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
+run "migration PR rewords a line with an odd backtick count" 1 "in no added fragment"
 mkunrel mig-edit; migfrags; printf '%s' "${EMPTIED/- old/- old2}" > "$R/CHANGELOG.md"; commit f
 run "migration PR also edits a released line" 1 "release rule"
 mkunrel mig-nofrag; printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f

@@ -38,10 +38,7 @@ V=(2.0.0 2026-03-04)
 mk control
 frag zeta.added.md; frag alpha.added.md "- alpha one
   continued
-- alpha two"; frag m.fixed.md; frag c.changed.md; frag r.removed.md; frag s.security.md; frag blank.added.md "
-- blank-padded
-
-"
+- alpha two"; frag m.fixed.md; frag c.changed.md; frag r.removed.md; frag s.security.md
 commit
 out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?
 want='## [Unreleased]
@@ -54,7 +51,6 @@ want='## [Unreleased]
 - alpha one
   continued
 - alpha two
-- blank-padded
 - entry zeta.added.md
 
 ### Changed
@@ -151,14 +147,37 @@ for body in '- - ```js' '- - # x' '- ***' '- - -' '* * *' '- ok
 ===' '- ---' \
   '> # x' '- ok
   =' '- <h2>y</h2>' '- ok
-  <h2>y</h2>' '- + # x' '- 1. # x'; do
+  <h2>y</h2>' '- + # x' '- 1. # x' \
+  '- x \`<b>\` y' '- a `b
+  c `<script>` d ` e' '- a `b' '- a ``b`` c' '- a <!-- b
+  c -->' '- a <?x ?>' '- a <![CDATA[' '- [x]: http://example.invalid' \
+  '- [Unreleased]: http://example.invalid' '- ok
+  [x]: http://example.invalid' '- ok
+
+  [x]: http://example.invalid' '- ok
+
+- b' '- see [t](http://example.invalid)' '- see [t][ref]'; do
   n=$((n + 1)); mk "lib-bad$n"; frag a.added.md; frag b.fixed.md "$body"; commit
   refuse "lib rejects: ${body//$'\n'/ | }" "not a valid fragment" "${V[@]}"
+done
+# Bytes the shell cannot hold in a variable: lone CR, CRLF, NUL, TAB, DEL, no final newline, empty.
+n=0
+for body in '- a\r## [9.9.9] — 2099-01-01\r- b\n' '- a\r\n- b\r\n' '- a\r  ---\n' '- a\r> x\n' \
+  '- a\r<script>\n' '- a\0b\n' '- a\tb\n' '- a\177b\n' '- ok' ''; do
+  n=$((n + 1)); mk "lib-byte$n"; frag a.added.md; printf -- "$body" > "$R/changelog.d/b.fixed.md"; commit
+  refuse "lib rejects bytes: $body" "not a valid fragment" "${V[@]}"
 done
 mk lib-ok; frag a.added.md; bt='`'; frag b.fixed.md "- use ${bt}x${bt}, see #12 and --- inline
   - nested --flag"; commit
 out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?
 if [[ $rc -eq 0 ]]; then ok; else fail "lib control refused inline text: $out"; fi
+mk lib-ok3; frag a.added.md; frag b.fixed.md "- use ${bt}<b>${bt} in a span and ${bt}x${bt} too
+  - nested ${bt}<i>${bt}"; commit
+out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?
+if [[ $rc -ne 0 ]]; then fail "lib control refused spans: $out"
+elif ! grep -qF -- "- use ${bt}<b>${bt} in a span and ${bt}x${bt} too" "$R/CHANGELOG.md" \
+  || ! grep -qF -- "  - nested ${bt}<i>${bt}" "$R/CHANGELOG.md"; then fail "lib control: text not emitted as written"
+else ok; fi
 mk lib-ok2; frag a.added.md; frag b.fixed.md '- the --flag is new
 - text with **bold**
   - nested _it_ and 3 - 2 = 1'; commit

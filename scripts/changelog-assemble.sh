@@ -10,6 +10,8 @@
 #   the same directory, with the same mode as before. The fragments are deleted after that mv.
 #   If a delete fails, the run exits non-zero with CHANGELOG.md already updated; a re-run then
 #   refuses (the version exists), so nothing is folded twice.
+#   Each fragment is copied, validated by cl_content_ok (the check script's rule) and emitted
+#   from that copy byte for byte: the validated text is the emitted text.
 #   Refuses (non-zero, no change) on: no fragments, an invalid fragment, an existing version
 #   heading, a bad version or date, CHANGELOG.md missing or a symlink, no [Unreleased] heading
 #   or no release heading after it, any entry still under [Unreleased]. Entries belong in
@@ -50,6 +52,7 @@ cl_unreleased_entries CHANGELOG.md > "$work/entries" || die "cannot read [Unrele
 [[ ! -s $work/entries ]] \
   || die "CHANGELOG.md has entries under '## [Unreleased]'; move them into $CL_DIR/ fragments first"
 
+mkdir "$work/frags" || die "mkdir failed"
 find "$CL_DIR" -mindepth 1 -print0 > "$work/all" || die "cannot list $CL_DIR/"
 : > "$work/names"
 nfrag=0
@@ -60,7 +63,9 @@ while IFS= read -r -d '' p; do
   [[ $name != */* && ! ( -d $p && ! -L $p ) ]] \
     || die "$label: fragments cannot live in a subdirectory"
   cl_name_category "$name" >/dev/null || die "$label: not a valid fragment name"
-  why=$(cl_content_ok "$p") || die "$label: not a valid fragment: $why"
+  [[ -f $p && ! -L $p ]] || die "$label: not a valid fragment: not a regular file"
+  cp -P "$p" "$work/frags/$name" || die "$label: cannot read it"
+  why=$(cl_content_ok "$work/frags/$name") || die "$label: not a valid fragment: $why"
   printf '%s\n' "$name" >> "$work/names"
   nfrag=$((nfrag + 1))
 done < "$work/all"
@@ -75,7 +80,7 @@ LC_ALL=C sort "$work/names" > "$work/sorted" || die "sort failed"
     while IFS= read -r name; do
       [[ $name == *".$cat.md" ]] || continue
       if [[ $first -eq 1 ]]; then printf '\n### %s\n' "$heading"; first=0; fi
-      grep -v '^[[:space:]]*$' "$CL_DIR/$name"
+      cat "$work/frags/$name" || die "cannot read $name"
     done < "$work/sorted"
   done
   printf '\n---\n\n'

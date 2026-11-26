@@ -6,7 +6,7 @@ File name: `<short-slug>.<category>.md`
 
 - `slug`: lower-case letters, digits and `-`, starting with a letter or digit.
 - `category`: `added`, `changed`, `removed`, `fixed` or `security`. A release lists them in that order.
-- Content: one or more Markdown bullets, the text you would have put in `CHANGELOG.md`. The first line starts with `- `. Continuation lines start with exactly two spaces.
+- Content: one or more Markdown bullets, the text you would have put in `CHANGELOG.md`. The first line starts with `- `. Continuation lines start with exactly two spaces. No blank lines; the file ends with a newline.
 
 Example, `changelog.d/sonar-parity-table.added.md`:
 
@@ -18,7 +18,7 @@ No subdirectories. `scripts/changelog-check.sh` rejects any other name or layout
 
 Every PR except the release PR adds a fragment, with no exemption: PRs with no user-facing change and bot PRs included. Describe the change in one bullet.
 
-A fragment line is valid only as `- text`, then `  - text` or `  text` (two spaces). Text starts with a letter, a digit, a backtick, `[`, `(`, `"`, `'`, or `#` and a digit (a PR reference such as `#96`). It holds a letter or a digit, does not start with a list marker (`1.`, `1)`) or three backticks, and has no `<` before a letter or `/` outside backticks. So a heading, quote, fence, thematic break, setext underline, table, list-marker line or HTML block is rejected, and the message names the line and the rule. Not caught: a fragment whose text is wrong or meaningless; inline Markdown inside a valid line (emphasis, links, link reference definitions, task boxes, entities); a fragment under the wrong category; a fragment that duplicates another fragment's text.
+A fragment passes `cl_content_ok` (`scripts/changelog-lib.sh`), the same rule for the check and the assemble script, which emits each fragment byte for byte. Catches, with the line and the rule named: any control byte but LF (CR, TAB, NUL, ESC, DEL), a last line with no newline, a blank line; a line that is not `- text` (the first line and after), `  - text` or `  text` (two spaces); text that starts with anything but a letter, a digit, a backtick, `[`, `(`, `"`, `'`, or `#` and a digit (a PR reference such as `#96`), has no letter or digit, starts like a list marker (`1.`, `1)`) or matches `[label]:` (a link reference definition); a backtick count that is odd on a line, two backticks in a row, a backslash before a backtick; outside backtick spans, `<` before a letter, `/`, `!` or `?` (raw HTML, comment, CDATA, processing instruction, autolink) and `](` or `][` (a link destination or label). So a heading, quote, fence, thematic break, setext underline, table or HTML block is rejected, and the script and Markdown agree on every line break and every code span. Does not catch: a fragment whose text is wrong or meaningless; inline Markdown inside a valid line that cannot open a block or hide a backtick (emphasis, entity references, a bare URL of any scheme, task boxes, a backslash before another character, a `[text]` that a `[text]:` definition elsewhere in `CHANGELOG.md` turns into a link, trailing spaces); a fragment under the wrong category; a fragment that duplicates another fragment's text.
 
 A PR may add fragments only. It may not edit or delete a fragment that already exists on the base, because a fragment belongs to the PR that added it (status M or D is rejected). Only the release PR deletes fragments.
 
