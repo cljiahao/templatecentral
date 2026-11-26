@@ -4,8 +4,6 @@
 
 # Add an Endpoint (NestJS module)
 
-A feature module: controller → service → repository.
-
 ## Naming Convention
 
 Replace `<name>` throughout using these rules:
@@ -183,7 +181,6 @@ export class TaskController {
 #### Authorization — decide before moving on
 
 The controller above is **fully public** — anyone can create, update and delete records.
-Treat authorization as a required decision, not an extra.
 
 - **If `src/modules/auth/` exists** (the project ran `templatecentral:add` (auth)), apply
   the project's guard by default. Put `@UseGuards(JwtAuthGuard)` + `@ApiBearerAuth()` on
@@ -292,8 +289,3 @@ After creating all files:
 2. Open Swagger docs at `/docs` — verify the new endpoints appear under the correct tag
 3. Run `pnpm test` — confirm the new unit test passes
 4. Test one endpoint manually via Swagger or `curl` to verify the full flow
-
-## Rules
-
-- **Tests ride with the change** — new or changed behaviour gets a Vitest test in `test/` in the same change, per the test-value rule (`docs/CONSTITUTION.md` §4).
-- Register the module in `app.module.ts` and export it from `modules/index.ts`
