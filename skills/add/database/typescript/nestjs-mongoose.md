@@ -15,9 +15,7 @@ pnpm add @nestjs/mongoose mongoose
 
 Run `TC_PART=leaf TC_LEAF=add/database/typescript/nestjs-mongoose bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/typescript/nestjs-mongoose/template/` (listed in `<skill-dir>/database/typescript/nestjs-mongoose/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**`src/database/database.module.ts`** (uses `serviceConfig` from `src/config/env.config.ts` — external service connections belong in `serviceConfig`, not `appConfig`):
-
-Copied verbatim from `<skill-dir>/database/typescript/nestjs-mongoose/template/src/database/database.module.ts` by the copy step; do not re-type it.
+**`src/database/database.module.ts`** (uses `serviceConfig` from `src/config/env.config.ts` — external service connections belong in `serviceConfig`, not `appConfig`)
 
 Add `MONGODB_URL` to `envSchema` in `src/config/env.config.ts` — validated at import, so boot fails when it is missing:
 
@@ -176,10 +174,6 @@ pnpm check && pnpm build && pnpm test && pnpm test:e2e
 
 ## Rules
 
-- **Opt-in only** — add a database only on request.
-- `DatabaseModule` is `@Global()` so modules need not re-import it.
-- Place `DatabaseModule` in `src/database/`.
-- Do not hardcode credentials; keep connection config in `.env` and document in `.env.example`.
 - **Mongoose**: Schemas live inside feature modules at `src/modules/<feature>/schemas/`. Register schemas with `MongooseModule.forFeature()` in the feature module — not globally. For IAM auth, install `@aws-sdk/credential-providers` and use the IAM `DatabaseModule` from `nestjs-mongoose-iam.md` (`MongooseModule.forRoot` with `AWS_CREDENTIAL_PROVIDER` in `authMechanismProperties`); schema and query code are unchanged.
 - **Auth integration** — if `templatecentral:add` (auth) ran first, `nestjs-mongoose-auth.md` replaces its 501 stubs; it is loaded alongside this guide, not from it.
 

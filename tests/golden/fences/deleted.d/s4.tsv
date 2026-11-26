@@ -1,0 +1,19 @@
+# file	heading	index	sha256
+skills/add/ai-security/implementation.md	LLM01 — Prompt Injection	0	4394ac89c1763838b8f7d0cf3667fdf0d073798a0873b9fc5903ea1278d61c06
+skills/add/ai-security/implementation.md	LLM01 — Prompt Injection	1	3771b6e6d575e05aab06038918e3a44e0e73fb373ec4dc39c99e91b784928551
+skills/add/ai-security/implementation.md	LLM01 — Prompt Injection	2	4b6a070d2492ee4ba9936ec8c5ca6533b46a79723f4d5e2c3cd1ee696bbcd4f8
+skills/add/ai-security/implementation.md	LLM02 — Sensitive Information Disclosure	0	79a92d056e7bc457446b5bd00631f4efef8fab4619ca379903b427ced0f03560
+skills/add/ai-security/implementation.md	LLM03 — Supply Chain	0	41bae4f2db1d4fac2ff5826956d2b84ac8f463cdddc595287a3cc4c8403459b9
+skills/add/ai-security/implementation.md	LLM04 — Data and Model Poisoning	0	ca905867eccaf8edcba6c351533a55d1db4005757345f801007cf08a7edfdfdc
+skills/add/ai-security/implementation.md	LLM04 — Data and Model Poisoning	1	5104f43d5de602996188f014da82be2649d9e546cfdc2be5d207db59e8b41939
+skills/add/ai-security/implementation.md	LLM04 — Data and Model Poisoning	2	29b472f17a8b4469d29d6eaf4044bba1181c75896edfa04b1f5a2d500e17a89b
+skills/add/ai-security/implementation.md	LLM05 — Improper Output Handling	0	f7f1df9d809247b0d660f09e1849a6ef1b25e0067271dd46c97fe3e56e9937a7
+skills/add/ai-security/implementation.md	LLM05 — Improper Output Handling	1	03823f9f1af91c45337aa54db3ea3a3528a9920b07b594bd67ed4490173ea618
+skills/add/ai-security/implementation.md	LLM05 — Improper Output Handling	2	bf1b5e828658a7735f383729560da2fb65009345b8c7b1ea673366ad83074ca9
+skills/add/ai-security/implementation.md	LLM06 — Excessive Agency (applies once any tool/function is wired)	0	eaa288abd355269dda87591921b5babb8386de0743d94e09e5ebf95fbdd31412
+skills/add/ai-security/implementation.md	LLM06 — Excessive Agency (applies once any tool/function is wired)	1	ebb4090d6c9dd37fa63d6cccd2351c0f35970ccdab572a31df29515bb6fdc22f
+skills/add/ai-security/implementation.md	LLM07 — System Prompt Leakage	0	18b6f8c79f0eb883a6e696b3816e660770570d7e9caebeae75e3cba4f56ef618
+skills/add/ai-security/implementation.md	LLM08 — Vector & Embedding Weaknesses (RAG only — Capability B)	0	9b6500fa094cb219a55b7b27f287b63e9b9e8347d987cf0a089b3ab9e887e3e4
+skills/add/ai-security/implementation.md	LLM09 — Misinformation	0	2ed15c0f2375338658a356f3a12015c9ca1c8d4a5e1ce70cf2582ee0d0fce61c
+skills/add/ai-security/implementation.md	LLM10 — Unbounded Consumption	0	baf35ae4eb27958adbf5d20c49fee76208b86f3d55f8b150419b40389b9bba61
+skills/add/ai-security/implementation.md	LLM10 — Unbounded Consumption	1	6ef8ec22b8a9ead0ef80ecf81ac959eb78b492589310f4772cd1fa56e683a3e6

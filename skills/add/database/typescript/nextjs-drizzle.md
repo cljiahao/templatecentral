@@ -41,21 +41,15 @@ Add to `package.json`:
 
 Run `TC_PART=leaf TC_LEAF=add/database/typescript/nextjs-drizzle bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/typescript/nextjs-drizzle/template/` (listed in `<skill-dir>/database/typescript/nextjs-drizzle/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**`drizzle.config.ts`** (project root):
-
-Copied verbatim from `<skill-dir>/database/typescript/nextjs-drizzle/template/drizzle.config.ts` by the copy step; do not re-type it.
+**`drizzle.config.ts`** (project root)
 
 #### A4. Define Schema
 
-**`src/integrations/database/schema.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nextjs-drizzle/template/src/integrations/database/schema.ts` by the copy step; do not re-type it.
+**`src/integrations/database/schema.ts`**
 
 #### A5. Create Database Client
 
-**`src/integrations/database/db-client.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nextjs-drizzle/template/src/integrations/database/db-client.ts` by the copy step; do not re-type it.
+**`src/integrations/database/db-client.ts`**
 
 > **TLS**: the `ssl` option is the enforcement point for the app (`next build`/`next start` run with `NODE_ENV=production`). `drizzle.config.ts` runs as a standalone CLI outside Next.js and uses only the URL — against any non-local database, end that `DATABASE_URL` with `?sslmode=verify-full` so `drizzle-kit migrate` verifies the server certificate (`require` encrypts without verifying identity).
 
@@ -63,9 +57,7 @@ Copied verbatim from `<skill-dir>/database/typescript/nextjs-drizzle/template/sr
 
 #### A6. Create Barrel Export
 
-**`src/integrations/database/index.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nextjs-drizzle/template/src/integrations/database/index.ts` by the copy step; do not re-type it.
+**`src/integrations/database/index.ts`**
 
 #### A7. Add Factory Function
 
@@ -176,11 +168,7 @@ Confirm the migration file was generated and the build succeeds with no type err
 
 ## Rules
 
-- **Opt-in only** — add a database only on request.
-- Client and schemas live in `src/integrations/database/`.
 - Keep the cached singleton — it prevents connection exhaustion on hot reload.
-- Do not hardcode credentials; keep connection config in `.env` / `.env.local` and document in `.env.example`.
-- Import database code only on the server, never in client components (`'use server'`, API routes, Server Components).
 - **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. `pnpm db:push` is dev-only, never production. Commit the migrations in `drizzle/`. No IAM variant — use Kysely for IAM auth.
 
 ---

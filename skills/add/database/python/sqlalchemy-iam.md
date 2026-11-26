@@ -20,9 +20,7 @@ psycopg[binary]
 
 Run `TC_PART=leaf TC_LEAF=add/database/python/sqlalchemy-iam bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/python/sqlalchemy-iam/template/` (listed in `<skill-dir>/database/python/sqlalchemy-iam/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**`src/database/base.py`**:
-
-Copied verbatim from `<skill-dir>/database/python/sqlalchemy-iam/template/src/database/base.py` by the copy step; do not re-type it.
+**`src/database/base.py`**
 
 ### A3. Initialize Alembic (same as standard)
 
@@ -43,54 +41,7 @@ sqlalchemy.url =
 
 ### A4. Create `src/database/session.py` (IAM variant)
 
-```python
-from collections.abc import Generator
-
-import boto3
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import Session, sessionmaker
-
-from core.config import api_settings
-
-
-def _get_iam_token() -> str:
-    try:
-        client = boto3.client("rds", region_name=api_settings.AWS_REGION)
-        return client.generate_db_auth_token(
-            DBHostname=api_settings.DATABASE_HOST,
-            Port=api_settings.DATABASE_PORT,
-            DBUsername=api_settings.DATABASE_USER,
-        )
-    except Exception as exc:
-        raise RuntimeError(f"Failed to generate RDS IAM token: {exc}") from exc
-
-
-engine = create_engine(
-    f"postgresql+psycopg://{api_settings.DATABASE_USER}@"
-    f"{api_settings.DATABASE_HOST}:{api_settings.DATABASE_PORT}/{api_settings.DATABASE_NAME}",
-    # verify-full, not "require": the IAM token is a bearer credential, so verify the server certificate against the RDS CA bundle.
-    connect_args={
-        "sslmode": "verify-full",
-        "sslrootcert": api_settings.RDS_CA_BUNDLE_PATH,
-    },
-)
-
-
-@event.listens_for(engine, "do_connect")
-def provide_token(dialect, conn_rec, cargs, cparams):
-    cparams["password"] = _get_iam_token()
-
-
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-
-
-def get_db() -> Generator[Session]:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-```
+**`src/database/session.py`**
 
 ### A5. Add IAM fields to `src/core/config.py`
 
@@ -252,15 +203,3 @@ Repository, service and router wiring is **identical** to standard SQLAlchemy (o
 - **Step B** — Create `src/api/repositories/user_repository.py`
 - **Step C** — Replace stubs in `src/api/services/auth_service.py`
 - **Step D** — Replace `src/api/routers/auth.py`
-
----
-
-## Rules
-
-- **Opt-in only** — add a database only on request.
-- Place ORM models in `src/models/` — not in `api/`.
-- `database/` holds infrastructure only (Base, session, engine) — no business logic.
-- Keep IAM fields (`DATABASE_HOST`, `DATABASE_USER`, etc.) in `src/.env` ; do not hardcode production credentials.
-- Always use Alembic for schema changes — never call `Base.metadata.create_all()` in production.
-- IAM tokens are short-lived — `do_connect` fetches a fresh one per connection.
-- **PostgreSQL only** for IAM auth.
