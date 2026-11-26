@@ -199,6 +199,10 @@ jobs:
         run: bash scripts/test-harness-kit.sh
       - name: Seeded workaround detector, secret scan, nosonar and diff-coverage gates and hook messages
         run: bash scripts/seeded-gates.test.sh
+      - name: Seeded review gate, its wiring probes and the harness removal script
+        run: |
+          bash scripts/seeded-review-gate.test.sh
+          bash scripts/seeded-remove-harness.test.sh
       - name: Day-one proof, every stack and CI host passes its offline seeded gates
         run: bash scripts/day-one.test.sh
       - name: Install PyYAML for the CI template guard

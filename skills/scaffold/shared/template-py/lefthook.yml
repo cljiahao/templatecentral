@@ -100,6 +100,9 @@ pre-push:
     workarounds:
       # Fails on a lint, type, coverage or test suppression this change adds, and on a deleted test whose source remains.
       run: bash scripts/check-workarounds.sh
+    review-record:
+      # Fails when HEAD has no passing in-session review record; run scripts/record-review.sh to make one. Records are local, so CI skips it.
+      run: bash scripts/check-review-record.sh
     verify:
       # --cov applies the 80% line floor set as fail_under in pyproject.toml.
       run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; ruff check src/ test/ && python -m pyright src/ && python -m pytest test/ --cov=src -q'
