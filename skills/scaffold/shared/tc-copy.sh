@@ -218,7 +218,7 @@ if [ "$PART" = manifest ]; then
     printf '%s\n' lefthook.yml .lefthook/commit-msg.sh .gitleaks.toml .claude/comment-hygiene-patterns.txt \
       .github/workflows/ci.yml azure-pipelines/templatecentral-gates.yml azure-pipelines.yml .claude/ci-gates.sh .claude/gates.txt .claude/gate-budget.sh .claude/gate-budget.conf \
       .claude/verify-harness.sh .claude/regen-harness.sh scripts/check-docs.sh scripts/test-budget.sh scripts/gate-ratchet.sh \
-      scripts/check-supply-chain.sh scripts/check-workflows.sh scripts/check-env-example.sh scripts/check-dockerfile.sh scripts/check-workarounds.sh scripts/scan-secrets.sh scripts/check-secret-scanner.sh scripts/check-review-record.sh scripts/record-review.sh scripts/remove-harness.sh .claude/review-checklist.txt .claude/review-checklist-stack.txt .claude/agents/code-reviewer.md .claude/registry-hosts.txt \
+      scripts/check-supply-chain.sh scripts/check-workflows.sh scripts/check-env-example.sh scripts/check-dockerfile.sh scripts/check-workarounds.sh scripts/scan-secrets.sh scripts/check-secret-scanner.sh scripts/check-review-record.sh scripts/record-review.sh scripts/remove-harness.sh scripts/check-bundle-size.sh scripts/check-change-size.sh scripts/check-licences.sh scripts/generate-sbom.sh scripts/py-env.py .claude/allowed-licences.txt .claude/bundle-budget.txt .claude/change-size-exclude.txt .claude/licence-exceptions.txt .claude/review-checklist.txt .claude/review-checklist-stack.txt .claude/agents/code-reviewer.md .claude/registry-hosts.txt \
       .claude/skills/test-consolidate/SKILL.md docs/adr/0001-test-each-behaviour-once.md docs/harness.md .github/dependabot.yml
   )
   body=""

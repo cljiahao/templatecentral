@@ -2,7 +2,7 @@
 # PostToolUse(Edit|Write): fast type feedback, never blocks; errors reach Claude via additionalContext.
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
 input=$(cat)
-file=$(printf '%s' "$input" | python3 -c "import json,sys
+file=$(printf '%s' "$input" | python3 -I -c "import json,sys
 try:
     ti=json.load(sys.stdin).get('tool_input') or {}
     print(ti.get('file_path') or ti.get('path') or '')
@@ -37,13 +37,13 @@ run() {
 }
 # timed_out: tell the agent the typecheck produced no result, then exit without blocking.
 timed_out() {
-  python3 -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"pyright timed out after "+sys.argv[1]+"s: no type result for this edit; run it manually."}}))' "$LIMIT" 2>/dev/null
+  python3 -I -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"pyright timed out after "+sys.argv[1]+"s: no type result for this edit; run it manually."}}))' "$LIMIT" 2>/dev/null
   exit 0
 }
-run python -m pyright --version
+run python -I -m pyright --version
 [ "$EC" -eq 124 ] && timed_out
 [ "$EC" -eq 0 ] || exit 0
-run python -m pyright src/
+run python -I -m pyright src/
 [ "$EC" -eq 124 ] && timed_out
 [ "$EC" -eq 0 ] && exit 0
 out=$OUTPUT
@@ -52,5 +52,5 @@ cap() { LC_ALL=C awk -v cap="$1" 'function ucut(s, n) { if (length(s) <= n) retu
 errs=$(printf '%s\n' "$out" | grep -E ' - error' | cap 1700)
 [ -n "$errs" ] || errs=$(printf '%s\n' "$out" | cap 1700)
 [ -n "$errs" ] || exit 0
-python3 -c 'import json,sys,os; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":("pyright reports type errors after this edit — fix them before moving on:\n"+os.fsencode(sys.argv[1]).decode("utf-8","replace"))[:2000]}}))' "$errs" 2>/dev/null
+python3 -I -c 'import json,sys,os; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":("pyright reports type errors after this edit — fix them before moving on:\n"+os.fsencode(sys.argv[1]).decode("utf-8","replace"))[:2000]}}))' "$errs" 2>/dev/null
 exit 0

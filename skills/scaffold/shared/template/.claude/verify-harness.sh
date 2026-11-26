@@ -22,7 +22,7 @@ read_manifest() {
   elif command -v node >/dev/null 2>&1; then
     node -e 'const m=JSON.parse(require("fs").readFileSync(".claude/harness.json","utf8"));for(const v of Object.values(m.seeded_files))console.log(v.path+"\t"+v.origin_hash)'
   elif command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import json;m=json.load(open(".claude/harness.json"));[print(str(v["path"])+"\t"+str(v["origin_hash"])) for v in m["seeded_files"].values()]'
+    python3 -I -c 'import json;m=json.load(open(".claude/harness.json"));[print(str(v["path"])+"\t"+str(v["origin_hash"])) for v in m["seeded_files"].values()]'
   else echo "verify-harness: need jq, node, or python3" >&2; return 3; fi
 }
 
@@ -52,10 +52,28 @@ while IFS='|' read -r gid lh ci || [ -n "$gid" ]; do
   case "$gid" in ""|"#"*) continue ;; esac
   if [ -z "$lh" ] || [ -z "$ci" ]; then echo "verify-harness: $gates line for '$gid' needs three | separated fields" >&2; exit 2; fi
   listed=$((listed + 1))
+  # A gate whose lefthook needle is a seeded path, and the config files its script reads, must be hashed entries of harness.json, so removing an entry cannot hide the file.
+  need=''
+  case "$lh" in scripts/*|.claude/*) need=${lh%% *} ;; esac
+  case "$gid" in
+    licences) need="$need .claude/allowed-licences.txt .claude/licence-exceptions.txt scripts/py-env.py" ;;
+    sbom) need="$need scripts/py-env.py" ;;
+    bundle) need="$need .claude/bundle-budget.txt" ;;
+    changesize) need="$need .claude/change-size-exclude.txt" ;;
+  esac
+  for nf in $need; do
+    if ! awk -F'\t' -v p="$nf" '$1 == p { f = 1 } END { exit !f }' <<< "$entries"; then echo "GATE FILE UNREGISTERED: $gid reads $nf, which $manifest does not list as a seeded file; restore the entry with regen-harness.sh" >&2; drift=1; fi
+  done
   if [ "$lh" != "-" ] && [ -n "$hook_text" ] && ! has "$hook_text" "$lh"; then echo "GATE MISSING: $gid is not run by lefthook.yml (expects '$lh')" >&2; drift=1; fi
   if [ "$ci" != "-" ] && [ -n "$gh_text" ] && ! has "$gh_text" "$ci"; then echo "GATE MISSING: $gid is not run by .github/workflows/ci.yml (expects '$ci')" >&2; drift=1; fi
   if [ "$ci" != "-" ] && [ -n "$az_text" ] && ! has "$az_text" "$ci"; then echo "GATE MISSING: $gid is not run by the Azure pipeline files (expects '$ci')" >&2; drift=1; fi
 done < "$gates"
+# Every gate a CI file invokes by id must still be listed, so deleting a manifest row cannot silently drop a gate.
+used=$(grep -ohE 'bash \.claude/ci-gates\.sh [a-z]+' <<< "$gh_text"$'\n'"$az_text" || true)
+while read -r _ _ uid; do
+  [ -n "$uid" ] || continue
+  if ! awk -F'|' -v g="$uid" '$1 == g { f = 1 } END { exit !f }' "$gates"; then echo "GATE UNLISTED: CI runs gate '$uid' but $gates has no row for it; restore the row" >&2; drift=1; fi
+done <<< "$used"
 # Review gate files: when gates.txt lists the review gate and lefthook exists, every seeded file with review in its path must hold non-whitespace content.
 if [ -n "$hook_text" ] && grep -q '^review|' "$gates"; then
   review_files=$(awk -F'\t' '$1 ~ /review/ { print $1 }' <<< "$entries")

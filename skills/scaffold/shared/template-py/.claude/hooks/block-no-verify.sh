@@ -18,11 +18,11 @@
 orig_dir=$PWD
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || { echo "BLOCKED: block-no-verify.sh cannot cd to the project root — refusing the command." >&2; exit 2; }
 input=$(cat)
-cmd=$(printf '%s' "$input" | python3 -c "import json,sys
+cmd=$(printf '%s' "$input" | python3 -I -c "import json,sys
 try: print(json.load(sys.stdin).get('tool_input',{}).get('command',''))
 except Exception: print('')" 2>/dev/null)
 # The hook input's cwd is where the command runs, so a bare git commit resolves that worktree's branch.
-in_cwd=$(printf '%s' "$input" | python3 -c "import json,sys
+in_cwd=$(printf '%s' "$input" | python3 -I -c "import json,sys
 try: print(json.load(sys.stdin).get('cwd') or '')
 except Exception: print('')" 2>/dev/null)
 [ -n "$in_cwd" ] && orig_dir=$in_cwd

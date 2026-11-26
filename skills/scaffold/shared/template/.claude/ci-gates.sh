@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|list> [base-branch]
+# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle|list> [base-branch]
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -119,7 +119,7 @@ pr_only() {
 }
 
 case "$gate" in
-  secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover)
+  secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle)
     gate_listed "$gate" || fail "gate '$gate' is not listed in .claude/gates.txt"
     ;;
   list)
@@ -176,7 +176,7 @@ case "$gate" in
         if [ -n "$stripped" ] && grep -qEf "$strict_patterns" <<< "$stripped"; then
           flagged="$flagged$nl  - $f: $stripped"
         fi
-      done < <(git diff -U0 "$base"...HEAD -- "$f" | grep '^+' | grep -vE '^\+\+\+' | sed 's/^+//' | grep -E '^[[:space:]]*(#|//|\*|"""|/\*\*?)')
+      done < <(git --literal-pathspecs diff -U0 "$base"...HEAD -- "$f" | grep '^+' | grep -vE '^\+\+\+' | sed 's/^+//' | grep -E '^[[:space:]]*(#|//|\*|"""|/\*\*?)')
     done < <(git diff -z --name-only "$base"...HEAD)
     rm -f "$strict_patterns"
     if [ -n "$flagged" ]; then
@@ -333,7 +333,7 @@ PY
       shift 2
       # pip-audit reports no severity, so every known vulnerability counts.
       pipx run "pip-audit==${PIP_AUDIT_VERSION}" -r "$file" "$@" --format json --progress-spinner off > "$tmp/report.json" 2> "$tmp/err.txt"
-      python3 "$tmp/pa.py" "$tmp/report.json" >> "$tmp/found"; rc=$?
+      python3 -I "$tmp/pa.py" "$tmp/report.json" >> "$tmp/found"; rc=$?
       [ "$rc" -ne 4 ] || fail "dependency audit covered no packages ($label)"
       [ "$rc" -eq 0 ] || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (pip-audit, $label)"; }
     }
@@ -410,7 +410,7 @@ JS
     code=""
     while IFS= read -r f; do
       [ -n "$f" ] || continue
-      if git diff -U0 --no-color --no-ext-diff "$base"...HEAD -- "$f" | awk -v py="$(case "$f" in *.py) echo 1 ;; *) echo 0 ;; esac)" '
+      if git --literal-pathspecs diff -U0 --no-color --no-ext-diff "$base"...HEAD -- "$f" | awk -v py="$(case "$f" in *.py) echo 1 ;; *) echo 0 ;; esac)" '
         /^@@/ { inbody = 1; next }
         inbody && /^[+]/ {
           t = substr($0, 2); sub(/^[ \t]+/, "", t)
@@ -463,8 +463,26 @@ JS
     fi
     bash scripts/check-dockerfile.sh || fail "Dockerfile check failed (output above)."
     ;;
+  licences)
+    [ -f scripts/check-licences.sh ] || fail "scripts/check-licences.sh is missing"
+    bash scripts/check-licences.sh || fail "licence check failed (output above). Install the dependencies first; change .claude/allowed-licences.txt only after a licence review."
+    ;;
+  sbom)
+    [ -f scripts/generate-sbom.sh ] || fail "scripts/generate-sbom.sh is missing"
+    bash scripts/generate-sbom.sh || fail "SBOM generation failed (output above). Install the dependencies first."
+    ;;
+  changesize)
+    pr_only
+    [ -f scripts/check-change-size.sh ] || fail "scripts/check-change-size.sh is missing"
+    bash scripts/check-change-size.sh "$base" || fail "this change is over the size budget, or could not be measured (output above). Split it into smaller reviewed changes."
+    ;;
+  bundle)
+    [ -f scripts/check-bundle-size.sh ] || fail "scripts/check-bundle-size.sh is missing"
+    # --build deletes dist and .next in the frontend folder (BUNDLE_DIR, else the current one) and builds there, then measures; a project with no Next.js or Vite config skips with a reason. The pre-push hook runs the same command.
+    bash scripts/check-bundle-size.sh --build || fail "bundle size check failed (output above). Lazy-load heavy routes or drop the large dependency; raise .claude/bundle-budget.txt only after a human decision."
+    ;;
   *)
-    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|list> [base-branch]" >&2
+    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle|list> [base-branch]" >&2
     exit 2
     ;;
 esac

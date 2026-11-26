@@ -20,6 +20,10 @@ steps:
     displayName: .env.example matches the variables the code reads
   - bash: bash .claude/ci-gates.sh dockerfile
     displayName: Dockerfile lint (digest pin, non-root USER, hadolint)
+  - bash: bash .claude/ci-gates.sh licences
+    displayName: Licences (every installed dependency has an allowed licence)
+  - bash: bash .claude/ci-gates.sh sbom
+    displayName: SBOM (CycloneDX bill of materials matches the lockfile)
   - bash: bash .claude/ci-gates.sh workarounds "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: No suppression markers, no removed covering tests
   - bash: bash .claude/ci-gates.sh changelog "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
@@ -43,6 +47,10 @@ steps:
       bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Gate ratchet (no gate weaker than the base branch)
     env: { LABELS: $(LABELS) }
+  - bash: bash .claude/ci-gates.sh changesize "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
+    displayName: Change size (the PR stays within the line and file budget)
+  - bash: bash .claude/ci-gates.sh bundle
+    displayName: Bundle size (gzip JS and CSS within .claude/bundle-budget.txt)
   # Prints the gate-time note for the gates this job ran. Exits 0 when over budget and 2 when the budget file, gate list or timing record is broken. Skipped when an earlier step fails.
   - bash: bash .claude/gate-budget.sh check
     displayName: Gate-time budget note

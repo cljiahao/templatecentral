@@ -32,6 +32,7 @@ seed() {
   cp "$RATCHET" "$R/scripts/gate-ratchet.sh"
   cp "$SH/template/scripts/check-docs.sh" "$R/scripts/check-docs.sh"
   cp "$SH/template/.claude/comment-hygiene-patterns.txt" "$R/.claude/comment-hygiene-patterns.txt"
+  for kf in allowed-licences licence-exceptions change-size-exclude bundle-budget; do cp "$SH/template/.claude/$kf.txt" "$R/.claude/$kf.txt"; done
   printf '# advisory allow-list\nGHSA-aaaa-bbbb-cccc 2099-01-01 reason\n' > "$R/.claude/dep-audit-allow.txt"
   printf '{}\n' > "$R/.claude/settings.json"
   cp "$SH/template/.claude/ci-gates.sh" "$SH/template/.claude/verify-harness.sh" "$R/.claude/"
@@ -518,15 +519,27 @@ git_ commit -q -m "add ignore"
 expect 0 "base without .gitleaks.toml: .gitleaksignore is not a shadow"
 seed ts
 
-python3 - "$T" "$SH" <<'PY'
-import sys, yaml
-t, sh = sys.argv[1:3]
-y = yaml.safe_load(open(sh + "/template-ci/github-ts/.github/workflows/ci.yml"))
-open(t + "/step-gh.sh", "w").write(y["jobs"]["gate-ratchet"]["steps"][1]["run"])
-a = yaml.safe_load(open(sh + "/template-ci/azure/azure-pipelines/templatecentral-gates.yml"))
-steps = a if isinstance(a, list) else a["steps"]
-open(t + "/step-az.sh", "w").write([x for x in steps if "ci-gates.sh ratchet" in x.get("bash", "")][-1]["bash"])
-PY
+# The CI ratchet steps are cut out of the shipped files with awk, so the test needs no PyYAML.
+# block_scalar <file> <start text> <key regex> <out file> writes the dedented body of the first block scalar after the start line, and stops the test run when that body is not the ratchet step.
+block_scalar() {
+  awk -v start="$2" -v key="$3" '
+    state == 0 && index($0, start) { state = 1; next }
+    state == 1 && $0 ~ key { state = 2; match($0, /[^ ]/); ind = RSTART - 1; bi = -1; next }
+    state == 2 {
+      if ($0 ~ /^ *$/) { if (bi >= 0) print ""; next }
+      match($0, /[^ ]/)
+      if (bi < 0) { if (RSTART - 1 <= ind) exit; bi = RSTART - 1 }
+      if (RSTART - 1 < bi) exit
+      print substr($0, bi + 1)
+    }
+  ' "$1" > "$4"
+  if ! grep -q 'ci-gates.sh ratchet' "$4"; then
+    echo "gate-ratchet.test: could not cut the ratchet step out of $1 (start '$2'); the CI step cases cannot run" >&2
+    exit 2
+  fi
+}
+block_scalar "$SH/template-ci/github-ts/.github/workflows/ci.yml" "  gate-ratchet:" '^ +run: [|]$' "$T/step-gh.sh"
+block_scalar "$SH/template-ci/azure/azure-pipelines/templatecentral-gates.yml" "# The merge-base copy of ci-gates.sh runs" '^ +- bash: [|]$' "$T/step-az.sh"
 git_ checkout -q -B main main
 printf '#!/usr/bin/env bash\necho BASE-ENTRY\nexit 9\n' > "$R/.claude/ci-gates.sh"
 git_ commit -q -am "base entry"
@@ -873,6 +886,67 @@ expect 1 "allow-list gains a line" ".claude/dep-audit-allow.txt" "advisory allow
 passes .claude/dep-audit-allow.txt "GHSA-aaaa-bbbb-cccc 2099-01-01 reason
 " "" "allow-list loses a line"
 passes .claude/dep-audit-allow.txt "# advisory allow-list" "# advisory allow-list, reviewed" "allow-list comment edit"
+
+# The keyless gate config files are content-frozen: a loosening edit fails and no label waives it, a tightening or comment edit passes, a deletion fails.
+for kf in allowed-licences licence-exceptions change-size-exclude; do
+  git_ checkout -q -B work main
+  printf 'Zzz-Extra-1.0\n' >> "$R/.claude/$kf.txt"
+  git_ commit -q -am "loosen $kf"
+  expect 1 "$kf gains a line" ".claude/$kf.txt" "Zzz-Extra-1.0"
+  ci_gate "allow-gate-change"
+  check 1 "$EC" "$kf gained line cannot be waived by label ($OUT)"
+  git_ checkout -q -B work main
+  sed '$d' "$R/.claude/$kf.txt" > "$R/.claude/$kf.new"
+  mv "$R/.claude/$kf.new" "$R/.claude/$kf.txt"
+  git_ commit -q -am "tighten $kf"
+  expect 0 "$kf loses its last line"
+  git_ checkout -q -B work main
+  printf '# a reviewed note\n' >> "$R/.claude/$kf.txt"
+  git_ commit -q -am "comment $kf"
+  expect 0 "$kf gains a comment"
+  drop ".claude/$kf.txt"
+  expect 1 "$kf deleted" ".claude/$kf.txt"
+done
+weakens .claude/bundle-budget.txt "max_gzip_kb 400" "max_gzip_kb 900" "bundle budget raised" ".claude/bundle-budget.txt" "was 400" "now 900"
+git_ checkout -q -B work main
+ci_gate "allow-gate-change"
+check 0 "$EC" "clean control: unchanged keyless config passes in CI ($OUT)"
+edit .claude/bundle-budget.txt "max_gzip_kb 400" "max_gzip_kb 900"
+ci_gate "allow-gate-change"
+check 1 "$EC" "bundle budget raise cannot be waived by label ($OUT)"
+passes .claude/bundle-budget.txt "max_gzip_kb 400" "max_gzip_kb 300" "bundle budget lowered"
+edit .claude/bundle-budget.txt "max_gzip_kb 400" "max_gzip_kb lots"
+expect 2 "bundle budget with a bad value fails closed" "UNREADABLE .claude/bundle-budget.txt"
+# Parser parity with check-bundle-size.sh: forms the gate refuses are refused here, and a number written in a way that reads differently is never read as a lower one.
+# bundle_text <label> <text as printf %b> <want exit> [fragment]: the budget file holds exactly this text on a branch off main (base is 400).
+bundle_text() {
+  git_ checkout -q -B work main
+  printf '%b' "$2" > "$R/.claude/bundle-budget.txt"
+  git_ commit -q -am work
+  ratchet
+  check "$3" "$EC" "bundle budget $1: exits $3 ($OUT)"
+  if [ -n "${4:-}" ]; then has "$4" "$OUT" "bundle budget $1: reports $4"; fi
+}
+bundle_text "no trailing newline, lowered" 'max_gzip_kb 300' 0
+bundle_text "duplicate key" 'max_gzip_kb 400\nmax_gzip_kb 900\n' 2 "UNREADABLE .claude/bundle-budget.txt"
+bundle_text "key with a colon" 'max_gzip_kb: 900\n' 2 "UNREADABLE"
+bundle_text "key with an equals sign" 'max_gzip_kb=900\n' 2 "UNREADABLE"
+bundle_text "plus sign" 'max_gzip_kb +900\n' 2 "UNREADABLE"
+bundle_text "hex" 'max_gzip_kb 0x384\n' 2 "UNREADABLE"
+bundle_text "exponent" 'max_gzip_kb 4e3\n' 2 "UNREADABLE"
+bundle_text "leading zero is read as the number, a raise" 'max_gzip_kb 0900\n' 1 "now 900"
+bundle_text "huge value, a raise" 'max_gzip_kb 99999999999999999999\n' 1 ".claude/bundle-budget.txt"
+bundle_text "empty file" '' 2 "UNREADABLE"
+bundle_text "carriage return" 'max_gzip_kb 400\r\n' 2 "carriage return in .claude/bundle-budget.txt"
+bundle_text "carriage return on a comment line" '# note\r\nmax_gzip_kb 400\n' 2 "carriage return"
+drop .claude/bundle-budget.txt
+expect 1 "bundle budget deleted" ".claude/bundle-budget.txt"
+# Each keyless gate row is frozen in the manifest, so removing one fails the ratchet.
+for g in licences sbom changesize bundle; do
+  row=$(grep "^$g|" "$SH/template/.claude/gates.txt")
+  weakens .claude/gates.txt "$row
+" "" "keyless gate $g removed from the manifest" "gate '$g'" "now removed"
+done
 git_ checkout -q -B work main
 : > "$R/.claude/comment-hygiene-patterns.txt"
 git_ commit -q -am "empty patterns"

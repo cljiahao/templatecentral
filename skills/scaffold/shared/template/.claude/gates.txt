@@ -14,4 +14,8 @@ envexample|scripts/check-env-example.sh|ci-gates.sh envexample
 dockerfile|-|ci-gates.sh dockerfile
 workarounds|scripts/check-workarounds.sh|ci-gates.sh workarounds
 review|scripts/check-review-record.sh|-
+licences|scripts/check-licences.sh|ci-gates.sh licences
+sbom|scripts/generate-sbom.sh|ci-gates.sh sbom
+changesize|scripts/check-change-size.sh|ci-gates.sh changesize
+bundle|scripts/check-bundle-size.sh|ci-gates.sh bundle
 diffcover|-|ci-gates.sh diffcover

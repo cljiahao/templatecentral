@@ -679,7 +679,7 @@ check_scaffold_seeds_complete_harness() {
     "template-ts/.claude/hooks/stop-checks.sh|stop_hook_active" "template-py/.claude/hooks/stop-checks.sh|stop_hook_active"
     "template-ts/.claude/hooks/subagent-stop.sh|stop_hook_active" "template-py/.claude/hooks/subagent-stop.sh|stop_hook_active"
     "template-ts/.claude/hooks/block-no-verify.sh|--no-verify" "template-py/.claude/hooks/block-no-verify.sh|--no-verify"
-    "template-ts/.claude/hooks/protect-files.sh|node -e" "template-py/.claude/hooks/protect-files.sh|python3 -c"
+    "template-ts/.claude/hooks/protect-files.sh|node -e" "template-py/.claude/hooks/protect-files.sh|python3 -I -c"
     "template/.claude/hooks/session-context.sh|CONSTITUTION"
   )
   local missing="" tok f kf all_kit="" v other tdir hay p

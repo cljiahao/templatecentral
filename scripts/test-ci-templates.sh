@@ -253,6 +253,7 @@ def condition_errors(rel, doc, tmpl):
         if not isinstance(steps, list):
             errors.append(f"{rel}: job {job} steps is not a list the step guard can read")
             return
+        seen_steps = []
         for step in steps:
             if not isinstance(step, dict):
                 errors.append(f"{rel}: job {job} has a step that is not a mapping the step guard can read")
@@ -267,6 +268,34 @@ def condition_errors(rel, doc, tmpl):
             run = step.get("run")
             if tmpl.startswith("github") and isinstance(run, str) and re.search(r"(?<!\|)\|(?!\|)", run) and "pipefail" not in run and step.get("shell") != "bash":
                 errors.append(f"{rel}: job {job} step {ident} pipes without pipefail, so a failing gate on the left of the pipe exits 0 (GitHub's default shell is bash -e); start the run with set -euo pipefail")
+            script = next((step[k] for k in ("run", "bash", "script") if isinstance(step.get(k), str)), "")
+            for text in script.split("\n"):
+                if text.lstrip().startswith("#"):
+                    continue
+                # Every python call in a step runs isolated (-I): the project folder is not on sys.path, so a root venv.py or pip/__init__.py cannot stand in for the module. pytest runs the project's own tests and is the one exception.
+                for call in re.finditer(r"(?:^|[\s;&|(\"])((?:[^\s;&|()\"']*/)?python3?)(?=[\s\"'])[\"']?(.*)", text):
+                    rest = call.group(2).split()
+                    if rest[:1] != ["-I"] and rest[:2] != ["-m", "pytest"]:
+                        errors.append(f"{rel}: job {job} step {ident} runs {call.group(1)} without -I, so a root venv.py or pip/__init__.py in the project can run in place of the module")
+                # A pip, pip3, pipx or uv pip, with or without a leading path, cannot take -I: use python -I -m pip. pipx run is the one exception, and only for an exact pin (name==version) because it installs into its own isolated environment.
+                for call in re.finditer(r"(?:^|[\s;&|(\"])(?<!-m )(?<!uv )((?:[^\s;&|()\"']*/)?(?:pip3?|pipx|uv pip))(?=[\s\"'])[\"']?(.*)", text):
+                    rest = call.group(2).split()
+                    if call.group(1) == "pipx" and rest[:1] == ["run"] and len(rest) > 1 and re.search(r"==\S", rest[1].strip("\"")):
+                        continue
+                    errors.append(f"{rel}: job {job} step {ident} runs bare {call.group(1)}, which cannot run isolated: use python -I -m pip (pipx run only with an exact == pin)")
+            seen_steps.append(script + " " + str(step.get("template", "")))
+            if "requirements-dev.txt" in script and "pip install" in script:
+                if "LICENCES_SCOPE=all" not in script or "scripts/check-licences.sh" not in script:
+                    errors.append(f"{rel}: job {job} step {ident} installs the dev tools without a licence check over everything installed (LICENCES_SCOPE=all bash scripts/check-licences.sh)")
+                before = " ".join(seen_steps[:-1])
+                if not (("ci-gates.sh licences" in before and "ci-gates.sh sbom" in before) or GATES_INCLUDE in before):
+                    errors.append(f"{rel}: job {job} step {ident} installs the unhashed dev requirements before the licence and SBOM gates have read the hash-pinned environment")
+                # Every gate that does not need the dev tools runs before the unhashed install, which can run code (setup.py, a build backend, a .pth file) and rewrite scripts/ and .claude/ci-gates.sh.
+                for gate in ("secrets", "changesize", "bundle"):
+                    if f"ci-gates.sh {gate}" not in before and GATES_INCLUDE not in before:
+                        errors.append(f"{rel}: job {job} step {ident} installs the unhashed dev requirements before the {gate} gate, so the install can rewrite the gate or its inputs")
+                if "jscpd" not in before:
+                    errors.append(f"{rel}: job {job} step {ident} installs the unhashed dev requirements before the duplication gate, which does not need the dev tools")
             for key in ("timeout-minutes", "timeoutInMinutes"):
                 if key in step and not (isinstance(step[key], int) and not isinstance(step[key], bool) and step[key] > 0):
                     errors.append(f"{rel}: job {job} step {ident} has {key}: {step[key]}")
@@ -411,9 +440,13 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('workflows', 'quality', 'run', 'bash .claude/ci-gates.sh workflows'),
                          ('envexample', 'quality', 'run', 'bash .claude/ci-gates.sh envexample'),
                          ('dockerfile', 'quality', 'run', 'bash .claude/ci-gates.sh dockerfile'),
+                         ('licences', 'quality', 'run', 'bash .claude/ci-gates.sh licences'),
+                         ('sbom', 'quality', 'run', 'bash .claude/ci-gates.sh sbom'),
                          ('format, lint and typecheck', 'quality', 'run', 'pnpm run check'),
                          ('jscpd', 'quality', 'run', 'pnpm exec jscpd'),
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
+                         ('change size', 'quality', 'run', 'bash .claude/ci-gates.sh changesize "$BASE_REF"'),
+                         ('bundle size', 'quality', 'run', 'bash .claude/ci-gates.sh bundle'),
                          ('gate-time note', 'quality', 'run', 'bash .claude/gate-budget.sh check'),
                          ('tests',
                           'test',
@@ -468,8 +501,10 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('workflows', 'quality', 'run', 'bash .claude/ci-gates.sh workflows'),
                          ('envexample', 'quality', 'run', 'bash .claude/ci-gates.sh envexample'),
                          ('dockerfile', 'quality', 'run', 'bash .claude/ci-gates.sh dockerfile'),
+                         ('licences', 'quality', 'run', 'bash .claude/ci-gates.sh licences'),
+                         ('sbom', 'quality', 'run', 'bash .claude/ci-gates.sh sbom'),
                          ('lint and format', 'quality', 'run', 'ruff check src/ test/ && ruff format --check src/ test/'),
-                         ('typecheck', 'quality', 'run', 'python -m pyright src/'),
+                         ('typecheck', 'quality', 'run', 'python -I -m pyright src/'),
                          ('jscpd', 'quality', 'run', 'npx --yes jscpd@${JSCPD_VERSION}'),
                          ('tests', 'quality', 'run', 'python -m pytest test/ --cov=src --cov-report=xml -q'),
                          ('diff-cover at 80',
@@ -479,6 +514,8 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           '--fail-under=80 | tee diff-cover.txt\n'),
                          ('diffcover empty-report check', 'quality', 'run', 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'),
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
+                         ('change size', 'quality', 'run', 'bash .claude/ci-gates.sh changesize "$BASE_REF"'),
+                         ('bundle size', 'quality', 'run', 'bash .claude/ci-gates.sh bundle'),
                          ('gate-time note', 'quality', 'run', 'bash .claude/gate-budget.sh check'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
                          ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
@@ -546,7 +583,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
  'azure-py': {'file': 'azure-py/azure-pipelines.yml',
               'needs': {'quality': []},
               'gates': [('lint and format', 'quality', 'bash', 'ruff check src/ test/ && ruff format --check src/ test/'),
-                        ('typecheck', 'quality', 'bash', 'python -m pyright src/'),
+                        ('typecheck', 'quality', 'bash', 'python -I -m pyright src/'),
                         ('jscpd', 'quality', 'bash', 'npx --yes jscpd@$(JSCPD_VERSION)'),
                         ('gates include', 'quality', 'template', 'azure-pipelines/templatecentral-gates.yml'),
                         ('tests', 'quality', 'bash', 'python -m pytest test/ --cov=src --cov-report=xml -q'),
@@ -581,6 +618,8 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                            ('Workflow hardening (pinned actions, token permissions, no injection)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh workflows'),
                            ('.env.example matches the variables the code reads', '(gates include)', 'bash', 'bash .claude/ci-gates.sh envexample'),
                            ('Dockerfile lint (digest pin, non-root USER, hadolint)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh dockerfile'),
+                           ('Licences (every installed dependency has an allowed licence)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh licences'),
+                           ('SBOM (CycloneDX bill of materials matches the lockfile)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh sbom'),
                            ('No suppression markers, no removed covering tests', '(gates include)', 'bash', 'bash .claude/ci-gates.sh workarounds "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'),
                            ('Changelog gate',
                             '(gates include)',
@@ -604,6 +643,8 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                             '  if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
                             'fi\n'
                             'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n'),
+                           ('Change size (the PR stays within the line and file budget)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh changesize "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'),
+                           ('Bundle size (gzip JS and CSS within .claude/bundle-budget.txt)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh bundle'),
                            ('Gate-time budget note',
                             '(gates include)',
                             'bash',
@@ -654,10 +695,15 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'bash .claude/ci-gates.sh workflows'},
                                      {'run': 'bash .claude/ci-gates.sh envexample'},
                                      {'run': 'bash .claude/ci-gates.sh dockerfile'},
+                                     {'run': 'bash .claude/ci-gates.sh licences'},
+                                     {'run': 'bash .claude/ci-gates.sh sbom'},
                                      {'run': 'pnpm run check'},
                                      {'run': 'pnpm exec jscpd'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                       'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'},
+                                     {'env': {'BASE_REF': '${{ github.base_ref }}'},
+                                      'run': 'bash .claude/ci-gates.sh changesize "$BASE_REF"'},
+                                     {'run': 'bash .claude/ci-gates.sh bundle'},
                                      {'run': 'bash .claude/gate-budget.sh check'}],
                          'test': [{'uses': 'actions/checkout', 'with': {'persist-credentials': False}},
                                   {'uses': 'pnpm/action-setup'},
@@ -797,9 +843,13 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                'cache-dependency-path': 'requirements*.txt'}},
                                      {'if': "hashFiles('uv.lock') != ''", 'uses': 'astral-sh/setup-uv'},
                                      {'run': 'set -euo pipefail\n'
-                                             'pip install --require-hashes -r requirements.txt\n'
-                                             'if [ -f requirements-dev.txt ]; then pip install -r '
-                                             'requirements-dev.txt; fi\n'},
+                                             '# The licence and SBOM gates read the project environment at .venv.\n'
+                                             'if [ -n "$(git ls-files .venv)" ]; then echo "::error::.venv is tracked by git; remove it (git rm -r --cached .venv): a committed environment is not trusted."; exit 1; fi\n'
+                                             '# python -I: the project folder is not on sys.path, so a root venv.py or pip/ cannot stand in for the stdlib module or pip.\n'
+                                             'python -I -m venv --clear .venv\n'
+                                             'echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"\n'
+                                             'echo "$PWD/.venv/bin" >> "$GITHUB_PATH"\n'
+                                             '.venv/bin/python -I -m pip install --require-hashes -r requirements.txt\n'},
                                      {'run': 'bash .claude/ci-gates.sh deps'},
                                      {'run': 'bash .claude/verify-harness.sh'},
                                      {'run': 'bash scripts/check-docs.sh'},
@@ -809,17 +859,23 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'bash .claude/ci-gates.sh workflows'},
                                      {'run': 'bash .claude/ci-gates.sh envexample'},
                                      {'run': 'bash .claude/ci-gates.sh dockerfile'},
-                                     {'run': 'ruff check src/ test/ && ruff format --check src/ test/'},
-                                     {'run': 'python -m pyright src/'},
+                                     {'run': 'bash .claude/ci-gates.sh licences'},
+                                     {'run': 'bash .claude/ci-gates.sh sbom'},
+                                     {'env': {'BASE_REF': '${{ github.base_ref }}'},
+                                      'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'},
+                                     {'env': {'BASE_REF': '${{ github.base_ref }}'},
+                                      'run': 'bash .claude/ci-gates.sh changesize "$BASE_REF"'},
+                                     {'run': 'bash .claude/ci-gates.sh bundle'},
                                      {'run': 'npx --yes jscpd@${JSCPD_VERSION}'},
+                                     {'run': 'set -euo pipefail\nif [ -f requirements-dev.txt ]; then\n  .venv/bin/python -I -m pip install -r requirements-dev.txt\n  LICENCES_SCOPE=all bash scripts/check-licences.sh\nfi\n'},
+                                     {'run': 'ruff check src/ test/ && ruff format --check src/ test/'},
+                                     {'run': 'python -I -m pyright src/'},
                                      {'run': 'python -m pytest test/ --cov=src --cov-report=xml -q'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                       'run': 'set -euo pipefail\npipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml '
                                              '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80 | tee diff-cover.txt\n'},
                                       {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                        'run': 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'},
-                                     {'env': {'BASE_REF': '${{ github.base_ref }}'},
-                                      'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'},
                                      {'run': 'bash .claude/gate-budget.sh check'}],
                          'changelog': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
                                        {'env': {'BASE_REF': '${{ github.base_ref }}',
@@ -848,15 +904,20 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
               'steps': {'quality': [{'checkout': 'self', 'fetchDepth': 0},
                                     {'task': 'UsePythonVersion@0', 'inputs': {'versionSpec': '3.14'}},
                                     {'bash': 'set -euo pipefail\n'
-                                             'python -m pip install --require-hashes -r requirements.txt\n'
-                                             'if [ -f requirements-dev.txt ]; then python -m pip install -r '
-                                             'requirements-dev.txt; fi\n'
+                                             '# The licence and SBOM gates read the project environment at .venv.\n'
+                                             'if [ -n "$(git ls-files .venv)" ]; then echo "##vso[task.logissue type=error].venv is tracked by git; remove it (git rm -r --cached .venv): a committed environment is not trusted."; exit 1; fi\n'
+                                             '# python -I: the project folder is not on sys.path, so a root venv.py or pip/ cannot stand in for the stdlib module or pip.\n'
+                                             'python -I -m venv --clear .venv\n'
+                                             'echo "##vso[task.setvariable variable=VIRTUAL_ENV]$PWD/.venv"\n'
+                                             'echo "##vso[task.prependpath]$PWD/.venv/bin"\n'
+                                             '.venv/bin/python -I -m pip install --require-hashes -r requirements.txt\n'
                                              '# the deps gate exports uv.lock with uv\n'
-                                             'if [ -f uv.lock ]; then python -m pip install uv==0.13.7; fi\n'},
+                                             'if [ -f uv.lock ]; then .venv/bin/python -I -m pip install --only-binary=:all: uv==0.13.7; fi\n'},
                                     {'template': 'azure-pipelines/templatecentral-gates.yml'},
-                                    {'bash': 'ruff check src/ test/ && ruff format --check src/ test/'},
-                                    {'bash': 'python -m pyright src/'},
                                     {'bash': 'npx --yes jscpd@$(JSCPD_VERSION)'},
+                                    {'bash': 'set -euo pipefail\nif [ -f requirements-dev.txt ]; then\n  .venv/bin/python -I -m pip install -r requirements-dev.txt\n  LICENCES_SCOPE=all bash scripts/check-licences.sh\nfi\n'},
+                                    {'bash': 'ruff check src/ test/ && ruff format --check src/ test/'},
+                                    {'bash': 'python -I -m pyright src/'},
                                     {'bash': 'python -m pytest test/ --cov=src --cov-report=xml -q'},
                                     {'bash': 'set -euo pipefail\n'
                                              'target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}\n'
@@ -874,6 +935,8 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                {'bash': 'bash .claude/ci-gates.sh workflows'},
                                                {'bash': 'bash .claude/ci-gates.sh envexample'},
                                                {'bash': 'bash .claude/ci-gates.sh dockerfile'},
+                                               {'bash': 'bash .claude/ci-gates.sh licences'},
+                                               {'bash': 'bash .claude/ci-gates.sh sbom'},
                                                {'bash': 'bash .claude/ci-gates.sh workarounds '
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'},
                                                {'bash': 'bash .claude/ci-gates.sh changelog '
@@ -894,6 +957,9 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                         'fi\n'
                                                         'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n',
                                                 'env': {'LABELS': '$(LABELS)'}},
+                                               {'bash': 'bash .claude/ci-gates.sh changesize '
+                                                        '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'},
+                                               {'bash': 'bash .claude/ci-gates.sh bundle'},
                                                {'bash': 'bash .claude/gate-budget.sh check'}]}}}
 
 for _h, _p in PINNED.items():
@@ -1073,6 +1139,95 @@ mutate "|| exit 0 after the jscpd step (github-ts)" github-ts/.github/workflows/
 mutate "|| echo after diff-cover (azure-py)" azure-py/azure-pipelines.yml '--fail-under=80' '--fail-under=80 || echo ignored' static
 mutate "|| exit 0 after nosonar (azure gates)" azure/azure-pipelines/templatecentral-gates.yml 'bash .claude/ci-gates.sh nosonar' 'bash .claude/ci-gates.sh nosonar || exit 0' static
 mutate "|| echo after the merge command (github-py pytest is the merge) " github-py/.github/workflows/ci.yml '--cov-report=xml -q' '--cov-report=xml -q || echo ignored' static
+gh_venv_line=$(cat <<'EOF'
+          if [ -n "$(git ls-files .venv)" ]; then echo "::error::.venv is tracked by git; remove it (git rm -r --cached .venv): a committed environment is not trusted."; exit 1; fi\n
+EOF
+)
+mutate "tracked .venv check removed (github-py)" github-py/.github/workflows/ci.yml "$gh_venv_line" '' static
+mutate "venv --clear removed (github-py)" github-py/.github/workflows/ci.yml 'python -I -m venv --clear .venv' 'python -I -m venv .venv' static
+az_venv_line=$(cat <<'EOF'
+          if [ -n "$(git ls-files .venv)" ]; then echo "##vso[task.logissue type=error].venv is tracked by git; remove it (git rm -r --cached .venv): a committed environment is not trusted."; exit 1; fi\n
+EOF
+)
+mutate "tracked .venv check removed (azure-py)" azure-py/azure-pipelines.yml "$az_venv_line" '' static
+mutate "venv --clear removed (azure-py)" azure-py/azure-pipelines.yml 'python -I -m venv --clear .venv' 'python -I -m venv .venv' static
+# The tracked-environment line itself, run as the job runs it: a tracked .venv fails the step, a clean tree passes.
+for host_file in github-py/.github/workflows/ci.yml azure-py/azure-pipelines.yml; do
+  line=$(grep -m1 'git ls-files .venv' "$CI_DIR/$host_file" | sed 's/^ *//')
+  rm -rf "$T/venvchk" && mkdir -p "$T/venvchk" && (cd "$T/venvchk" && git init -q . && echo x > a.txt && git add -A && git -c user.email=t@e.x -c user.name=t commit -q -m c)
+  if (cd "$T/venvchk" && bash -c "$line" > /dev/null 2>&1); then ok "clean tree passes the tracked .venv step ($host_file)"; else bad "clean tree failed the tracked .venv step ($host_file)"; fi
+  (cd "$T/venvchk" && mkdir -p .venv/lib && echo 'import os' > .venv/lib/evil.pth && git add -f .venv && git -c user.email=t@e.x -c user.name=t commit -q -m venv)
+  if (cd "$T/venvchk" && bash -c "$line" > /dev/null 2>&1); then bad "a tracked .venv passed the step ($host_file)"; else ok "a tracked .venv fails the step ($host_file)"; fi
+done
+# Isolated python (-I): dropping it from any call, or installing the dev requirements ahead of the licence and SBOM gates, is caught.
+for host in github-py/.github/workflows/ci.yml:github-py azure-py/azure-pipelines.yml:azure-py; do
+  hf=${host%%:*}; hn=${host##*:}
+  mutate "-I removed from venv ($hn)" "$hf" 'python -I -m venv --clear .venv' 'python -m venv --clear .venv' static "without -I"
+  mutate "-I removed from the hashed pip install ($hn)" "$hf" '.venv/bin/python -I -m pip install --require-hashes' '.venv/bin/python -m pip install --require-hashes' static "without -I"
+  mutate "-I removed from the dev pip install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '.venv/bin/python -m pip install -r requirements-dev.txt' static "without -I"
+  mutate "licence check of the dev tools removed ($hn)" "$hf" '\n            LICENCES_SCOPE=all bash scripts/check-licences.sh' '' static "dev tools"
+  mutate "-I removed from pyright ($hn)" "$hf" 'python -I -m pyright' 'python -m pyright' static "without -I"
+  mutate "dev requirements installed with the hashed ones, before the licence gate ($hn)" "$hf" '.venv/bin/python -I -m pip install --require-hashes -r requirements.txt' '.venv/bin/python -I -m pip install --require-hashes -r requirements.txt\n          if [ -f requirements-dev.txt ]; then .venv/bin/python -I -m pip install -r requirements-dev.txt; fi' static "before the licence and SBOM gates"
+  mutate "bare pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' 'pip install -r requirements-dev.txt' static "bare pip"
+  mutate "bare pip3 for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' 'pip3 install -r requirements-dev.txt' static "bare pip3"
+  mutate "bare pipx for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' 'pipx install -r requirements-dev.txt' static "bare pipx"
+  mutate "uv pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' 'uv pip install -r requirements-dev.txt' static "bare uv pip"
+  mutate "VIRTUAL_ENV python without -I for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' "\$VIRTUAL_ENV/bin/python -m pip install -r requirements-dev.txt" static "without -I"
+  mutate "pipx run without an exact pin ($hn)" "$hf" 'pipx run "diff-cover==' 'pipx run "diff-cover' static "bare pipx"
+  mutate "PWD-prefixed pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' "\$PWD/.venv/bin/pip install -r requirements-dev.txt" static "runs bare"
+  mutate "GITHUB_WORKSPACE-prefixed pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' "\$GITHUB_WORKSPACE/.venv/bin/pip install -r requirements-dev.txt" static "runs bare"
+  mutate "quoted VIRTUAL_ENV pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' "\"\$VIRTUAL_ENV/bin/pip\" install -r requirements-dev.txt" static "runs bare"
+  mutate "/usr/bin/pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '/usr/bin/pip install -r requirements-dev.txt' static "runs bare"
+  mutate "PWD-prefixed python without -I for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' "\$PWD/.venv/bin/python -m pip install -r requirements-dev.txt" static "without -I"
+  mutate "/usr/bin/pip3 for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '/usr/bin/pip3 install -r requirements-dev.txt' static "runs bare"
+  while IFS= read -r good; do
+    rm -rf "$T/mut" && cp -R "$CI_DIR" "$T/mut"
+    python3 - "$T/mut/$hf" ".venv/bin/python -I -m pip install -r requirements-dev.txt" "$good" <<'PY'
+import sys
+p, old, new = sys.argv[1:4]
+s = open(p).read()
+if old not in s:
+    sys.exit("control target not found: " + old)
+open(p, "w").write(s.replace(old, new))
+PY
+    out=$(static_check "$T/mut" 2>&1 || true)
+    if [[ "$out" == *"without -I"* || "$out" == *"runs bare"* ]]; then bad "control: the isolated form raised an -I finding ($hn): $good -> $(grep -E 'without -I|runs bare' <<<"$out" | head -1)"; else ok "control: no -I finding for $good ($hn)"; fi
+  done <<'GOODS'
+$PWD/.venv/bin/python -I -m pip install -r requirements-dev.txt
+"$VIRTUAL_ENV/bin/python" -I -m pip install -r requirements-dev.txt
+/usr/bin/python3 -I -m pip install -r requirements-dev.txt
+GOODS
+done
+# The unhashed dev install runs after every gate that does not need the dev tools: a dev install placed ahead of any of them is caught.
+mutate "dev install ahead of the secret scan (github-py)" github-py/.github/workflows/ci.yml "      # PR: the PR's commits; push: full history\n" "      - run: |\n          .venv/bin/python -I -m pip install -r requirements-dev.txt\n          LICENCES_SCOPE=all bash scripts/check-licences.sh\n      # PR: the PR's commits; push: full history\n" static "before the secrets gate"
+mutate "dev install ahead of change size (github-py)" github-py/.github/workflows/ci.yml "      - name: Change size (the PR" "      - run: |\n          .venv/bin/python -I -m pip install -r requirements-dev.txt\n          LICENCES_SCOPE=all bash scripts/check-licences.sh\n      - name: Change size (the PR" static "before the changesize gate"
+mutate "dev install ahead of bundle size (github-py)" github-py/.github/workflows/ci.yml "      - name: Bundle size (gzip" "      - run: |\n          .venv/bin/python -I -m pip install -r requirements-dev.txt\n          LICENCES_SCOPE=all bash scripts/check-licences.sh\n      - name: Bundle size (gzip" static "before the bundle gate"
+mutate "dev install ahead of duplication (github-py)" github-py/.github/workflows/ci.yml "      - name: Duplication (production" "      - run: |\n          .venv/bin/python -I -m pip install -r requirements-dev.txt\n          LICENCES_SCOPE=all bash scripts/check-licences.sh\n      - name: Duplication (production" static "before the duplication gate"
+mutate "dev install ahead of duplication (azure-py)" azure-py/azure-pipelines.yml "      # Pinned by JSCPD_VERSION; bump it deliberately.\n      - bash: npx" "      - bash: |\n          .venv/bin/python -I -m pip install -r requirements-dev.txt\n          LICENCES_SCOPE=all bash scripts/check-licences.sh\n      # Pinned by JSCPD_VERSION; bump it deliberately.\n      - bash: npx" static "before the duplication gate"
+mutate "-I removed from the uv install (azure-py)" azure-py/azure-pipelines.yml 'python -I -m pip install --only-binary=:all: uv' 'python -m pip install --only-binary=:all: uv' static "without -I"
+# The venv and pip lines as the jobs run them, in a project with a root venv.py / pip/__init__.py that plants a marker: with -I the marker never appears; the same line without -I (probe) plants it; a clean project has none.
+for host_file in github-py/.github/workflows/ci.yml azure-py/azure-pipelines.yml; do
+  venv_line=$(grep -m1 'python -I -m venv --clear .venv' "$CI_DIR/$host_file" | sed 's/^ *//; s/^python /python3 /')
+  pip_line=$(grep -m1 '\.venv/bin/python -I -m pip install --require-hashes' "$CI_DIR/$host_file" | sed 's/^ *//; s/ install .*/ --version/')
+  for probe in isolated unisolated; do
+    for plant in venv.py pip clean; do
+      d="$T/iso-$probe-$plant"; rm -rf "$d" && mkdir -p "$d"
+      case $plant in
+        venv.py) echo 'open("PLANTED", "w").close()' > "$d/venv.py" ;;
+        pip) mkdir "$d/pip" && echo 'open("PLANTED", "w").close()' > "$d/pip/__init__.py" ;;
+      esac
+      v=$venv_line p=$pip_line
+      if [[ $probe == unisolated ]]; then v=${v/ -I/}; p=${p/ -I/}; fi
+      (cd "$d" && bash -c "$v" > /dev/null 2>&1; bash -c "$p" > /dev/null 2>&1) || true
+      label="$probe python, $plant project ($host_file)"
+      if [[ $probe == isolated || $plant == clean ]]; then
+        if [[ -e "$d/PLANTED" ]]; then bad "a planted $plant ran in the job: $label"; else ok "nothing planted ran: $label"; fi
+      else
+        if [[ -e "$d/PLANTED" ]]; then ok "probe: without -I the planted $plant runs: $label"; else bad "probe failed, the planted $plant did not run without -I: $label"; fi
+      fi
+    done
+  done
+done
 mutate "if: false on the jscpd step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Duplication (production source <= 3%, per .jscpd.json)\n        run: pnpm exec jscpd' '      - if: false\n        name: Duplication (production source <= 3%, per .jscpd.json)\n        run: pnpm exec jscpd' static
 mutate "if: false on the nosonar step (github-py)" github-py/.github/workflows/ci.yml '      - name: No NOSONAR suppression markers' '      - if: false\n        name: No NOSONAR suppression markers' static
 mutate "if: false on the merge step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Merge shard reports (writes coverage/cobertura-coverage.xml)' '      - if: false\n        name: Merge shard reports (writes coverage/cobertura-coverage.xml)' static
@@ -1340,7 +1495,27 @@ gate_fixture() { # gate_fixture <dir> <ts|py> <github|azure>
   fi
   echo x > "$d/.claude/hooks/a.sh"
   h=$(shasum -a 256 "$d/.claude/hooks/a.sh" | cut -d' ' -f1)
-  printf '{"seeded_files":{"a":{"path":".claude/hooks/a.sh","origin_hash":"%s"}}}' "$h" > "$d/.claude/harness.json"
+  # A gate whose lefthook needle names a script must have that script registered, so the fixture registers each one.
+  local entries gp gid lh ci
+  entries=$(printf '"a":{"path":".claude/hooks/a.sh","origin_hash":"%s"}' "$h")
+  while IFS='|' read -r gid lh ci; do
+    [[ -z "$gid" || "$gid" == \#* ]] && continue
+    case "$lh" in
+      scripts/*|.claude/*)
+        gp=${lh%% *}
+        mkdir -p "$d/$(dirname "$gp")"
+        [[ -f "$d/$gp" ]] || echo "$gid" > "$d/$gp"
+        entries="$entries,$(printf '"%s":{"path":"%s","origin_hash":"%s"}' "$gid" "$gp" "$(shasum -a 256 "$d/$gp" | cut -d' ' -f1)")"
+        ;;
+    esac
+  done < "$d/.claude/gates.txt"
+  # verify-harness also needs the config files each gate reads registered (GATE FILE UNREGISTERED)
+  for gp in .claude/allowed-licences.txt .claude/licence-exceptions.txt scripts/py-env.py .claude/bundle-budget.txt .claude/change-size-exclude.txt; do
+    mkdir -p "$d/$(dirname "$gp")"
+    [[ -f "$d/$gp" ]] || echo "$gp" > "$d/$gp"
+    entries="$entries,$(printf '"%s":{"path":"%s","origin_hash":"%s"}' "$gp" "$gp" "$(shasum -a 256 "$d/$gp" | cut -d' ' -f1)")"
+  done
+  printf '{"seeded_files":{%s}}' "$entries" > "$d/.claude/harness.json"
   # A real scaffold commits before it verifies; verify-harness derives its enforcement layer from HEAD
   if ! { git -C "$d" init -q -b main && git -C "$d" add -A \
     && git -C "$d" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m "chore: scaffold"; }; then
@@ -1365,6 +1540,16 @@ for st in ts py; do
         if out=$(gate_verify "$T/gmm"); then bad "mutation not caught: $st/$host $f drops gate $gid"; else ok "mutation caught: $st/$host $f drops gate $gid"; fi
       done
     done < "$SHARED/template/.claude/gates.txt"
+    # Dropping a keyless gate's manifest row while CI still calls it is drift: the row is the only thing that lists it.
+    for g in licences sbom changesize bundle; do
+      grep -q "^$g|" "$SHARED/template/.claude/gates.txt" || { bad "gate manifest: $g has no row in gates.txt"; continue; }
+      gate_fixture "$T/gmr" "$st" "$host"
+      sed -i.bak "/^$g|/d" "$T/gmr/.claude/gates.txt"
+      git -C "$T/gmr" add -A && git -C "$T/gmr" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m "drop $g row"
+      if out=$(gate_verify "$T/gmr"); then bad "mutation not caught: $st/$host drops the $g row from gates.txt"; else
+        case "$out" in *"GATE UNLISTED: CI runs gate '$g'"*) ok "mutation caught: $st/$host drops the $g row from gates.txt" ;; *) bad "$st/$host $g row removal failed for the wrong reason: $out" ;; esac
+      fi
+    done
   done
 done
 

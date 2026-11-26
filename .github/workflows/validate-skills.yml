@@ -161,8 +161,6 @@ jobs:
         run: bash scripts/pre-guard.test.sh
       - name: Seeded test budget script tests
         run: bash scripts/test-budget.test.sh
-      - name: Seeded gate ratchet tests
-        run: bash scripts/gate-ratchet.test.sh
       - name: Seeded supply-chain, workflow, env-example and Dockerfile checks
         run: bash scripts/supply-chain.test.sh
       - name: Seeded Dockerfiles pass the dockerfile gate with real hadolint
@@ -206,6 +204,41 @@ jobs:
           echo "$RUNNER_TEMP/ci-templates-venv/bin" >> "$GITHUB_PATH"
       - name: Seeded CI template tests
         run: bash scripts/test-ci-templates.sh
+
+  keyless-gate-tests:
+    name: Keyless gate tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: '26'
+      - name: Enable the pnpm that each scaffold pins
+        run: corepack enable
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: '3.14'
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: '0.13.7'
+      - name: Seeded licence gate and its real scaffold runs
+        run: bash scripts/seeded-licences.test.sh
+      - name: Seeded SBOM gate and its real scaffold runs
+        run: bash scripts/seeded-sbom.test.sh
+      - name: Seeded bundle size gate and its real scaffold builds
+        run: bash scripts/seeded-bundle-size.test.sh
+      - name: Seeded change size gate
+        run: bash scripts/seeded-change-size.test.sh
+      - name: Seeded gate ratchet tests
+        run: bash scripts/gate-ratchet.test.sh
+      - name: Seeded lock file parser fuzz against pip
+        run: bash scripts/seeded-lock-parser-fuzz.test.sh
 
   golden-tests:
     name: Golden scaffold tree tests
@@ -487,6 +520,7 @@ jobs:
       - plugin-validate
       - shell-lint
       - seeded-gate-tests
+      - keyless-gate-tests
       - golden-tests
       - template-copy-tests
       - version-docs-tests

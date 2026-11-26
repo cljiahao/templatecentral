@@ -238,7 +238,7 @@ json_has() {
 # ── Twin drift ────────────────────────────────────────────────────────────────
 
 # strip_json <file>: the hook without its JSON-extraction statement (one node line in the TS twin, three python3 lines in the FastAPI twin).
-strip_json() { awk '/^(cmd|in_cwd|file)=\$\(printf .%s. "\$input" \| (node -e|python3 -c)/ { skip = 1 } skip { if ($0 ~ /2>\/dev\/null\)$/) skip = 0; next } /^  (node -e|python3 -c) / { next } { print }' "$1"; }
+strip_json() { awk '/^(cmd|in_cwd|file)=\$\(printf .%s. "\$input" \| (node -e|python3 -I -c)/ { skip = 1 } skip { if ($0 ~ /2>\/dev\/null\)$/) skip = 0; next } /^  (node -e|python3 -I -c) / { next } { print }' "$1"; }
 # drift_ok <ts file> <py file>: same text once the JSON extraction is stripped, and the strip kept at least 90% of the lines.
 drift_ok() {
   local a b total kept
@@ -769,7 +769,8 @@ MOCK
 cat > "$MOCK/python" <<'MOCK'
 #!/usr/bin/env bash
 many() { i=0; while [ "$i" -lt 60 ]; do i=$((i + 1)); if [ -n "$MOCK_UNI" ]; then printf '%s line %d a\303\251 ' "$1" "$i"; j=0; while [ "$j" -lt 150 ]; do j=$((j + 1)); printf '\346\227\245'; done; echo; else printf '%s line %d %0200d\n' "$1" "$i" 0; fi; done; }
-case "$*" in
+args="$*"
+case "${args#-I }" in
   "-m pyright --version") [ "$MOCK_HANG_PROBE" = pyright ] && exec sleep 30; [ -n "$MOCK_NO_PYRIGHT" ] && exit 1; echo pyright 1.1; exit 0 ;;
   "-m pyright src/") [ -n "$MOCK_HANG_PYRIGHT" ] && exec sleep 30; echo "pyright" >> "$MOCK_LOG"; [ -f "$MOCK_TSC_OK" ] && exit 0
     [ -n "$MOCK_MANY" ] && { many '/p/src/a.py:1:5 - error: "x" is not defined'; exit 1; }
@@ -1704,6 +1705,37 @@ git -C "$V" init -q
 vcommit() { git -C "$1" add -A && git -C "$1" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q --allow-empty --no-verify -m fixture; }
 sha() { python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$1"; }
 
+# gate_support <gate id>: the config files the gate's script reads, which verify-harness.sh also requires as hashed entries.
+gate_support() {
+  case "$1" in
+    licences) echo ".claude/allowed-licences.txt .claude/licence-exceptions.txt scripts/py-env.py" ;;
+    sbom) echo "scripts/py-env.py" ;;
+    bundle) echo ".claude/bundle-budget.txt" ;;
+    changesize) echo ".claude/change-size-exclude.txt" ;;
+  esac
+}
+
+# gate_entries <dir>: stubs every script or config a gate row names inside <dir> and prints the harness.json entries that register them, each led by a comma.
+gate_entries() {
+  local d="$1" gid lh ci gp
+  while IFS='|' read -r gid lh ci; do
+    case "$gid" in ""|"#"*) continue ;; esac
+    case "$lh" in
+      scripts/*|.claude/*)
+        gp=${lh%% *}
+        mkdir -p "$d/$(dirname "$gp")"
+        [[ -f "$d/$gp" ]] || echo "$gid" > "$d/$gp"
+        printf ',"%s":{"path":"%s","origin_hash":"%s"}' "g-$gid" "$gp" "$(sha "$d/$gp")"
+        ;;
+    esac
+    for gp in $(gate_support "$gid"); do
+      mkdir -p "$d/$(dirname "$gp")"
+      [[ -f "$d/$gp" ]] || echo "$gp" > "$d/$gp"
+      printf ',"%s":{"path":"%s","origin_hash":"%s"}' "s-$gid-${gp//[^A-Za-z0-9]/_}" "$gp" "$(sha "$d/$gp")"
+    done
+  done < "$d/.claude/gates.txt"
+}
+
 # expect_verify <want-exit> <harness.json> <description> [PATH]
 expect_verify() {
   printf '%s' "$2" > "$V/.claude/harness.json"
@@ -1715,7 +1747,7 @@ expect_verify() {
   fi
   check "$1" "$?" "verify-harness $3"
 }
-GOOD="{\"seeded_files\":{\"a\":{\"path\":\".claude/hooks/a.sh\",\"origin_hash\":\"$(sha "$V/.claude/hooks/a.sh")\"}}}"
+GOOD="{\"seeded_files\":{\"a\":{\"path\":\".claude/hooks/a.sh\",\"origin_hash\":\"$(sha "$V/.claude/hooks/a.sh")\"}$(gate_entries "$V")}}"
 expect_verify 0 "$GOOD" "matching baseline"
 echo y >> "$V/.claude/hooks/a.sh"
 expect_verify 1 "$GOOD" "modified guarded file"
@@ -1748,7 +1780,7 @@ pipe_fixture() { # pipe_fixture <dir> <guarded padding lines> <gate text padding
   mkdir -p "$d/.claude/hooks" "$d/scripts" "$d/.github/workflows" "$d/azure-pipelines"
   echo x > "$d/.claude/hooks/a.sh"
   cp "$KIT/gates.txt" "$d/.claude/gates.txt"
-  printf '%s' "{\"seeded_files\":{\"a\":{\"path\":\".claude/hooks/a.sh\",\"origin_hash\":\"$(sha "$d/.claude/hooks/a.sh")\"}}}" > "$d/.claude/harness.json"
+  printf '%s' "{\"seeded_files\":{\"a\":{\"path\":\".claude/hooks/a.sh\",\"origin_hash\":\"$(sha "$d/.claude/hooks/a.sh")\"}$(gate_entries "$d")}}" > "$d/.claude/harness.json"
   # A stand-in ratchet: the real one lists the same shape (kind, path, enforced), here with the match on line 1 and a long tail.
   { printf '#!/usr/bin/env bash\n'
     printf 'printf "guard\\t.claude/hooks/a.sh\\t1\\n"\n'
@@ -1785,7 +1817,7 @@ git -C "$GV" init -q
 cp "$KIT/gates.txt" "$GV/.claude/gates.txt"
 printf '%s' "$GOOD" > "$GV/.claude/harness.json"
 mkdir -p "$GV/.claude/hooks"; cp "$V/.claude/hooks/a.sh" "$GV/.claude/hooks/a.sh"
-printf '%s' "{\"seeded_files\":{\"a\":{\"path\":\".claude/hooks/a.sh\",\"origin_hash\":\"$(sha "$GV/.claude/hooks/a.sh")\"}}}" > "$GV/.claude/harness.json"
+printf '%s' "{\"seeded_files\":{\"a\":{\"path\":\".claude/hooks/a.sh\",\"origin_hash\":\"$(sha "$GV/.claude/hooks/a.sh")\"}$(gate_entries "$GV")}}" > "$GV/.claude/harness.json"
 gate_lines=$(grep -vE '^[[:space:]]*(#|$)' "$GV/.claude/gates.txt")
 : > "$GV/lefthook.yml"; : > "$GV/.github/workflows/ci.yml"; : > "$GV/azure-pipelines/templatecentral-gates.yml"
 while IFS='|' read -r gid lh ci; do
@@ -1794,6 +1826,26 @@ while IFS='|' read -r gid lh ci; do
 done <<< "$gate_lines"
 gate_verify() { vcommit "$GV"; (cd "$GV" && bash "$KIT/verify-harness.sh" 2>&1); }
 out=$(gate_verify); check 0 "$?" "verify-harness passes when every runner has every listed gate"
+# A gate's script, and the config files it reads, must stay hashed entries of harness.json: removing one entry is a finding that names the gate and the file (control: the full manifest passes above).
+cp "$GV/.claude/harness.json" "$GV/.claude/harness.full"
+while IFS='|' read -r gid lh ci; do
+  files=""
+  case "$lh" in scripts/*|.claude/*) files=${lh%% *} ;; esac
+  files="$files $(gate_support "$gid")"
+  for gf in $files; do
+    python3 - "$GV/.claude/harness.full" "$GV/.claude/harness.json" "$gf" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1]))
+m["seeded_files"] = {k: v for k, v in m["seeded_files"].items() if v["path"] != sys.argv[3]}
+json.dump(m, open(sys.argv[2], "w"))
+PY
+    out=$(gate_verify); rc=$?
+    check 1 "$rc" "verify-harness fails when the harness.json entry for $gf is removed (gate $gid)"
+    check 1 "$(grep -c "GATE FILE UNREGISTERED: $gid reads $gf," <<<"$out")" "verify-harness names gate $gid and file $gf"
+  done
+done <<< "$gate_lines"
+cp "$GV/.claude/harness.full" "$GV/.claude/harness.json"
+out=$(gate_verify); check 0 "$?" "verify-harness passes again once the entries are restored ($out)"
 cp "$REPO_ROOT/skills/scaffold/shared/template-settings-ts/.claude/settings.json" "$GV/.claude/settings.json"
 out=$(gate_verify); check 0 "$?" "verify-harness passes on the seeded settings.json ($out)"
 sed 's/"Bash(curl \*)",/"Bash(curl)",/' "$REPO_ROOT/skills/scaffold/shared/template-settings-ts/.claude/settings.json" > "$GV/.claude/settings.json"
@@ -1827,7 +1879,7 @@ out=$(gate_verify); check 2 "$?" "verify-harness fails when gates.txt is missing
 cp "$KIT/gates.txt" "$GV/.claude/gates.txt"; printf 'broken\n' >> "$GV/.claude/gates.txt"
 out=$(gate_verify); check 2 "$?" "verify-harness fails on a malformed manifest line"
 bash "$KIT/ci-gates.sh" list > "$T/gl.txt" 2>&1
-check "harness docs testbudget nosonar secrets deps changelog comments ratchet supplychain workflows envexample dockerfile workarounds review diffcover" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints the manifest gates in order"
+check "harness docs testbudget nosonar secrets deps changelog comments ratchet supplychain workflows envexample dockerfile workarounds review licences sbom changesize bundle diffcover" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints the manifest gates in order"
 KG=$(mktemp -d "$T/kg.XXXX"); cp "$KIT/ci-gates.sh" "$KG/"; grep -v '^nosonar|' "$KIT/gates.txt" > "$KG/gates.txt"
 bash "$KG/ci-gates.sh" nosonar >/dev/null 2>&1
 check 1 "$?" "ci-gates refuses a gate the manifest does not list"

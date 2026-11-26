@@ -207,6 +207,11 @@ scripts/gate-ratchet.test.sh	bash scripts/gate-ratchet.test.sh
 scripts/supply-chain.test.sh	bash scripts/supply-chain.test.sh
 scripts/seeded-dockerfiles.test.sh	bash scripts/seeded-dockerfiles.test.sh
 scripts/seeded-gates.test.sh	bash scripts/seeded-gates.test.sh
+scripts/seeded-licences.test.sh	bash scripts/seeded-licences.test.sh
+scripts/seeded-sbom.test.sh	bash scripts/seeded-sbom.test.sh
+scripts/seeded-bundle-size.test.sh	bash scripts/seeded-bundle-size.test.sh
+scripts/seeded-change-size.test.sh	bash scripts/seeded-change-size.test.sh
+scripts/seeded-lock-parser-fuzz.test.sh	bash scripts/seeded-lock-parser-fuzz.test.sh
 scripts/seeded-review-gate.test.sh	bash scripts/seeded-review-gate.test.sh
 scripts/seeded-remove-harness.test.sh	bash scripts/seeded-remove-harness.test.sh
 scripts/day-one.test.sh	bash scripts/day-one.test.sh
@@ -252,6 +257,7 @@ scripts/changelog-assemble.test.sh	bash scripts/changelog-check.sh {BASE}
 @noread	bash scripts/day-one.test.sh	README.md
 @noread	bash scripts/gate-ratchet.test.sh	README.md
 @noread	bash scripts/seeded-gates.test.sh	README.md
+@noread	bash scripts/seeded-change-size.test.sh	README.md
 @noread	bash scripts/seeded-review-gate.test.sh	README.md
 @noread	bash scripts/test-budget.test.sh	README.md
 @noread	bash scripts/measure-seeded-load.sh	README.md

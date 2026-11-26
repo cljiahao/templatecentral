@@ -76,6 +76,10 @@ jobs:
         run: bash .claude/ci-gates.sh envexample
       - name: Dockerfile lint (digest pin, non-root USER, hadolint)
         run: bash .claude/ci-gates.sh dockerfile
+      - name: Licences (every installed dependency has an allowed licence)
+        run: bash .claude/ci-gates.sh licences
+      - name: SBOM (CycloneDX bill of materials matches the lockfile)
+        run: bash .claude/ci-gates.sh sbom
       # format:check + lint + typecheck
       - run: pnpm run check
       - name: Duplication (production source <= 3%, per .jscpd.json)
@@ -85,6 +89,12 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: bash .claude/ci-gates.sh secrets "$BASE_REF"
+      - name: Change size (the PR stays within the line and file budget)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash .claude/ci-gates.sh changesize "$BASE_REF"
+      - name: Bundle size (gzip JS and CSS within .claude/bundle-budget.txt)
+        run: bash .claude/ci-gates.sh bundle
       # Prints the gate-time note for the gates this job ran. Exits 0 when over budget and 2 when the budget file, gate list or timing record is broken. Skipped when an earlier step fails.
       - name: Gate-time budget note
         run: bash .claude/gate-budget.sh check

@@ -162,7 +162,8 @@ exit 1
 STUB
   cat > "$1/python" <<'STUB'
 #!/usr/bin/env bash
-case "$*" in
+args="$*"
+case "${args#-I }" in
   "-m pyright --version" | "-m pytest --version") exit 0 ;;
 esac
 i=0; while [ "$i" -lt 60 ]; do i=$((i + 1)); printf '/p/src/a.py:%d:5 - error: "x" is not defined (reportUndefinedVariable) %0200d\n' "$i" 0; done

@@ -53,7 +53,7 @@ read_manifest() {
   elif command -v node > /dev/null 2>&1; then
     node -e 'const m=JSON.parse(require("fs").readFileSync(".claude/harness.json","utf8"));for(const v of Object.values(m.seeded_files)){const a=String(v.path),b=String(v.origin_hash);if(/[\x00-\x1f]/.test(a+b))throw new Error("control character");console.log(a+"\t"+b)}'
   elif command -v python3 > /dev/null 2>&1; then
-    python3 -c 'import json;m=json.load(open(".claude/harness.json"));[print(str(v["path"])+"\t"+str(v["origin_hash"])) if not any(ord(c)<32 for c in str(v["path"])+str(v["origin_hash"])) else (_ for _ in ()).throw(ValueError("control character")) for v in m["seeded_files"].values()]'
+    python3 -I -c 'import json;m=json.load(open(".claude/harness.json"));[print(str(v["path"])+"\t"+str(v["origin_hash"])) if not any(ord(c)<32 for c in str(v["path"])+str(v["origin_hash"])) else (_ for _ in ()).throw(ValueError("control character")) for v in m["seeded_files"].values()]'
   else
     return 3
   fi
@@ -70,10 +70,12 @@ is_removable() {
     .claude/ci-gates.sh | .claude/comment-hygiene-patterns.txt | .claude/gates.txt | .claude/regen-harness.sh) return 0 ;;
     .claude/registry-hosts.txt | .claude/settings.json | .claude/verify-harness.sh) return 0 ;;
     .claude/review-checklist.txt | .claude/review-checklist-stack.txt) return 0 ;;
+    .claude/allowed-licences.txt | .claude/bundle-budget.txt | .claude/change-size-exclude.txt | .claude/licence-exceptions.txt) return 0 ;;
     .github/dependabot.yml | .github/workflows/ci.yml | .gitleaks.toml | .jscpd.json | sonar-project.properties) return 0 ;;
     azure-pipelines.yml | azure-pipelines/templatecentral-gates.yml | lefthook.yml) return 0 ;;
     docs/harness.md | docs/adr/0001-test-each-behaviour-once.md) return 0 ;;
     scripts/check-dockerfile.sh | scripts/check-docs.sh | scripts/check-env-example.sh | scripts/check-review-record.sh) return 0 ;;
+    scripts/check-bundle-size.sh | scripts/check-change-size.sh | scripts/check-licences.sh | scripts/generate-sbom.sh | scripts/py-env.py) return 0 ;;
     scripts/check-secret-scanner.sh | scripts/check-supply-chain.sh | scripts/check-workflows.sh | scripts/gate-ratchet.sh) return 0 ;;
     scripts/record-review.sh | scripts/remove-harness.sh | scripts/test-budget.sh) return 0 ;;
   esac

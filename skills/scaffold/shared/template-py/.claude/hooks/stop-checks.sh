@@ -12,7 +12,7 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
 gate_git_fail() { echo "Stop gate: cannot read changed files ($1); repair the repository or run the checks manually." >&2; exit 2; }
 PROJ="${CLAUDE_PROJECT_DIR:-.}"
 input=$(cat)
-active=$(printf '%s' "$input" | python3 -c "import json,sys
+active=$(printf '%s' "$input" | python3 -I -c "import json,sys
 try: print('true' if json.loads(sys.stdin.read() or '{}').get('stop_hook_active') is True else 'false')
 except Exception: print('false')" 2>/dev/null)
 [ "$active" = "true" ] && exit 0
@@ -108,8 +108,8 @@ probe() {
 }
 probe "pytest --version" "Stop gate cannot run: pytest is unavailable (python -m pytest); install the dev dependencies." python -m pytest --version
 if [ -n "$src_changed" ]; then
-  probe "pyright --version" "Stop gate cannot run: pyright is unavailable (python -m pyright); install the dev dependencies." python -m pyright --version
-  run python -m pyright src/
+  probe "pyright --version" "Stop gate cannot run: pyright is unavailable (python -m pyright); install the dev dependencies." python -I -m pyright --version
+  run python -I -m pyright src/
   [ "$EC" -eq 0 ] || fail pyright
 fi
 if [ -n "$full" ]; then
