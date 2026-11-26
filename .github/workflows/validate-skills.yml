@@ -25,21 +25,6 @@ on:
     # labeled/unlabeled re-run the workflow so the "Fence snapshot unchanged" job re-reads the
     # fence-snapshot-change label; without them a label added after the run began is never seen.
     types: [opened, synchronize, reopened, labeled, unlabeled]
-    paths:
-      - 'skills/**'
-      - 'scripts/**'
-      - 'tests/**'
-      - 'adapters/**'
-      - '.claude-plugin/**'
-      - 'README.md'
-      - 'CHANGELOG.md'
-      - 'AGENTS.md'
-      - 'EXAMPLES.md'
-      - 'CONTRIBUTING.md'
-      - 'FUTURE.md'
-      - 'SECURITY.md'
-      - '.claude/**'
-      - '.github/workflows/**'
 
 jobs:
   validate:
@@ -130,7 +115,7 @@ jobs:
   shell-lint:
     name: Shellcheck repo scripts
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -138,8 +123,8 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-      - name: Install zsh for the copy-guard shell tests
-        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Install PyYAML for the test wiring check
+        run: sudo apt-get update && sudo apt-get install -y python3-yaml
       - name: shellcheck + bash -n
         run: |
           shellcheck scripts/*.sh
@@ -174,8 +159,6 @@ jobs:
           find "$t" -path "$t/*/template*" \( -name '*.cjs' -o -name '*.mjs' \) -print0 | xargs -0 -r -n1 node --check
       - name: pre-guard.sh behavioral test
         run: bash scripts/pre-guard.test.sh
-      - name: Seeded harness-kit hook regression tests
-        run: bash scripts/test-harness-kit.sh
       - name: Seeded test budget script tests
         run: bash scripts/test-budget.test.sh
       - name: Seeded gate ratchet tests
@@ -184,6 +167,26 @@ jobs:
         run: bash scripts/supply-chain.test.sh
       - name: Seeded Dockerfiles pass the dockerfile gate with real hadolint
         run: bash scripts/seeded-dockerfiles.test.sh
+      - name: Every scripts/*.test.sh file is run by a workflow step
+        run: bash scripts/check-tests-wired.sh
+      - name: Wiring check tests
+        run: bash scripts/check-tests-wired.test.sh
+      - name: Workflow job id reader tests
+        run: bash scripts/workflow-job-ids.test.sh
+
+  seeded-gate-tests:
+    name: Seeded gate tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Seeded harness-kit hook regression tests
+        run: bash scripts/test-harness-kit.sh
       - name: Seeded workaround detector, secret scan, nosonar and diff-coverage gates and hook messages
         run: bash scripts/seeded-gates.test.sh
       - name: Seeded gate-time budget, record, check, hook and ratchet guards
@@ -194,8 +197,6 @@ jobs:
           bash scripts/seeded-remove-harness.test.sh
       - name: Day-one proof, every stack and CI host passes its offline seeded gates
         run: bash scripts/day-one.test.sh
-      - name: Golden regeneration script tests
-        run: bash scripts/regen-golden.test.sh
       - name: Install PyYAML for the CI template guard
         run: |
           python3 -m venv "$RUNNER_TEMP/ci-templates-venv"
@@ -203,6 +204,20 @@ jobs:
           echo "$RUNNER_TEMP/ci-templates-venv/bin" >> "$GITHUB_PATH"
       - name: Seeded CI template tests
         run: bash scripts/test-ci-templates.sh
+
+  golden-tests:
+    name: Golden scaffold tree tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Golden regeneration script tests
+        run: bash scripts/regen-golden.test.sh
       - name: Research content guard tests
         run: bash scripts/check-research-content.test.sh
       - name: Fence extractor tests
@@ -215,8 +230,34 @@ jobs:
         run: bash scripts/check-golden.sh --from-templates
       - name: Template and guide comment policy
         run: bash scripts/check-template-comments.sh
+
+  template-copy-tests:
+    name: Template copy tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Install zsh for the copy-guard shell tests
+        run: sudo apt-get update && sudo apt-get install -y zsh
       - name: Template copy tests
         run: bash scripts/test-template-copy.sh
+
+  version-docs-tests:
+    name: Version, docs and load tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - name: Token counter tests
         run: bash scripts/count-load.test.sh
       - name: Outcome measurement tests
@@ -249,10 +290,6 @@ jobs:
           done
       - name: Quality baseline script tests
         run: bash scripts/quality-baseline.test.sh
-      - name: Harness live check tests
-        run: bash scripts/harness-live.test.sh
-      - name: Harness refresh tests
-        run: bash scripts/harness-refresh.test.sh
       - name: Review scope and remove-example scripts parse and pass shellcheck
         run: |
           set -euo pipefail
@@ -286,6 +323,64 @@ jobs:
             exit "$rc"
           fi
 
+  harness-tests:
+    name: Harness live and refresh tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Harness live check tests
+        run: bash scripts/harness-live.test.sh
+      - name: Harness refresh tests
+        run: bash scripts/harness-refresh.test.sh
+
+  sonar-parity-tests:
+    name: Sonar parity tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Sonar parity check tests
+        run: bash scripts/check-sonar-parity.test.sh
+
+  defect-report-tests:
+    name: Migrate defect report tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Migrate defect report tests
+        run: bash scripts/defect-report.test.sh
+
+  migrate-baseline-tests:
+    name: Migrate gate baseline tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Migrate gate baseline tests
+        run: bash scripts/migrate-baseline.test.sh
+
   lint-negative-tests:
     name: Lint check negative tests
     runs-on: ubuntu-24.04
@@ -298,6 +393,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y python3-yaml
       - name: Each lint check fails on an empty match and on a deleted anchor
         run: bash scripts/lint-skills.test.sh
+      - name: The probe pool of that test reports crashed, truncated and missing probes
+        run: bash scripts/lint-skills-pool.test.sh
 
   fence-snapshot-frozen:
     name: Fence snapshot unchanged
@@ -327,12 +424,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
+      - name: Line-budget allowance check tests
+        run: bash scripts/check-line-budget-frozen.test.sh
       - name: Fail when a line-budget allowance grew
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: |
-          bash scripts/check-line-budget-frozen.test.sh
-          bash scripts/check-line-budget-frozen.sh "origin/$BASE_REF"
+        run: bash scripts/check-line-budget-frozen.sh "origin/$BASE_REF"
 
   token-count:
     name: Scaffold load size
@@ -373,3 +470,61 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Run hooks.test.mjs
         run: node adapters/opencode/hooks.test.mjs
+
+  # The one check to require in branch protection. It runs even when a job failed or was cancelled
+  # (if: always()) and fails unless every job in `needs` finished with result success. The only jobs
+  # that may be skipped are fence-snapshot-frozen and line-budget-frozen, and only on a push, where
+  # their own `if` skips them by design; on a pull request they must succeed. It also fails when a job of this workflow is
+  # missing from `needs`, so a new job cannot be left out of the aggregate unnoticed.
+  all-checks:
+    name: All checks
+    if: always()
+    needs:
+      - validate
+      - lint-patterns
+      - plugin-validate
+      - shell-lint
+      - seeded-gate-tests
+      - golden-tests
+      - template-copy-tests
+      - version-docs-tests
+      - harness-tests
+      - sonar-parity-tests
+      - defect-report-tests
+      - migrate-baseline-tests
+      - lint-negative-tests
+      - fence-snapshot-frozen
+      - line-budget-frozen
+      - token-count
+      - opencode-adapter-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Every job succeeded, or was skipped by design
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          bad=$(jq -r --arg ev "$EVENT" '
+            to_entries[]
+            | select(if (.key == "fence-snapshot-frozen" or .key == "line-budget-frozen") and $ev != "pull_request"
+                     then .value.result != "skipped"
+                     else .value.result != "success" end)
+            | "\(.key)=\(.value.result)"' <<<"$NEEDS")
+          if [ -n "$bad" ]; then
+            echo "Jobs that did not pass:"
+            echo "$bad"
+            exit 1
+          fi
+          in_file=$(bash scripts/workflow-job-ids.sh .github/workflows/validate-skills.yml | grep -vx all-checks | sort)
+          in_needs=$(jq -r 'keys[]' <<<"$NEEDS" | sort)
+          if [ "$in_file" != "$in_needs" ]; then
+            echo "The jobs of this workflow and the needs of all-checks differ:"
+            diff <(echo "$in_file") <(echo "$in_needs") || true
+            exit 1
+          fi
+          echo "All $(echo "$in_needs" | wc -l | tr -d ' ') jobs passed or were skipped by design"
