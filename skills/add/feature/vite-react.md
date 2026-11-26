@@ -37,8 +37,6 @@ export interface ProjectItem {
 
 ### 3. Create `constants.ts`
 
-Put all static data here, not in components:
-
 ```ts
 // Values use the backend `sort` format: `asc_<field>` or `desc_<field>`.
 export const SORT_OPTIONS = [
@@ -106,8 +104,6 @@ Export from barrel: `api/index.ts`
 
 **Check the component library before writing UI** (`templatecentral:standards` → `code-standards/vite-react.md` → *Component Best Practices*). Prefer existing shadcn primitives and widgets (`custom-card`, `custom-dialog`, `custom-form-field`, `media-card`, `pill`, …) over new ones.
 
-Feature-specific components. Use `function` declarations:
-
 ```tsx
 // components/project-card.tsx
 import { CustomCard } from '@/components/widgets';
@@ -121,8 +117,6 @@ export function ProjectCard({ project }: { project: ProjectItem }) {
 Export from barrel: `components/index.ts`
 
 ### 6. Create Hooks (in `hooks/`)
-
-Follow naming convention:
 
 | Suffix | Purpose |
 |--------|---------|
@@ -167,11 +161,8 @@ Build and tests pass; `import { X } from '@/features/<name>'` resolves from outs
 
 ## Rules
 
-- **Direct imports** OK within the same feature
-- Do not import across features; promote shared code (used by 2+) to `components/widgets/` or `lib/`
-- The barrel exports only the public API
-- Write `types.ts` before components
-- Call the backend through an `ApiClient` subclass, not raw `fetch` or a hardcoded URL (those skip the session cookie and CSRF header)
+- Do not import across features; promote code used by 2+ features to `components/widgets/` or `lib/` — no lint rule enforces this, and cross-feature imports create cycles
+- The barrel exports only the public API: export only what consumers outside the feature need
 
 ## Standalone Components
 
@@ -194,6 +185,4 @@ npx shadcn@latest add <component-name>
 
 It installs into `src/components/ui/`; never hand-create primitives there.
 
-Rules:
-- Prefer composition with children over boolean flag props for variants
-- Add each new file in a shared folder to its barrel `index.ts`
+Add the new component to its folder's `index.ts` barrel.

@@ -27,13 +27,7 @@
 
 > For API endpoints, use `templatecentral:add (endpoint)`.
 
-Use **route groups** `(name)/` to share layouts without affecting the URL.
-Use **folders** `name/` when the folder should be a URL segment.
-Use **dynamic segments** `[param]/` for resource IDs.
-
 ### 2. Create the Page File
-
-Pages should be thin — compose from features/ and components/:
 
 ```tsx
 // src/app/dashboard/analytics/page.tsx
@@ -52,7 +46,7 @@ export default function AnalyticsPage() {
 
 ### 3. Add a Loading State (Required for Data-Fetching Pages)
 
-Always add `loading.tsx` alongside pages that fetch data. If `skeleton` is not yet installed, run `npx shadcn@latest add skeleton` first.
+If `skeleton` is not yet installed, run `npx shadcn@latest add skeleton` first.
 
 ```tsx
 // src/app/dashboard/analytics/loading.tsx
@@ -136,8 +130,4 @@ Build passes; for a data-fetching page, the loading state renders in the browser
 
 ## Rules
 
-- Add `loading.tsx` to data-fetching routes
-- One layout per concern
-- Use route groups `(name)/` for shared layouts without URL impact
-- Keep `page.tsx` components server components, without `'use client'`. Note: `error.tsx` requires `'use client'` (Next.js constraint)
-- Keep pages in the `(public)/` or `dashboard/` route groups
+- `page.tsx` stays a server component: no `'use client'` (put interactivity in a feature component)

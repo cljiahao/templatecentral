@@ -1,0 +1,5 @@
+# S5 skill pass: illustrative test fences deleted (generic usage examples, not files the agent creates).
+skills/add/test/fastapi.md	Naming	0	7711683e7ee0f47434e4b435179f6e6331a331f3700f4cdcd6406e85a36e80a4
+skills/add/test/fastapi.md	Parametrize	0	060e539f16498419e5698d24128c7822aeed98fa08f18bd3e048be92e98872fa
+skills/add/test/vite-react.md	Component Tests with User Interaction	0	4da0ca041242f54e275b02c880e89c1949f21405157b33983c71d8adc3b798c3
+skills/add/test/vite-react.md	Integration Service Tests (External APIs)	0	6f6375fcf51b8b5314ba4321271fb74eba44c272e692dee525a7d8d625d080fd
