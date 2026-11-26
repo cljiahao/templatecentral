@@ -7,10 +7,13 @@
 # A file that git does not diff as text (binary, a NUL byte, an attribute) and every untracked file weighs max(its newline count, one line per 4 KB rounded up), so no content trick or attribute can make a file weigh less than its lines: a text file with one NUL byte, or a -diff line in .gitattributes or .git/info/attributes, still weighs every line. A changed binary adds the newline count of its old content. A tracked text file weighs max(the lines git reports as added plus deleted, one line per 4 KB rounded up of the bytes on those added and deleted lines), so one huge line, a file with only CR line ends, a huge deleted file and a huge line added to an existing file all weigh their size. The size term counts the changed lines only, never the whole file: a one-line edit to a large existing file weighs what git reports. Replacing a huge line with another huge line counts both (old plus new bytes), because a reviewer must read both.
 # Limits: bytes weigh 1 line per 4 KB, so a diff of many short lines and no huge line weighs its git line count; a change that git reports as zero lines and zero bytes (a mode change) weighs 0.
 # linguist-generated is read at the merge base from a scratch git directory that shares the object store but has no info/attributes, with core.attributesFile off, so neither a changed .gitattributes nor a local .git/info/attributes line can drop a file from the count.
+# Every git call reads a changed file's name literally (GIT_LITERAL_PATHSPECS=1), so a name that looks like pathspec magic is a plain file name; a changed path whose own diff has no hunk although git counted lines is an exit 2.
 # Exit: 0 within budget, 1 over budget, 2 it could not measure (no git, no base ref, bad budget).
 # In GitHub Actions and Azure Pipelines the budget and exclude-file overrides are refused.
 # Usage: bash scripts/check-change-size.sh [base-ref]        Env: CHANGE_SIZE_EXCLUDE_FILE overrides the exclude file path.
 set -uo pipefail
+# A changed file's name is data: every git call reads a path literally, so a name such as :(glob)x, :(top)y or :(attr:foo)z cannot act as a pathspec that matches nothing, or another file, or makes git fail.
+export GIT_LITERAL_PATHSPECS=1
 
 MAX_CHANGED_LINES=${CHANGE_SIZE_MAX_LINES:-800}
 MAX_CHANGED_FILES=${CHANGE_SIZE_MAX_FILES:-40}
@@ -110,6 +113,8 @@ while IFS= read -r -d '' rec; do
   case "$deleted" in *[!0-9]*) deleted=0 ;; esac
   w=$((added + deleted))
   git --attr-source="$mb" -c core.attributesFile=/dev/null -c core.quotepath=false diff --no-textconv --no-renames -U0 "$mb" -- "$path" > "$tmp/one.diff" 2> "$tmp/err.txt" || die "git diff failed for $path: $(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"
+  # Fail closed: git reported changed lines for this path, so its own diff must hold a hunk. A diff with none means the path was not read as this file.
+  if [ "$w" -gt 0 ] && ! grep -a -q -e '^@@' -- "$tmp/one.diff"; then die "git reported $w changed lines in $path but its diff has no hunk, so the file cannot be weighed"; fi
   cbytes=$(LC_ALL=C awk 'hdr == 0 && /^@@/ { hdr = 1 } hdr == 1 && /^[-+]/ { n += length($0) + 1 } END { print n + 0 }' "$tmp/one.diff") || die "cannot measure the changed bytes of $path"
   sw=$(((cbytes + 4095) / 4096))
   if [ "$sw" -gt "$w" ]; then w=$sw; fi

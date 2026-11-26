@@ -273,12 +273,12 @@ def condition_errors(rel, doc, tmpl):
                 if text.lstrip().startswith("#"):
                     continue
                 # Every python call in a step runs isolated (-I): the project folder is not on sys.path, so a root venv.py or pip/__init__.py cannot stand in for the module. pytest runs the project's own tests and is the one exception.
-                for call in re.finditer(r"(?:^|[\s;&|(\"])((?:(?:\.venv|\"?\$\{?VIRTUAL_ENV\}?\"?)/bin/)?python3?)(?=\s)(.*)", text):
+                for call in re.finditer(r"(?:^|[\s;&|(\"])((?:[^\s;&|()\"']*/)?python3?)(?=[\s\"'])[\"']?(.*)", text):
                     rest = call.group(2).split()
                     if rest[:1] != ["-I"] and rest[:2] != ["-m", "pytest"]:
                         errors.append(f"{rel}: job {job} step {ident} runs {call.group(1)} without -I, so a root venv.py or pip/__init__.py in the project can run in place of the module")
-                # A bare pip, pip3, pipx or uv pip cannot take -I: use python -I -m pip. pipx run is the one exception, and only for an exact pin (name==version) because it installs into its own isolated environment.
-                for call in re.finditer(r"(?:^|[\s;&|(\"])(?<!-m )(?<!uv )((?:(?:\.venv|\"?\$\{?VIRTUAL_ENV\}?\"?)/bin/)?(?:pip3?|pipx|uv pip))(?=\s)(.*)", text):
+                # A pip, pip3, pipx or uv pip, with or without a leading path, cannot take -I: use python -I -m pip. pipx run is the one exception, and only for an exact pin (name==version) because it installs into its own isolated environment.
+                for call in re.finditer(r"(?:^|[\s;&|(\"])(?<!-m )(?<!uv )((?:[^\s;&|()\"']*/)?(?:pip3?|pipx|uv pip))(?=[\s\"'])[\"']?(.*)", text):
                     rest = call.group(2).split()
                     if call.group(1) == "pipx" and rest[:1] == ["run"] and len(rest) > 1 and re.search(r"==\S", rest[1].strip("\"")):
                         continue
@@ -1174,6 +1174,25 @@ for host in github-py/.github/workflows/ci.yml:github-py azure-py/azure-pipeline
   mutate "uv pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' 'uv pip install -r requirements-dev.txt' static "bare uv pip"
   mutate "VIRTUAL_ENV python without -I for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '$VIRTUAL_ENV/bin/python -m pip install -r requirements-dev.txt' static "without -I"
   mutate "pipx run without an exact pin ($hn)" "$hf" 'pipx run "diff-cover==' 'pipx run "diff-cover' static "bare pipx"
+  mutate "PWD-prefixed pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '$PWD/.venv/bin/pip install -r requirements-dev.txt' static "runs bare"
+  mutate "GITHUB_WORKSPACE-prefixed pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '$GITHUB_WORKSPACE/.venv/bin/pip install -r requirements-dev.txt' static "runs bare"
+  mutate "quoted VIRTUAL_ENV pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '"$VIRTUAL_ENV/bin/pip" install -r requirements-dev.txt' static "runs bare"
+  mutate "/usr/bin/pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '/usr/bin/pip install -r requirements-dev.txt' static "runs bare"
+  mutate "PWD-prefixed python without -I for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '$PWD/.venv/bin/python -m pip install -r requirements-dev.txt' static "without -I"
+  mutate "/usr/bin/pip3 for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '/usr/bin/pip3 install -r requirements-dev.txt' static "runs bare"
+  for good in '$PWD/.venv/bin/python -I -m pip install -r requirements-dev.txt' '"$VIRTUAL_ENV/bin/python" -I -m pip install -r requirements-dev.txt' '/usr/bin/python3 -I -m pip install -r requirements-dev.txt'; do
+    rm -rf "$T/mut" && cp -R "$CI_DIR" "$T/mut"
+    python3 - "$T/mut/$hf" ".venv/bin/python -I -m pip install -r requirements-dev.txt" "$good" <<'PY'
+import sys
+p, old, new = sys.argv[1:4]
+s = open(p).read()
+if old not in s:
+    sys.exit("control target not found: " + old)
+open(p, "w").write(s.replace(old, new))
+PY
+    out=$(static_check "$T/mut" 2>&1 || true)
+    if [[ "$out" == *"without -I"* || "$out" == *"runs bare"* ]]; then bad "control: the isolated form raised an -I finding ($hn): $good -> $(grep -E 'without -I|runs bare' <<<"$out" | head -1)"; else ok "control: no -I finding for $good ($hn)"; fi
+  done
 done
 # The unhashed dev install runs after every gate that does not need the dev tools: a dev install placed ahead of any of them is caught.
 mutate "dev install ahead of the secret scan (github-py)" github-py/.github/workflows/ci.yml "      # PR: the PR's commits; push: full history\n" "      - run: |\n          .venv/bin/python -I -m pip install -r requirements-dev.txt\n          LICENCES_SCOPE=all bash scripts/check-licences.sh\n      # PR: the PR's commits; push: full history\n" static "before the secrets gate"

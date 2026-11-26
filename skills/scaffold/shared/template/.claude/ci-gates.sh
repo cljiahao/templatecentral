@@ -176,7 +176,7 @@ case "$gate" in
         if [ -n "$stripped" ] && grep -qEf "$strict_patterns" <<< "$stripped"; then
           flagged="$flagged$nl  - $f: $stripped"
         fi
-      done < <(git diff -U0 "$base"...HEAD -- "$f" | grep '^+' | grep -vE '^\+\+\+' | sed 's/^+//' | grep -E '^[[:space:]]*(#|//|\*|"""|/\*\*?)')
+      done < <(git --literal-pathspecs diff -U0 "$base"...HEAD -- "$f" | grep '^+' | grep -vE '^\+\+\+' | sed 's/^+//' | grep -E '^[[:space:]]*(#|//|\*|"""|/\*\*?)')
     done < <(git diff -z --name-only "$base"...HEAD)
     rm -f "$strict_patterns"
     if [ -n "$flagged" ]; then
@@ -410,7 +410,7 @@ JS
     code=""
     while IFS= read -r f; do
       [ -n "$f" ] || continue
-      if git diff -U0 --no-color --no-ext-diff "$base"...HEAD -- "$f" | awk -v py="$(case "$f" in *.py) echo 1 ;; *) echo 0 ;; esac)" '
+      if git --literal-pathspecs diff -U0 --no-color --no-ext-diff "$base"...HEAD -- "$f" | awk -v py="$(case "$f" in *.py) echo 1 ;; *) echo 0 ;; esac)" '
         /^@@/ { inbody = 1; next }
         inbody && /^[+]/ {
           t = substr($0, 2); sub(/^[ \t]+/, "", t)

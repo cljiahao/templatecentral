@@ -6,7 +6,7 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SH="$REPO_ROOT/skills/scaffold/shared"
-GATE="$SH/template/scripts/check-change-size.sh"
+GATE="${SEEDED_CHANGE_SIZE_GATE:-$SH/template/scripts/check-change-size.sh}"
 EXCLUDE="$SH/template/.claude/change-size-exclude.txt"
 
 PASS=0
@@ -610,6 +610,53 @@ repo dashbin
 { rand_bin 5000000; } > "$D/-bin.dat"
 run "$D" BASE_REF=main
 check 1 "$EC" "a 5 MB untracked dash-named binary fails on size, not on a read error"
+
+# A changed file's name is data, not a pathspec: names that look like pathspec magic weigh like any other file, and git is never asked to read them as magic.
+# magic_case <label> <file name>: a tracked 3-line file of that name replaced by one 5 MB line fails the gate (a clean control with a small edit passes).
+magic_case() {
+  repo "mg-$1-control"
+  lines 3 "$D/$2"
+  base_commit
+  echo changed > "$D/$2"
+  commit_all
+  run "$D" BASE_REF=main
+  check 0 "$EC" "control: a small edit to a tracked file named $2 passes ($OUT)"
+  repo "mg-$1"
+  lines 3 "$D/$2"
+  base_commit
+  oneline 5000000 "$D/$2"
+  commit_all
+  run "$D" BASE_REF=main
+  check 1 "$EC" "a tracked 5 MB one-line file named $2 goes over budget ($OUT)"
+  has "1221 lines" "$OUT" "the file named $2 weighs one line per 4 KB"
+}
+magic_case plain ":name"
+magic_case glob ":(glob)x"
+magic_case top ":(top)zz"
+magic_case icase ":(icase)ZZ"
+magic_case attr ":(attr:foo)bar"
+magic_case bad ":(bad)x"
+
+# Fail closed: when git counts lines for a path but its own per-file diff holds no hunk, the gate stops with exit 2 instead of weighing the file at its line count.
+repo nohunk
+lines 3 "$D/t.txt"
+base_commit
+oneline 5000000 "$D/t.txt"
+commit_all
+mkdir -p "$T/nohunk-shim"
+cat > "$T/nohunk-shim/git" << EOS
+#!/bin/sh
+case "\$*" in
+  *" -U0 "*) exit 0 ;;
+esac
+exec "$(command -v git)" "\$@"
+EOS
+chmod +x "$T/nohunk-shim/git"
+run "$D" BASE_REF=main
+check 1 "$EC" "control: the real git weighs the 5 MB line ($OUT)"
+run "$D" BASE_REF=main PATH="$T/nohunk-shim:$PATH"
+check 2 "$EC" "a per-file diff with no hunk fails closed ($OUT)"
+has "has no hunk" "$OUT" "the no-hunk message says why"
 
 # Real run: a freshly scaffolded nextjs project, committed as the base, then one real edit.
 D="$T/real"
