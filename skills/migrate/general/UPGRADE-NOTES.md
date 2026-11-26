@@ -39,6 +39,7 @@ The harness refresh updates harness files only; source the plugin generated earl
 ## frame-ancestors
 
 - Fix: the steps in `skills/migrate/frame-ancestors.md`. Skip when the app must never be framed.
+- Renamed: an app from 6.2.0 or later that sets the earlier variable (ending `_PORTAL_ORIGIN`) in deploy config or `.env.example` is silently denied framing. Rename it to `EMBED_PARENT_ORIGIN` there and re-copy the code per the same guide.
 - Current: the framing files that guide lists, under `skills/scaffold/`.
 
 ## Review by hand: NestJS roles guard

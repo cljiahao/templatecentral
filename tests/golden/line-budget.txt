@@ -40,7 +40,6 @@ migrate/general/phase-5-health-check.md	116	54
 migrate/nextjs-backend-extraction/common.md	161	76
 migrate/nextjs-backend-extraction/fastapi.md	240	74
 migrate/nextjs-backend-extraction/nestjs.md	245	72
-migrate/frame-ancestors.md	63	51
 review/SKILL.md	14	-
 scaffold/fastapi/source-files.md	178	-
 scaffold/nestjs/source-files.md	137	-
