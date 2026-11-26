@@ -14,7 +14,7 @@ Brings the harness files to the current templates. Replaces only files proven un
 
 **Safety.** `--apply` checks every path it will write first (targets, sidecars, base copies, `.claude/harness.json`). A symlink, a path outside the project, or a symlinked `.claude/.harness-base` or `harness.json` makes it refuse with exit 2 before any write. A `<path>.templatecentral-new` that already exists is never overwritten: merge or remove it first. Any FAILED line ends with one `PARTIAL:` line listing what was written and what was not.
 
-**Notes.** `--stack <nestjs|nextjs|vite-react|fastapi>` picks the stack when detection is ambiguous or finds none. A dry run exits 0 when only REPLACE or ADD are pending. A replaced file gets the template's file mode.
+**Notes.** `--stack <nestjs|nextjs|vite-react|fastapi>` picks the stack when detection is ambiguous or finds none. A dry run exits 0 when only REPLACE or ADD are pending. A replaced file gets the template's file mode. The refresh never edits `.gitignore`: when it adds the review gate and `.gitignore` lacks `.claude/review/`, the plan names that line for you to add.
 
 1. Dry run. It writes nothing and prints one line per file:
    ```bash

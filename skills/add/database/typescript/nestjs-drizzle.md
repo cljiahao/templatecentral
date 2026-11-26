@@ -41,29 +41,21 @@ Add to `package.json`:
 
 Run `TC_PART=leaf TC_LEAF=add/database/typescript/nestjs-drizzle bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/typescript/nestjs-drizzle/template/` (listed in `<skill-dir>/database/typescript/nestjs-drizzle/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**`drizzle.config.ts`** (project root):
-
-Copied verbatim from `<skill-dir>/database/typescript/nestjs-drizzle/template/drizzle.config.ts` by the copy step; do not re-type it.
+**`drizzle.config.ts`** (project root)
 
 > `drizzle.config.ts` reads `process.env` directly — it runs as a standalone CLI command outside NestJS, so it cannot use `serviceConfig`. Against any non-local database, end that `DATABASE_URL` with `?sslmode=verify-full` so `drizzle-kit migrate` verifies the server certificate (`require` encrypts without verifying identity).
 
 #### A4. Define Schema
 
-**`src/database/schema.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nestjs-drizzle/template/src/database/schema.ts` by the copy step; do not re-type it.
+**`src/database/schema.ts`**
 
 #### A5. Create DrizzleService
 
-**`src/database/drizzle.service.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nestjs-drizzle/template/src/database/drizzle.service.ts` by the copy step; do not re-type it.
+**`src/database/drizzle.service.ts`**
 
 #### A6. Create DatabaseModule
 
-**`src/database/database.module.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nestjs-drizzle/template/src/database/database.module.ts` by the copy step; do not re-type it.
+**`src/database/database.module.ts`**
 
 #### A7. Register in AppModule
 
@@ -180,10 +172,6 @@ Confirm the migration file was generated and every command passes.
 
 ## Rules
 
-- **Opt-in only** — add a database only on request.
-- `DatabaseModule` is `@Global()` so modules need not re-import it.
-- Place `DrizzleService` and `DatabaseModule` in `src/database/`.
-- Do not hardcode credentials; keep connection config in `.env` and document in `.env.example`.
 - **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. `pnpm db:push` is dev-only, never production. Commit the migrations in `drizzle/`. No IAM variant — use Kysely for IAM auth.
 
 ---

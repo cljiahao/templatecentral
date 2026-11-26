@@ -1,0 +1,2 @@
+# file	heading	index	template-path
+skills/add/database/python/sqlalchemy-iam.md	A4. Create `src/database/session.py` (IAM variant)	0	skills/add/database/python/sqlalchemy-iam/template/src/database/session.py

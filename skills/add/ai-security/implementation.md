@@ -3,397 +3,61 @@
      prereq: Stack identified. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ---
 
-## Controls (apply all that are relevant to the chosen capability)
-
-### LLM01 — Prompt Injection
-
-User-supplied content must never be concatenated directly into a system prompt.
-
-**Pattern — wrap user input with a trust boundary marker:**
-
-```ts
-// ❌ Never: direct interpolation
-const prompt = `You are a helpful assistant. User says: ${userMessage}`;
-
-// ✅ Always: role separation — user content stays in the user turn
-const prompt = [
-  { role: 'system', content: systemPrompt },
-  { role: 'user', content: userMessage },
-];
-```
-
-**Validation gate** — reject inputs that attempt to override instructions:
-
-```ts
-// Narrow phrases only — bare words like "disregard" or "system prompt" reject ordinary input.
-const INJECTION_PATTERNS = [
-  /ignore (all |the )?(previous|above|prior) instructions/i,
-  /disregard (all |the )?(previous|above|prior) instructions/i,
-  /reveal (your|the) system prompt/i,
-  /you are now (in )?(developer|dan|jailbreak) mode/i,
-];
-
-export function validateUserPrompt(input: string): void {
-  if (input.length > 4000) throw new Error('Input exceeds maximum length');
-  for (const pattern of INJECTION_PATTERNS) {
-    if (pattern.test(input)) throw new Error('Input contains disallowed content');
-  }
-}
-```
-
-```python
-# Python equivalent
-import re
-
-INJECTION_PATTERNS = [
-    r'ignore (all |the )?(previous|above|prior) instructions',
-    r'disregard (all |the )?(previous|above|prior) instructions',
-    r'reveal (your|the) system prompt',
-    r'you are now (in )?(developer|dan|jailbreak) mode',
-]
-
-def validate_user_prompt(text: str) -> None:
-    if len(text) > 4000:
-        raise ValueError("Input exceeds maximum length")
-    for pattern in INJECTION_PATTERNS:
-        if re.search(pattern, text, re.IGNORECASE):
-            raise ValueError("Input contains disallowed content")
-```
-
-> **Pattern-matching is a first layer, not a complete defense.** A denylist catches obvious overrides but cannot stop novel or obfuscated injection — prompt injection is not fully solvable by filtering. The load-bearing controls are *structural*: keep user content in `user`-role messages (never concatenated into the system prompt), never grant the model authority to change its own instructions or invoke high-privilege tools without an out-of-band gate, validate/escape model **output** before it reaches a sink, and apply least-agency tool scoping (ASI02). Treat the denylist as defense-in-depth on top of these.
-
----
-
-### LLM02 — Sensitive Information Disclosure
-
-Never allow PII or credentials to enter LLM context. Strip before sending.
-
-```ts
-// Order matters: bare-digit NATIONAL-ID would eat card and phone numbers first; set it to your locale format.
-const PII_PATTERNS: Array<[RegExp, string]> = [
-  [/\b[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.\w{2,}\b/g, '[EMAIL]'],
-  [/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]'],
-  [/\+?\b\d{1,3}[\s-]?\d{3,5}[\s-]?\d{4,8}\b/g, '[PHONE]'],
-  [/\b\d{6,12}\b/g, '[NATIONAL-ID]'],
-];
-
-export function redactPII(text: string): string {
-  return PII_PATTERNS.reduce((t, [pattern, replacement]) =>
-    t.replace(pattern, replacement), text);
-}
-```
-
-**Rule**: Log only `request_id`, `model`, `token_count`, `duration_ms` — never log the raw prompt or completion.
-
-Before sending sensitive data to a model provider, confirm the provider's terms on logging it and on training on it.
-
----
-
-### LLM03 — Supply Chain
-
-Pin model identifiers explicitly. Never use `latest` or version-free aliases in production.
-
-```ts
-// ❌ Never — bare alias, behaviour changes without notice
-const model = 'gpt-4o';
-
-// ✅ Always — pin a specific dated snapshot from your provider's model catalogue, never a floating alias
-const model = '<provider>-<model>-<snapshot-date>';
-```
-
-For open-source / self-hosted models: verify checksums against the provider's published hash before loading. Prefer weight formats and loaders that cannot execute code on load.
-
-Files uploaded for model processing get the same safeguards as any upload — see rule 5 in `<skill-dir>/../standards/validation-patterns/patterns.md`.
-
----
-
-### LLM04 — Data and Model Poisoning
-
-Training data, fine-tuning sets and retrieval corpora are attack surfaces: poisoned data adds backdoors or bias with no visible model change.
-
-**For application developers using hosted models** (the common case):
-- Validate and sanitize any data you feed into fine-tuning pipelines or RAG corpora
-- Use immutable checksums to verify model weights and training datasets against provider-published hashes before loading
-- Never pull model weights from unverified mirrors — use only signed releases from the original provider
-
-```ts
-import { createHash } from 'node:crypto';
-
-// Store provenance per chunk so a poisoned source can be purged.
-async function ingestDocument(content: string, source: string, expectedHash?: string): Promise<void> {
-  const hash = createHash('sha256').update(content).digest('hex');
-  if (expectedHash && hash !== expectedHash) {
-    throw new Error('Document hash mismatch — possible content tampering');
-  }
-  await embedAndStore(content, { source, sha256: hash });
-}
-```
-
-```python
-import hashlib
-
-
-def ingest_document(content: str, source: str, expected_hash: str | None = None) -> None:
-    digest = hashlib.sha256(content.encode()).hexdigest()
-    if expected_hash and digest != expected_hash:
-        raise ValueError("Document hash mismatch — possible content tampering")
-    embed_and_store(content, metadata={"source": source, "sha256": digest})
-```
-
-**Monitoring gate** — detect unexpected output drift in production:
-
-```ts
-// Baseline measured on clean data — a sudden shift may indicate poisoned context.
-const EXPECTED_REFUSAL_RATE = 0.02;
-
-function monitorOutputDrift(refusalCount: number, totalCount: number): void {
-  if (totalCount === 0) return;
-  const rate = refusalCount / totalCount;
-  if (rate > EXPECTED_REFUSAL_RATE * 3) {
-    logger.warn({ rate, expected: EXPECTED_REFUSAL_RATE }, 'Abnormal refusal rate — possible data poisoning');
-  }
-}
-```
-
----
-
-### LLM05 — Improper Output Handling
-
-Treat all LLM output as untrusted user input. Never evaluate, exec, or render it directly.
-
-```ts
-// ❌ Never render raw LLM output as HTML
-return <div dangerouslySetInnerHTML={{ __html: llmOutput }} />;
-
-// ✅ Sanitise or use text-only rendering; regex-stripping HTML is bypassable, so it is not a control
-import DOMPurify from 'dompurify';
-return <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(llmOutput) }} />;
-
-// ✅ Or use a markdown renderer with sanitisation, e.g. react-markdown with rehype-sanitize
-```
-
-**Structured output** — use schema validation on model responses:
-
-```ts
-import { z } from 'zod';
-
-const AnswerSchema = z.object({
-  answer: z.string().max(2000),
-  confidence: z.number().min(0).max(1),
-  sources: z.array(z.url()).max(5),
-});
-
-function parseAnswer(content: string | null): z.infer<typeof AnswerSchema> {
-  let json: unknown;
-  try {
-    json = JSON.parse(content ?? '');
-  } catch {
-    throw new Error('Model returned non-JSON output');
-  }
-  const parsed = AnswerSchema.safeParse(json);
-  if (!parsed.success) throw new Error('Model returned invalid structure');
-  return parsed.data;
-}
-```
-
-```python
-from pydantic import BaseModel, Field, HttpUrl
-
-
-class AnswerResponse(BaseModel):
-    answer: str = Field(max_length=2000)
-    confidence: float = Field(ge=0, le=1)
-    sources: list[HttpUrl] = Field(max_length=5)
-
-
-# Raises pydantic.ValidationError on non-JSON or off-schema output.
-parsed = AnswerResponse.model_validate_json(content or "")
-```
-
----
-
-### LLM06 — Excessive Agency (applies once any tool/function is wired)
-
-Every tool the agent can call must have an explicit allowlist. Irreversible actions need a human-in-the-loop gate.
-
-```ts
-// Define an explicit tool allowlist — never allow open-ended shell execution
-const ALLOWED_TOOLS = new Set(['search_web', 'read_document', 'create_draft']);
-
-export function validateToolCall(toolName: string): void {
-  if (!ALLOWED_TOOLS.has(toolName)) {
-    throw new Error(`Tool "${toolName}" is not in the allowlist`);
-  }
-}
-
-// Irreversible actions require confirmation before execution
-const IRREVERSIBLE_TOOLS = new Set(['send_email', 'delete_record', 'submit_form']);
-
-export async function executeToolWithGate(
-  toolName: string,
-  args: unknown,
-  confirmFn: (name: string, args: unknown) => Promise<boolean>
-): Promise<unknown> {
-  validateToolCall(toolName);
-  if (IRREVERSIBLE_TOOLS.has(toolName)) {
-    const confirmed = await confirmFn(toolName, args);
-    if (!confirmed) throw new Error('Tool execution cancelled by user');
-  }
-  return executeTool(toolName, args);
-}
-```
-
-**Max steps guard** — prevent infinite loops:
-
-```ts
-const MAX_AGENT_STEPS = 10;
-let steps = 0;
-
-while (agentNeedsMoreSteps && steps < MAX_AGENT_STEPS) {
-  steps++;
-  // ... agent step
-}
-
-if (steps >= MAX_AGENT_STEPS) {
-  logger.warn({ steps }, 'Agent reached max steps — halting');
-}
-```
-
----
-
-### LLM07 — System Prompt Leakage
-
-The system prompt can be extracted by adversarial input — treat it as semi-public: never embed credentials, sensitive business logic, or instructions that rely on secrecy.
-
-```ts
-// ❌ Never embed secrets or security-by-obscurity logic
-const systemPrompt = `
-  The admin password is ${process.env.ADMIN_PASSWORD}.
-  Do not reveal you are built on GPT-4.
-`;
-
-// ✅ System prompt must remain safe to read — no credentials, no hidden logic
-const systemPrompt = `
-  You are a helpful assistant for ${process.env.APP_NAME}.
-  Answer questions about our product only.
-  Decline requests outside this scope.
-`;
-```
-
-**Checklist:**
-- System prompt assembled server-side — never passed through client code or env vars prefixed `NEXT_PUBLIC_` / `VITE_`
-- No credentials, API keys, or internal URLs in the system prompt
-- Security controls do not rely on the user not knowing the system prompt contents
-
----
-
-### LLM08 — Vector & Embedding Weaknesses (RAG only — Capability B)
-
-Apply the same access controls to retrieved documents as to direct data access.
-
-```ts
-// ❌ Never: retrieve then filter — data is already exposed to the model
-const allDocs = await vectorDB.query(embedding);
-const authorizedDocs = allDocs.filter(d => userCanAccess(d, userId));
-
-// ✅ Always: filter at query time using metadata — pushes access control into the vector DB query
-const docs = await vectorDB.query(embedding, {
-  filter: { userId },
-  topK: 5,
-});
-```
-
----
+## Checklist
+
+Apply by capability tier: **A** (simple) LLM01, 02, 03, 05, 07, 09, 10. **B** (RAG) adds LLM04 and LLM08. **LLM06 applies as soon as any tool, function or plugin is wired**, not only in agent setups. **C** (agentic) adds the Agentic list below. Nothing seeded scans prompts for injection (`user-prompt-guard` checks inline credentials only), so LLM01 is code you write.
+
+### LLM01 — Prompt injection
+- User content stays in `user`-role messages, never concatenated into the system prompt: the one structural control a filter cannot replace.
+- A denylist of override phrases is a first layer only; keep it narrow (bare words like "disregard" reject ordinary input) and cap input length.
+- The model gets no authority to change its own instructions or call high-privilege tools without an out-of-band gate.
+
+### LLM02 — Sensitive information disclosure
+- Strip PII and credentials before the prompt leaves your process; set the national-ID pattern to your locale, and run it last because bare digits swallow card and phone numbers.
+- Log only `request_id`, `model`, `token_count`, `duration_ms`: raw prompts and completions hold user data.
+- Confirm the provider's terms on logging and training before sending sensitive data.
+
+### LLM03 — Supply chain
+- Pin a dated model snapshot, never a floating alias: behaviour changes without notice.
+- Self-hosted weights: verify the provider's published checksum and use formats that cannot execute code on load.
+- Files uploaded for model processing get the upload rules in `<skill-dir>/../standards/validation-patterns/patterns.md` (rule 5).
+
+### LLM04 — Data and model poisoning (RAG, fine-tuning)
+- Store a source and sha256 per ingested chunk so a poisoned source can be purged.
+- Alert when the refusal rate drifts far from a baseline taken on clean data.
+
+### LLM05 — Improper output handling
+- Model output is untrusted input: never `eval`, exec or render it as raw HTML. Sanitise with a real sanitiser (regex-stripping HTML is bypassable) or render as text.
+- Validate every response against a Zod or Pydantic schema, as for any external API.
+
+### LLM06 — Excessive agency
+- Explicit tool allowlist; irreversible tools (send, delete, submit) need human confirmation.
+- Cap agent steps so a loop cannot run unbounded.
+
+### LLM07 — System prompt leakage
+- Treat the system prompt as public: no credentials, internal URLs or secrecy-dependent rules.
+- Assemble it server-side, never through client code or `NEXT_PUBLIC_*` / `VITE_*` variables.
+
+### LLM08 — Vector and embedding weaknesses (RAG)
+- Filter by user or tenant metadata inside the vector query. Filtering after retrieval has already exposed the documents to the model.
 
 ### LLM09 — Misinformation
+- Instruct the model to answer from context only and admit uncertainty.
+- High-stakes domains (medical, legal, financial): human review or a source citation before the user sees it.
+- Keep a small evaluation set and re-run it when the model, prompt or retrieval changes; tell users where AI output is shown that it can be wrong.
 
-Models hallucinate. Never present raw output as verified fact without grounding or human review.
+### LLM10 — Unbounded consumption
+- Set a token cap on every call. The parameter name differs by provider (`max_completion_tokens` on newer OpenAI models; `max_tokens` is required by Anthropic's Messages API).
+- Rate-limit per authenticated user id (not IP), server-side, reusing the project's auth rate limiter or the gateway.
+- Document `AI_MAX_TOKENS_PER_REQUEST`, `AI_MAX_REQUESTS_PER_USER_PER_MINUTE` and the provider key names (values blank) in `.env.example`.
 
-```ts
-// Always instruct the model to cite context and admit uncertainty
-const systemPrompt = `
-Answer only from the provided context. If unsure, say "I don't know."
-Do not invent statistics, names, dates, or URLs.
-`;
+## Agentic applications (capability C)
 
-// For factual claims: validate against authoritative source before displaying
-const result = await callModel(prompt);
-if (requiresFactualGrounding(result.content)) {
-  const verified = await crossReferenceDatabase(result.content);
-  // surface only confirmed facts
-  return verified;
-}
-```
-
-**Rule**: For high-stakes domains (medical, legal, financial), gate AI output behind a human review step or source citation before presenting to end users.
-
-Keep a small evaluation set and re-run it whenever the model, prompt or retrieval changes. Tell users where AI output is shown that it can be wrong.
-
----
-
-### LLM10 — Unbounded Consumption
-
-Every LLM call must have explicit token limits and a per-user rate limit.
-
-```ts
-const response = await openai.chat.completions.create({
-  model: '<provider>-<model>-<snapshot-date>',
-  messages,
-  // Newer OpenAI models reject `max_tokens`; Anthropic's Messages API requires `max_tokens`.
-  max_completion_tokens: Number(process.env.AI_MAX_TOKENS_PER_REQUEST ?? 1000),
-});
-```
-
-Enforce the per-user limit server-side, keyed on the authenticated user id (not IP) — reuse the project's auth rate limiter or the gateway.
-
-**Environment variables to document in `.env.example`:**
-
-```
-# AI provider keys — never commit real values
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
-AWS_BEDROCK_REGION=
-
-# Token budgets
-AI_MAX_TOKENS_PER_REQUEST=1000
-AI_MAX_REQUESTS_PER_USER_PER_MINUTE=10
-```
-
----
-
-## Hardcoded Prohibitions
-
-Regardless of capability or environment, **never**:
-
-- Log raw prompts or completions (contain user data / PII)
-- Store API keys in client-side code (`NEXT_PUBLIC_*`, `VITE_*`)
-- Render LLM output as raw HTML without sanitisation
-- Execute LLM-generated code without a human review gate
-- Use `latest` model aliases in production — always pin snapshots
-- Allow unrestricted tool calling without an explicit allowlist (agentic)
-
-
-## Agentic Applications
-
-For Capability C (agentic systems), also apply the **OWASP Top 10 for Agentic Applications (ASI prefix codes)** — a separate framework covering multi-agent orchestration risks:
-
-| Code | Name | Mitigation focus |
-|------|------|-----------------|
-| ASI01 | Agent Goal Hijack | Validate objective integrity; reject goal mutations from untrusted input |
-| ASI02 | Tool Misuse & Exploitation | Scope tool allowlists per-agent; block recursive/unbounded execution |
-| ASI03 | Identity & Privilege Abuse | Re-validate authority at every delegation boundary |
-| ASI04 | Agentic Supply Chain Vulnerabilities | Allowlist MCP/tool-server connections; pin + verify external agent/tool/schema versions (signed manifests where available) and re-verify on runtime discovery, before trust |
-| ASI05 | Unexpected Code Execution | Sandbox agent-generated code; never eval untrusted model output |
-| ASI06 | Memory & Context Poisoning | Validate memory reads; isolate long-term memory from prompt construction |
-| ASI07 | Insecure Inter-Agent Communication | Re-authenticate agent-to-agent messages; no implicit trust between agents |
-| ASI08 | Cascading Failures | Circuit-break chains; cap propagation depth; isolate failure domains |
-| ASI09 | Human-Agent Trust Exploitation | Scope confirmations to specific actions; reject open-ended authority grants |
-| ASI10 | Rogue Agents | Hard-code objective boundaries; monitor for goal drift in long-running agents |
-
-Design principle: **Least Agency** — give each agent only the permissions and tools its task needs; scope credentials and tool allowlists per agent, not globally.
+Apply the OWASP Top 10 for Agentic Applications (ASI01–ASI10) with **least agency**: scope tools and credentials per agent, never globally. Three that are easy to miss:
+- **ASI03** — re-check authority at every delegation boundary.
+- **ASI04** — allowlist MCP and tool-server connections, pin and verify external tool and schema versions, and re-verify on runtime discovery.
+- **ASI06** — validate memory reads and keep long-term memory out of prompt construction.
 
 ## Rules
 
-- Apply controls proportional to capability: A (simple) needs LLM01, 02, 03, 05, 07, 09, 10; B (RAG) adds LLM04 (data/model poisoning — validate RAG and fine-tuning ingestion) and LLM08. LLM09 (misinformation/overreliance) applies at every tier. **LLM06 (Excessive Agency) applies the moment ANY tool, function, or plugin is wired — not only multi-agent setups** — so add it as soon as the model can take an action. C (agentic) adds the full OWASP Agentic Top 10 (ASI01–ASI10, Least-Agency principle)
-- Use structured output validation (Zod/Pydantic) on every model response — treat it like an external API
-- Document the AI feature's data flow in the project's `AGENTS.md` under "Architecture Decisions"
+- Document the AI feature's data flow in the project's `AGENTS.md` under "Architecture Decisions".

@@ -125,3 +125,6 @@ jspm_packages/
 
 # Per-developer skill telemetry written by .claude/hooks/skill-usage-log.sh
 .claude/skill-usage.log
+
+# Local review records written by scripts/record-review.sh (per machine, never committed)
+.claude/review/

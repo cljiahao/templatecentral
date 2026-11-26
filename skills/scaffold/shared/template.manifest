@@ -32,6 +32,7 @@ template-py/.claude/hooks/protect-files.sh 755 - -
 template-py/.claude/hooks/stop-checks.sh 755 - -
 template-py/.claude/hooks/subagent-stop.sh 755 - -
 template-py/.claude/hooks/user-prompt-guard.py 644 - -
+template-py/.claude/review-checklist-stack.txt 644 - -
 template-py/.jscpd.json 644 - -
 template-py/lefthook.yml 644 - -
 template-py/sonar-project.properties 644 - -
@@ -45,15 +46,18 @@ template-ts/.claude/hooks/protect-files.sh 755 - -
 template-ts/.claude/hooks/stop-checks.sh 755 - -
 template-ts/.claude/hooks/subagent-stop.sh 755 - -
 template-ts/.claude/hooks/user-prompt-guard.cjs 644 - -
+template-ts/.claude/review-checklist-stack.txt 644 - -
 template-ts/.jscpd.json 644 - -
 template-ts/lefthook.yml 644 - -
 template-ts/sonar-project.properties 644 - -
+template/.claude/agents/code-reviewer.md 644 - -
 template/.claude/ci-gates.sh 755 - -
 template/.claude/comment-hygiene-patterns.txt 644 - -
 template/.claude/gates.txt 644 - -
 template/.claude/hooks/session-context.sh 755 - -
 template/.claude/hooks/skill-usage-log.sh 755 - -
 template/.claude/regen-harness.sh 755 - -
+template/.claude/review-checklist.txt 644 - -
 template/.claude/verify-harness.sh 755 - -
 template/.gitleaks.toml 644 - -
 template/.lefthook/commit-msg.sh 755 - -
@@ -64,7 +68,10 @@ template/scripts/check-supply-chain.sh 755 - -
 template/scripts/check-workflows.sh 755 - -
 template/scripts/check-env-example.sh 755 - -
 template/scripts/check-dockerfile.sh 755 - -
+template/scripts/check-review-record.sh 755 - -
 template/scripts/check-secret-scanner.sh 755 - -
+template/scripts/record-review.sh 755 - -
+template/scripts/remove-harness.sh 755 - -
 template/scripts/check-workarounds.sh 755 - -
 template/scripts/scan-secrets.sh 755 - -
 template/.claude/registry-hosts.txt 644 - -
