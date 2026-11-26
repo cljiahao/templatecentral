@@ -21,9 +21,7 @@ Add a driver for the target database:
 
 Run `TC_PART=leaf TC_LEAF=add/database/python/sqlalchemy bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/python/sqlalchemy/template/` (listed in `<skill-dir>/database/python/sqlalchemy/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**`src/database/base.py`** (the copy also writes an empty `src/database/__init__.py`):
-
-Copied verbatim from `<skill-dir>/database/python/sqlalchemy/template/src/database/base.py` by the copy step; do not re-type it.
+**`src/database/base.py`** (the copy also writes an empty `src/database/__init__.py`)
 
 ### A3. Add Configuration
 
@@ -51,9 +49,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite://")
 
 ### A4. Create Database Session
 
-**`src/database/session.py`**:
-
-Copied verbatim from `<skill-dir>/database/python/sqlalchemy/template/src/database/session.py` by the copy step; do not re-type it.
+**`src/database/session.py`**
 
 ### A5. Initialize Alembic
 
@@ -343,15 +339,3 @@ def get_me(
     user = get_user(db=db, user_id=user_id)
     return UserResponse(id=user["id"], email=user["email"], name=user["name"])
 ```
-
----
-
-## Rules
-
-- **Opt-in only** — add a database only on request.
-- Place ORM models in `src/models/` — not in `api/`.
-- `database/` holds infrastructure only (Base, session, engine) — no business logic.
-- Keep `DATABASE_URL` in `src/.env` ; do not hardcode production credentials.
-- Always use Alembic for schema changes — never call `Base.metadata.create_all()` in production.
-- The `get_db` dependency ensures sessions are properly closed.
-- For async SQLAlchemy, use `create_async_engine` + `AsyncSession` from `sqlalchemy.ext.asyncio`.
