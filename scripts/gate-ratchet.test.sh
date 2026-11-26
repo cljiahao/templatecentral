@@ -525,7 +525,7 @@ y = yaml.safe_load(open(sh + "/template-ci/github-ts/.github/workflows/ci.yml"))
 open(t + "/step-gh.sh", "w").write(y["jobs"]["gate-ratchet"]["steps"][1]["run"])
 a = yaml.safe_load(open(sh + "/template-ci/azure/azure-pipelines/templatecentral-gates.yml"))
 steps = a if isinstance(a, list) else a["steps"]
-open(t + "/step-az.sh", "w").write(steps[-1]["bash"])
+open(t + "/step-az.sh", "w").write([x for x in steps if "ci-gates.sh ratchet" in x.get("bash", "")][-1]["bash"])
 PY
 git_ checkout -q -B main main
 printf '#!/usr/bin/env bash\necho BASE-ENTRY\nexit 9\n' > "$R/.claude/ci-gates.sh"

@@ -23,7 +23,7 @@ The loader cats this index plus exactly three part files — the stack's **one**
 
 | Step | Seeds | Where |
 |---|---|---|
-| 0 | (`tc-copy.sh`) every template file below that is a real file: the 9 `.claude/hooks/` scripts, `.claude/ci-gates.sh`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml` | this file — scaffold only; migrate diffs and merges instead |
+| 0 | (`tc-copy.sh`) every template file below that is a real file: the 9 `.claude/hooks/` scripts, `.claude/ci-gates.sh`, `.claude/gate-budget.sh`, `.claude/gate-budget.conf`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml` | this file — scaffold only; migrate diffs and merges instead |
 | A | `.claude/settings.json` (copied here with `TC_PART=settings`) | enforcement (merge rules, deny lists, hook inventory) + variant notes |
 | B | `.claude/hooks/` scripts (copied in Step 0) | notes in the variant (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-edit-comment-check`, `stop-checks`, `subagent-stop`) + enforcement (`comment-hygiene-patterns.txt`, `session-context`, `skill-usage-log`, `chmod`) |
 | B2 | git-hook layer (files copied in Step 0) | notes in the variant (`lefthook.yml`) + enforcement (`.lefthook/commit-msg.sh`, `.gitleaks.toml`, install wiring) |
@@ -52,7 +52,7 @@ TC_STACK=<stack> TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 |---|---|---|
 | `base` | here, before Step A and the first `pnpm install` | `template` + `template-ts` (nestjs, nextjs, vite-react) or `template-py` (fastapi), per `<skill-dir>/shared/template.manifest` |
 | `settings` | Step A, after the stack's `AGENTS.md` step | `template-settings-ts` or `template-settings-py`: `.claude/settings.json` |
-| `ci` | Step B3, with `TC_CI=github` or `TC_CI=azure` | `template-ci/github-ts` or `github-py`, or `azure` plus `azure-ts` or `azure-py`; `TC_CI=none` instead removes the `.claude/ci-gates.sh` that `base` placed, only when it is byte for byte the template's, and refuses otherwise |
+| `ci` | Step B3, with `TC_CI=github` or `TC_CI=azure` | `template-ci/github-ts` or `github-py`, or `azure` plus `azure-ts` or `azure-py`; `TC_CI=none` instead removes the `.claude/ci-gates.sh` that `base` placed, only when it is byte for byte the template's, and refuses otherwise; `.claude/gate-budget.sh` and `.claude/gate-budget.conf` stay, though nothing then records timings |
 | `late` | Step C, after the stack's `AGENTS.md` step (which follows its verification gate) | `template-late`: `FUTURE.md`, `docs/CONSTITUTION.md`, `docs/harness.md`, `.claude/skills/skill-audit/SKILL.md` (stored as `SKILL.md.tmpl`; prettier would reformat the first two at an earlier format pass) |
 | `stack`, `agents` | the stack's `source-files.md`, when it says | `<skill-dir>/<STACK>/template` and `template-agents`, per `<skill-dir>/<STACK>/template.manifest` |
 | `leaf` | an `add` or `migrate` leaf that names its own template tree | `TC_LEAF=<add or migrate>/<leaf stem>` (for example `add/auth/nestjs`) copies every `template*` tree beside that leaf per its `template.manifest`, or only `TC_TREE=<tree>`; `TC_STACK` is not used. Same refusals and `STOP:` line as the other parts |
