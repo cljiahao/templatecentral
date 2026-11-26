@@ -41,10 +41,6 @@ migrate/nextjs-backend-extraction/common.md	161	76
 migrate/nextjs-backend-extraction/fastapi.md	240	74
 migrate/nextjs-backend-extraction/nestjs.md	245	72
 review/SKILL.md	14	-
-scaffold/fastapi/source-files.md	178	-
-scaffold/nestjs/source-files.md	137	-
-scaffold/nextjs/source-files.md	185	-
-scaffold/vite-react/source-files.md	175	-
 standards/code-standards/nestjs.md	122	-
 standards/full-stack-pairing/implementation.md	244	-
 standards/validation-patterns/nextjs.md	121	-
