@@ -42,7 +42,9 @@
 #   directory or symlink; a file created at an edit target while the original is held (the install uses a hard link, which
 #   refuses an existing name; the new file is kept and the run is rolled back); a write or delete that fails;
 #   INT, TERM or HUP during the apply (all rolled back); a CDPATH or a project path with a newline; a project path that is /.
-# Not caught: a file whose content changed but still equals the scaffold's current example (nothing is lost then); example code a
+# Not caught: an edit on a filesystem without hard links (FAT, some SMB or NFS mounts): the install is a hard link, so the
+#   run fails, is rolled back and the edit can never apply there (a plain rename would reopen the race with a file created
+#   at the target, so there is no fallback); a file whose content changed but still equals the scaffold's current example (nothing is lost then); example code a
 #   user copied elsewhere; imports of the example from files the manifest does not name (the build and typecheck show these); a
 #   write through a file handle opened before the move, landing after the compare and before the rm (every change made through
 #   the path is caught); a file the user creates at a deleted path during the apply (the run fails and the new file is left);
@@ -129,7 +131,16 @@ KEEP_STAGE=0
 APPLYING=0
 DONE=0
 ROLLED=0
-: >"$STAGE/temps"
+: >"$STAGE/temps" || { rm -rf "$STAGE"; die "cannot write the record temps; nothing was changed"; }
+# recinit <name>: create (empty) the record file $STAGE/<name>; a failed write stops the run before anything is changed.
+recinit() { if ! : >"$STAGE/$1"; then die "cannot write the record $1; nothing was changed"; fi; }
+# rec <name> <line>: append a line to the record $STAGE/<name>; a failed write stops the run before the action it records
+# (during the apply the project is rolled back first).
+rec() {
+  if printf '%s\n' "$2" >>"$STAGE/$1"; then return 0; fi
+  if [ "$APPLYING" -eq 1 ]; then fail_apply "cannot write the record $1"; fi
+  die "cannot write the record $1; nothing was changed"
+}
 # cleanup: the EXIT trap; rolls back an apply that was cut short, removes the temp files and the temp directory.
 cleanup() {
   local t
@@ -212,11 +223,11 @@ while IFS= read -r f; do
   safe_rel "$f" || die "--force path '$f' is outside the project, unclean or has a symlink"
 done <<<"$FORCE"
 
-: >"$STAGE/deletes"
-: >"$STAGE/editfiles"
-: >"$STAGE/delroots"
-: >"$STAGE/forced"
-: >"$STAGE/dirs"
+recinit deletes
+recinit editfiles
+recinit delroots
+recinit forced
+recinit dirs
 ALL_GONE=1
 
 # snap_delete <rel>: copy a file to delete into the stage as it is now; the copy is what is compared with the scaffold, with
@@ -241,10 +252,10 @@ while IFS= read -r row || [ -n "$row" ]; do
     if ! find "$ROOT/$p" -name "*$NL*" >"$STAGE/nlnames" 2>/dev/null; then block "$p cannot be listed (an unreadable directory inside it)"; continue; fi
     if [ -s "$STAGE/nlnames" ]; then block "$p holds a file name with a newline"; continue; fi
     if ! find "$ROOT/$p" -type f >"$STAGE/files" 2>/dev/null; then block "$p cannot be listed (an unreadable directory inside it)"; continue; fi
-    LC_ALL=C sort "$STAGE/files" >"$STAGE/files.sorted"
+    if ! LC_ALL=C sort "$STAGE/files" >"$STAGE/files.sorted"; then block "$p cannot be listed (the list could not be written)"; continue; fi
     if ! find "$ROOT/$p" -depth -type d >>"$STAGE/dirs" 2>/dev/null; then block "$p cannot be listed (an unreadable directory inside it)"; continue; fi
   elif [ -f "$ROOT/$p" ]; then
-    printf '%s\n' "$ROOT/$p" >"$STAGE/files.sorted"
+    if ! printf '%s\n' "$ROOT/$p" >"$STAGE/files.sorted"; then block "$p cannot be listed (the list could not be written)"; continue; fi
   else
     block "$p is not a regular file or directory"; continue
   fi
@@ -253,17 +264,17 @@ while IFS= read -r row || [ -n "$row" ]; do
     if [ ! -r "$abs" ]; then block "$rel is not readable"; continue; fi
     if ! snap_delete "$rel"; then block "$rel cannot be copied for the rollback"; continue; fi
     if [ -f "$TPL/$rel" ] && cmp -s -- "$STAGE/snapdel/$rel" "$TPL/$rel"; then
-      printf '%s\n' "$rel" >>"$STAGE/deletes"
+      rec deletes "$rel"
       echo "DELETE $rel"
     elif is_forced "$rel" || is_forced "$p"; then
-      printf '%s\n' "$rel" >>"$STAGE/deletes"
-      printf '%s\n' "$rel" >>"$STAGE/forced"
+      rec deletes "$rel"
+      rec forced "$rel"
       echo "FORCE  $rel (differs from the scaffold example)"
     else
       block_differs "$rel differs from the scaffold example or is not part of it; keep it, or name it with --force $rel"
     fi
   done <"$STAGE/files.sorted"
-  printf '%s\n' "$p" >>"$STAGE/delroots"
+  rec delroots "$p"
 done <"$MANIFEST"
 
 while IFS= read -r f; do
@@ -272,7 +283,7 @@ while IFS= read -r f; do
 done <<<"$FORCE"
 
 # edit rows, grouped by file in manifest order
-awk -F'\t' '/^#/ || /^$/ { next } $1 != "delete" { print $2 }' "$MANIFEST" >"$STAGE/names"
+awk -F'\t' '/^#/ || /^$/ { next } $1 != "delete" { print $2 }' "$MANIFEST" >"$STAGE/names" || die "cannot write the record names; nothing was changed"
 n=0
 seen=$NL
 while IFS= read -r file; do
@@ -290,7 +301,7 @@ while IFS= read -r file; do
   if ! cp -p -- "$ROOT/$file" "$snap"; then block "$file cannot be copied for the rollback"; continue; fi
   if LC_ALL=C grep -q "$CR" "$snap"; then block "$file has CR line endings; the scaffold text uses LF, so nothing can be proved: edit it by hand"; continue; fi
   if [ -s "$snap" ] && [ -n "$(tail -c1 "$snap")" ]; then block "$file has no final newline"; continue; fi
-  awk -F'\t' -v f="$file" '/^#/ || /^$/ { next } $1 != "delete" && $2 == f { print }' "$MANIFEST" >"$STAGE/rows.$n"
+  awk -F'\t' -v f="$file" '/^#/ || /^$/ { next } $1 != "delete" && $2 == f { print }' "$MANIFEST" >"$STAGE/rows.$n" || die "cannot write the rows of $file; nothing was changed"
   tplfile=/dev/null
   if [ -f "$TPL/$file" ]; then tplfile=$TPL/$file; fi
   OUT=$STAGE/out.$n
@@ -342,7 +353,7 @@ while IFS= read -r file; do
   rc=$?
   case "$rc" in
     0)
-      echo "EDIT   $file"; printf '%s\n' "$res"; printf '%s\t%s\t%s\n' "$file" "$OUT" "$snap" >>"$STAGE/editfiles" ;;
+      echo "EDIT   $file"; printf '%s\n' "$res"; rec editfiles "$file$TAB$OUT$TAB$snap" ;;
     4) if [ "$ALL_GONE" -eq 1 ]; then echo "DONE   $file (already edited)"; else block "$file: none of the expected lines were found, but example files still exist"; fi ;;
     *) block "$file: $(printf '%s' "$res" | tr '\n' ';')" ;;
   esac
@@ -365,14 +376,14 @@ if [ "$APPLY" -eq 0 ]; then
 fi
 
 # --- apply
-: >"$STAGE/replaced"
-: >"$STAGE/removed"
+recinit replaced
+recinit removed
 
 # restore_file <copy> <target>: put the copy back over target (temp file in the same directory, then rename).
 restore_file() {
   local snap=$1 target=$2 t m
   t=$(mktemp "${target%/*}/.remove-example.XXXXXX") || return 1
-  printf '%s\n' "$t" >>"$STAGE/temps"
+  if ! printf '%s\n' "$t" >>"$STAGE/temps"; then rm -f -- "$t"; return 1; fi
   m=$(file_mode "$snap") || return 1
   cat -- "$snap" >"$t" || return 1
   chmod "$m" "$t" || return 1
@@ -435,22 +446,22 @@ while IFS="$TAB" read -r file staged snap; do
 done <"$STAGE/editfiles"
 
 # stage every edited file as a temp file next to its target, with the target's mode
-: >"$STAGE/plan"
+recinit plan
 while IFS="$TAB" read -r file staged snap; do
   if [ -z "$file" ]; then continue; fi
   target=$ROOT/$file
   tmp=$(mktemp "${target%/*}/.remove-example.XXXXXX") || die "cannot create a temp file next to $file; nothing was changed"
-  printf '%s\n' "$tmp" >>"$STAGE/temps"
+  if ! printf '%s\n' "$tmp" >>"$STAGE/temps"; then rm -f -- "$tmp"; die "cannot write the record temps; nothing was changed"; fi
   m=$(file_mode "$target") || die "cannot read the mode of $file; nothing was changed"
   cat -- "$staged" >"$tmp" || die "cannot write the new $file; nothing was changed"
   chmod "$m" "$tmp" || die "cannot set the mode of the new $file; nothing was changed"
-  printf '%s\t%s\t%s\t%s\n' "$target" "$tmp" "$snap" "$staged" >>"$STAGE/plan"
+  rec plan "$target$TAB$tmp$TAB$snap$TAB$staged"
 done <"$STAGE/editfiles"
 
 # take <target> <copy>: move the file aside (one rename, so a change made after the checks is not lost), then compare what was
 # moved with the copy from the checks. A difference, or anything but a regular file, puts it back through the rollback and
 # stops. Leaves the held name in HELD.
-: >"$STAGE/holds"
+recinit holds
 HELDN=0
 HELD=
 take() {
@@ -458,7 +469,7 @@ take() {
   HELDN=$((HELDN + 1))
   HELD=${target%/*}/.remove-example.held.$$.$HELDN
   if [ -e "$HELD" ] || [ -L "$HELD" ]; then fail_apply "cannot hold $label: $HELD exists"; fi
-  printf '%s\t%s\t%s\n' "$target" "$HELD" "$copy" >>"$STAGE/holds"
+  rec holds "$target$TAB$HELD$TAB$copy"
   if ! mv -- "$target" "$HELD"; then fail_apply "cannot move $label aside"; fi
   if [ -L "$HELD" ] || [ ! -f "$HELD" ]; then fail_apply "$label is no longer a regular file"; fi
   if ! cmp -s -- "$HELD" "$copy"; then fail_apply "$label changed while the script ran; it was put back"; fi
@@ -470,15 +481,15 @@ trap '' PIPE
 while IFS="$TAB" read -r target tmp snap staged; do
   if [ -z "$target" ]; then continue; fi
   take "$target" "$snap"
-  printf '%s\t%s\t%s\n' "$target" "$snap" "$staged" >>"$STAGE/replaced"
-  if ! ln -- "$tmp" "$target"; then fail_apply "cannot install ${target#"$ROOT"/}: the name is taken (a file was created during the apply) or links are refused"; fi
+  rec replaced "$target$TAB$snap$TAB$staged"
+  if ! ln -- "$tmp" "$target"; then fail_apply "cannot install ${target#"$ROOT"/}: the name is taken (a file was created during the apply) or the filesystem may not support hard links"; fi
   if ! rm -f -- "$tmp"; then fail_apply "cannot remove the temp file of ${target#"$ROOT"/}"; fi
   if ! rm -f -- "$HELD"; then fail_apply "cannot remove the old copy of ${target#"$ROOT"/}"; fi
 done <"$STAGE/plan"
 
 while IFS= read -r rel; do
   if [ -z "$rel" ]; then continue; fi
-  printf '%s\n' "$rel" >>"$STAGE/removed"
+  rec removed "$rel"
   take "$ROOT/$rel" "$STAGE/snapdel/$rel"
   if ! rm -f -- "$HELD"; then fail_apply "cannot delete $rel"; fi
   if [ -e "$HELD" ] || [ -e "$ROOT/$rel" ]; then fail_apply "$rel is still there after the delete"; fi

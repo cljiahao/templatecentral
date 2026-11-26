@@ -430,7 +430,7 @@ g_install_sig() {
   contains "TERM right after the install: says every file was restored" "every file was restored" "$o"
   check "TERM right after the install: the target holds the original" "$orig" "$(cat "$D/$R")"
   check "TERM right after the install: the project is as it was" "$h" "$(treehash "$D")"
-  local REC=$'  printf \'%s\\t%s\\t%s\\n\' "$target" "$snap" "$staged" >>"$STAGE/replaced"\n'
+  local REC=$'  rec replaced "$target$TAB$snap$TAB$staged"\n'
   local RMT=$'  if ! rm -f -- "$tmp"; then fail_apply "cannot remove the temp file of ${target#"$ROOT"/}"; fi\n'
   if mutant "$J" "$REC" '' && mutadd "$RMT" "$RMT$REC"; then
     rm -rf "$J/p2" "$J/h2"; sd fastapi "$J/p2"
@@ -439,6 +439,63 @@ g_install_sig() {
     check "mutant with the record written after the install leaves the edit in place" "1" "$(changed01 "$h" "$(treehash "$J/p2")")"
   fi
 }
+
+# a transaction record that cannot be written: the run stops before the action the record is for, rolls back, and names the
+# record. The record file is made read-only while a shim holds the run at a command just before the write (not as root).
+# g_record <record> <shim command> <marker> <skip>; controls: the same hook without the chmod gives a clean run.
+# Mutants: the call site of the record writes it without a check (the run goes on, applies, and says so).
+g_record() {
+  local rname=$1 cmd=$2 marker=$3 skip=$4 J=$T/j.rec$1 D h H o st
+  if [ "$NOTROOT" -ne 1 ]; then echo "skip record probe $rname: running as root"; return; fi
+  mkdir -p "$J/tmp" "$J/tmp2"
+  # control: the hook fires, nothing is made read-only
+  D=$J/c; sd fastapi "$D"; h=$(treehash "$D"); H=$J/hc
+  mkshim "$H" "$cmd" pause "$marker" "$skip"
+  TMPDIR=$J/tmp launch "$H" "$SC" "$D" --apply
+  if ! waitready "$H"; then echo "FAIL record $rname control: the hook never fired"; finish "$H"; return; fi
+  finish "$H"; o=$(cat "$H/out")
+  check "record $rname control (writable): exit 0" "0" "$RC"
+  contains "record $rname control: applied" "applied" "$o"
+  rm -rf "$J/p"; D=$J/p; sd fastapi "$D"; H=$J/h
+  mkshim "$H" "$cmd" pause "$marker" "$skip"
+  TMPDIR=$J/tmp launch "$H" "$SC" "$D" --apply
+  if ! waitready "$H"; then echo "FAIL record $rname: the hook never fired"; finish "$H"; return; fi
+  st=$(find "$J/tmp" -maxdepth 1 -type d -name 'remove-example.*' | awk 'NR == 1')
+  chmod a-w "$st/$rname"
+  finish "$H"; o=$(cat "$H/out")
+  chmod u+w "$st/$rname" 2>/dev/null
+  check "record $rname unwritable: exit 1" "1" "$RC"
+  contains "record $rname unwritable: names the record" "cannot write the record $rname" "$o"
+  contains "record $rname unwritable: says every file was restored" "every file was restored" "$o"
+  check "record $rname unwritable: the project is as it was" "$h" "$(treehash "$D")"
+  g_record_mutant "$rname" "$cmd" "$marker" "$skip" "$J" "$h"
+}
+# g_record_mutant <record> <cmd> <marker> <skip> <job dir> <hash>: the call site writes the record without a check
+g_record_mutant() {
+  local rname=$1 cmd=$2 marker=$3 skip=$4 J=$5 h=$6 old new st o
+  case "$rname" in
+    holds) old=$'  rec holds "$target$TAB$HELD$TAB$copy"'; new=$'  printf \'%s\\t%s\\t%s\\n\' "$target" "$HELD" "$copy" >>"$STAGE/holds"' ;;
+    replaced) old=$'  rec replaced "$target$TAB$snap$TAB$staged"'; new=$'  printf \'%s\\t%s\\t%s\\n\' "$target" "$snap" "$staged" >>"$STAGE/replaced"' ;;
+    removed) old=$'  rec removed "$rel"'; new=$'  printf \'%s\\n\' "$rel" >>"$STAGE/removed"' ;;
+  esac
+  if mutant "$J" "$old" "$new"; then
+    rm -rf "$J/p2" "$J/h2"; sd fastapi "$J/p2"
+    mkshim "$J/h2" "$cmd" pause "$marker" "$skip"
+    TMPDIR=$J/tmp2 launch "$J/h2" "$MUT" "$J/p2" --apply
+    if waitready "$J/h2"; then
+      st=$(find "$J/tmp2" -maxdepth 1 -type d -name 'remove-example.*' | awk 'NR == 1')
+      if [ -n "$st" ]; then chmod a-w "$st/$rname"; fi
+    fi
+    finish "$J/h2"; o=$(cat "$J/h2/out")
+    if [ -n "${st:-}" ]; then chmod u+w "$st/$rname" 2>/dev/null; fi
+    check "record $rname: the mutant without the check exits 0" "0" "$RC"
+    contains "record $rname: the mutant without the check says applied" "applied" "$o"
+    check "record $rname: the mutant without the check changes the project" "1" "$(changed01 "$h" "$(treehash "$J/p2")")"
+  fi
+}
+g_record_holds() { g_record holds rm ".remove-example.held" 0; }
+g_record_replaced() { g_record replaced cmp ".remove-example.held" 0; }
+g_record_removed() { g_record removed rm ".remove-example.held" 1; }
 
 # a file created at the edit target while the original is held: the install refuses it, the new file is kept, nothing is lost
 g_install_race() {
@@ -451,6 +508,7 @@ g_install_race() {
   finish "$H"; settle "$H"; o=$(cat "$H/out")
   check "file created at the edit target: exit 1" "1" "$RC"
   contains "file created at the edit target: says the name is taken" "the name is taken" "$o"
+  contains "file created at the edit target: mentions the hard-link limit" "may not support hard links" "$o"
   check "file created at the edit target: the new file is kept" "mine" "$(cat "$D/$R")"
   held=$(find "$D/src/api" -name '.remove-example.held.*' | awk 'NR == 1')
   check "file created at the edit target: the original is kept under the held name" "$orig" "$(if [ -n "$held" ]; then cat "$held"; fi)"
@@ -872,7 +930,7 @@ g_manifest_b() {
     $'|| $3 !~ /^[1-9][0-9]*$/' ''
 }
 
-JOBS="install_sig install_race sig_int sig_term sig_hup sig_nth_int sig_nth_term sig_nth_hup pipe sig_early sig_keep rm_fail swap_link swap_dir mid_delete cp_fail inode rmdir unreadable special_root edit_refusals marker streams usage cdpath force_paths manifest_a manifest_b"
+JOBS="record_holds record_replaced record_removed install_sig install_race sig_int sig_term sig_hup sig_nth_int sig_nth_term sig_nth_hup pipe sig_early sig_keep rm_fail swap_link swap_dir mid_delete cp_fail inode rmdir unreadable special_root edit_refusals marker streams usage cdpath force_paths manifest_a manifest_b"
 n=0
 for j in $JOBS; do
   ( "g_$j"; echo "job $j done" ) >"$T/o.$j" 2>&1 &
