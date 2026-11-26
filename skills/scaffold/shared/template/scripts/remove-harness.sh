@@ -53,7 +53,7 @@ read_manifest() {
   elif command -v node > /dev/null 2>&1; then
     node -e 'const m=JSON.parse(require("fs").readFileSync(".claude/harness.json","utf8"));for(const v of Object.values(m.seeded_files)){const a=String(v.path),b=String(v.origin_hash);if(/[\x00-\x1f]/.test(a+b))throw new Error("control character");console.log(a+"\t"+b)}'
   elif command -v python3 > /dev/null 2>&1; then
-    python3 -c 'import json;m=json.load(open(".claude/harness.json"));[print(str(v["path"])+"\t"+str(v["origin_hash"])) if not any(ord(c)<32 for c in str(v["path"])+str(v["origin_hash"])) else (_ for _ in ()).throw(ValueError("control character")) for v in m["seeded_files"].values()]'
+    python3 -I -c 'import json;m=json.load(open(".claude/harness.json"));[print(str(v["path"])+"\t"+str(v["origin_hash"])) if not any(ord(c)<32 for c in str(v["path"])+str(v["origin_hash"])) else (_ for _ in ()).throw(ValueError("control character")) for v in m["seeded_files"].values()]'
   else
     return 3
   fi

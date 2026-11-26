@@ -30,11 +30,11 @@ jobs:
           set -euo pipefail
           # The licence and SBOM gates read the project environment at .venv.
           if [ -n "$(git ls-files .venv)" ]; then echo "::error::.venv is tracked by git; remove it (git rm -r --cached .venv): a committed environment is not trusted."; exit 1; fi
-          python -m venv --clear .venv
+          # python -I: the project folder is not on sys.path, so a root venv.py or pip/ cannot stand in for the stdlib module or pip.
+          python -I -m venv --clear .venv
           echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-          .venv/bin/python -m pip install --require-hashes -r requirements.txt
-          if [ -f requirements-dev.txt ]; then .venv/bin/python -m pip install -r requirements-dev.txt; fi
+          .venv/bin/python -I -m pip install --require-hashes -r requirements.txt
       - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)
         run: bash .claude/ci-gates.sh deps
       - name: Harness integrity
@@ -57,8 +57,16 @@ jobs:
         run: bash .claude/ci-gates.sh licences
       - name: SBOM (CycloneDX bill of materials matches the lockfile)
         run: bash .claude/ci-gates.sh sbom
+      # The dev requirements are not hash-pinned and an sdist can run code, so they install only after the licence and SBOM gates have read the hash-pinned environment.
+      - name: Install dev tools and check their licences (after the licence and SBOM gates)
+        run: |
+          set -euo pipefail
+          if [ -f requirements-dev.txt ]; then
+            .venv/bin/python -I -m pip install -r requirements-dev.txt
+            LICENCES_SCOPE=all bash scripts/check-licences.sh
+          fi
       - run: ruff check src/ test/ && ruff format --check src/ test/
-      - run: python -m pyright src/
+      - run: python -I -m pyright src/
       - name: Duplication (production source <= 3%, per .jscpd.json)
         # Pinned by JSCPD_VERSION; bump it deliberately.
         run: npx --yes jscpd@${JSCPD_VERSION}

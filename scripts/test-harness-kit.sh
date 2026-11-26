@@ -238,7 +238,7 @@ json_has() {
 # ── Twin drift ────────────────────────────────────────────────────────────────
 
 # strip_json <file>: the hook without its JSON-extraction statement (one node line in the TS twin, three python3 lines in the FastAPI twin).
-strip_json() { awk '/^(cmd|in_cwd|file)=\$\(printf .%s. "\$input" \| (node -e|python3 -c)/ { skip = 1 } skip { if ($0 ~ /2>\/dev\/null\)$/) skip = 0; next } /^  (node -e|python3 -c) / { next } { print }' "$1"; }
+strip_json() { awk '/^(cmd|in_cwd|file)=\$\(printf .%s. "\$input" \| (node -e|python3 -I -c)/ { skip = 1 } skip { if ($0 ~ /2>\/dev\/null\)$/) skip = 0; next } /^  (node -e|python3 -I -c) / { next } { print }' "$1"; }
 # drift_ok <ts file> <py file>: same text once the JSON extraction is stripped, and the strip kept at least 90% of the lines.
 drift_ok() {
   local a b total kept
@@ -769,7 +769,8 @@ MOCK
 cat > "$MOCK/python" <<'MOCK'
 #!/usr/bin/env bash
 many() { i=0; while [ "$i" -lt 60 ]; do i=$((i + 1)); if [ -n "$MOCK_UNI" ]; then printf '%s line %d a\303\251 ' "$1" "$i"; j=0; while [ "$j" -lt 150 ]; do j=$((j + 1)); printf '\346\227\245'; done; echo; else printf '%s line %d %0200d\n' "$1" "$i" 0; fi; done; }
-case "$*" in
+args="$*"
+case "${args#-I }" in
   "-m pyright --version") [ "$MOCK_HANG_PROBE" = pyright ] && exec sleep 30; [ -n "$MOCK_NO_PYRIGHT" ] && exit 1; echo pyright 1.1; exit 0 ;;
   "-m pyright src/") [ -n "$MOCK_HANG_PYRIGHT" ] && exec sleep 30; echo "pyright" >> "$MOCK_LOG"; [ -f "$MOCK_TSC_OK" ] && exit 0
     [ -n "$MOCK_MANY" ] && { many '/p/src/a.py:1:5 - error: "x" is not defined'; exit 1; }

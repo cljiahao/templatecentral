@@ -2,7 +2,7 @@
 # PreToolUse(Edit|Write|NotebookEdit): block secrets and certs, ask before CI and governance edits; fails closed.
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || { echo "BLOCKED: protect-files.sh cannot cd to the project root — refusing the write." >&2; exit 2; }
 input=$(cat)
-file=$(printf '%s' "$input" | python3 -c "import json,sys
+file=$(printf '%s' "$input" | python3 -I -c "import json,sys
 try:
     ti=json.load(sys.stdin).get('tool_input') or {}
     print(ti.get('file_path') or ti.get('notebook_path') or ti.get('path') or '')
@@ -95,7 +95,7 @@ if [[ -z "$reason" && ( "$base" == azure-pipelines*.yml || "$base" == azure-pipe
 fi
 if [ -n "$reason" ]; then
   # Emit "ask": exit 1 on PreToolUse never blocks, and runtime-built JSON cannot be broken by a hostile path.
-  python3 -c 'import json,sys,os; d=lambda s: os.fsencode(s).decode("utf-8","replace"); head="PROTECTED FILE: "; tail=" — "+d(sys.argv[2])+". Human approval needed."; a=d(sys.argv[1]); room=max(0,200-len(head)-len(tail)); k=max(0,room-1); h=-(-k//2); a=a if len(a)<=room else a[:h]+"…"+(a[len(a)-(k-h):] if k>h else ""); print(json.dumps({"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":(head+a+tail)[:200]}}))' "$rel" "$reason" \
+  python3 -I -c 'import json,sys,os; d=lambda s: os.fsencode(s).decode("utf-8","replace"); head="PROTECTED FILE: "; tail=" — "+d(sys.argv[2])+". Human approval needed."; a=d(sys.argv[1]); room=max(0,200-len(head)-len(tail)); k=max(0,room-1); h=-(-k//2); a=a if len(a)<=room else a[:h]+"…"+(a[len(a)-(k-h):] if k>h else ""); print(json.dumps({"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":(head+a+tail)[:200]}}))' "$rel" "$reason" \
     || { echo "BLOCKED: $(shortp "$rel" 80) is protected ($reason) and the approval prompt could not be built." >&2; exit 2; }
   exit 0
 fi

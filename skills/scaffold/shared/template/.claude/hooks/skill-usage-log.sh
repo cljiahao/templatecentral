@@ -6,7 +6,7 @@ input=$(cat)
 if command -v node >/dev/null 2>&1; then
   name=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{const s=((JSON.parse(b||'{}')||{}).tool_input||{}).skill;if(typeof s==='string')process.stdout.write(s)}catch(e){}})" 2>/dev/null)
 elif command -v python3 >/dev/null 2>&1; then
-  name=$(printf '%s' "$input" | python3 -c "import json,sys
+  name=$(printf '%s' "$input" | python3 -I -c "import json,sys
 try:
     s=(json.load(sys.stdin).get('tool_input') or {}).get('skill')
 except Exception:

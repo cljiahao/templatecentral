@@ -45,6 +45,10 @@ fixture() {
     nextjs) : > "$D/next.config.ts" ;;
     vite-react) : > "$D/vite.config.ts" ;;
   esac
+  case "$2" in
+    nextjs | vite-react) printf '{\n  "stack": "%s"\n}\n' "$2" > "$D/.claude/harness.json" ;;
+    *) printf '{\n  "stack": "fastapi"\n}\n' > "$D/.claude/harness.json" ;;
+  esac
   printf 'max_gzip_kb %s\n' "$3" > "$D/.claude/bundle-budget.txt"
 }
 
@@ -225,6 +229,91 @@ recorded rec-nestjs nestjs
 run "$D"
 check 0 "$EC" "recorded nestjs still skips ($OUT)"
 
+# A harness.json that is missing, has no stack or an unknown one is refused: the gate never guesses the stack.
+fixture hj-control vite-react 100
+blob 5 "$D/dist/a.js"
+run "$D"
+check 0 "$EC" "control: harness.json with a stack measures ($OUT)"
+rm "$D/.claude/harness.json"
+run "$D"
+check 2 "$EC" "a missing harness.json is refused, not a skip or a guess"
+has "harness.json is missing" "$OUT" "message says the file is missing"
+printf '{ "templatecentral_version": "8.0.0" }\n' > "$D/.claude/harness.json"
+run "$D"
+check 2 "$EC" "a harness.json with no stack key is refused"
+has "has no \"stack\"" "$OUT" "message says the stack is missing"
+printf '{ "stack": "" }\n' > "$D/.claude/harness.json"
+run "$D"
+check 2 "$EC" "an empty stack is refused"
+printf '{ "stack": "rails" }\n' > "$D/.claude/harness.json"
+run "$D"
+check 2 "$EC" "an unknown stack is refused"
+printf 'not json at all\n' > "$D/.claude/harness.json"
+run "$D"
+check 2 "$EC" "a garbled harness.json is refused"
+rm -rf "$D/dist"
+fixture hj-skip nestjs 100
+rm "$D/.claude/harness.json"
+run "$D"
+check 2 "$EC" "a stack with no bundle also needs its harness.json (no config, no file)"
+printf '{ "stack": "nestjs" }\n' > "$D/.claude/harness.json"
+run "$D"
+check 0 "$EC" "control: the same project with a recorded nestjs skips ($OUT)"
+
+# --build: the old output is deleted, then pnpm run build runs in the frontend folder; a build that writes elsewhere leaves nothing to measure.
+stubdir="$T/stub"
+mkdir -p "$stubdir"
+cat > "$stubdir/pnpm" <<'STUB'
+#!/usr/bin/env bash
+if [ -n "${STUB_FAIL:-}" ]; then echo "stub build failed" >&2; exit 1; fi
+mkdir -p "${STUB_OUT:-dist}"
+printf 'console.log(1)\n' > "${STUB_OUT:-dist}/a.js"
+echo "$PWD" >> "${STUB_LOG:-/dev/null}"
+STUB
+chmod +x "$stubdir/pnpm"
+run_build() { # run_build <dir> [env]: the gate with --build and the stub pnpm first on PATH
+  local d=$1
+  shift
+  OUT=$(cd "$d" && env -u CI -u GITHUB_ACTIONS -u TF_BUILD -u BUNDLE_DIR -u BUNDLE_BUDGET_FILE PATH="$stubdir:$PATH" "$@" "$BASH_BIN" "$GATE" --build 2>&1)
+  EC=$?
+}
+fixture build-ok vite-react 100
+run_build "$D"
+check 0 "$EC" "control: --build builds and measures ($OUT)"
+fixture build-stale vite-react 100
+blob 900 "$D/dist/stale.js"
+run "$D"
+check 1 "$EC" "control: the stale 900 KB output alone is over budget"
+run_build "$D"
+check 0 "$EC" "--build deletes the stale output before it measures ($OUT)"
+if [ -e "$D/dist/stale.js" ]; then stale_rc=0; else stale_rc=1; fi
+check 1 "$stale_rc" "the stale file is gone after --build"
+fixture build-moved vite-react 100
+blob 900 "$D/dist/stale.js"
+run_build "$D" STUB_OUT=build
+check 2 "$EC" "a build that writes outside dist leaves nothing to measure, the stale dist is not used"
+fixture build-fail vite-react 100
+blob 5 "$D/dist/a.js"
+run_build "$D" STUB_FAIL=1
+check 2 "$EC" "a failing build exits 2 instead of measuring the old output"
+has "the build failed" "$OUT" "message says the build failed"
+fixture build-sub vite-react 100
+mkdir -p "$D/apps/web"
+: > "$D/apps/web/vite.config.ts"
+rm "$D/vite.config.ts"
+blob 900 "$D/apps/web/dist/stale.js"
+log="$T/sub.log"
+: > "$log"
+run_build "$D" BUNDLE_DIR=apps/web STUB_LOG="$log"
+check 0 "$EC" "--build with BUNDLE_DIR builds in the frontend folder ($OUT)"
+has "/apps/web" "$(cat "$log")" "the build ran inside BUNDLE_DIR"
+fixture build-none nestjs 100
+run_build "$D" STUB_FAIL=1
+check 0 "$EC" "a stack with no bundle never builds ($OUT)"
+run "$D"
+OUT=$(cd "$D" && "$BASH_BIN" "$GATE" --nope 2>&1)
+check 2 $? "an unknown argument is refused"
+
 fixture override vite-react 1
 blob 5 "$D/dist/a.js"
 run "$D"
@@ -266,6 +355,7 @@ check 1 "$EC" "about 1.5 KB gzip fails a 1 KB budget (rounded up, not truncated)
 # BUNDLE_DIR: the frontend lives in a subfolder.
 D="$T/mono"
 mkdir -p "$D/.claude" "$D/backend" "$D/frontend"
+printf '{ "stack": "nextjs" }\n' > "$D/.claude/harness.json"
 echo '{"dependencies":{"next":"16"}}' > "$D/frontend/package.json"
 : > "$D/frontend/next.config.ts"
 printf 'max_gzip_kb 100\n' > "$D/.claude/bundle-budget.txt"
@@ -281,32 +371,37 @@ check 1 "$EC" "BUNDLE_DIR with a tight budget fails over budget"
 
 # package.json depends on next or vite but no config is found: never a silent skip.
 D="$T/noconfig-next"
-mkdir -p "$D"
+mkdir -p "$D/.claude"
+printf '{ "stack": "nextjs" }\n' > "$D/.claude/harness.json"
 echo '{"dependencies":{"next":"16"}}' > "$D/package.json"
 run "$D"
 check 2 "$EC" "package.json with next and no next.config.* cannot be measured, not skipped"
 has "depends on next or vite, but there is no next.config.* or vite.config.*" "$OUT" "message names the problem"
 has "BUNDLE_DIR" "$OUT" "message says how to fix it"
 D="$T/noconfig-vite"
-mkdir -p "$D"
+mkdir -p "$D/.claude"
+printf '{ "stack": "vite-react" }\n' > "$D/.claude/harness.json"
 echo '{"devDependencies":{"vite":"8"}}' > "$D/package.json"
 run "$D"
 check 2 "$EC" "package.json with vite and no vite.config.* cannot be measured, not skipped"
 D="$T/node-only"
-mkdir -p "$D"
+mkdir -p "$D/.claude"
+printf '{ "stack": "nestjs" }\n' > "$D/.claude/harness.json"
 echo '{"dependencies":{"@nestjs/core":"11"}}' > "$D/package.json"
 run "$D"
 check 0 "$EC" "package.json with neither next nor vite is skipped ($OUT)"
 
 D="$T/nest"
-mkdir -p "$D"
+mkdir -p "$D/.claude"
+printf '{ "stack": "nestjs" }\n' > "$D/.claude/harness.json"
 echo '{}' > "$D/nest-cli.json"
 run "$D"
 check 0 "$EC" "a nestjs project is skipped ($OUT)"
 has "skipped" "$OUT" "skip says why in one line"
 check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "skip is one line"
 D="$T/py"
-mkdir -p "$D"
+mkdir -p "$D/.claude"
+printf '{ "stack": "fastapi" }\n' > "$D/.claude/harness.json"
 echo fastapi > "$D/requirements.txt"
 run "$D"
 check 0 "$EC" "a fastapi project is skipped ($OUT)"
@@ -353,6 +448,7 @@ real_build() {
   mkdir -p "$D"
   TC_STACK=$1 TC_PART=stack bash "$SH/tc-copy.sh" "$D" > /dev/null || return 1
   mkdir -p "$D/.claude"
+  printf '{ "stack": "%s" }\n' "$1" > "$D/.claude/harness.json"
   cp "$BUDGET" "$D/.claude/bundle-budget.txt"
   cd "$D" || return 1
   pnpm install > "$T/$2-install.log" 2>&1 || return 1

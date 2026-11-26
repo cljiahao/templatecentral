@@ -11,7 +11,7 @@ pre-commit:
       run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; ruff check --fix {staged_files} && ruff format {staged_files}'
       stage_fixed: true
     typecheck:
-      run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; python -m pyright src/'
+      run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; python -I -m pyright src/'
     secret-scan:
       # Scans staged changes when the scanner is installed; the next command warns or fails when it is not.
       run: if command -v gitleaks >/dev/null 2>&1; then gitleaks git --pre-commit --staged --redact --no-banner -v; fi
@@ -117,4 +117,4 @@ pre-push:
       run: bash scripts/check-bundle-size.sh
     verify:
       # --cov applies the 80% line floor set as fail_under in pyproject.toml.
-      run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; ruff check src/ test/ && python -m pyright src/ && python -m pytest test/ --cov=src -q'
+      run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; ruff check src/ test/ && python -I -m pyright src/ && python -m pytest test/ --cov=src -q'

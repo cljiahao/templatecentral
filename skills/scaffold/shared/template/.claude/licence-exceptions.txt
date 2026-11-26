@@ -2,6 +2,7 @@
 # check-licences.sh accepts the licence for a package whose name matches; every other package still needs a licence from allowed-licences.txt.
 # Adding a line is a human decision (legal review). Say why in a comment above it.
 # libvips binaries that sharp ships for next/image (LGPL-3.0-or-later), used unmodified as a separate library.
+# The @img npm scope belongs to the sharp project: only its owner can publish a package under it, so the prefix cannot match a stranger's package.
 @img/sharp-* LGPL-3.0-or-later
 # certifi ships the CA bundle that fastapi's HTTP stack (uvicorn[standard]) needs: MPL-2.0 is file-level copyleft and the package is used unmodified.
 certifi MPL-2.0
@@ -12,5 +13,18 @@ eslint-plugin-sonarjs LGPL-3.0-only
 eslint-plugin-no-unsanitized MPL-2.0
 axe-core MPL-2.0
 # lightningcss and its per-platform binaries compile the stylesheets (MPL-2.0).
+# The binaries are named one by one: lightningcss is not scoped, so a prefix would also match an unrelated package such as lightningcss-foo.
 lightningcss MPL-2.0
-lightningcss-* MPL-2.0
+lightningcss-darwin-arm64 MPL-2.0
+lightningcss-darwin-x64 MPL-2.0
+lightningcss-freebsd-x64 MPL-2.0
+lightningcss-linux-arm-gnueabihf MPL-2.0
+lightningcss-linux-arm64-gnu MPL-2.0
+lightningcss-linux-arm64-musl MPL-2.0
+lightningcss-linux-x64-gnu MPL-2.0
+lightningcss-linux-x64-musl MPL-2.0
+lightningcss-win32-arm64-msvc MPL-2.0
+lightningcss-win32-x64-msvc MPL-2.0
+lightningcss-android-arm64 MPL-2.0
+# nodeenv (a pyright dependency) declares the bare licence "BSD"; its text is the 3-clause BSD licence. Dev tooling, used unmodified.
+nodeenv BSD

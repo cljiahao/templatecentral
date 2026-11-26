@@ -4,7 +4,8 @@
 # Counts committed and uncommitted changes to tracked files, plus untracked files that are not ignored.
 # Budgets (env overrides): CHANGE_SIZE_MAX_LINES lines added plus deleted, CHANGE_SIZE_MAX_FILES files changed.
 # Not counted: paths matching .claude/change-size-exclude.txt (lockfiles), and files marked linguist-generated in .gitattributes. Both are read at the merge base, so a change cannot exclude itself; this needs git 2.40 or newer. A rename counts as a delete plus an add.
-# A binary file weighs one line per 4 KB, rounded up, so a large binary is not free. Whether a file is binary is decided from its content: the diff and binary attributes are read at the merge base only (git --attr-source, core.attributesFile off, no textconv), so a changed .gitattributes cannot make a text file look binary. A line in .git/info/attributes on a local clone is the author's own file, not part of the change.
+# A file that git does not diff as text (binary, a NUL byte, an attribute) and every untracked file weighs max(its newline count, one line per 4 KB rounded up), so no content trick or attribute can make a file weigh less than its lines: a text file with one NUL byte, or a -diff line in .gitattributes or .git/info/attributes, still weighs every line. A changed binary adds the newline count of its old content. A tracked text file counts the lines git reports as added plus deleted.
+# linguist-generated is read at the merge base from a scratch git directory that shares the object store but has no info/attributes, with core.attributesFile off, so neither a changed .gitattributes nor a local .git/info/attributes line can drop a file from the count.
 # Exit: 0 within budget, 1 over budget, 2 it could not measure (no git, no base ref, bad budget).
 # In GitHub Actions and Azure Pipelines the budget and exclude-file overrides are refused.
 # Usage: bash scripts/check-change-size.sh [base-ref]        Env: CHANGE_SIZE_EXCLUDE_FILE overrides the exclude file path.
@@ -32,9 +33,22 @@ for v in CHANGE_SIZE_MAX_LINES CHANGE_SIZE_MAX_FILES CHANGE_SIZE_EXCLUDE_FILE; d
   if [ -n "${!v:-}" ]; then refuse_in_ci "$v"; fi
 done
 
-# Prints the weight of a binary file of $1 bytes: one line per 4 KB, rounded up.
-binary_weight() {
-  echo $((($1 + 4095) / 4096))
+# Prints the weight of a file of $1 bytes and $2 newline-counted lines: the larger of the line count and one line per 4 KB, rounded up.
+file_weight() {
+  local w=$((($1 + 4095) / 4096))
+  if [ "$2" -gt "$w" ]; then w=$2; fi
+  echo "$w"
+}
+
+# Prints the number of lines in file $1, counting a last line with no newline, whatever bytes it holds (NUL included). Returns 1 when the file cannot be read, so a caller stops instead of counting 0.
+count_lines() {
+  local n
+  n=$(LC_ALL=C grep -a -c '' "$1" 2> "$tmp/err.txt")
+  if [ $? -gt 1 ]; then
+    return 1
+  fi
+  case "$n" in '' | *[!0-9]*) n=0 ;; esac
+  echo "$n"
 }
 
 for v in "$MAX_CHANGED_LINES" "$MAX_CHANGED_FILES"; do
@@ -61,8 +75,8 @@ else
   : > "$tmp/exclude.txt"
   printf 'check-change-size: %s is not on %s yet, so nothing is excluded and every changed line counts. Exclusions apply once the file is on the base branch.\n' "$exclude_path" "$base" >&2
 fi
-git check-attr --source="$mb" linguist-generated -- "$exclude_path" > /dev/null 2> "$tmp/err.txt" || die "git check-attr --source needs git 2.40 or newer to read the attributes at the merge base ($(git --version)): $(head -n 1 "$tmp/err.txt")"
-git --attr-source="$mb" check-attr diff -- "$exclude_path" > /dev/null 2> "$tmp/err.txt" || die "git --attr-source needs git 2.40 or newer, so the diff and binary attributes cannot be read at the merge base ($(git --version)): $(head -n 1 "$tmp/err.txt")"
+git -c core.attributesFile=/dev/null check-attr --source="$mb" linguist-generated -- "$exclude_path" > /dev/null 2> "$tmp/err.txt" || die "git check-attr --source needs git 2.40 or newer to read the attributes at the merge base ($(git --version)): $(head -n 1 "$tmp/err.txt")"
+git --attr-source="$mb" -c core.attributesFile=/dev/null check-attr diff -- "$exclude_path" > /dev/null 2> "$tmp/err.txt" || die "git --attr-source needs git 2.40 or newer, so the diff and binary attributes cannot be read at the merge base ($(git --version)): $(head -n 1 "$tmp/err.txt")"
 
 tab=$(printf '\t')
 : > "$tmp/counted.txt"
@@ -75,12 +89,20 @@ while IFS= read -r -d '' rec; do
   path=${rest#*"$tab"}
   if [ -z "$path" ]; then continue; fi
   if [ "$added" = - ]; then
+    nl=0
+    bytes=0
     if [ -f "$path" ]; then
       bytes=$(wc -c < "$path" | tr -d ' ')
-    else
-      bytes=$(git cat-file -s "$mb:$path" 2> "$tmp/err.txt") || die "cannot size binary file $path: $(head -n 1 "$tmp/err.txt")"
+      nl=$(count_lines "$path") || die "cannot read $path"
     fi
-    printf '%s\t%s\n' "$(binary_weight "$bytes")" "$path" >> "$tmp/counted.txt"
+    if git cat-file -e "$mb:$path" 2> /dev/null; then
+      git cat-file blob "$mb:$path" > "$tmp/base.bin" 2> "$tmp/err.txt" || die "cannot read $path at the merge base: $(head -n 1 "$tmp/err.txt")"
+      obytes=$(wc -c < "$tmp/base.bin" | tr -d ' ')
+      if [ "$obytes" -gt "$bytes" ]; then bytes=$obytes; fi
+      onl=$(count_lines "$tmp/base.bin") || die "cannot read $path at the merge base"
+      nl=$((nl + onl))
+    fi
+    printf '%s\t%s\n' "$(file_weight "$bytes" "$nl")" "$path" >> "$tmp/counted.txt"
     continue
   fi
   case "$added" in *[!0-9]*) added=0 ;; esac
@@ -92,20 +114,23 @@ git -c core.quotepath=false ls-files -z --others --exclude-standard > "$tmp/untr
 while IFS= read -r -d '' path; do
   n=0
   if [ -f "$path" ] && [ ! -L "$path" ]; then
-    n=$(LC_ALL=C grep -I -c '' "$path" 2> "$tmp/err.txt")
-    rc=$?
-    if [ "$rc" -gt 1 ]; then die "cannot read untracked file $path: $(head -n 1 "$tmp/err.txt")"; fi
-    case "$n" in '' | *[!0-9]*) n=0 ;; esac
     bytes=$(wc -c < "$path" | tr -d ' ')
-    if [ "$n" -eq 0 ] && [ "$bytes" -gt 0 ]; then n=$(binary_weight "$bytes"); fi
+    nl=$(count_lines "$path") || die "cannot read untracked file $path"
+    n=$(file_weight "$bytes" "$nl")
   fi
   printf '%s\t%s\n' "$n" "$path" >> "$tmp/counted.txt"
 done < "$tmp/untracked.z"
 
+# A scratch git directory that shares the object store but has no info/attributes, so a local attributes line cannot mark a file generated.
+git init -q --bare "$tmp/attr.git" > /dev/null 2> "$tmp/err.txt" || die "cannot create a scratch git directory: $(head -n 1 "$tmp/err.txt")"
+objdir=$(git rev-parse --path-format=absolute --git-path objects 2> "$tmp/err.txt") || die "cannot find the object store: $(head -n 1 "$tmp/err.txt")"
+printf '%s\n' "$objdir" > "$tmp/attr.git/objects/info/alternates" || die "cannot link the object store"
+rm -f "$tmp/attr.git/info/attributes"
+
 cut -f2- "$tmp/counted.txt" | tr '\n' '\0' > "$tmp/paths.z"
 : > "$tmp/generated.txt"
 if [ -s "$tmp/paths.z" ]; then
-  git -c core.quotepath=false check-attr --source="$mb" -z linguist-generated --stdin < "$tmp/paths.z" > "$tmp/attr.z" 2> "$tmp/err.txt" || die "git check-attr failed: $(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"
+  git --git-dir="$tmp/attr.git" -c core.attributesFile=/dev/null -c core.quotepath=false check-attr --source="$mb" -z linguist-generated --stdin < "$tmp/paths.z" > "$tmp/attr.z" 2> "$tmp/err.txt" || die "git check-attr failed: $(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"
   while IFS= read -r -d '' apath && IFS= read -r -d '' _attr && IFS= read -r -d '' aval; do
     case "$aval" in
       set | true) printf '%s\n' "$apath" >> "$tmp/generated.txt" ;;

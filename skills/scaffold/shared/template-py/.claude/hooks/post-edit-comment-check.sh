@@ -199,7 +199,7 @@ fi
 
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
 input=$(cat)
-file=$(printf '%s' "$input" | python3 -c "import json,sys
+file=$(printf '%s' "$input" | python3 -I -c "import json,sys
 try:
     ti=json.load(sys.stdin).get('tool_input') or {}
     print(ti.get('file_path') or ti.get('path') or '')
@@ -213,6 +213,6 @@ found=$(scan "$file" | sort -s -t "$(printf '\t')" -k1,1 -k2,2n)
 if [ -n "$found" ]; then
   msg="⚠ comment hygiene (see standards/code-standards/comments.md):
 $(printf '%s\n' "$found" | LC_ALL=C awk -F'\t' 'function ucut(s, n) { if (length(s) <= n) return s; s = substr(s, 1, n); sub(/[\300-\337]$/, "", s); sub(/[\340-\357][\200-\277]?$/, "", s); sub(/[\360-\367]([\200-\277]([\200-\277])?)?$/, "", s); return s } NR <= 10 { printf "  - line %s: %s\n", $2, (length($3) > 160 ? ucut($3, 157) "..." : $3) } END { if (NR > 10) printf "  - ... and %d more findings\n", NR - 10 }')"
-  python3 -c "import json,sys,os; print(json.dumps({'hookSpecificOutput':{'hookEventName':'PostToolUse','additionalContext':os.fsencode(sys.argv[1]).decode('utf-8','replace')}}))" "$msg"
+  python3 -I -c "import json,sys,os; print(json.dumps({'hookSpecificOutput':{'hookEventName':'PostToolUse','additionalContext':os.fsencode(sys.argv[1]).decode('utf-8','replace')}}))" "$msg"
 fi
 exit 0

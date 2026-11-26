@@ -333,7 +333,7 @@ PY
       shift 2
       # pip-audit reports no severity, so every known vulnerability counts.
       pipx run "pip-audit==${PIP_AUDIT_VERSION}" -r "$file" "$@" --format json --progress-spinner off > "$tmp/report.json" 2> "$tmp/err.txt"
-      python3 "$tmp/pa.py" "$tmp/report.json" >> "$tmp/found"; rc=$?
+      python3 -I "$tmp/pa.py" "$tmp/report.json" >> "$tmp/found"; rc=$?
       [ "$rc" -ne 4 ] || fail "dependency audit covered no packages ($label)"
       [ "$rc" -eq 0 ] || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (pip-audit, $label)"; }
     }
@@ -478,14 +478,8 @@ JS
     ;;
   bundle)
     [ -f scripts/check-bundle-size.sh ] || fail "scripts/check-bundle-size.sh is missing"
-    # Only a project with a Next.js or Vite config emits a browser bundle; any other stack skips the build and the script reports why. The frontend folder is BUNDLE_DIR, else the current one.
-    # The build output folders are deleted first, so the gate can only measure what this build wrote; check-bundle-size.sh also refuses a tracked dist or .next.
-    bdir=${BUNDLE_DIR:-.}
-    rm -rf "$bdir/dist" "$bdir/.next"
-    if compgen -G "$bdir/next.config.*" >/dev/null || compgen -G "$bdir/vite.config.*" >/dev/null; then
-      (cd "$bdir" && pnpm run build) || fail "the build failed, so the bundle size cannot be measured (output above)."
-    fi
-    bash scripts/check-bundle-size.sh || fail "bundle size check failed (output above). Lazy-load heavy routes or drop the large dependency; raise .claude/bundle-budget.txt only after a human decision."
+    # --build deletes dist and .next in the frontend folder (BUNDLE_DIR, else the current one) and builds there, then measures; a project with no Next.js or Vite config skips with a reason. The pre-push hook runs the same command.
+    bash scripts/check-bundle-size.sh --build || fail "bundle size check failed (output above). Lazy-load heavy routes or drop the large dependency; raise .claude/bundle-budget.txt only after a human decision."
     ;;
   *)
     echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle|list> [base-branch]" >&2

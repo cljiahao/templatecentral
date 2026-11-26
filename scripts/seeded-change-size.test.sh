@@ -32,6 +32,8 @@ run() {
   OUT=$(cd "$d" && env -u CI -u TF_BUILD -u GITHUB_ACTIONS -u BASE_REF -u CHANGE_SIZE_MAX_LINES -u CHANGE_SIZE_MAX_FILES -u CHANGE_SIZE_EXCLUDE_FILE "$@" "$BASH_BIN" "$GATE" 2>&1)
   EC=$?
 }
+# rand_bin <n>: writes n bytes that git sees as binary (NUL bytes) and that hold no newline, so the size weight alone decides.
+rand_bin() { head -c "$1" /dev/zero; }
 # lines <n> <file>: writes n lines.
 lines() { seq 1 "$1" > "$2"; }
 
@@ -290,27 +292,27 @@ run "$D" BASE_REF=main
 check 1 "$EC" "a file that only looks like a lockfile is counted"
 
 repo binary
-head -c 2000 /dev/urandom > "$D/image.bin"
+rand_bin 2000 > "$D/image.bin"
 commit_all
 run "$D" BASE_REF=main
 check 0 "$EC" "a small binary counts one line ($OUT)"
 has "ok (1 lines in 1 files" "$OUT" "2000 bytes weigh one line"
 
 repo bigbinary
-head -c 5000000 /dev/urandom > "$D/video.bin"
+rand_bin 5000000 > "$D/video.bin"
 commit_all
 run "$D" BASE_REF=main
 check 1 "$EC" "a 5 MB committed binary fails the line budget"
 has "1221 changed lines" "$OUT" "5000000 bytes weigh 1221 lines (4 KB each, rounded up)"
 
 repo binuntracked
-head -c 5000000 /dev/urandom > "$D/video.bin"
+rand_bin 5000000 > "$D/video.bin"
 run "$D" BASE_REF=main
 check 1 "$EC" "a 5 MB untracked binary fails the line budget"
 has "1221 changed lines" "$OUT" "an untracked binary weighs the same"
 
 repo bindeleted
-head -c 5000000 /dev/urandom > "$D/video.bin"
+rand_bin 5000000 > "$D/video.bin"
 commit_all
 git -C "$D" checkout -q main
 git -C "$D" checkout -q -b work4
@@ -432,15 +434,88 @@ mkdir -p "$D/src"
 for i in 1 2 3; do seq 1 20000 > "$D/src/f$i.txt"; done
 commit_all
 run "$D" BASE_REF=main
-check 0 "$EC" "an attribute already on the base branch is honoured ($OUT)"
+check 1 "$EC" "a -diff attribute, even one already on the base branch, cannot lower the count"
+has "60000 changed lines" "$OUT" "-diff at the base: every line still counted"
 repo attrbin
 mkdir -p "$D/src"
-head -c 5000000 /dev/urandom > "$D/src/video.bin"
+rand_bin 5000000 > "$D/src/video.bin"
 printf 'src/** -diff\n' > "$D/.gitattributes"
 commit_all
 run "$D" BASE_REF=main
 check 1 "$EC" "a real binary is still weighed by size under a -diff attribute"
 has "1222 changed lines" "$OUT" "5000000 bytes plus the attributes line"
+
+# A content trick must not make a file weigh less than its lines: one leading NUL byte makes git call a text file binary (numstat "- -").
+nul_lead() { # nul_lead <n> <file>: n text lines behind one NUL byte
+  { printf '\0'; seq 1 "$1"; } > "$2"
+}
+repo nulled
+nul_lead 20000 "$D/big.txt"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a committed 20000-line text file led by a NUL byte fails the budget"
+has "20000 changed lines" "$OUT" "the NUL-led file weighs its newline count"
+
+repo nulleduntracked
+nul_lead 20000 "$D/big.txt"
+run "$D" BASE_REF=main
+check 1 "$EC" "the same NUL-led file, untracked, fails the budget"
+has "20000 changed lines" "$OUT" "the untracked NUL-led file weighs its newline count"
+
+repo nulledcontrol
+seq 1 20000 > "$D/big.txt"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "control: the same 20000 lines without the NUL byte fail the same way"
+has "20000 changed lines" "$OUT" "the clean text file weighs its lines"
+
+repo nulledsmall
+nul_lead 100 "$D/small.txt"
+commit_all
+run "$D" BASE_REF=main
+check 0 "$EC" "control: a small NUL-led file still passes ($OUT)"
+
+repo nulledmod
+seq 1 20000 > "$D/big.txt"
+base_commit big.txt
+nul_lead 20000 "$D/big.txt"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a base text file turned binary by a NUL byte weighs the old and new newline counts"
+has "40000 changed lines" "$OUT" "old plus new newlines"
+
+# Attributes in .git/info/attributes (the author's own file, never part of the change) cannot lower a count either.
+repo infoattr
+lines 2000 "$D/a.txt"
+printf 'a.txt -diff\n' >> "$D/.git/info/attributes"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a -diff line in .git/info/attributes does not hide 2000 lines"
+has "2000 changed lines" "$OUT" "info/attributes -diff: every line counted"
+
+repo infogen
+lines 2000 "$D/a.txt"
+printf 'a.txt linguist-generated\n' >> "$D/.git/info/attributes"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "linguist-generated in .git/info/attributes does not drop the file"
+has "2000 changed lines" "$OUT" "info/attributes linguist-generated: every line counted"
+
+repo infocontrol
+lines 2000 "$D/a.txt"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "control: the same 2000 lines with no attributes fail"
+has "2000 changed lines" "$OUT" "control counts 2000 lines"
+
+repo infobase
+lines 2000 "$D/a.txt"
+printf 'a.txt linguist-generated\n' > "$D/.gitattributes"
+base_commit a.txt .gitattributes
+lines 2100 "$D/a.txt"
+commit_all
+run "$D" BASE_REF=main
+check 0 "$EC" "control: linguist-generated at the merge base is still honoured ($OUT)"
 
 # Real run: a freshly scaffolded nextjs project, committed as the base, then one real edit.
 D="$T/real"

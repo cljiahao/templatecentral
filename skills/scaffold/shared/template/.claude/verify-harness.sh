@@ -22,7 +22,7 @@ read_manifest() {
   elif command -v node >/dev/null 2>&1; then
     node -e 'const m=JSON.parse(require("fs").readFileSync(".claude/harness.json","utf8"));for(const v of Object.values(m.seeded_files))console.log(v.path+"\t"+v.origin_hash)'
   elif command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import json;m=json.load(open(".claude/harness.json"));[print(str(v["path"])+"\t"+str(v["origin_hash"])) for v in m["seeded_files"].values()]'
+    python3 -I -c 'import json;m=json.load(open(".claude/harness.json"));[print(str(v["path"])+"\t"+str(v["origin_hash"])) for v in m["seeded_files"].values()]'
   else echo "verify-harness: need jq, node, or python3" >&2; return 3; fi
 }
 

@@ -161,8 +161,6 @@ jobs:
         run: bash scripts/pre-guard.test.sh
       - name: Seeded test budget script tests
         run: bash scripts/test-budget.test.sh
-      - name: Seeded gate ratchet tests
-        run: bash scripts/gate-ratchet.test.sh
       - name: Seeded supply-chain, workflow, env-example and Dockerfile checks
         run: bash scripts/supply-chain.test.sh
       - name: Seeded Dockerfiles pass the dockerfile gate with real hadolint
@@ -235,6 +233,8 @@ jobs:
         run: bash scripts/seeded-bundle-size.test.sh
       - name: Seeded change size gate
         run: bash scripts/seeded-change-size.test.sh
+      - name: Seeded gate ratchet tests
+        run: bash scripts/gate-ratchet.test.sh
       - name: Seeded lock file parser fuzz against pip
         run: bash scripts/seeded-lock-parser-fuzz.test.sh
 

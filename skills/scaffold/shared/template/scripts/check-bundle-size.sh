@@ -4,10 +4,12 @@
 # A folder with no next.config.* or vite.config.* exits 0 with a one-line reason, unless its package.json depends on next or vite, or .claude/harness.json records the stack as nextjs or vite-react: that fails, it never passes silently.
 # The stack comes from harness.json, which the gate ratchet freezes as content and verify-harness.sh hashes, so moving the app into a subfolder cannot turn the gate into a skip: set BUNDLE_DIR to the frontend folder.
 # The folder read is fixed (.next/static for Next.js, dist for Vite) and a tracked dist or .next is refused, so the gate measures a fresh build only: ci-gates.sh deletes both before it builds, and a build that wrote elsewhere leaves nothing to measure and exits 2.
-# Will not catch: a build that emits a large bundle some other way than into those folders (a second output, a server-rendered payload), or a project whose harness.json was never seeded.
+# Will not catch: a build that emits a large bundle some other way than into those folders (a second output, a server-rendered payload), or a harness.json whose frozen "stack" was wrong from the start (the ratchet and verify-harness only catch a change to it).
 # Exit: 0 within budget (or no browser bundle), 1 over budget, 2 it could not measure (no build, bad budget, unreadable output).
 # A trailing '# comment' on the budget line is allowed. A second max_gzip_kb line or a carriage return in the budget file is refused. In CI the budget-file override is refused.
-# Usage: bash scripts/check-bundle-size.sh        Env: BUNDLE_DIR frontend folder, BUNDLE_BUDGET_FILE budget file path (relative paths start at the folder you run this from).
+# With --build the gate first deletes dist and .next in the frontend folder and runs pnpm run build there, so a stale folder (after outDir moved, or a leftover build) can never pass; ci-gates.sh and the pre-push hook both run it this way, one shared path. Without it the gate measures what is already built.
+# A harness.json that exists but records no parsable "stack" is refused (exit 2), as is a missing one: the stack is never guessed. Stacks with no browser bundle (nestjs, fastapi) record themselves and skip with a reason.
+# Usage: bash scripts/check-bundle-size.sh [--build]        Env: BUNDLE_DIR frontend folder, BUNDLE_BUDGET_FILE budget file path (relative paths start at the folder you run this from).
 set -uo pipefail
 export LC_ALL=C
 
@@ -23,6 +25,13 @@ if [ -n "${BUNDLE_BUDGET_FILE:-}" ]; then
   esac
 fi
 
+build=0
+case "${1:-}" in
+  '') ;;
+  --build) build=1 ;;
+  *) die "unknown argument '$1'. Usage: check-bundle-size.sh [--build]" ;;
+esac
+
 root=$PWD
 budget_file=${BUNDLE_BUDGET_FILE:-.claude/bundle-budget.txt}
 case "$budget_file" in
@@ -34,11 +43,13 @@ if [ -n "${BUNDLE_DIR:-}" ]; then
   cd "$BUNDLE_DIR" 2> /dev/null || die "BUNDLE_DIR '$BUNDLE_DIR' is not a folder."
 fi
 
-# The stack recorded when the harness was seeded (a frozen file); empty when there is no harness.json or no stack in it.
-recorded=''
-if [ -f "$root/.claude/harness.json" ]; then
-  recorded=$(sed -n '/"stack"[[:space:]]*:/{s/^.*"stack"[[:space:]]*:[[:space:]]*"\([^"]*\)".*$/\1/p;q;}' "$root/.claude/harness.json") || die "cannot read $root/.claude/harness.json"
-fi
+# The stack recorded when the harness was seeded (a frozen file). A missing file, or one with no parsable "stack", is refused: with the stack unknown the gate could skip a project that does emit a bundle.
+if [ ! -f "$root/.claude/harness.json" ]; then die "$root/.claude/harness.json is missing, so the stack is unknown and the gate cannot tell whether this project emits a bundle. Restore it with the harness refresh (templatecentral:migrate)."; fi
+recorded=$(sed -n '/"stack"[[:space:]]*:/{s/^.*"stack"[[:space:]]*:[[:space:]]*"\([^"]*\)".*$/\1/p;q;}' "$root/.claude/harness.json") || die "cannot read $root/.claude/harness.json"
+case "$recorded" in
+  nextjs | vite-react | nestjs | fastapi) ;;
+  *) die "$root/.claude/harness.json has no \"stack\" of nextjs, vite-react, nestjs or fastapi (got '$recorded'), so the gate cannot tell whether this project emits a bundle. Restore the file with the harness refresh (templatecentral:migrate)." ;;
+esac
 
 if ls next.config.* > /dev/null 2>&1; then
   stack=nextjs
@@ -59,6 +70,11 @@ fi
 # Build output that git tracks is not a build: refuse it before reading anything from it.
 tracked=$(git ls-files -- dist .next 2> /dev/null) || tracked=''
 if [ -n "$tracked" ]; then die "build output is tracked by git (${tracked%%$'\n'*}). Remove it from git (git rm -r --cached dist .next) and add both to .gitignore: the gate measures a fresh build only."; fi
+
+if [ "$build" = 1 ]; then
+  rm -rf dist .next
+  pnpm run build || die "the build failed, so the bundle size cannot be measured (output above)."
+fi
 
 if [ ! -f "$budget_file" ]; then die "$budget_file is missing. Restore it from the scaffold: it holds 'max_gzip_kb <number>'."; fi
 if grep -q "$(printf '\r')" "$budget_file"; then die "carriage return in $budget_file: save it with LF line endings."; fi
