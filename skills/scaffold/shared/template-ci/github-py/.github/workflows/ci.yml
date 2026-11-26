@@ -71,8 +71,7 @@ jobs:
       - name: Duplication (production source <= 3%, per .jscpd.json)
         # Pinned by JSCPD_VERSION; bump it deliberately.
         run: npx --yes jscpd@${JSCPD_VERSION}
-      # The dev requirements are not hash-pinned and an sdist, a build backend or a dropped .pth file can run code, so they install after every gate that does not need the dev tools (licences, SBOM, secret scan, change size, bundle size, duplication). Only steps that need the dev tools run after: ruff, pyright, pytest, diff-cover and the licence check over everything installed.
-      # Residual risk: that code can still change the later steps' inputs (the test run, the typecheck, the diff-cover report) and the gate-time note; the dev packages are reviewed in requirements-dev.txt, so a change there is a reviewed change.
+      # Dev tools install last, after every gate that does not need them.
       - name: Install dev tools and check their licences (after the licence and SBOM gates)
         run: |
           set -euo pipefail

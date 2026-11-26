@@ -1172,15 +1172,15 @@ for host in github-py/.github/workflows/ci.yml:github-py azure-py/azure-pipeline
   mutate "bare pip3 for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' 'pip3 install -r requirements-dev.txt' static "bare pip3"
   mutate "bare pipx for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' 'pipx install -r requirements-dev.txt' static "bare pipx"
   mutate "uv pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' 'uv pip install -r requirements-dev.txt' static "bare uv pip"
-  mutate "VIRTUAL_ENV python without -I for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '$VIRTUAL_ENV/bin/python -m pip install -r requirements-dev.txt' static "without -I"
+  mutate "VIRTUAL_ENV python without -I for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' "\$VIRTUAL_ENV/bin/python -m pip install -r requirements-dev.txt" static "without -I"
   mutate "pipx run without an exact pin ($hn)" "$hf" 'pipx run "diff-cover==' 'pipx run "diff-cover' static "bare pipx"
-  mutate "PWD-prefixed pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '$PWD/.venv/bin/pip install -r requirements-dev.txt' static "runs bare"
-  mutate "GITHUB_WORKSPACE-prefixed pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '$GITHUB_WORKSPACE/.venv/bin/pip install -r requirements-dev.txt' static "runs bare"
-  mutate "quoted VIRTUAL_ENV pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '"$VIRTUAL_ENV/bin/pip" install -r requirements-dev.txt' static "runs bare"
+  mutate "PWD-prefixed pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' "\$PWD/.venv/bin/pip install -r requirements-dev.txt" static "runs bare"
+  mutate "GITHUB_WORKSPACE-prefixed pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' "\$GITHUB_WORKSPACE/.venv/bin/pip install -r requirements-dev.txt" static "runs bare"
+  mutate "quoted VIRTUAL_ENV pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' "\"\$VIRTUAL_ENV/bin/pip\" install -r requirements-dev.txt" static "runs bare"
   mutate "/usr/bin/pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '/usr/bin/pip install -r requirements-dev.txt' static "runs bare"
-  mutate "PWD-prefixed python without -I for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '$PWD/.venv/bin/python -m pip install -r requirements-dev.txt' static "without -I"
+  mutate "PWD-prefixed python without -I for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' "\$PWD/.venv/bin/python -m pip install -r requirements-dev.txt" static "without -I"
   mutate "/usr/bin/pip3 for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '/usr/bin/pip3 install -r requirements-dev.txt' static "runs bare"
-  for good in '$PWD/.venv/bin/python -I -m pip install -r requirements-dev.txt' '"$VIRTUAL_ENV/bin/python" -I -m pip install -r requirements-dev.txt' '/usr/bin/python3 -I -m pip install -r requirements-dev.txt'; do
+  while IFS= read -r good; do
     rm -rf "$T/mut" && cp -R "$CI_DIR" "$T/mut"
     python3 - "$T/mut/$hf" ".venv/bin/python -I -m pip install -r requirements-dev.txt" "$good" <<'PY'
 import sys
@@ -1192,7 +1192,11 @@ open(p, "w").write(s.replace(old, new))
 PY
     out=$(static_check "$T/mut" 2>&1 || true)
     if [[ "$out" == *"without -I"* || "$out" == *"runs bare"* ]]; then bad "control: the isolated form raised an -I finding ($hn): $good -> $(grep -E 'without -I|runs bare' <<<"$out" | head -1)"; else ok "control: no -I finding for $good ($hn)"; fi
-  done
+  done <<'GOODS'
+$PWD/.venv/bin/python -I -m pip install -r requirements-dev.txt
+"$VIRTUAL_ENV/bin/python" -I -m pip install -r requirements-dev.txt
+/usr/bin/python3 -I -m pip install -r requirements-dev.txt
+GOODS
 done
 # The unhashed dev install runs after every gate that does not need the dev tools: a dev install placed ahead of any of them is caught.
 mutate "dev install ahead of the secret scan (github-py)" github-py/.github/workflows/ci.yml "      # PR: the PR's commits; push: full history\n" "      - run: |\n          .venv/bin/python -I -m pip install -r requirements-dev.txt\n          LICENCES_SCOPE=all bash scripts/check-licences.sh\n      # PR: the PR's commits; push: full history\n" static "before the secrets gate"

@@ -519,15 +519,27 @@ git_ commit -q -m "add ignore"
 expect 0 "base without .gitleaks.toml: .gitleaksignore is not a shadow"
 seed ts
 
-python3 - "$T" "$SH" <<'PY'
-import sys, yaml
-t, sh = sys.argv[1:3]
-y = yaml.safe_load(open(sh + "/template-ci/github-ts/.github/workflows/ci.yml"))
-open(t + "/step-gh.sh", "w").write(y["jobs"]["gate-ratchet"]["steps"][1]["run"])
-a = yaml.safe_load(open(sh + "/template-ci/azure/azure-pipelines/templatecentral-gates.yml"))
-steps = a if isinstance(a, list) else a["steps"]
-open(t + "/step-az.sh", "w").write([x for x in steps if "ci-gates.sh ratchet" in x.get("bash", "")][-1]["bash"])
-PY
+# The CI ratchet steps are cut out of the shipped files with awk, so the test needs no PyYAML.
+# block_scalar <file> <start text> <key regex> <out file> writes the dedented body of the first block scalar after the start line, and stops the test run when that body is not the ratchet step.
+block_scalar() {
+  awk -v start="$2" -v key="$3" '
+    state == 0 && index($0, start) { state = 1; next }
+    state == 1 && $0 ~ key { state = 2; match($0, /[^ ]/); ind = RSTART - 1; bi = -1; next }
+    state == 2 {
+      if ($0 ~ /^ *$/) { if (bi >= 0) print ""; next }
+      match($0, /[^ ]/)
+      if (bi < 0) { if (RSTART - 1 <= ind) exit; bi = RSTART - 1 }
+      if (RSTART - 1 < bi) exit
+      print substr($0, bi + 1)
+    }
+  ' "$1" > "$4"
+  if ! grep -q 'ci-gates.sh ratchet' "$4"; then
+    echo "gate-ratchet.test: could not cut the ratchet step out of $1 (start '$2'); the CI step cases cannot run" >&2
+    exit 2
+  fi
+}
+block_scalar "$SH/template-ci/github-ts/.github/workflows/ci.yml" "  gate-ratchet:" '^ +run: [|]$' "$T/step-gh.sh"
+block_scalar "$SH/template-ci/azure/azure-pipelines/templatecentral-gates.yml" "# The merge-base copy of ci-gates.sh runs" '^ +- bash: [|]$' "$T/step-az.sh"
 git_ checkout -q -B main main
 printf '#!/usr/bin/env bash\necho BASE-ENTRY\nexit 9\n' > "$R/.claude/ci-gates.sh"
 git_ commit -q -am "base entry"
