@@ -45,9 +45,6 @@ review/SKILL.md	14	-
 scaffold/fastapi/source-files.md	178	-
 scaffold/nestjs/source-files.md	137	-
 scaffold/nextjs/source-files.md	185	-
-scaffold/shared/documentation-kit.md	156	-
-scaffold/shared/harness-kit-enforcement.md	154	-
-scaffold/shared/harness-kit-finalize.md	148	-
 scaffold/vite-react/source-files.md	175	-
 standards/code-standards/nestjs.md	122	-
 standards/full-stack-pairing/implementation.md	244	-

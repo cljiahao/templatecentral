@@ -57,15 +57,16 @@ TC_STACK=<stack> TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 | `stack`, `agents` | the stack's `source-files.md`, when it says | `<skill-dir>/<STACK>/template` and `template-agents`, per `<skill-dir>/<STACK>/template.manifest` |
 | `leaf` | an `add` or `migrate` leaf that names its own template tree | `TC_LEAF=<add or migrate>/<leaf stem>` (for example `add/auth/nestjs`) copies every `template*` tree beside that leaf per its `template.manifest`, or only `TC_TREE=<tree>`; `TC_STACK` is not used. Same refusals and `STOP:` line as the other parts |
 | `manifest` | Step E, after the verify skills and Steps A–D | writes `.claude/harness.json`: one `seeded_files` entry per seeded file present, `templatecentral_version` from the plugin's `plugin.json`, `adoWiki` from `TC_ADO_WIKI`; refuses when the file exists |
+| `finish` | Step G, after `tail` and the TS format pass | refuses while `docs/CONSTITUTION.md`, `FUTURE.md` or `docs/harness.md` holds a placeholder; re-hashes every `harness.json` entry, mirrors each seeded file into `.claude/.harness-base/` (the merge base for migrate Phase 5), and runs `verify-harness.sh` once the project has a commit |
 | `tail` | Step G, after the stack's `AGENTS.md` step | appends `template-tail/AGENTS-tail.md` to the project's `AGENTS.md` with the stack's typecheck command filled in; it writes nothing else |
 
-`settings`, `late` and `ci` with `TC_CI=github` or `TC_CI=azure` refuse unless the project's `lefthook.yml` is the one `base` copied for this `TC_STACK`, so run `base` first (`TC_CI=none` returns before that check: it only removes a file, and compares it with the template's). `settings`, `late` and `tail` also refuse until `AGENTS.md` exists, which keeps them behind the verification gate and the format pass in every stack.
+`settings`, `late` and `ci` with `TC_CI=github` or `TC_CI=azure` refuse unless the project's `lefthook.yml` is the one `base` copied for this `TC_STACK`, so run `base` first . `settings`, `late` and `tail` also refuse until `AGENTS.md` exists, which keeps them behind the verification gate and the format pass in every stack.
 
 A template file named `<name>.tmpl` is copied to `<name>` (the manifest lists the `.tmpl` source). Skill files ship that way (`SKILL.md.tmpl`), so no skill loader that scans the plugin registers a template skill.
 
-Substitute `<skill-dir>` and `<target>` as plain text inside the double quotes. A path that holds `"`, `$`, a backtick or a backslash needs that character escaped (or single quotes around the whole path); the script itself never expands a path. A path must not contain a newline: if one does, stop and ask the user for another directory before substituting.
+Substitute `<skill-dir>` and `<target>` as plain text inside the double quotes; a path holding `"`, `$`, a backtick, a backslash or a newline needs another directory.
 
-The script checks everything before the first write and writes nothing when a check fails (bad target, symlink or empty directory in a tree, manifest disagreeing with the trees, a path that already exists, an unwritable directory). It creates only missing parent directories and copies each listed file with its manifest mode; it never copies attributes onto the project root or an existing directory and never changes a mode it did not create. A `No such file or directory` error for `tc-copy.sh` (an unsubstituted or wrong `<skill-dir>`) also means stop: report it, do not look for the script elsewhere. Every refusal and every failed copy ends with a `STOP:` line: do not `rm` or overwrite anything, and report it to the user (a failed copy also lists the files already written). A refusal ends only the script's own `bash`, never the caller's shell.
+The script checks everything before the first write and writes nothing when a check fails. Every refusal and every failed copy ends with a `STOP:` line: do not `rm` or overwrite anything, report it to the user. A `No such file or directory` error for `tc-copy.sh` (a wrong `<skill-dir>`) also means stop: do not look for the script elsewhere.
 
 The CI file is not part of this copy: Step B3 picks the host and copies it. Every later step in this kit that mentions one of these files works on the copy now in `<target>`.
 
@@ -79,10 +80,3 @@ The CI file is not part of this copy: Step B3 picks the host and copies it. Ever
 | **nestjs** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` for code files (full `pnpm test` for config, setup, data or any non-code change) | `nest-verify` | `pnpm check` |
 | **nextjs** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` for code files (full `pnpm test` for config, setup, data or any non-code change) | `next-verify` + `next-migrate` | `pnpm check` |
 | **vite-react** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` for code files (full `pnpm test` for config, setup, data or any non-code change) | `vite-verify` | `pnpm check` |
-
-**Additional per-stack notes:**
-- `user-prompt-guard` filename: `user-prompt-guard.py` for **fastapi**; `user-prompt-guard.cjs` for all TS stacks (`.cjs`, not `.js`: `"type": "module"` would load `.js` as ESM and break `require()`).
-- `user-prompt-guard` settings.json invocation: `"command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/user-prompt-guard.py"]` (fastapi) vs `"command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/user-prompt-guard.cjs"]` (TS stacks).
-- `harness.json` `"stack"` value: use the lowercase stack name (`fastapi` / `nestjs` / `nextjs` / `vite-react`).
-- `harness.json` verify-skill path: use the stack's verify-skill name(s) from the table above (next.js has two skills).
-- CLAUDE.md hash in `harness.json`: conditional form `[ -f CLAUDE.md ] && sha256_claude=$(...)` on all stacks.

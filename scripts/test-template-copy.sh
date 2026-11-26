@@ -1302,6 +1302,30 @@ out=$(TC_STACK=nextjs TC_PART=manifest TC_ADO_WIKI=yes bash "$SHARED/tc-copy.sh"
 check 1 "$([[ $ec -ne 0 && "$out" == *"takes true or false"* && ! -e "$tgt/.claude/harness.json" ]] && echo 1 || echo 0)" "part_manifest_refuses_a_bad_flag ($out)"
 out=$(TC_STACK=nextjs TC_PART=manifest TC_CI=github bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
 check 1 "$([[ $ec -ne 0 && "$out" == *"TC_CI must stay empty"* ]] && echo 1 || echo 0)" "part_manifest_refuses_ci ($out)"
+# part_finish: Step G ends the seeding: refuses on a placeholder, re-hashes, mirrors the base snapshot, verifies
+tgt="$T/finish"; mkdir -p "$tgt"
+for part in stack base agents settings late; do TC_STACK=nextjs TC_PART=$part bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1; done
+TC_STACK=nextjs TC_PART=ci TC_CI=github bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1
+mkdir -p "$tgt/.claude/skills/next-verify" "$tgt/.claude/skills/next-migrate"; : > "$tgt/.claude/skills/next-verify/SKILL.md"; : > "$tgt/.claude/skills/next-migrate/SKILL.md"
+out=$(TC_STACK=nextjs TC_PART=finish bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"run kit Step E first"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "part_finish_refuses_without_manifest ($out)"
+TC_STACK=nextjs TC_PART=manifest bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1
+out=$(TC_STACK=nextjs TC_PART=finish bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"still holds a placeholder"* && ! -e "$tgt/.claude/.harness-base" ]] && echo 1 || echo 0)" "part_finish_refuses_on_placeholder ($out)"
+sed -i.bak -e 's/__TC_PROJECT_TITLE__/Demo/g' -e '/\[Fill in/d' "$tgt/docs/CONSTITUTION.md"; rm -f "$tgt/docs/CONSTITUTION.md.bak"
+printf '\n# edited after seeding\n' >> "$tgt/AGENTS.md"
+commit_fixture "$tgt"
+out=$(TC_STACK=nextjs TC_PART=finish bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 0 "$ec" "part_finish: exits 0 ($out)"
+want=$(shasum -a 256 "$tgt/AGENTS.md" 2>/dev/null | cut -d' ' -f1)
+got=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["seeded_files"]["AGENTS.md"]["origin_hash"])' "$tgt/.claude/harness.json" 2>&1)
+check "$want" "$got" "part_finish: AGENTS.md re-hashed after a later edit"
+check 1 "$(cmp -s "$tgt/AGENTS.md" "$tgt/.claude/.harness-base/AGENTS.md" && echo 1 || echo 0)" "part_finish: the base snapshot mirrors the final bytes"
+printf '\n# drift\n' >> "$tgt/.claude/hooks/protect-files.sh"
+out=$(TC_STACK=nextjs TC_PART=finish bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 0 "$ec" "part_finish: a rerun re-baselines edited files and still verifies ($out)"
+out=$(TC_STACK=nextjs TC_PART=finish TC_CI=github bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"TC_CI must stay empty"* ]] && echo 1 || echo 0)" "part_finish_refuses_ci ($out)"
 
 # settings and late refuse without Step 0, and with a STACK that does not match it
 for part in settings late; do
@@ -1473,7 +1497,7 @@ out=$(cd "$tgt" && bash -c "$(printf '%s\n' "$TM_CMD" | python3 -c 'import sys; 
 check 1 "$([[ $ec -eq 0 && "$(grep -c '^## Task Management$' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "task_management_append: the documented command appends the section ($out)"
 # Step D fills the title with the Edit tool: no script and no heredoc carries the name
 check 0 "$(grep -c 'TC_NAME' "$SHARED/harness-kit-finalize.md")" "step_d_has_no_name_heredoc"
-check 1 "$([[ "$(snippet "$SHARED/harness-kit-finalize.md" '^## Step D\b' 1)" == *"grep -nE '__TC_|\[Fill in' docs/CONSTITUTION.md"* ]] && echo 1 || echo 0)" "step_d_greps_for_leftover_placeholders"
+check 1 "$(awk '/^## Step D\./ {on=1; next} /^## / {on=0} on' "$SHARED/harness-kit-finalize.md" | grep -c 'TC_PART=finish' | sed 's/^ *[1-9][0-9]*$/1/')" "step_d_names_finish_as_the_placeholder_check"
 
 # every template .sh parses
 bad=""; while IFS= read -r f; do bash -n "$f" 2>/dev/null || bad+=" $f"; done < <(find "$SHARED" \( -path '*/template*' -o -name tc-copy.sh \) -name '*.sh')

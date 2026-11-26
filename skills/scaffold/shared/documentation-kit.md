@@ -15,79 +15,13 @@ Execute all five numbered steps below, in order.
 
 ## Step 1. Determine the wiki opt-in (`adoWiki`)
 
-In a scaffold, the user answered in scaffold Step 1 and `harness-kit-finalize.md` Step E wrote the answer into `.claude/harness.json`, so the read function returns it and nothing is asked. The ask and write logic serves `templatecentral:migrate` and `templatecentral:add (documentation)`, and any project whose manifest lacks the field.
+If `.claude/harness.json` does not exist yet, skip this step and Step 4: `adoWiki` is `false`.
 
-**Guard first:** if `.claude/harness.json` does not exist yet, skip this step and Step 4: `adoWiki` is `false`.
+Read the top-level `adoWiki` field of `.claude/harness.json` (a sibling of `seeded_files`, never inside it). In a scaffold, `TC_PART=manifest` wrote it from the scaffold Step 1 answer, so nothing is asked. `true` or `false`: use it. Unset, with an interactive user: ask once, then add `"adoWiki": true` or `false` as a top-level field with the Edit tool and leave `seeded_files` alone:
 
-Read the top-level `adoWiki` field from `.claude/harness.json`, a **sibling** of `seeded_files`, never inside it:
+> Does this project publish `docs/` to a wiki (for example an Azure DevOps Code Wiki)? If yes, I'll add a `.order` file to `docs/` so the pages render in a fixed order. (yes/no)
 
-```json
-{
-  "stack": "<stack>",
-  "seeded_at": "<ISO-date>",
-  "adoWiki": false,
-  "seeded_files": { "...": "..." }
-}
-```
-
-**Read function** (portable: jq → node → python3 fallback). Prints `true`, `false`, or an empty string if the field is unset:
-
-```bash
-read_adowiki() {
-  local manifest=".claude/harness.json"
-  [ -f "$manifest" ] || { echo ""; return 0; }
-  if command -v jq >/dev/null 2>&1; then
-    jq -r 'if has("adoWiki") then (.adoWiki | tostring) else "" end' "$manifest"
-  elif command -v node >/dev/null 2>&1; then
-    node -e 'const fs=require("fs"),j=JSON.parse(fs.readFileSync("'"$manifest"'","utf8"));process.stdout.write(Object.prototype.hasOwnProperty.call(j,"adoWiki")?String(j.adoWiki):"")'
-  elif command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import json
-j=json.load(open("'"$manifest"'"))
-print(str(j["adoWiki"]).lower() if "adoWiki" in j else "")'
-  else
-    echo "read_adowiki: need jq, node, or python3" >&2
-    return 3
-  fi
-}
-```
-
-**Write function** (same fallback order). Sets or replaces the top-level `adoWiki` field only — it must never read, write, or otherwise touch `seeded_files`:
-
-```bash
-write_adowiki() {
-  local value="$1"   # literal "true" or "false"
-  local manifest=".claude/harness.json"
-  [ -f "$manifest" ] || { echo "write_adowiki: $manifest missing" >&2; return 1; }
-  if command -v jq >/dev/null 2>&1; then
-    local tmp
-    tmp=$(mktemp "${TMPDIR:-/tmp}/harness-json.XXXXXX")
-    jq --argjson v "$value" '.adoWiki = $v' "$manifest" > "$tmp" && mv "$tmp" "$manifest"
-  elif command -v node >/dev/null 2>&1; then
-    node -e 'const fs=require("fs"),p="'"$manifest"'",j=JSON.parse(fs.readFileSync(p,"utf8"));j.adoWiki='"$value"';fs.writeFileSync(p,JSON.stringify(j,null,2)+"\n");'
-  elif command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import json
-p="'"$manifest"'"
-j=json.load(open(p))
-j["adoWiki"]='"$([ "$value" = "true" ] && echo True || echo False)"'
-open(p,"w").write(json.dumps(j,indent=2)+"\n")'
-  else
-    echo "write_adowiki: need jq, node, or python3" >&2
-    return 3
-  fi
-}
-```
-
-**Decision logic:**
-
-1. `existing=$(read_adowiki)`
-2. If `$existing` is `true` or `false`, use it. Do not ask again.
-3. If `$existing` is empty **and an interactive user is available**, ask exactly once, worded around:
-
-   > Does this project publish `docs/` to a wiki (for example an Azure DevOps Code Wiki)? If yes, I'll add a `.order` file to `docs/` so the pages render in a fixed order. (yes/no)
-
-   **No interactive user** (headless run): default to `false` and note it in the Step 5 report.
-
-4. Persist the answer immediately with `write_adowiki "true"` or `write_adowiki "false"`.
+No interactive user (headless run): use `false` and note it in the Step 5 report.
 
 ---
 
@@ -127,9 +61,9 @@ No `## Contents`, no file list, no per-file descriptions. An existing boundary R
 
 ## Step 4. Wiki ordering (only if `adoWiki` is true)
 
-**Gate:** run this step only when `read_adowiki` returns `true`. Otherwise write nothing.
+**Gate:** run this step only when `adoWiki` is `true`. Otherwise write nothing.
 
-The wiki is generated from `docs/` and nothing else. Write `docs/.order`, one entry per line with the extension stripped: `architecture` first, then every other page and subfolder of `docs/` in alphabetical order. Regenerate it whenever a page is added or removed.
+The wiki is generated from `docs/` and nothing else. Write `docs/.order`: one entry per line, extension stripped, `architecture` first, then the rest alphabetically.
 
 ---
 

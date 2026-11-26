@@ -4,9 +4,11 @@
 # Usage: TC_STACK=<stack> TC_PART=<part> [TC_CI=<host>] bash tc-copy.sh <target>
 #        TC_PART=leaf TC_LEAF=<add|migrate>/<path/to/leaf-stem> [TC_TREE=<tree>] bash tc-copy.sh <target>
 #   TC_STACK  nestjs | nextjs | vite-react | fastapi (not used by TC_PART=leaf)
-#   TC_PART   base | settings | ci | late | stack | agents | tail | manifest | leaf   (see skills/scaffold/shared/harness-kit.md, Step 0)
+#   TC_PART   base | settings | ci | late | stack | agents | tail | manifest | finish | leaf   (see skills/scaffold/shared/harness-kit.md, Step 0)
 #             manifest writes .claude/harness.json (kit Step E); TC_ADO_WIKI (true|false, default false)
 #             sets its adoWiki field
+#             finish ends the seeding (kit Step G): refuses while a placeholder is left, re-hashes every
+#             seeded_files entry, mirrors each file into .claude/.harness-base/, runs verify-harness once committed
 #   TC_CI     github | azure | none; required for TC_PART=ci, empty for every other part
 #   TC_LEAF   for leaf: the leaf's stem under skills/, e.g. add/auth/nestjs; its template trees and
 #             template.manifest sit in skills/<TC_LEAF>/
@@ -109,8 +111,8 @@ case "$PART" in
       none) SEL= ;;
       *) stop "unknown CI '$CI' (want github, azure or none)" ;;
     esac ;;
-  manifest)
-    [ -z "$CI" ] || stop "TC_CI must stay empty for TC_PART=manifest"
+  manifest | finish)
+    [ -z "$CI" ] || stop "TC_CI must stay empty for TC_PART=$PART"
     SEL= ;;
   stack | agents)
     [ -z "$CI" ] || stop "TC_CI must stay empty for TC_PART=$PART"
@@ -237,6 +239,51 @@ TC_LIST
   } > "$tmp" || { rm -f -- "$tmp"; stop "writing $TGT/$mf failed"; }
   mv -- "$tmp" "$TGT/$mf" || { rm -f -- "$tmp"; stop "writing $TGT/$mf failed"; }
   echo "Wrote $TGT/$mf ($(printf '%s' "$body" | grep -c origin_hash) entries, templatecentral_version $ver)."
+  exit 0
+fi
+if [ "$PART" = finish ]; then
+  # Ends the seeding: placeholder check, re-hash of every manifest entry, base-snapshot mirror, verify-harness.
+  WHAT="finish seeding"
+  mf=.claude/harness.json
+  if [ -L "$TGT/.claude" ] || [ -L "$TGT/$mf" ] || [ ! -f "$TGT/$mf" ]; then stop "$TGT/$mf is missing or a symlink: run kit Step E first"; fi
+  for d in docs/CONSTITUTION.md FUTURE.md docs/harness.md; do
+    [ -f "$TGT/$d" ] || continue
+    if grep -nE '__TC_|\[Fill in' "$TGT/$d" >&2; then stop "$d still holds a placeholder (lines above): fill it in or delete it where it says so"; fi
+  done
+  sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 -- "$1"; else sha256sum -- "$1"; fi | cut -d' ' -f1; }
+  paths=$(sed -n 's/^ *"[^"]*": { "origin_hash": "[0-9a-f]*", "path": "\([^"]*\)" },\{0,1\}$/\1/p' "$TGT/$mf")
+  [ -n "$paths" ] || stop "$TGT/$mf lists no seeded file"
+  map=""
+  while IFS= read -r p; do
+    [ -f "$TGT/$p" ] || continue
+    if [ -L "$TGT/$p" ]; then stop "$TGT/$p is a symlink"; fi
+    h=$(sha "$TGT/$p") || stop "cannot hash $p"
+    map="$map$p$TAB$h$NL"
+  done <<TC_LIST
+$paths
+TC_LIST
+  tmp="$TGT/$mf.tmp.$$"
+  printf '%s' "$map" | awk -F'\t' 'NR == FNR { h[$1] = $2; next }
+    match($0, /"origin_hash": "[0-9a-f]*", "path": "/) {
+      rest = substr($0, RSTART + RLENGTH); p = substr(rest, 1, index(rest, "\"") - 1)
+      if (p in h) $0 = substr($0, 1, RSTART - 1) "\"origin_hash\": \"" h[p] "\", \"path\": \"" p substr(rest, length(p) + 1)
+    } { print }' - "$TGT/$mf" > "$tmp" || { rm -f -- "$tmp"; stop "re-hashing $mf failed"; }
+  mv -- "$tmp" "$TGT/$mf" || { rm -f -- "$tmp"; stop "writing $TGT/$mf failed"; }
+  n=0
+  while IFS= read -r p; do
+    [ -f "$TGT/$p" ] || continue
+    mkdir -p -- "$TGT/.claude/.harness-base/$(dirname -- "$p")" || stop "cannot create the snapshot folder for $p"
+    cp -- "$TGT/$p" "$TGT/.claude/.harness-base/$p" || stop "cannot mirror $p into .claude/.harness-base/"
+    n=$((n + 1))
+  done <<TC_LIST
+$paths
+TC_LIST
+  echo "Re-hashed $mf and mirrored $n files into .claude/.harness-base/."
+  if (cd "$TGT" && git rev-parse --verify -q HEAD >/dev/null 2>&1); then
+    (cd "$TGT" && bash .claude/verify-harness.sh) || stop "verify-harness.sh failed (output above)"
+  else
+    echo "verify-harness.sh not run: the project has no commit yet (run it after the first commit)."
+  fi
   exit 0
 fi
 if [ "$PART" = ci ] && [ "$CI" = none ]; then
