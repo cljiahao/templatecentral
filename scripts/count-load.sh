@@ -12,7 +12,7 @@
 #   --entry add:database/typescript/nestjs-kysely
 #   --entry migrate:general/phase-4-upgrade
 #   --entry migrate:nextjs-backend-extraction/nestjs
-#   --entry migrate:portal-frame-ancestors@fastapi
+#   --entry migrate:frame-ancestors@fastapi
 #   --entry standards:code-standards/nextjs
 # NAME is the leaf's path under skills/<SKILL>/ without .md. An entry loads, in order: SKILL.md; the
 # router, which is <dir>.md for a leaf under <dir>/ or else <dir>/implementation.md; the standards

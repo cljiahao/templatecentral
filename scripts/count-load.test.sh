@@ -80,11 +80,11 @@ check yes "$(entry_check "$j" add:database/python/sqlalchemy '"skills/add/databa
 j=$(entry_json --entry standards:code-standards/nextjs --entry standards:validation-patterns/nestjs)
 check yes "$(entry_check "$j" standards:code-standards/nextjs '"skills/standards/code-standards/comments.md" in f and "skills/standards/code-standards/nextjs.md" in f')" "standards code-standards loads comments.md first"
 check yes "$(entry_check "$j" standards:validation-patterns/nestjs '"skills/standards/validation-patterns/patterns.md" in f')" "standards validation-patterns loads patterns.md"
-j=$(entry_json --entry migrate:general/phase-4-upgrade --entry migrate:general/implementation --entry migrate:nextjs-backend-extraction/nestjs --entry migrate:portal-frame-ancestors)
+j=$(entry_json --entry migrate:general/phase-4-upgrade --entry migrate:general/implementation --entry migrate:nextjs-backend-extraction/nestjs --entry migrate:frame-ancestors)
 check yes "$(entry_check "$j" migrate:general/phase-4-upgrade '"skills/migrate/general/implementation.md" in f and "skills/migrate/general/phase-4-upgrade.md" in f and "skills/migrate/general/phase-5-health-check.md" not in f')" "migrate phase leaf loads the router without following its cat lines"
 check yes "$(entry_check "$j" migrate:general/implementation '"skills/migrate/general/implementation.md" in f and "skills/migrate/general/phase-5-health-check.md" not in f and "skills/scaffold/shared/harness-kit.md" not in u')" "migrate general/implementation names its phase files in a table, so nothing is followed"
 check yes "$(entry_check "$j" migrate:nextjs-backend-extraction/nestjs '"skills/migrate/nextjs-backend-extraction/common.md" in f and not any(p.startswith("skills/add/") for p in list(f) + list(u))')" "migrate extraction follows common.md and no add leaf"
-check yes "$(entry_check "$j" migrate:portal-frame-ancestors '"skills/migrate/portal-frame-ancestors.md" in f and "skills/scaffold/nextjs/template/src/proxy.ts" not in u')" "migrate portal-frame-ancestors lists template files in prose, so none is followed"
+check yes "$(entry_check "$j" migrate:frame-ancestors '"skills/migrate/frame-ancestors.md" in f and "skills/scaffold/nextjs/template/src/proxy.ts" not in u')" "migrate frame-ancestors lists template files in prose, so none is followed"
 # No shipped doc keeps a <stack> cat line, so a fixture tree holds one: <stack> must be skipped without @STACK and filled with it.
 FIX=$(mktemp -d) || exit 1
 trap 'rm -rf "$FIX"' EXIT

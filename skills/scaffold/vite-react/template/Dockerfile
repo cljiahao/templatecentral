@@ -92,7 +92,7 @@ RUN apk upgrade --no-cache \
 
 COPY --chown=${APP_UID}:${APP_GID} --from=builder ${APP_DIR}/dist /usr/share/nginx/html
 COPY --chown=${APP_UID}:${APP_GID} ./nginx.conf.template /etc/nginx/templates/nginx.conf.template
-# Sourced by the nginx entrypoint before envsubst: derives the frame headers from APPCENTRAL_PORTAL_ORIGIN.
+# Sourced by the nginx entrypoint before envsubst: derives the frame headers from EMBED_PARENT_ORIGIN.
 COPY --chown=${APP_UID}:${APP_GID} --chmod=755 ./docker/15-frame-protection.envsh /docker-entrypoint.d/15-frame-protection.envsh
 
 EXPOSE ${PORT}
