@@ -141,15 +141,17 @@ printf '# Changelog\n\n## [Unreleased]\n\n---\n\n## [1.0.0] — 2026-01-01\n' > 
 out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?
 if [[ $rc -eq 0 ]]; then ok; else fail "empty [Unreleased] control refused: $out"; fi
 
-# Lib screening: text after a bullet marker may not start a fence or heading, nor be a lone rule
-#   line.
+# Lib screening: a line fits the allow-list grammar of cl_content_ok or the fragment is refused.
 n=0
 for body in '- - ```js' '- - # x' '- ***' '- - -' '* * *' '- ok
   ___' '- ```js' '- # H' '- ok
 - # H' '- ok
   - ~~~' '- ok
   ---' '- ok
-===' '- ---'; do
+===' '- ---' \
+  '> # x' '- ok
+  =' '- <h2>y</h2>' '- ok
+  <h2>y</h2>' '- + # x' '- 1. # x'; do
   n=$((n + 1)); mk "lib-bad$n"; frag a.added.md; frag b.fixed.md "$body"; commit
   refuse "lib rejects: ${body//$'\n'/ | }" "not a valid fragment" "${V[@]}"
 done
@@ -157,9 +159,9 @@ mk lib-ok; frag a.added.md; bt='`'; frag b.fixed.md "- use ${bt}x${bt}, see #12 
   - nested --flag"; commit
 out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?
 if [[ $rc -eq 0 ]]; then ok; else fail "lib control refused inline text: $out"; fi
-mk lib-ok2; frag a.added.md; frag b.fixed.md '- --flag is new
-- **bold** text
-  - _it_ and 3 - 2 = 1'; commit
+mk lib-ok2; frag a.added.md; frag b.fixed.md '- the --flag is new
+- text with **bold**
+  - nested _it_ and 3 - 2 = 1'; commit
 out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?
 if [[ $rc -eq 0 ]]; then ok; else fail "lib control refused flag, bold and italic text: $out"; fi
 

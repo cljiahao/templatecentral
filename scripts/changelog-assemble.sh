@@ -60,8 +60,7 @@ while IFS= read -r -d '' p; do
   [[ $name != */* && ! ( -d $p && ! -L $p ) ]] \
     || die "$label: fragments cannot live in a subdirectory"
   cl_name_category "$name" >/dev/null || die "$label: not a valid fragment name"
-  cl_content_ok "$p" \
-    || die "$label: not a valid fragment (bullet first, then bullets or indented lines)"
+  why=$(cl_content_ok "$p") || die "$label: not a valid fragment: $why"
   printf '%s\n' "$name" >> "$work/names"
   nfrag=$((nfrag + 1))
 done < "$work/all"

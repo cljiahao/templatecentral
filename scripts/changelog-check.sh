@@ -32,26 +32,29 @@
 #   changed nothing else. The golden hashes depend on template content, not on the version, and
 #   pristine-hashes.txt is regenerated from the tag after the release, not in the release PR.
 #
-# Catches: no fragment added; unknown category; empty or whitespace-only fragment; no bullet line;
-#   heading ("#" not followed by a digit), fence or thematic-break line inside a fragment, also
-#   after any number of bullet markers (- * + and 1. 1), each then a space); symlink, submodule or type-changed fragment; subdirectory; name outside the pattern
-#   (incl. spaces, newlines); fragment added then deleted in the same PR; README.md counted as a
+# Catches: no fragment added; unknown category; empty or whitespace-only fragment; a fragment
+#   line outside the line grammar (changelog-lib.sh, cl_content_ok): a line is only "- text", then
+#   "  - text" or "  text" (two spaces); text starts with a letter, digit, backtick, [ ( " ' or #
+#   and a digit (a PR reference), holds a letter or digit, is not a list marker (1. or 1)) or
+#   three backticks, and has no < before a letter or / outside backticks. So a heading, quote,
+#   fence, thematic break, setext underline, table, list-marker line or HTML block is rejected;
+#   symlink, submodule or type-changed fragment; subdirectory; name outside the pattern (incl.
+#   spaces, newlines); fragment added then deleted in the same PR; README.md counted as a
 #   fragment; missing base ref or merge base; entries left under "## [Unreleased]"; in a normal
-#   PR a fragment deleted or modified (policy: a fragment belongs to the PR that added it) and a
+#   PR a fragment deleted or modified (policy: a fragment belongs to the PR that added it), a
 #   changed, deleted or type-changed version file, a version value change, a minified or
-#   duplicate-key version file; a normal PR that edits CHANGELOG.md (it
-#   must then pass the replay, so free edits, history rewrites and fake release headings fail); a
-#   release PR with a fragment left or added, a path off the allow-list (this includes the
-#   assemble script, the lib, this check and the workflow), an extra or duplicate key in a version
-#   file, a version that is not greater; CHANGELOG.md deleted or type-changed; a malformed heading.
-# Does not catch: a fragment whose text is wrong or meaningless; a fragment under the wrong
-#   category (a migration PR does not compare the category either); a normal PR that edits this
-#   script, changelog-assemble.sh, changelog-lib.sh, the tests or the workflow, because the checks
-#   that run are the PR's own copies and only a release PR is held to the allow-list; a normal PR
-#   that edits plugin.json or harness.json in any way other than the version value; a fragment
-#   that duplicates another fragment's text; Markdown that is not a heading, fence or break
-#   (table, quote, link reference, raw HTML); a heading marker behind a non-marker token such as
-#   "- (# x"; a Setext underline of one or two characters.
+#   duplicate-key version file; a normal PR that edits CHANGELOG.md (it must then pass the replay,
+#   so free edits, history rewrites and fake release headings fail); a release PR with a
+#   fragment left or added, a path off the allow-list (this includes the assemble script, the
+#   lib, this check and the workflow), an extra or duplicate key in a version file, a version
+#   that is not greater; CHANGELOG.md deleted or type-changed; a malformed heading.
+# Does not catch: a fragment whose text is wrong or meaningless; inline Markdown inside a valid
+#   line (emphasis, links, link reference definitions, task boxes, entities); a fragment under
+#   the wrong category (a migration PR does not compare the category either); a fragment that
+#   duplicates another fragment's text; a normal PR that edits this script,
+#   changelog-assemble.sh, changelog-lib.sh, the tests or the workflow, because the checks that
+#   run are the PR's own copies and only a release PR is held to the allow-list; a normal PR
+#   that edits plugin.json or harness.json in any way other than the version value.
 set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
@@ -116,8 +119,8 @@ while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
       bad "$label: must be a regular file (mode $nm)"; continue
     fi
     git cat-file blob "$nsha" > "$work/frag" || { bad "$label: cannot read blob"; continue; }
-    if ! cl_content_ok "$work/frag"; then
-      bad "$label: first line '- text', then bullets or indented text (no heading, fence, rule)"
+    if ! why=$(cl_content_ok "$work/frag"); then
+      bad "$label: $why"
       continue
     fi
     cat "$work/frag" >> "$work/fragtext"
@@ -170,10 +173,12 @@ fi
 # Loads <p> at the merge base and at HEAD into $work/jb and $work/jh and succeeds when each copy
 # has exactly one line for the version <key>. Returns 1 when a copy is missing and 2 when a copy
 # has no such line (minified JSON) or more than one (duplicate key): both fail closed. Sets
-# VL_NB and VL_NH to the line counts. Shared by ver_same and json_check.
+# VL_NB and VL_NH to the line counts and VL_PAT to the line pattern. Shared by ver_same and
+# json_check.
 ver_load() {
   local p=$1 key=$2 pat
   pat='^[[:space:]]*"'$key'"[[:space:]]*:'
+  VL_PAT=$pat
   git cat-file blob "$mb:$p" > "$work/jb" 2>/dev/null || return 1
   git cat-file blob "HEAD:$p" > "$work/jh" 2>/dev/null || return 1
   VL_NB=$(grep -cE "$pat" "$work/jb"); VL_NH=$(grep -cE "$pat" "$work/jh")
@@ -184,12 +189,11 @@ ver_load() {
 # exactly one such line in each copy. Used in a normal PR, where the version never changes. A
 # file new at HEAD has no earlier value and passes the value test.
 ver_same() {
-  local p=$1 key=$2 pat
-  pat='^[[:space:]]*"'$key'"[[:space:]]*:'
+  local p=$1 key=$2
   if ! git cat-file -e "$mb:$p" 2>/dev/null; then return 0; fi
   ver_load "$p" "$key" || return 1
-  grep -E "$pat" "$work/jb" > "$work/vb"
-  grep -E "$pat" "$work/jh" > "$work/vh"
+  grep -E "$VL_PAT" "$work/jb" > "$work/vb"
+  grep -E "$VL_PAT" "$work/jh" > "$work/vh"
   cmp -s "$work/vb" "$work/vh"
 }
 

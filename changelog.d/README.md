@@ -6,7 +6,7 @@ File name: `<short-slug>.<category>.md`
 
 - `slug`: lower-case letters, digits and `-`, starting with a letter or digit.
 - `category`: `added`, `changed`, `removed`, `fixed` or `security`. A release lists them in that order.
-- Content: one or more Markdown bullets, the text you would have put in `CHANGELOG.md`. The first line starts with a bullet marker (`- `, `* `, `+ `, `1. ` or `1) `). Continuation lines are indented or start with a marker.
+- Content: one or more Markdown bullets, the text you would have put in `CHANGELOG.md`. The first line starts with `- `. Continuation lines start with exactly two spaces.
 
 Example, `changelog.d/sonar-parity-table.added.md`:
 
@@ -18,7 +18,7 @@ No subdirectories. `scripts/changelog-check.sh` rejects any other name or layout
 
 Every PR except the release PR adds a fragment, with no exemption: PRs with no user-facing change and bot PRs included. Describe the change in one bullet.
 
-Fragments cannot contain heading lines, code fences or thematic breaks. A line is rejected when, after the indent and any number of bullet markers (`-`, `*`, `+`, `1.`, `1)`, each followed by a space), its text starts with `#` and no digit, three backticks or `~~~`, or is a break: three or more `-`, `=`, `*` or `_` (same character, spaces allowed, so `- - -` and `* * *` count). `- --flag is new`, `- **bold** text` and `- #96 fixed` (a `#` and a digit is a PR reference) are fine. Not caught: Markdown that is not a heading, fence or break, such as a table, a quote, a link reference or raw HTML; `Setext` underlines of one or two characters (`-`, `==`); a heading marker after a non-marker token, for example `- (# x`.
+A fragment line is valid only as `- text`, then `  - text` or `  text` (two spaces). Text starts with a letter, a digit, a backtick, `[`, `(`, `"`, `'`, or `#` and a digit (a PR reference such as `#96`). It holds a letter or a digit, does not start with a list marker (`1.`, `1)`) or three backticks, and has no `<` before a letter or `/` outside backticks. So a heading, quote, fence, thematic break, setext underline, table, list-marker line or HTML block is rejected, and the message names the line and the rule. Not caught: a fragment whose text is wrong or meaningless; inline Markdown inside a valid line (emphasis, links, link reference definitions, task boxes, entities); a fragment under the wrong category; a fragment that duplicates another fragment's text.
 
 A PR may add fragments only. It may not edit or delete a fragment that already exists on the base, because a fragment belongs to the PR that added it (status M or D is rejected). Only the release PR deletes fragments.
 

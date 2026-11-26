@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/changelog-lib.sh — shared fragment rules for changelog-check.sh and changelog-assemble.sh.
+# scripts/changelog-lib.sh — shared fragment rules for the changelog check and assemble scripts.
 # Sourced, never run. One allow-list: the exact file-name pattern, the exact category set and
 # the content rules live here and nowhere else.
 
@@ -18,41 +18,61 @@ cl_name_category() {
   printf '%s\n' "${name##*.}"
 }
 
-# Succeeds when the file is a regular, non-symlink file whose first non-blank line is a bullet
-# with text, and whose other non-blank lines are bullets or indented continuations. A marker is
-# "-", "*", "+" or a number with "." or ")", then space. Each line is peeled: indent, then any
-# number of markers. At every step the rest may not start with a fence marker or a heading
-# ("#" not followed by a digit, so "#96" stays a PR reference), and may not be a thematic break
-# (three or more of - = * _, same character, spaces allowed, so "- - -" and "* * *" count).
+# Succeeds when the file is a regular, non-symlink file whose non-blank lines all fit this
+# grammar; otherwise prints "fragment line N breaks the rule ...: <line>" and fails. A line is
+# valid only as one of:
+#   bullet        "- " then text. The first non-blank line must be one.
+#   nested bullet "  - " (two spaces) then text, after the first bullet.
+#   continuation  two spaces then text, after the first bullet.
+# Text starts with a letter, a digit, a backtick, "[", "(", a double or single quote, or "#" and
+# a digit (a PR reference). It holds a letter or a digit, does not start with an ordered-list
+# marker ("1." or "1)", which would open a nested list) or three backticks (a fence), and has no
+# "<" before a letter or "/" outside a backtick span (raw HTML). Everything else is rejected, so
+# no heading, quote, rule, setext underline, table or HTML block can pass. Blank lines are free.
 cl_content_ok() {
-  local f=$1 line t first=1 seen=0
-  local re_blank='^[[:space:]]*$' re_indent='^[[:space:]]'
-  local re_marker='^([-*+]|[0-9]+[.)])[[:space:]]+'
-  local re_bullet='^([-*+]|[0-9]+[.)])[[:space:]]+[^[:space:]]'
-  local re_rule='^((-[[:space:]]*){3,}|(=[[:space:]]*){3,}'
-  re_rule+='|(\*[[:space:]]*){3,}|(_[[:space:]]*){3,})$'
-  if [[ -L $f || ! -f $f ]]; then return 1; fi
+  local LC_ALL=C
+  local f=$1 line n=0 seen=0 rest t rule
+  local re_blank='^[[:space:]]*$' re_first='^([A-Za-z0-9`[("'"'"']|#[0-9])'
+  local re_ord='^[0-9]+[.)]([[:space:]]|$)' re_span='^([^`]*)`[^`]*`(.*)$'
+  local re_alnum='[A-Za-z0-9]' re_html='<[A-Za-z/]'
+  if [[ -L $f || ! -f $f ]]; then
+    echo "fragment is not a regular file"; return 1
+  fi
   while IFS= read -r line || [[ -n $line ]]; do
+    n=$((n + 1))
     if [[ $line =~ $re_blank ]]; then continue; fi
-    if [[ $first -eq 1 ]]; then
-      first=0
-      if [[ ! $line =~ $re_bullet ]]; then return 1; fi
-      seen=1
+    rule=""
+    if [[ $line == '- '* ]]; then
+      rest=${line#- }
+    elif [[ $seen -eq 1 && $line == '  - '* ]]; then
+      rest=${line#  - }
+    elif [[ $seen -eq 1 && $line == '  '* && $line != '   '* ]]; then
+      rest=${line#  }
+    else
+      rule="a line is '- text', or after the first bullet '  - text' or '  text' (two spaces)"
     fi
-    if [[ ! $line =~ $re_bullet && ! $line =~ $re_indent ]]; then return 1; fi
-    t=${line#"${line%%[![:space:]]*}"}
-    while :; do
-      case $t in
-        '```'*|'~~~'*) return 1 ;;
-        '#'[0-9]*) ;;
-        '#'*) return 1 ;;
-      esac
-      if [[ $t =~ $re_rule ]]; then return 1; fi
-      [[ $t =~ $re_marker ]] || break
-      t=${t#"${BASH_REMATCH[0]}"}
-    done
+    if [[ -z $rule ]]; then
+      seen=1
+      t=$rest
+      while [[ $t =~ $re_span ]]; do t=${BASH_REMATCH[1]}${BASH_REMATCH[2]}; done
+      if [[ ! $rest =~ $re_first ]]; then
+        rule="text starts with a letter, digit, backtick, [ ( \" ' or # and a digit"
+      elif [[ $rest =~ $re_ord ]]; then
+        rule="text may not start with a list marker such as 1."
+      elif [[ $rest == '```'* ]]; then
+        rule="text may not start with a code fence"
+      elif [[ ! $rest =~ $re_alnum ]]; then
+        rule="text holds a letter or a digit"
+      elif [[ $t =~ $re_html ]]; then
+        rule="no < before a letter or / outside backticks (raw HTML)"
+      fi
+    fi
+    if [[ -n $rule ]]; then
+      printf 'fragment line %d breaks the rule "%s": %s\n' "$n" "$rule" "${line//[[:cntrl:]]/?}"
+      return 1
+    fi
   done < "$f"
-  [[ $seen -eq 1 ]]
+  if [[ $seen -eq 0 ]]; then echo "fragment has no bullet line"; return 1; fi
 }
 
 # Prints every entry under "## [Unreleased]" of the file: each line that is not blank and not a

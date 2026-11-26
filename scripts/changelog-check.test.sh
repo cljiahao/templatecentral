@@ -57,54 +57,69 @@ mk badcat; frag a.bogus.md; commit f
 run "unknown category" 1 "name must be"
 
 mk emptyfile; : > "$R/changelog.d/a.added.md"; commit f
-run "empty fragment" 1 "first line"
+run "empty fragment" 1 "no bullet line"
 
 mk blank; printf '  \n\n\t\n' > "$R/changelog.d/a.added.md"; commit f
-run "whitespace-only fragment" 1 "first line"
+run "whitespace-only fragment" 1 "no bullet line"
 
 mk nobullet; printf 'just words\n' > "$R/changelog.d/a.added.md"; commit f
-run "no bullet line" 1 "first line"
+run "no bullet line" 1 "breaks the rule"
 
 mk emptybullet; printf -- '- \n' > "$R/changelog.d/a.added.md"; commit f
-run "bullet with no text" 1 "first line"
+run "bullet with no text" 1 "breaks the rule"
 
 mk fence1; printf -- '- ok\n  ```\n' > "$R/changelog.d/a.added.md"; commit f
-run "indented code fence in a fragment" 1 "first line"
+run "indented code fence in a fragment" 1 "breaks the rule"
 mk fence2; printf -- '- ok\n\t~~~\n' > "$R/changelog.d/a.added.md"; commit f
-run "indented tilde fence in a fragment" 1 "first line"
+run "indented tilde fence in a fragment" 1 "breaks the rule"
 mk quiet; frag bad.bogus.md; commit f
 runq "normal PR with a bad fragment prints no release rule text" 1
 
 mk heading2; printf -- '- ok\n  # H\n' > "$R/changelog.d/a.added.md"; commit f
-run "indented heading in a fragment" 1 "first line"
+run "indented heading in a fragment" 1 "breaks the rule"
 mk contok; printf -- '- ok\n  continued text\n- two\n' > "$R/changelog.d/a.added.md"; commit f
 run "indented continuation text is fine" 0
 
 mk bfence; printf -- '- ```js\n' > "$R/changelog.d/a.added.md"; commit f
-run "bullet text starting with a code fence" 1 "first line"
+run "bullet text starting with a code fence" 1 "breaks the rule"
 mk bhead; printf -- '- # H\n' > "$R/changelog.d/a.added.md"; commit f
-run "bullet text starting with a heading mark" 1 "first line"
+run "bullet text starting with a heading mark" 1 "breaks the rule"
 mk bhead2; printf -- '- ok\n- # H\n' > "$R/changelog.d/a.added.md"; commit f
-run "second bullet starting with a heading mark" 1 "first line"
+run "second bullet starting with a heading mark" 1 "breaks the rule"
 mk nfence; printf -- '- ok\n  - ~~~\n' > "$R/changelog.d/a.added.md"; commit f
-run "nested bullet starting with a tilde fence" 1 "first line"
+run "nested bullet starting with a tilde fence" 1 "breaks the rule"
 mk rule1; printf -- '- ok\n  ---\n' > "$R/changelog.d/a.added.md"; commit f
-run "lone --- continuation line" 1 "first line"
+run "lone --- continuation line" 1 "breaks the rule"
 mk rule2; printf -- '- ok\n===\n' > "$R/changelog.d/a.added.md"; commit f
-run "lone === line" 1 "first line"
+run "lone === line" 1 "breaks the rule"
 mk rule3; printf -- '- ok\n  ===\n' > "$R/changelog.d/a.added.md"; commit f
-run "indented === line" 1 "first line"
+run "indented === line" 1 "breaks the rule"
 mk rule4; printf -- '- ---\n' > "$R/changelog.d/a.added.md"; commit f
-run "bullet whose text is ---" 1 "first line"
+run "bullet whose text is ---" 1 "breaks the rule"
 mk inline; printf -- '- use \x60x\x60 and a - b, see #12 and --- inside text\n  - nested --flag\n' > "$R/changelog.d/a.added.md"; commit f
 run "inline backticks, #, --- inside text are fine" 0
 
-# Peeling and thematic breaks: bad bodies fail, ordinary bullets stay fine.
+# Line grammar: a line is valid only as "- text", then "  - text" or "  text" (two spaces). Text
+# starts from a closed set. Bodies below use printf %b; \x60 is a backtick.
 n=0
 while IFS= read -r body; do
-  n=$((n + 1)); mk "peel$n"; printf -- '%b\n' "$body" > "$R/changelog.d/a.added.md"; commit f
-  run "fragment body rejected: $body" 1 "first line"
+  n=$((n + 1)); mk "rej$n"; printf -- '%b\n' "$body" > "$R/changelog.d/a.added.md"; commit f
+  run "fragment body rejected: $body" 1 "breaks the rule"
 done <<'LIST'
+> # x
+- > # x
+- ok\n  > # x
+- ok\n  > quoted text
+- x\n  =
+- x\n  --
+- x\n  -
+- x\n  ---
+- <h2>y</h2>
+- ok\n  <h2>y</h2>
+- ok text <h2>y</h2>
+- ok text </div>
+- ok \x60unclosed <h2>y</h2>
+- use <b>bold</b>
 - - \x60\x60\x60js
 - - # x
 - - - ~~~
@@ -127,42 +142,79 @@ done <<'LIST'
 - + \x60\x60\x60js
 - 2. ~~~
 - + ***
+- ok\n1. # x
+- ok\n  1. # x
+- 12) numbered item
+- --flag is new
+- **bold** text
+- _italic_ text
+- + plus marker item
+- ok\n  + nested plus item
+- ok\n  2) nested numbered item
+- + #96 fixed the thing
+- ok\n  ** bold: more
+- ok\n  -- two dashes only
+- ok\n  | table | row |
+- ok\n  ~~~
+- ok\n\t~~~
+- ok\n  \x60\x60\x60
+- \x60\x60\x60js
+- ok\n   three-space line
+- ok\n    four-space line
+-   extra space after the dash
+- ok\n  (
+- ok\n  "
+- \x60
+- #
+- # H
+- #x not a reference
+- ok\n- # H
+- ok\n  # H
+- ok\n  - # H
+- ok\n  - > # x
+- ok\n  - <h2>y</h2>
+1. numbered first line
++ plus first line
+1) paren first line
+* star first line
++ # x
+- ok\n+ plus bullet
+- ok\n3. numbered bullet
+- ok\n1. # x
 LIST
+# Controls: every allowed first character, as bullet, nested bullet and continuation.
 n=0
 while IFS= read -r body; do
   n=$((n + 1)); mk "keep$n"; printf -- '%b\n' "$body" > "$R/changelog.d/a.added.md"; commit f
   run "control, fragment body accepted: $body" 0
 done <<'LIST'
-- --flag is new
-- **bold** text
-- _italic_ text and a_b_c
+- letter first
 - 3 - 2 = 1
-- ok\n  - nested - - dash text
-- ok\n  **Bold:** more
-- ok\n  * star item here
-- ok\n  -- two dashes only
-- + plus marker item
-- 1. numbered item
-- ok\n  + nested plus item
-- ok\n  2) nested numbered item
+- \x60code\x60 first
+- [link](#x) first
+- (paren) first
+- "quoted" first
+- 'single quoted' first
 - #96 fixed the thing
-- + #96 fixed the thing
-- ok\n  1. see #12
+- ok\n  letter continuation
+- ok\n  3 digit continuation
+- ok\n  \x60code\x60 continuation
+- ok\n  [link] continuation
+- ok\n  (paren) continuation
+- ok\n  "quoted" continuation
+- ok\n  'quoted' continuation
+- ok\n  #12 continuation
+- ok\n  - nested letter
+- ok\n  - nested \x60code\x60
+- ok\n  - nested #12
+- ok\n\n- blank line between bullets
+- ok\n  - nested - - dash text
+- see #12, a - b and --- inside text\n  - nested --flag
+- use \x60<h2>\x60 and \x60</div>\x60 in text
+- a < b and 3 <4 and <3 hearts
+- ok\n  text with \x60<b>\x60 inside\n  more text
+- ok   trailing spaces   
 LIST
-
-# Every marker works as the first line and as a continuation line.
-mk mk-first1; printf -- '1. numbered first line\n' > "$R/changelog.d/a.added.md"; commit f
-run "control, numbered first line" 0
-mk mk-first2; printf -- '+ plus first line\n' > "$R/changelog.d/a.added.md"; commit f
-run "control, plus first line" 0
-mk mk-first3; printf -- '1) paren first line\n' > "$R/changelog.d/a.added.md"; commit f
-run "control, paren first line" 0
-mk mk-cont; printf -- '- ok\n+ plus bullet\n3. numbered bullet\n' > "$R/changelog.d/a.added.md"; commit f
-run "control, plus and numbered continuation bullets" 0
-mk mk-bad1; printf -- '+ # x\n' > "$R/changelog.d/a.added.md"; commit f
-run "plus first line with a heading" 1 "first line"
-mk mk-bad2; printf -- '- ok\n1. # x\n' > "$R/changelog.d/a.added.md"; commit f
-run "numbered bullet line with a heading" 1 "first line"
 
 mk q-frag; frag a.added.md; commit f
 runq "normal PR adding a fragment prints no release rule text" 0
@@ -204,7 +256,7 @@ mk trailnl; frag $'a.added.md\n'; commit f
 run "name with a trailing newline" 1 "name must be"
 
 mk heading; printf -- '- ok\n## [9.9.9] — fake\n' > "$R/changelog.d/a.added.md"; commit f
-run "heading injected after a bullet" 1 "first line"
+run "heading injected after a bullet" 1 "breaks the rule"
 
 mk symlink; ln -s -- "- real" "$R/changelog.d/a.added.md"; commit f
 run "symlink fragment" 1 "regular file"
