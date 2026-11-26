@@ -484,6 +484,12 @@ check 0 "$RC" "control: pull_request with paths and paths-ignore counts"
 trig trig_types_ok '  pull_request:
     types: [synchronize, opened, ready_for_review]'
 check 0 "$RC" "control: pull_request with the repo's types list (any order) counts"
+trig trig_types_labels '  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]'
+check 0 "$RC" "control: pull_request with the validate-skills types list counts"
+trig trig_types_labels_only '  pull_request:
+    types: [labeled, unlabeled]'
+check 1 "$RC" "bypass: pull_request with only labeled and unlabeled does not count"
 trig trig_bare '  pull_request:'
 check 0 "$RC" "control: a bare pull_request counts"
 tree trig_filtered_only

@@ -9,8 +9,9 @@
 # A workflow is read as YAML (python3 with PyYAML, python3 first, then /usr/bin/python3; WIRED_PYTHONS can
 # name other interpreters, for the self-test). It counts only when its `on` holds pull_request and that
 # trigger carries no filter that can skip a pull request: no `branches`, no `branches-ignore`, no other key
-# but `paths` and `paths-ignore`, and `types` only when it is absent or equals the one value list the
-# workflows use today: opened, synchronize, ready_for_review.
+# but `paths` and `paths-ignore`, and `types` only when it is absent or equals (in any order) one of the two
+# value lists the workflows use today: opened, synchronize, ready_for_review (ai-review.yml); or opened,
+# synchronize, reopened, labeled, unlabeled (validate-skills.yml).
 #
 # A run block wires a test only when EVERY line of it is on this allow-list, matched whole:
 #   a blank line
@@ -69,7 +70,10 @@ tests = sys.argv[3 + nwf:]
 
 ALLOWED_JOB_IF = "github.event_name == 'pull_request'"
 ALLOWED_PR_KEYS = {"paths", "paths-ignore", "types"}
-ALLOWED_PR_TYPES = ["opened", "ready_for_review", "synchronize"]
+ALLOWED_PR_TYPES = [
+    ["opened", "ready_for_review", "synchronize"],
+    ["labeled", "opened", "reopened", "synchronize", "unlabeled"],
+]
 BLANK = re.compile(r" *")
 INVOKE = re.compile(r"(bash|node) ([A-Za-z0-9_][A-Za-z0-9_./-]*)((?: [A-Za-z0-9_./=:@%+,-]+)*) *")
 
@@ -98,7 +102,7 @@ def pull_request_counts(doc):
         return False
     if "types" in value:
         types = value["types"]
-        if not isinstance(types, list) or sorted(str(t) for t in types) != ALLOWED_PR_TYPES:
+        if not isinstance(types, list) or sorted(str(t) for t in types) not in ALLOWED_PR_TYPES:
             return False
     return True
 
