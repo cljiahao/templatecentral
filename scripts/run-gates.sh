@@ -51,12 +51,17 @@
 # RUN_GATES_WORKFLOWS (a directory of workflows, scanned instead of .github/workflows) and RUN_GATES_MAP
 # (another map file) are for the test of this script only.
 # The script reads the repo, runs existing gates and writes only under $TMPDIR (gate logs; kept on failure).
+# The audit reads only a gate script's own text, not the scripts it calls: test-template-copy.sh runs
+# build-agents-dist.sh, which copies CHANGELOG.md, and the audit does not see that. A @noread row can
+# hide a later real read of the same path. A gate grandchild that moves to its own process group survives
+# the group kill. Local `uses: ./` steps (composite actions, reusable workflows) stop the run unless an
+# @skip row names them. A rename whose old or new path matches a map row is named on stderr.
 # Will not catch: what a gate reads that its own script text does not name (a path built in a variable, a glob loop,
 # data read through a tool; the map and the audit are a judgement, not a trace; list a path the audit
 # misses as unmapped, which selects all); env set by a workflow step (`env:`) or `if:` guards (put an env
 # in the map row); `run:` blocks and steps that are not a `bash scripts/` or `node adapters/` command
 # (inline shell, shellcheck, `bash -n`, the dist-build output check: CI only); workflows that do not
-# trigger on pull_request, reusable and composite workflows; a `cd` through a variable; the
+# trigger on pull_request, and what a reusable or composite workflow runs (a local `uses: ./` is refused, not read); a `cd` through a variable; the
 # fence-snapshot-change label (the frozen gates run unlabelled here); tools a gate needs and this machine
 # lacks (that gate fails here and passes in CI, or reports skips here and runs in CI).
 set -uo pipefail
@@ -177,7 +182,19 @@ read_gates() {
         if (ind(raw) > keyind) { if (raw !~ /^[ \t]*#/) check_line(trim(raw), FNR); next }
         inblock = 0
       }
+      if (cont) {
+        if (raw ~ /^[ \t]*$/) next
+        if (ind(raw) > keyind) { if (raw !~ /^[ \t]*#/) check_line(trim(raw), FNR); next }
+        cont = 0
+      }
       if (raw ~ /^[ \t]*#/) next
+      if (match(raw, /^[ \t]*(-[ \t]+)*uses:[ \t]*[\047"]?\.\//)) {
+        val = trim(substr(raw, RSTART + RLENGTH - 2)); sub(/[ \t]+#.*$/, "", val); gsub(/[\047"]/, "", val)
+        ok = 0
+        for (k = 1; k <= nskip; k++) if (index(val, skips[k]) > 0) { ok = 1; used[skips[k]] = 1 }
+        if (!ok) err(FNR, "a local uses: (composite action or reusable workflow) this runner cannot read; add an @skip row naming it to scripts/run-gates.map", val)
+        next
+      }
       if (raw ~ /^[ \t]*(-[ \t]+)?working-directory:/) {
         if (raw ~ /(scripts|adapters)/) err(FNR, "working-directory in scripts or adapters (this runner cannot follow it)", trim(raw))
         next
@@ -186,16 +203,17 @@ read_gates() {
         keyind = index(raw, "run:") - 1
         rest = trim(substr(raw, RSTART + RLENGTH))
         if (rest ~ /^[|>][+-]?[0-9]*([ \t]+#.*)?$/) { inblock = 1; next }
-        if (rest != "") check_line(rest, FNR)
+        if (rest != "") { check_line(rest, FNR); cont = 1 }
       }
     }
     END { for (s in used) print "S\t" s }
   ' "$1"
 }
 
-# Succeed when workflow file $1 triggers on pull_request (a mention before `jobs:` counts).
+# Succeed when workflow file $1 mentions pull_request anywhere outside a comment. The whole file is read, so
+# a workflow with `jobs:` before `on:` is seen; a mention elsewhere (an `if:` guard) only adds a workflow.
 triggers_on_pr() {
-  awk '/^jobs:/ { exit } /^[[:space:]]*#/ { next } /pull_request/ { f = 1 } END { exit !f }' "$1"
+  awk '/^[[:space:]]*#/ { next } /pull_request/ { f = 1 } END { exit !f }' "$1"
 }
 
 # Read the gates of every pull_request workflow into GATES, the @skip commands that were found into USED_SKIPS.
@@ -424,6 +442,7 @@ collect_changes() {
   git -C "$ROOT" rev-parse --verify --quiet "$base^{commit}" >/dev/null || die "bad base ref: $base (run: git fetch origin main)"
   mb=$(git -C "$ROOT" merge-base "$base" HEAD 2>/dev/null) || die "no merge base between $base and HEAD"
   git -C "$ROOT" diff -z --no-renames --name-only "$mb" -- >"$out.tracked" || die "git diff failed"
+  git -C "$ROOT" diff -z -M --name-status "$mb" -- >"$out.renames" || die "git diff failed"
   case "$WORK" in
     "$ROOT"/*)
       rel=${WORK#"$ROOT"/}
@@ -432,6 +451,22 @@ collect_changes() {
       git -C "$ROOT" ls-files -z --others --exclude-standard >"$out.untracked" || die "git ls-files failed" ;;
   esac
   cat "$out.tracked" "$out.untracked" >"$out"
+}
+
+# Name each rename in file $1 (git diff -z --name-status -M) where the old or the new path matches a map row.
+# Both paths are in the changed set already (the diff that selects gates runs with --no-renames); this line
+# only tells the reader which pairs were one move.
+note_renames() {
+  local st a b
+  while IFS= read -r -d '' st; do
+    case "$st" in
+      R* | C*)
+        IFS= read -r -d '' a || break
+        IFS= read -r -d '' b || break
+        if first_glob "$a" || first_glob "$b"; then echo "run-gates: renamed: $a -> $b (the map rows of both paths apply)" >&2; fi ;;
+      *) IFS= read -r -d '' a || break ;;
+    esac
+  done <"$1"
 }
 
 # Print the full map command (with its env words) for workflow gate $1; fail when the map has none.
@@ -571,6 +606,7 @@ if [ "$MODE" = "changed" ]; then
   collect_changes "$BASE" "$WORK/changes"
   if [ ! -s "$WORK/changes" ]; then echo "no changes"; exit 0; fi
   select_gates "$WORK/changes"
+  note_renames "$WORK/changes.renames"
   if [ "$SELECT_ALL" -eq 1 ]; then echo "run-gates: all gates selected: $REASON" >&2; fi
 else
   SELECT_ALL=1

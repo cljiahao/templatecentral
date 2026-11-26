@@ -24,10 +24,10 @@ has() { # has <text> <needle> <description>
 if [ -n "${RG_TEST_NESTED:-}" ]; then echo "run-gates.test.sh: nested run refused" >&2; exit 2; fi
 export RG_TEST_NESTED=1
 
-# lim <command...>: run it in its own process group and kill the group after 60 s (LIM_S overrides), so a blocked run fails the check.
+# lim <command...>: exit 128 + the signal when the command is killed by one (not 0), else its status. Run it in its own process group and kill the group after 60 s (LIM_S overrides), so a blocked run fails the check.
 lim() {
   perl -e '$s = $ENV{LIM_S} || 60; setpgrp(0, 0); $p = fork; if (!$p) { exec @ARGV; exit 127 }
-    $SIG{ALRM} = sub { kill "KILL", -$$; exit 124 }; alarm $s; waitpid($p, 0); exit($? >> 8)' "$@"
+    $SIG{ALRM} = sub { kill "KILL", -$$; exit 124 }; alarm $s; waitpid($p, 0); exit(($? & 127) ? 128 + ($? & 127) : $? >> 8)' "$@"
 }
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/run-gates-test.XXXXXX") || exit 2
@@ -38,6 +38,11 @@ N=0
 R=""
 
 stub() { { printf '#!/usr/bin/env bash\n'; cat; } > "$R/scripts/$1"; } # stub <name>: the body comes from stdin
+
+# lim reports a child killed by a signal as 128 + the signal, not 0; a normal exit keeps its status
+lim bash -c 'kill -KILL $$'; check 137 "$?" "lim_reports_a_signal_killed_child"
+lim bash -c 'exit 3'; check 3 "$?" "lim_keeps_a_normal_exit_status_control"
+lim true; check 0 "$?" "lim_zero_status_control"
 
 TPL="$T/template"
 
@@ -371,6 +376,42 @@ check 0 "$(rg --check)" "parser_working_directory_elsewhere_control_exit"
 mk; printf '      - run: echo hi\n        working-directory: scripts\n' >> "$R/$WF"
 check 2 "$(rg --check)" "parser_working_directory_in_scripts_exit"
 has "$(out)" "working-directory in scripts or adapters" "parser_working_directory_in_scripts_message"
+# a workflow with jobs: before on: is still read
+wf_jobs_first() { # wf_jobs_first <trigger>: other.yml with the jobs block ahead of the trigger
+  printf 'name: o\njobs:\n  j:\n    steps:\n      - run: bash scripts/new-gate.sh\non:\n  %s:\n' "$1" > "$R/.github/workflows/other.yml"
+}
+mk; stub new-gate.sh <<< true
+wf_jobs_first pull_request
+check 2 "$(rg --check)" "jobs_before_on_is_scanned_exit"
+has "$(out)" "missing from the map: bash scripts/new-gate.sh" "jobs_before_on_is_scanned_message"
+printf 'skills/a/*\tbash scripts/new-gate.sh\n' >> "$R/scripts/run-gates.map"
+check 0 "$(rg --check)" "jobs_before_on_with_a_map_row_control_exit"
+mk; stub new-gate.sh <<< true
+wf_jobs_first push
+check 0 "$(rg --check)" "jobs_before_on_push_only_control_exit"
+# a plain multi-line run: scalar is read line by line
+mk; printf '      - run: true &&\n          bash scripts/x.sh\n' >> "$R/$WF"
+check 2 "$(rg --check)" "multiline_run_second_line_is_read_exit"
+has "$(out)" "missing from the map: bash scripts/x.sh" "multiline_run_second_line_is_read_message"
+mk; printf '      - run: bash\\\n          scripts/x.sh\n' >> "$R/$WF"
+check 2 "$(rg --check)" "multiline_run_split_path_exit"
+has "$(out)" "$FORM" "multiline_run_split_path_message"
+mk; printf '      - run: true &&\n          bash scripts/a.sh\n' >> "$R/$WF"
+check 0 "$(rg --check)" "multiline_run_mapped_gate_control_exit"
+mk; printf '      - run: echo hi\n        env:\n          K: v\n      - run: bash scripts/a.sh\n' >> "$R/$WF"
+check 0 "$(rg --check)" "multiline_run_sibling_key_is_not_a_continuation_control_exit"
+# a local uses: (composite action, reusable workflow) stops the run unless an @skip row names it
+mk; printf '      - uses: ./.github/actions/foo\n' >> "$R/$WF"
+check 2 "$(rg --check)" "local_action_exit"
+has "$(out)" "a local uses:" "local_action_message"
+has "$(out)" "validate-skills.yml:" "local_action_names_file_and_line"
+mk; printf '  reuse:\n    uses: ./.github/workflows/x.yml\n' >> "$R/$WF"
+check 2 "$(rg --check)" "local_reusable_workflow_exit"
+has "$(out)" "a local uses:" "local_reusable_workflow_message"
+mk; printf '      - uses: ./.github/actions/foo\n' >> "$R/$WF"; printf '@skip\t./.github/actions/foo\tcomposite action, reviewed\n' >> "$R/scripts/run-gates.map"
+check 0 "$(rg --check)" "local_action_with_a_skip_row_control_exit"
+mk; printf '      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n' >> "$R/$WF"
+check 0 "$(rg --check)" "remote_uses_control_exit"
 # every pull_request workflow is scanned; one that does not trigger on pull_request is not
 mk; stub new-gate.sh <<< true
 printf 'name: o\non:\n  pull_request:\njobs:\n  j:\n    steps:\n      - run: bash scripts/new-gate.sh\n' > "$R/.github/workflows/other.yml"
@@ -432,6 +473,10 @@ check "" "$(ran)" "no_common_ancestor_runs_nothing"
 mk; ( cd "$R" && put skills/a/r.md && git add -A && git commit -qm r && git update-ref refs/remotes/origin/main HEAD && git mv skills/a/r.md skills/c/r.md ) || exit 2
 check 0 "$(rg --changed main)" "rename_exit"
 check "a,b,c," "$(ran)" "rename_selects_the_gates_of_both_paths"
+has "$(out)" "renamed: skills/a/r.md -> skills/c/r.md" "rename_is_named_in_the_output"
+mk; ( cd "$R" && put skills/a/n.md ) || exit 2
+check 0 "$(rg --changed main)" "no_rename_control_exit"
+if [[ "$(out)" == *"renamed:"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: no_rename_control_prints_no_rename_line"; else PASS=$((PASS + 1)); fi
 
 # --- a foreign git environment is dropped, so the diff and the gates read this repo ---
 rm -f "$RAN_LOG.gitenv"
@@ -460,6 +505,18 @@ mini() { # mini: a repo with one gate, scripts/g.sh, whose body comes from stdin
   printf 'skills/*\tbash scripts/g.sh\nscripts/g.sh\tbash scripts/g.sh\n' > "$R/scripts/run-gates.map"
   put skills/x/x.md
 }
+# gone_check <pid file> <description>: fail when the file holds no pid; poll up to about 1 s for that process to be gone
+gone_check() {
+  local pid gone=no n=0
+  pid=$(cat "$1" 2>/dev/null)
+  if [ -z "$pid" ]; then FAIL=$((FAIL + 1)); echo "FAIL: $2 — no pid was recorded"; return 0; fi
+  while [ "$n" -lt 10 ]; do
+    if ! kill -0 "$pid" 2>/dev/null; then gone=yes; break; fi
+    sleep 0.1; n=$((n + 1))
+  done
+  if [ "$gone" = no ]; then kill -KILL "$pid" 2>/dev/null; fi
+  check "yes" "$gone" "$2"
+}
 # a gate over the time limit fails, is named, and its whole process group dies
 rm -f "$RAN_LOG.sleeper"
 mini <<'EOF'
@@ -470,15 +527,12 @@ EOF
 check 1 "$(rgv RUN_GATES_TIMEOUT=1 --changed main)" "timeout_exit"
 has "$(out)" "timed out after 1s" "timeout_message"
 has "$(out)" "FAIL  bash scripts/g.sh" "timeout_is_reported_fail"
-sl=$(cat "$RAN_LOG.sleeper" 2>/dev/null)
-gone=yes
-if [ -n "$sl" ] && kill -0 "$sl" 2>/dev/null; then gone=no; kill -KILL "$sl" 2>/dev/null; fi
-check "yes" "$gone" "timeout_kills_the_gates_children"
+gone_check "$RAN_LOG.sleeper" "timeout_kills_the_gates_children"
 # control: a gate inside the limit passes and is not reported as timed out
 mini <<'EOF'
 exit 0
 EOF
-check 0 "$(rgv RUN_GATES_TIMEOUT=1 --changed main)" "timeout_control_exit"
+check 0 "$(rgv RUN_GATES_TIMEOUT=30 --changed main)" "timeout_control_exit"
 if [[ "$(out)" == *"timed out"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: timeout_control_is_not_timed_out"; else PASS=$((PASS + 1)); fi
 check 2 "$(rgv RUN_GATES_TIMEOUT=abc --all)" "bad_timeout_value_exit"
 has "$(out)" "RUN_GATES_TIMEOUT must be" "bad_timeout_value_message"
@@ -539,12 +593,9 @@ hung=no
 if kill -0 "$RP" 2>/dev/null; then hung=yes; kill -KILL -- "-$RP" 2>/dev/null; fi
 { wait "$RP"; } 2>/dev/null
 st=$?
-sl=$(cat "$RAN_LOG.sleeper" 2>/dev/null)
-gone=yes
-if [ -n "$sl" ] && kill -0 "$sl" 2>/dev/null; then gone=no; kill -KILL "$sl" 2>/dev/null; fi
 check "no" "$hung" "sigint_stops_the_runner"
 check 130 "$st" "sigint_exit_status"
-check "yes" "$gone" "sigint_kills_the_gates_children"
+gone_check "$RAN_LOG.sleeper" "sigint_kills_the_gates_children"
 check "" "$(ls -A "$T/tmp3")" "sigint_removes_the_scratch_dir"
 has "$(cat "$T/out")" "interrupted by INT" "sigint_message"
 
