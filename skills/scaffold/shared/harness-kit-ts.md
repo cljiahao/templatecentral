@@ -2,50 +2,8 @@
      loaded-by: scaffold/shared/harness-kit.md (index — catted together with it by scaffold/{nestjs,nextjs,vite-react}/source-files.md + migrate/general/phase-4-upgrade.md + migrate/general/phase-5-health-check.md) → scaffold/SKILL.md | migrate/SKILL.md
      prereq: Stack identified as TS stacks (nestjs / nextjs / vite-react); harness-kit.md (index + delta table) loaded. Do not invoke this file directly — it is loaded at runtime by the templatecentral:scaffold and templatecentral:migrate skills. -->
 
-# Shared Harness Kit — TS stacks (nestjs / nextjs / vite-react) bodies
+# Shared Harness Kit — TS stacks (nestjs / nextjs / vite-react)
 
-Per-stack content for kit Steps A, B, and B2 (TS stacks (nestjs / nextjs / vite-react)): notes on the `settings.json` that Step A copies from `template-settings-ts/`, and notes on the per-stack hooks and `lefthook.yml`, which are real files under `template-ts/` that `harness-kit.md` Step 0 copies. The other stack's bodies live in `harness-kit-fastapi.md` — do not load it.
-
----
-
-## Step A — `.claude/settings.json` (TS stacks (nestjs / nextjs / vite-react))
-
-`.claude/settings.json` — Step A copies it (`TC_PART=settings` of `tc-copy.sh`) from `<skill-dir>/shared/template-settings-ts/.claude/settings.json`; it already names the stack's `user-prompt-guard` runtime.
-
----
-
-## Step B — hook scripts (TS stacks (nestjs / nextjs / vite-react))
-
-`.claude/hooks/protect-files.sh` (canonical — hard-blocks secrets, `secrets/*`, `.secrets/*` and certs; asks before CI and governance edits). Step 0 copies it from `<skill-dir>/shared/template-ts/.claude/hooks/protect-files.sh` (uses `node` for JSON parsing).
-
----
-
-`.claude/hooks/block-no-verify.sh` (runtime varies for JSON parsing only; logic is identical). Step 0 copies it from `<skill-dir>/shared/template-ts/.claude/hooks/block-no-verify.sh` (uses `node`).
-
----
-
-`.claude/hooks/user-prompt-guard.cjs` (TS stacks only — `.cjs`, not `.js`; see the delta-table note above). Step 0 copies it from `<skill-dir>/shared/template-ts/.claude/hooks/user-prompt-guard.cjs`.
-
----
-
-`.claude/hooks/post-edit-typecheck.sh` (typecheck command differs by stack — see delta table). Step 0 copies it from `<skill-dir>/shared/template-ts/.claude/hooks/post-edit-typecheck.sh` (uses `node` + `pnpm exec tsc`).
-
----
-
-`.claude/hooks/post-edit-comment-check.sh` (comment scanner — patterns from `.claude/comment-hygiene-patterns.txt`). Step 0 copies it from `<skill-dir>/shared/template-ts/.claude/hooks/post-edit-comment-check.sh` (uses `node` for JSON parsing).
-
----
-
-`.claude/hooks/stop-checks.sh` (typecheck, then `vitest related` for changed code files; any config or setup file (including every root `*.config.*` and vitest `setupFiles`), data, other non-code file, a deletion, a rename, or more than 50 changed files runs `pnpm test`; root docs and top-level `docs/` are ignored). A missing `pnpm`, `tsc` or `vitest`, or a run past 270 s, blocks with a message. It exits at once when nothing but those docs changed (or the work is already committed — pre-commit/pre-push and CI gate that path); Claude Code also caps consecutive Stop-hook continuations at 8 by default (`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`). Step 0 copies it from `<skill-dir>/shared/template-ts/.claude/hooks/stop-checks.sh` (uses `node` + `vitest related`).
-
----
-
-`.claude/hooks/subagent-stop.sh` (file extension and typecheck command differ by stack). Step 0 copies it from `<skill-dir>/shared/template-ts/.claude/hooks/subagent-stop.sh` (checks `.ts|.tsx`, uses `pnpm exec tsc`).
-
----
-
-## Step B2 — `lefthook.yml` (TS stacks (nestjs / nextjs / vite-react))
-
-`lefthook.yml` TS stacks (nestjs / nextjs / vite-react). Step 0 copies it from `<skill-dir>/shared/template-ts/lefthook.yml`.
+Stack delta for kit Steps A, B and B2. `TC_PART=base` copies the 7 per-stack hooks (`.claude/hooks/protect-files.sh`, `block-no-verify.sh`, `user-prompt-guard.cjs`, `post-edit-typecheck.sh`, `post-edit-comment-check.sh`, `stop-checks.sh`, `subagent-stop.sh`) and `lefthook.yml` from `template-ts/`; `TC_PART=settings` copies `.claude/settings.json` from `template-settings-ts/`. Each script's header states its behaviour.
 
 > **Hook install:** the TS stacks run Step 0 before their first `pnpm install`, so the `"prepare": "lefthook install || true"` script finds `lefthook.yml` and wires `pre-commit`/`pre-push` during that install. If an install ran before Step 0, it left a stub `lefthook.yml` and Step 0 refuses: report that to the user instead of working around it.

@@ -1302,6 +1302,173 @@ out=$(TC_STACK=nextjs TC_PART=manifest TC_ADO_WIKI=yes bash "$SHARED/tc-copy.sh"
 check 1 "$([[ $ec -ne 0 && "$out" == *"takes true or false"* && ! -e "$tgt/.claude/harness.json" ]] && echo 1 || echo 0)" "part_manifest_refuses_a_bad_flag ($out)"
 out=$(TC_STACK=nextjs TC_PART=manifest TC_CI=github bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
 check 1 "$([[ $ec -ne 0 && "$out" == *"TC_CI must stay empty"* ]] && echo 1 || echo 0)" "part_manifest_refuses_ci ($out)"
+# part_finish: Step G ends the seeding: refuses on a placeholder, re-hashes, mirrors the base snapshot, verifies
+tgt="$T/finish"; mkdir -p "$tgt"
+for part in stack base agents settings late; do TC_STACK=nextjs TC_PART=$part bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1; done
+TC_STACK=nextjs TC_PART=ci TC_CI=github bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1
+mkdir -p "$tgt/.claude/skills/next-verify" "$tgt/.claude/skills/next-migrate"; : > "$tgt/.claude/skills/next-verify/SKILL.md"; : > "$tgt/.claude/skills/next-migrate/SKILL.md"
+out=$(TC_STACK=nextjs TC_PART=finish bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"run kit Step E first"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "part_finish_refuses_without_manifest ($out)"
+TC_STACK=nextjs TC_PART=manifest bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1
+out=$(TC_STACK=nextjs TC_PART=finish bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"still holds a placeholder"* && ! -e "$tgt/.claude/.harness-base" ]] && echo 1 || echo 0)" "part_finish_refuses_on_placeholder ($out)"
+sed -i.bak -e 's/__TC_PROJECT_TITLE__/Demo/g' -e '/\[Fill in/d' "$tgt/docs/CONSTITUTION.md"; rm -f "$tgt/docs/CONSTITUTION.md.bak"
+printf '\n# edited after seeding\n' >> "$tgt/AGENTS.md"
+commit_fixture "$tgt"
+out=$(TC_STACK=nextjs TC_PART=finish bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 0 "$ec" "part_finish: exits 0 ($out)"
+want=$(shasum -a 256 "$tgt/AGENTS.md" 2>/dev/null | cut -d' ' -f1)
+got=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["seeded_files"]["AGENTS.md"]["origin_hash"])' "$tgt/.claude/harness.json" 2>&1)
+check "$want" "$got" "part_finish: AGENTS.md re-hashed after a later edit"
+check 1 "$(cmp -s "$tgt/AGENTS.md" "$tgt/.claude/.harness-base/AGENTS.md" && echo 1 || echo 0)" "part_finish: the base snapshot mirrors the final bytes"
+hash_of() { python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["seeded_files"][sys.argv[2]]["origin_hash"])' "$1/.claude/harness.json" "$2" 2>&1; }
+hook_before=$(hash_of "$tgt" .claude/hooks/protect-files.sh)
+printf '\n# drift\n' >> "$tgt/.claude/hooks/protect-files.sh"
+out=$(TC_STACK=nextjs TC_PART=finish bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 0 "$ec" "part_finish: a rerun re-baselines edited files and still verifies ($out)"
+check "$(shasum -a 256 "$tgt/.claude/hooks/protect-files.sh" | cut -d' ' -f1)" "$(hash_of "$tgt" .claude/hooks/protect-files.sh)" "part_finish: the drifted hook's hash was re-baselined"
+check 1 "$([[ "$(hash_of "$tgt" .claude/hooks/protect-files.sh)" != "$hook_before" ]] && echo 1 || echo 0)" "part_finish: the rerun changed the drifted hook's hash"
+# BEGIN finish_extra
+# Fresh copies of one pristine fixture (placeholders filled, no commit) keep each case independent.
+fin_copy() { rm -rf "$1"; cp -R "$T/finish-pristine" "$1"; }
+fin_run() { TC_STACK=nextjs TC_PART=finish bash "$SHARED/tc-copy.sh" "$1" 2>&1; }
+tgt="$T/finish-pristine"; rm -rf "$tgt"; mkdir -p "$tgt"
+for part in stack base agents settings late; do TC_STACK=nextjs TC_PART=$part bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1; done
+mkdir -p "$tgt/.claude/skills/next-verify" "$tgt/.claude/skills/next-migrate"; : > "$tgt/.claude/skills/next-verify/SKILL.md"; : > "$tgt/.claude/skills/next-migrate/SKILL.md"
+TC_STACK=nextjs TC_PART=ci TC_CI=github bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1
+TC_STACK=nextjs TC_PART=manifest bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1
+sed -i.bak -e 's/__TC_PROJECT_TITLE__/Demo/g' -e '/\[Fill in/d' "$tgt/docs/CONSTITUTION.md"; rm -f "$tgt/docs/CONSTITUTION.md.bak"
+# every listed path missing: harness.json must stay byte for byte, never become empty
+fin_copy "$T/fin-gone"; sed -i.bak 's/"path": "/"path": "gone\//' "$T/fin-gone/.claude/harness.json"; rm -f "$T/fin-gone/.claude/harness.json.bak"
+cp "$T/fin-gone/.claude/harness.json" "$T/fin-gone.before"
+out=$(fin_run "$T/fin-gone"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"none of the files"* && "$out" == *"$STOPLINE"* ]] && cmp -s "$T/fin-gone.before" "$T/fin-gone/.claude/harness.json" && [ -s "$T/fin-gone/.claude/harness.json" ] && echo 1 || echo 0)" "part_finish_all_paths_missing_keeps_the_manifest ($out)"
+check 1 "$([ ! -e "$T/fin-gone/.claude/.harness-base" ] && [ -z "$(find "$T/fin-gone/.claude" -maxdepth 1 -name 'harness.json.*')" ] && echo 1 || echo 0)" "part_finish_all_paths_missing: no snapshot and no temp file left"
+# an entry in another shape is a stop, never a silent skip
+fin_copy "$T/fin-shape"; python3 -c 'import json, sys; j = json.load(open(sys.argv[1])); open(sys.argv[1], "w").write(json.dumps(j, indent=2) + "\n")' "$T/fin-shape/.claude/harness.json"
+out=$(fin_run "$T/fin-shape"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"one-line entry shape"* && ! -e "$T/fin-shape/.claude/.harness-base" ]] && [ -z "$(find "$T/fin-shape/.claude" -maxdepth 1 -name 'harness.json.*')" ] && echo 1 || echo 0)" "part_finish_pretty_printed_manifest_stops ($out)"
+fin_copy "$T/fin-mixed"; python3 -c '
+import sys
+p = sys.argv[1]; out = []
+for l in open(p).read().split("\n"):
+    if "\"path\": \"lefthook.yml\"" in l:
+        k, rest = l.split(": {", 1)
+        out += [k + ": {", "      \"origin_hash\": \"0\",", "      \"path\": \"lefthook.yml\" }" + ("," if l.rstrip().endswith(",") else "")]
+    else:
+        out.append(l)
+open(p, "w").write("\n".join(out))' "$T/fin-mixed/.claude/harness.json"
+out=$(fin_run "$T/fin-mixed"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"\"path\" keys but"* && ! -e "$T/fin-mixed/.claude/.harness-base" ]] && [ -z "$(find "$T/fin-mixed/.claude" -maxdepth 1 -name 'harness.json.*')" ] && echo 1 || echo 0)" "part_finish_mixed_shapes_stop ($out)"
+# a path that leaves the project is a stop before any copy
+for bad in '../escape-finish.txt' '/tmp/escape-finish.txt' 'a/../../escape-finish.txt' 'a/..'; do
+  fin_copy "$T/fin-esc"; rm -f "$T/escape-finish.txt"
+  sed -i.bak "s|\"path\": \"AGENTS.md\"|\"path\": \"$bad\"|" "$T/fin-esc/.claude/harness.json"; rm -f "$T/fin-esc/.claude/harness.json.bak"
+  : > "$T/escape-finish.txt"
+  out=$(fin_run "$T/fin-esc"); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"absolute or holds a .. segment"* && ! -e "$T/fin-esc/.claude/.harness-base" ]] && [ -z "$(find "$T/fin-esc/.claude" -maxdepth 1 -name 'harness.json.*')" ] && echo 1 || echo 0)" "part_finish_escaping_path_stops[$bad] ($out)"
+  rm -f "$T/escape-finish.txt"
+done
+# no commit: the verifier is not run and the output says so; a parent repository's commit does not count
+fin_copy "$T/fin-nocommit"; git -C "$T/fin-nocommit" init -q -b main
+out=$(fin_run "$T/fin-nocommit"); ec=$?
+check 1 "$([[ $ec -eq 0 && "$out" == *"verify-harness.sh not run"* ]] && echo 1 || echo 0)" "part_finish_no_commit_skips_verify ($out)"
+rm -rf "$T/fin-parent"; mkdir -p "$T/fin-parent"; cp -R "$T/finish-pristine" "$T/fin-parent/proj"; printf 'x\n' > "$T/fin-parent/README.md"
+rm -rf "$T/fin-parent/proj/.git"; git -C "$T/fin-parent" init -q -b main && git -C "$T/fin-parent" add README.md \
+  && git -C "$T/fin-parent" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m "chore: parent"
+out=$(fin_run "$T/fin-parent/proj"); ec=$?
+check 1 "$([[ $ec -eq 0 && "$out" == *"verify-harness.sh not run"* ]] && echo 1 || echo 0)" "part_finish_parent_repository_commit_skips_verify ($out)"
+# the verifier really runs once the project has a commit: a pipeline without the harness gate fails it
+fin_copy "$T/fin-verify"; sed -i.bak '/verify-harness/d' "$T/fin-verify/lefthook.yml"; rm -f "$T/fin-verify/lefthook.yml.bak"
+commit_fixture "$T/fin-verify"
+out=$(fin_run "$T/fin-verify"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"verify-harness.sh failed"* && "$out" == *"already rewritten"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "part_finish_verify_failure_stops ($out)"
+fin_copy "$T/fin-control"; commit_fixture "$T/fin-control"
+out=$(fin_run "$T/fin-control"); ec=$?
+check 0 "$ec" "part_finish_verify_control: the same fixture without the edit passes ($out)"
+# temp files: a planted symlink at either name stops the run and is never written through; other names are the control
+leftover() { [ -z "$(find "$1/.claude" -maxdepth 1 -name 'harness.json.*')" ]; }
+for case_ in map tmp; do
+  fin_copy "$T/fin-link-$case_"; printf 'victim\n' > "$T/fin-link-$case_.victim"; cp "$T/fin-link-$case_.victim" "$T/fin-link-$case_.before"
+  out=$(bash -c 'ln -s "$1" "$2/.claude/harness.json.$4.$$"; exec env TC_STACK=nextjs TC_PART=finish bash "$3/tc-copy.sh" "$2"' _ "$T/fin-link-$case_.victim" "$T/fin-link-$case_" "$SHARED" "$case_" 2>&1); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"the name is taken"* ]] && cmp -s "$T/fin-link-$case_.victim" "$T/fin-link-$case_.before" && echo 1 || echo 0)" "part_finish_planted_symlink_${case_}_stops_and_target_unchanged ($out)"
+  if [ "$case_" = tmp ]; then check 1 "$([ -z "$(find "$T/fin-link-$case_/.claude" -maxdepth 1 -name 'harness.json.map.*')" ] && echo 1 || echo 0)" "part_finish_tmp_name_taken_removes_the_map_file"; fi
+done
+fin_copy "$T/fin-link-ctl"; printf 'victim\n' > "$T/fin-link-ctl.victim"
+out=$(bash -c 'ln -s "$1" "$2/.claude/harness.json.map.0"; ln -s "$1" "$2/.claude/harness.json.tmp.0"; exec env TC_STACK=nextjs TC_PART=finish bash "$3/tc-copy.sh" "$2"' _ "$T/fin-link-ctl.victim" "$T/fin-link-ctl" "$SHARED" 2>&1); ec=$?
+check 0 "$ec" "part_finish_planted_symlink_control: links at other names do not matter ($out)"
+check 1 "$([ "$(cat "$T/fin-link-ctl.victim")" = victim ] && echo 1 || echo 0)" "part_finish_planted_symlink_control: the target is unchanged"
+# the manifest part refuses a taken temp name the same way
+fin_copy "$T/man-link"; rm -f "$T/man-link/.claude/harness.json"; printf 'victim\n' > "$T/man-link.victim"
+out=$(bash -c 'ln -s "$1" "$2/.claude/harness.json.tmp.$$"; exec env TC_STACK=nextjs TC_PART=manifest bash "$3/tc-copy.sh" "$2"' _ "$T/man-link.victim" "$T/man-link" "$SHARED" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"the name is taken"* ]] && [ "$(cat "$T/man-link.victim")" = victim ] && [ ! -e "$T/man-link/.claude/harness.json" ] && echo 1 || echo 0)" "part_manifest_planted_symlink_stops_and_target_unchanged ($out)"
+# the manifest part stops on a tab in a listed path, as finish does; a clean tree writes the manifest
+fin_copy "$T/man-tab"; rm -f "$T/man-tab/.claude/harness.json"; printf 'x\n' > "$T/man-tab/.claude/hooks/a	b"
+out=$(TC_STACK=nextjs TC_PART=manifest bash "$SHARED/tc-copy.sh" "$T/man-tab" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"holds a tab"* && ! -e "$T/man-tab/.claude/harness.json" ]] && leftover "$T/man-tab" && echo 1 || echo 0)" "part_manifest_tab_in_path_stops ($out)"
+rm -f "$T/man-tab/.claude/hooks/a	b"
+out=$(TC_STACK=nextjs TC_PART=manifest bash "$SHARED/tc-copy.sh" "$T/man-tab" 2>&1); ec=$?
+check 0 "$ec" "part_manifest_tab_control: the same tree without the tab file writes the manifest ($out)"
+# a tab in a manifest path is a stop, not a silent skip
+fin_copy "$T/fin-tab"; cp "$T/fin-tab/.claude/harness.json" "$T/fin-tab.before"
+python3 -c 'import sys; p = sys.argv[1]; s = open(p).read(); open(p, "w").write(s.replace("\"path\": \"AGENTS.md\"", "\"path\": \"AGENTS.md\tx\"", 1))' "$T/fin-tab/.claude/harness.json"; cp "$T/fin-tab/.claude/harness.json" "$T/fin-tab.edited"
+out=$(fin_run "$T/fin-tab"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"holds a tab"* ]] && cmp -s "$T/fin-tab.edited" "$T/fin-tab/.claude/harness.json" && leftover "$T/fin-tab" && [ ! -e "$T/fin-tab/.claude/.harness-base" ] && echo 1 || echo 0)" "part_finish_tab_in_path_stops ($out)"
+# a listed file that is missing is named on one line and keeps its old hash
+fin_copy "$T/fin-skip"; rm -f "$T/fin-skip/lefthook.yml"
+out=$(fin_run "$T/fin-skip"); ec=$?
+check 1 "$([[ $ec -eq 0 && "$out" == *"Skipped lefthook.yml: not present"* ]] && echo 1 || echo 0)" "part_finish_missing_listed_file_is_named ($out)"
+fin_copy "$T/fin-noskip"; out=$(fin_run "$T/fin-noskip"); ec=$?
+check 1 "$([[ $ec -eq 0 && "$out" != *"Skipped "* ]] && echo 1 || echo 0)" "part_finish_no_skip_line_when_all_present ($out)"
+# a symlinked base-snapshot folder is a stop: cp would write through it
+fin_copy "$T/fin-base-link"; mkdir -p "$T/fin-base-link.outside"; ln -s "$T/fin-base-link.outside" "$T/fin-base-link/.claude/.harness-base"
+out=$(fin_run "$T/fin-base-link"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *".harness-base is a symlink"* && -z "$(find "$T/fin-base-link.outside" -type f)" ]] && echo 1 || echo 0)" "part_finish_base_snapshot_symlink_stops ($out)"
+# a symlink planted inside the snapshot folder (a file or a folder) is a stop before any write
+for kind in file dir; do
+  fin_copy "$T/fin-inl-$kind"; mkdir -p "$T/fin-inl-$kind/.claude/.harness-base" "$T/fin-inl-$kind.outside"
+  printf 'victim\n' > "$T/fin-inl-$kind.victim"
+  if [ "$kind" = file ]; then ln -s "$T/fin-inl-$kind.victim" "$T/fin-inl-$kind/.claude/.harness-base/AGENTS.md"; else ln -s "$T/fin-inl-$kind.outside" "$T/fin-inl-$kind/.claude/.harness-base/.claude"; fi
+  cp "$T/fin-inl-$kind/.claude/harness.json" "$T/fin-inl-$kind.before"
+  out=$(fin_run "$T/fin-inl-$kind"); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"a symlink sits inside"* && "$(cat "$T/fin-inl-$kind.victim")" = victim && -z "$(find "$T/fin-inl-$kind.outside" -type f)" ]] && cmp -s "$T/fin-inl-$kind.before" "$T/fin-inl-$kind/.claude/harness.json" && leftover "$T/fin-inl-$kind" && echo 1 || echo 0)" "part_finish_symlink_inside_snapshot_${kind}_stops ($out)"
+done
+fin_copy "$T/fin-inl-ctl"; mkdir -p "$T/fin-inl-ctl/.claude/.harness-base"; : > "$T/fin-inl-ctl/.claude/.harness-base/stale.txt"
+out=$(fin_run "$T/fin-inl-ctl"); ec=$?
+check 0 "$ec" "part_finish_snapshot_folder_without_links_control ($out)"
+# a doc path that is a directory is a stop (not a regular file); an unreadable doc is a stop through the grep status
+fin_copy "$T/fin-docdir"; rm -f "$T/fin-docdir/FUTURE.md"; mkdir "$T/fin-docdir/FUTURE.md"
+out=$(fin_run "$T/fin-docdir"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"not a regular file"* ]] && echo 1 || echo 0)" "part_finish_doc_directory_stops ($out)"
+fin_copy "$T/fin-docperm"; chmod 000 "$T/fin-docperm/FUTURE.md"
+if [ ! -r "$T/fin-docperm/FUTURE.md" ]; then
+  out=$(fin_run "$T/fin-docperm"); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"cannot read FUTURE.md"* ]] && echo 1 || echo 0)" "part_finish_unreadable_doc_stops ($out)"
+else
+  echo "SKIP: part_finish_unreadable_doc_stops (chmod 000 leaves the file readable, running as root)"
+fi
+chmod 644 "$T/fin-docperm/FUTURE.md"
+# the line-count guard: an awk that prints nothing, or drops a line, must stop the run and leave harness.json byte-identical; a pass-through awk is the control
+realawk=$(command -v awk); mkdir -p "$T/stubawk"
+for mode in empty dropline passthrough; do
+  case $mode in
+    empty) printf '#!/bin/sh\nexit 0\n' > "$T/stubawk/awk" ;;
+    dropline) printf '#!/bin/sh\n%s "$@" | sed 1d\n' "$realawk" > "$T/stubawk/awk" ;;
+    *) printf '#!/bin/sh\nexec %s "$@"\n' "$realawk" > "$T/stubawk/awk" ;;
+  esac
+  chmod +x "$T/stubawk/awk"
+  fin_copy "$T/fin-awk-$mode"; cp "$T/fin-awk-$mode/.claude/harness.json" "$T/fin-awk-$mode.before"
+  out=$(PATH="$T/stubawk:$PATH" fin_run "$T/fin-awk-$mode"); ec=$?
+  if [ "$mode" = passthrough ]; then
+    check 0 "$ec" "part_finish_awk_control: a pass-through awk finishes ($out)"
+  else
+    check 1 "$([[ $ec -ne 0 && "$out" == *"does not have the lines of the original"* && "$out" == *"$STOPLINE"* ]] && cmp -s "$T/fin-awk-$mode.before" "$T/fin-awk-$mode/.claude/harness.json" && [ -z "$(find "$T/fin-awk-$mode/.claude" -maxdepth 1 -name 'harness.json.*')" ] && echo 1 || echo 0)" "part_finish_awk_${mode}_stops_and_keeps_the_manifest ($out)"
+  fi
+done
+# END finish_extra
+tgt="$T/finish"
+out=$(TC_STACK=nextjs TC_PART=finish TC_CI=github bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"TC_CI must stay empty"* ]] && echo 1 || echo 0)" "part_finish_refuses_ci ($out)"
 
 # settings and late refuse without Step 0, and with a STACK that does not match it
 for part in settings late; do
@@ -1473,7 +1640,7 @@ out=$(cd "$tgt" && bash -c "$(printf '%s\n' "$TM_CMD" | python3 -c 'import sys; 
 check 1 "$([[ $ec -eq 0 && "$(grep -c '^## Task Management$' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "task_management_append: the documented command appends the section ($out)"
 # Step D fills the title with the Edit tool: no script and no heredoc carries the name
 check 0 "$(grep -c 'TC_NAME' "$SHARED/harness-kit-finalize.md")" "step_d_has_no_name_heredoc"
-check 1 "$([[ "$(snippet "$SHARED/harness-kit-finalize.md" '^## Step D\b' 1)" == *"grep -nE '__TC_|\[Fill in' docs/CONSTITUTION.md"* ]] && echo 1 || echo 0)" "step_d_greps_for_leftover_placeholders"
+check 1 "$(awk '/^## Step D\./ {on=1; next} /^## / {on=0} on' "$SHARED/harness-kit-finalize.md" | grep -c 'TC_PART=finish' | sed 's/^ *[1-9][0-9]*$/1/')" "step_d_names_finish_as_the_placeholder_check"
 
 # every template .sh parses
 bad=""; while IFS= read -r f; do bash -n "$f" 2>/dev/null || bad+=" $f"; done < <(find "$SHARED" \( -path '*/template*' -o -name tc-copy.sh \) -name '*.sh')

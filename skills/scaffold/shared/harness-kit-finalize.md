@@ -21,19 +21,13 @@ Run `tc-copy.sh` of `harness-kit.md` Step 0 as `TC_STACK=<stack> TC_PART=late ba
 
 ## Step D. Fill in `docs/CONSTITUTION.md`
 
-With the Edit tool, replace `__TC_PROJECT_TITLE__` in `docs/CONSTITUTION.md` with the project title. The title must be a single line: if it holds a newline, stop and ask the user for a one-line title and edit nothing. Replace each `[Fill in: …]` line with the project's real value, or delete it where it says so. The §6 quality gate is the **quality-gate line** from the per-stack delta table. Then check that no placeholder is left:
-
-```bash
-grep -nE '__TC_|\[Fill in' docs/CONSTITUTION.md
-```
-
-It must print nothing.
+With the Edit tool, replace `__TC_PROJECT_TITLE__` in `docs/CONSTITUTION.md` with the project title. The title must be a single line: if it holds a newline, stop and ask the user for a one-line title and edit nothing. Replace each `[Fill in: …]` line with the project's real value, or delete it where it says so. The §6 quality gate is the **quality-gate line** from the per-stack delta table. `TC_PART=finish` in Step G refuses while a placeholder is left in this file, `FUTURE.md` or `docs/harness.md`.
 
 ---
 
 ## Step E. Create `.claude/harness.json`
 
-**Prerequisites:** run only after the stack file's verify-skill step (6c in every stack) has created the verify skills (and `next-migrate` for nextjs).
+**Prerequisites:** run only after the stack's verify skills exist (and `next-migrate` for nextjs); the script refuses when one is missing.
 
 Write `.claude/harness.json` with the copy script. It hashes every seeded file present (`AGENTS.md`, `CLAUDE.md` if the stack's CLAUDE.md step created it, `settings.json`, the verify skills of the delta table, `/skill-audit`, every file under `.claude/hooks/` including `local/`, the git-hook layer, the CI files Step B3 seeded and the harness scripts), takes `templatecentral_version` from the plugin's `.claude-plugin/plugin.json`, and refuses when the file already exists or a verify skill is missing:
 
@@ -41,26 +35,13 @@ Write `.claude/harness.json` with the copy script. It hashes every seeded file p
 TC_STACK=<stack> TC_PART=manifest TC_ADO_WIKI=<true|false> bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 ```
 
-`TC_ADO_WIKI` is the Step E3 documentation choice (default `false`). In a scaffold, set it from the scaffold Step 1 answer on the wiki (`adoWiki`), so Step E3 reads it and asks nothing. A migration has no scaffold Step 1: reuse the `adoWiki` value of the project's previous manifest when it has one, and otherwise ask the user, worded as in `documentation-kit.md` Step 1, before running the script. It becomes the top-level `adoWiki` field that `documentation-kit.md` reads. The `AGENTS.md` and `CLAUDE.md` hashes are provisional: Step G appends the AGENTS.md tail and runs the final format pass, then re-hashes every entry and refreshes `.claude/.harness-base/`. A file seeded later (a hook added to `.claude/hooks/local/`) gets its own `seeded_files` entry in the same `{ "origin_hash": …, "path": … }` shape.
+`TC_ADO_WIKI` is the Step E3 documentation choice (default `false`). In a scaffold, set it from the scaffold Step 1 answer on the wiki (`adoWiki`), so Step E3 reads it and asks nothing. A migration has no scaffold Step 1: reuse the `adoWiki` value of the project's previous manifest when it has one, and otherwise ask the user, worded as in `documentation-kit.md` Step 1, before running the script. It becomes the top-level `adoWiki` field that `documentation-kit.md` reads. The hashes are provisional: `TC_PART=finish` in Step G re-hashes every entry once the files are final. A file seeded later (a hook added to `.claude/hooks/local/`) gets its own `seeded_files` entry in the same `{ "origin_hash": …, "path": … }` shape.
 
 ---
 
-## Step E2. Seed the base snapshot (enables safe day-2 re-sync)
+## Step E2. Base snapshot
 
-Copy every seeded file into `.claude/.harness-base/` — a committed snapshot of the **as-seeded** content, the merge *base* `templatecentral:migrate` Phase 5 uses to **3-way-merge** harness updates without clobbering the user's edits.
-
-```bash
-mkdir -p .claude/.harness-base
-# Mirror each seeded path into .claude/.harness-base/ (same relative path). Paths come from the manifest just written.
-for p in $(python3 -c "import json;[print(v['path']) for v in json.load(open('.claude/harness.json'))['seeded_files'].values()]" 2>/dev/null \
-          || node -e 'const m=require("./.claude/harness.json");for(const v of Object.values(m.seeded_files))console.log(v.path)'); do
-  [ -f "$p" ] || continue
-  mkdir -p ".claude/.harness-base/$(dirname "$p")"
-  cp "$p" ".claude/.harness-base/$p"
-done
-```
-
-Keep `.claude/.harness-base/` tracked: it goes in with the project's first commit. `protect-files.sh` guards it; the harness verifier ignores it.
+`TC_PART=finish` (Step G) mirrors every seeded file into `.claude/.harness-base/`, the as-seeded merge base `templatecentral:migrate` Phase 5 uses to 3-way-merge harness updates. Keep it tracked: it goes in with the first commit. A migration takes the snapshot at its own finish step (Phase 4 Step 4f-3), not earlier.
 
 ---
 
@@ -90,31 +71,19 @@ ln -s .claude .agents
 
 ## Step G. Post-scaffold agent workflow
 
-**AGENTS.md tail — managed block, single source:** the `## AI Harness` / `## Skills Security` / `## Git Workflow` tail comes only from this step. After the stack-specific AGENTS.md is written, `TC_PART=tail` writes it between the `<!-- BEGIN:templatecentral-tail … -->` and `<!-- END:templatecentral-tail -->` lines, for a fresh scaffold and a migrate re-seed. No markers and no `## AI Harness` heading outside a code fence: it appends the wrapped tail. Exactly one marker pair: it replaces everything between them (markers included) and leaves every other byte alone, so a re-run adds no second copy. Malformed markers (one, a duplicate, END before BEGIN), or no markers but an `## AI Harness` heading: it stops with an error and writes nothing; in the heading case, wrap the existing generic tail in the two marker lines by hand first. Repo rules go outside the markers (a `## Harness (project)` section there is fine). A symlinked `AGENTS.md` is followed, so the link survives. Markers match whole lines outside code fences; a line ending in CRLF still matches, and the replacement block is written with LF, so a CRLF file ends up with mixed line endings. The tail is the real file `<skill-dir>/shared/template-tail/AGENTS-tail.md`, which the script reads (a migration runs `<skill-dir>/../scaffold/shared/tc-copy.sh`: change only that path). `TC_PART=tail` builds the whole text first, so a failure writes nothing (a replace goes through a temp file beside AGENTS.md and a `mv`, so AGENTS.md is never left half-written), and refuses when `<target>/AGENTS.md` does not exist. The typecheck command that replaces the marker `see delta table for stack command` (inside its parentheses) is fixed per stack inside the script; only `STACK` is yours to set:
+**AGENTS.md tail — managed block, single source:** the `## AI Harness` / `## Skills Security` / `## Git Workflow` tail comes only from this step. After the stack-specific AGENTS.md is written, `TC_PART=tail` writes `<skill-dir>/shared/template-tail/AGENTS-tail.md` between the `<!-- BEGIN:templatecentral-tail … -->` and `<!-- END:templatecentral-tail -->` lines (a migration runs `<skill-dir>/../scaffold/shared/tc-copy.sh`: change only that path). A re-run replaces the block and adds no second copy; repo rules go outside the markers. On malformed markers, or an `## AI Harness` heading with no markers, it stops and writes nothing: wrap the existing generic tail in the two marker lines by hand, then re-run.
 
 ```bash
 TC_STACK=<stack> TC_PART=tail bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 ```
 
-**Final format pass (TS stacks only — run before the utilities below):** Steps C/D, E3 and the tail wrote files after the first format pass, so run `pnpm format` once now (the project script formats exactly what `pnpm run check` checks), or `pnpm run check` and CI's `quality` job fail on files nobody edited. (FastAPI: not needed — ruff touches only `*.py`.)
+**Final format pass (TS stacks only):** Steps C/D, E3 and the tail wrote files after the first format pass, so run `pnpm format` once now, or `pnpm run check` and CI's `quality` job fail on files nobody edited. FastAPI needs none.
 
-**Re-baseline the manifest (all stacks — after the tail append and the format pass, before the utilities below):** the tail and the format pass changed seeded files, so recompute every `origin_hash` and refresh the base snapshot. Part of seeding, not a drift blessing — once, before the first commit:
+**Finish the seeding (all stacks, once, before the first commit):** the tail and the format pass changed seeded files, so re-hash every `origin_hash`, refresh `.claude/.harness-base/` and run `verify-harness.sh`. It refuses while a placeholder is left. A `CLAUDE.md` created in this step needs its `seeded_files` entry before this runs.
+
 ```bash
-if command -v node >/dev/null 2>&1; then
-  node -e 'const fs=require("fs"),cr=require("crypto"),f=".claude/harness.json",j=JSON.parse(fs.readFileSync(f,"utf8"));for(const v of Object.values(j.seeded_files)){if(fs.existsSync(v.path))v.origin_hash=cr.createHash("sha256").update(fs.readFileSync(v.path)).digest("hex");}fs.writeFileSync(f,JSON.stringify(j,null,2)+"\n")'
-else
-  python3 -c 'import json,hashlib,os;f=".claude/harness.json";j=json.load(open(f));[v.__setitem__("origin_hash",hashlib.sha256(open(v["path"],"rb").read()).hexdigest()) for v in j["seeded_files"].values() if os.path.isfile(v["path"])];open(f,"w").write(json.dumps(j,indent=2)+"\n")'
-fi
-# Refresh the Step E2 base snapshot so .claude/.harness-base/ mirrors the final bytes, then confirm:
-for p in $(python3 -c "import json;[print(v['path']) for v in json.load(open('.claude/harness.json'))['seeded_files'].values()]" 2>/dev/null \
-          || node -e 'const m=require("./.claude/harness.json");for(const v of Object.values(m.seeded_files))console.log(v.path)'); do
-  [ -f "$p" ] || continue
-  mkdir -p ".claude/.harness-base/$(dirname "$p")"
-  cp "$p" ".claude/.harness-base/$p"
-done
-bash .claude/verify-harness.sh
+TC_STACK=<stack> TC_PART=finish bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 ```
-If `CLAUDE.md` is created in this step, add its `seeded_files` entry before running the re-baseline.
 
 Then run these agent skills in order. They are **on by default** — skipping requires explicit user confirmation.
 
@@ -131,7 +100,7 @@ Then run these agent skills in order. They are **on by default** — skipping re
 
 ## Step H. Install Claude Code plugins
 
-**Claude Code users only.** `marketplace add` only registers a source; then install. **On by default** — use the scaffold Step 1 answer on Claude Code plugins, and skip only if the user opted out there or opts out now. Installs are user-scoped.
+**Claude Code users only.** `marketplace add` only registers a source; then install. **Off by default** — install only when the scaffold Step 1 answer on Claude Code plugins is yes, or the user asks now. Installs are user-scoped.
 
 ```bash
 claude plugin marketplace add JuliusBrussee/caveman
@@ -142,7 +111,5 @@ claude plugin install superpowers
 
 - **caveman** — compresses Claude output prose, reducing token cost in development sessions. Disable with `/caveman off` when writing committed files (`AGENTS.md`, `CLAUDE.md`, docs).
 - **superpowers** — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
-
-**If the user asks to skip:** Accept without pushback — these improve session quality but are not required.
 
 **No interactive user** (headless run): skip this step unless the run's instructions say to install the plugins, and note the skip in your final report. An unattended run does not change user-scoped Claude Code configuration on its own.
