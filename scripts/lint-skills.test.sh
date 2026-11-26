@@ -4,27 +4,36 @@
 #
 # Usage: bash scripts/lint-skills.test.sh   (run from anywhere; needs python3)
 #   ONLY=<regex> runs just the tests whose name matches; LINT_TEST_JOBS=<n> sets how many run at once
-#   (default: the CPU count; 1 runs them one after another); LINT=<path> runs the tests against
-#   another copy of the linter.
+#   (a whole number from 1 to 256, default: the CPU count; 1 runs them strictly one after another,
+#   the parent-side checks included; anything else, empty included, exits 2 before a temp dir exists);
+#   LINT=<path> runs the tests against another copy of the linter.
 #
 # Each case copies skills/ to a scratch dir, damages it, runs scripts/lint-skills.sh on the copy
 # and asserts that one named check section reports the expected FAIL message. A check that scans a
 # path glob must fail when the glob matches nothing (<check>_fails_on_empty_match) and when the code
 # it anchors on is gone (<check>_fails_when_anchor_deleted); otherwise moving code out of markdown
 # would let it pass while verifying nothing.
+#
+# Will not catch: a machine that runs out of disk or memory under high parallelism (lower LINT_TEST_JOBS);
+# a probe process that leaves its process group (the pool stops only the groups it started, and then
+# keeps the work dirs and warns when a group cannot be confirmed gone).
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT" || exit 2
-T=$(mktemp -d "${TMPDIR:-/tmp}/lint-skills-test.XXXXXX") || exit 1
 LINT="${LINT:-scripts/lint-skills.sh}"
+MAX_JOBS=256
 CPUS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)
 [[ "$CPUS" =~ ^[1-9][0-9]*$ ]] || CPUS=4
-JOBS="${LINT_TEST_JOBS:-$CPUS}"
-if ! [[ "$JOBS" =~ ^[1-9][0-9]*$ ]]; then
-  echo "lint-skills.test: LINT_TEST_JOBS must be a positive integer, got [$JOBS]" >&2
+(( CPUS <= MAX_JOBS )) || CPUS=$MAX_JOBS
+JOBS="${LINT_TEST_JOBS-$CPUS}"
+if ! [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || (( ${#JOBS} > 3 )) || (( JOBS > MAX_JOBS )); then
+  echo "lint-skills.test: LINT_TEST_JOBS must be a whole number from 1 to $MAX_JOBS, got [$JOBS]" >&2
   exit 2
 fi
+set -m
+[[ $- == *m* ]] || { echo "lint-skills.test: the shell cannot start each probe in its own process group (set -m failed)" >&2; exit 2; }
+T=$(mktemp -d "${TMPDIR:-/tmp}/lint-skills-test.XXXXXX") || exit 1
 
 PASS=0
 FAIL=0
@@ -37,7 +46,11 @@ check() { # check <want> <got> <description>
 # $T/w<n>. A probe reports through emit, which writes $T/r<n> whole and ends it with TRAILER;
 # pool_collect reads the files in probe order and counts a probe as passed only when it exited
 # 0, left a complete result file and that file says PASS. Everything else is a FAIL.
-# LINT_TEST_JOBS=1 runs the probes one after another.
+# LINT_TEST_JOBS=1 runs the probes one after another; pool_serial_point makes the parent-side code
+# that follows wait for the last probe, so 1 means strictly serial.
+# set -m gives every probe job a process group of its own (group id = the job's pid). The pool tracks
+# those pids itself: it stops a probe's group when it reaps the probe and at exit (EXIT, INT, TERM),
+# and needs no ps. A group it cannot confirm gone keeps its work dir and a warning is printed.
 TRAILER='--probe-end--'
 NJOB=0
 REAPED=0
@@ -45,10 +58,29 @@ PNAME=()
 PIDS=()
 PSTAT=()
 
+# pool_stop_group <pid> — kill the process group the probe job <pid> leads; true when no member is left.
+pool_stop_group() {
+  kill -KILL -- "-$1" 2>/dev/null || true
+  kill -KILL "$1" 2>/dev/null || true
+  wait "$1" 2>/dev/null || true
+  ! kill -0 -- "-$1" 2>/dev/null
+}
+
+CLEAN_TRIES=50
 pool_cleanup() {
-  local pids p
-  pids=$(ps -A -o pid= -o ppid= 2>/dev/null | awk -v root="$$" '{ par[$1] = $2; ord[++n] = $1 } END { for (i = 1; i <= n; i++) { p = ord[i]; while (p in par) { if (par[p] == root) { print ord[i]; break } p = par[p] } } }')
-  while read -r p; do kill -KILL "$p" 2>/dev/null || true; done <<<"$pids"
+  local n tries left=0
+  trap '' INT TERM
+  for (( n = REAPED + 1; n <= NJOB; n++ )); do
+    for (( tries = 0; tries < CLEAN_TRIES; tries++ )); do
+      pool_stop_group "${PIDS[$n]}" && break
+      sleep 0.1
+    done
+    if (( tries == CLEAN_TRIES )); then left=$((left + 1)); fi
+  done
+  if (( left > 0 )); then
+    echo "lint-skills.test: WARNING: $left probe process group(s) could not be confirmed stopped; $T is left in place" >&2
+    return 0
+  fi
   rm -rf "$T"
 }
 trap pool_cleanup EXIT
@@ -60,11 +92,25 @@ emit() {
   printf '%s\n%s\n' "$1" "$TRAILER" > "$T/r$NJOB.tmp" && mv -f "$T/r$NJOB.tmp" "$T/r$NJOB"
 }
 
-# pool_reap_one — wait for the oldest probe that is still running and keep its exit status.
+# pool_reap_one — wait for the oldest probe that is still running, keep its exit status and stop any process it left
+# in its group. REAPED moves only after the wait, so an interrupt during the wait leaves that probe to pool_cleanup.
 pool_reap_one() {
-  REAPED=$((REAPED + 1))
-  wait "${PIDS[$REAPED]}"
-  PSTAT[REAPED]=$?
+  local n=$((REAPED + 1))
+  wait "${PIDS[$n]}"
+  PSTAT[n]=$?
+  kill -KILL -- "-${PIDS[$n]}" 2>/dev/null || true
+  REAPED=$n
+}
+
+# pool_drain — wait for every probe started so far.
+pool_drain() {
+  while (( REAPED < NJOB )); do pool_reap_one; done
+}
+
+# pool_serial_point — with one job the probes run strictly one after another: finish them before the
+# parent-side code that follows. With more jobs the parent-side code overlaps the probes.
+pool_serial_point() {
+  if (( JOBS == 1 )); then pool_drain; fi
 }
 
 # pool_start <test name> <probe function> <args...> — run the probe in the background once a slot is free.
@@ -102,7 +148,7 @@ result_state() {
 # pool_collect — wait for the rest, then print every failure in probe order and count the results.
 pool_collect() {
   local n state body found=0 missing=0
-  while (( REAPED < NJOB )); do pool_reap_one; done
+  pool_drain
   for (( n = 1; n <= NJOB; n++ )); do
     if [[ ! -e "$T/r$n" ]]; then
       missing=$((missing + 1))
@@ -1129,6 +1175,7 @@ depth_slash_forms_agree() {
   check 1 "$([[ "$a" == *"OK:"* && "$b" == *"OK:"* ]] && echo 1 || echo 0)" "nesting_depth_passes_with_the_template_trees_in_both_forms"
   rm -rf "$w"
 }
+pool_serial_point
 depth_slash_forms_agree
 
 # ── the copy script: renamed copies, B3 scope, selectors, and ordering ────────
@@ -1579,6 +1626,7 @@ run_pfd() {
   done
 }
 
+pool_serial_point
 run_pfd
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"

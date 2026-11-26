@@ -135,8 +135,8 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-      - name: Install zsh for the copy-guard shell tests
-        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Install PyYAML for the test wiring check
+        run: sudo apt-get update && sudo apt-get install -y python3-yaml
       - name: shellcheck + bash -n
         run: |
           shellcheck scripts/*.sh
@@ -185,7 +185,7 @@ jobs:
         run: bash scripts/check-tests-wired.test.sh
 
   seeded-gate-tests:
-    name: Seeded gate and golden tests
+    name: Seeded gate tests
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -195,16 +195,12 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-      - name: Install zsh for the copy-guard shell tests
-        run: sudo apt-get update && sudo apt-get install -y zsh
       - name: Seeded harness-kit hook regression tests
         run: bash scripts/test-harness-kit.sh
       - name: Seeded workaround detector, secret scan, nosonar and diff-coverage gates and hook messages
         run: bash scripts/seeded-gates.test.sh
       - name: Day-one proof, every stack and CI host passes its offline seeded gates
         run: bash scripts/day-one.test.sh
-      - name: Golden regeneration script tests
-        run: bash scripts/regen-golden.test.sh
       - name: Install PyYAML for the CI template guard
         run: |
           python3 -m venv "$RUNNER_TEMP/ci-templates-venv"
@@ -212,6 +208,20 @@ jobs:
           echo "$RUNNER_TEMP/ci-templates-venv/bin" >> "$GITHUB_PATH"
       - name: Seeded CI template tests
         run: bash scripts/test-ci-templates.sh
+
+  golden-tests:
+    name: Golden scaffold tree tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Golden regeneration script tests
+        run: bash scripts/regen-golden.test.sh
       - name: Research content guard tests
         run: bash scripts/check-research-content.test.sh
       - name: Fence extractor tests
@@ -224,6 +234,20 @@ jobs:
         run: bash scripts/check-golden.sh --from-templates
       - name: Template and guide comment policy
         run: bash scripts/check-template-comments.sh
+
+  template-copy-tests:
+    name: Template copy tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Install zsh for the copy-guard shell tests
+        run: sudo apt-get update && sudo apt-get install -y zsh
       - name: Template copy tests
         run: bash scripts/test-template-copy.sh
 
@@ -238,13 +262,6 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-      - name: Install zsh for the copy-guard shell tests
-        run: sudo apt-get update && sudo apt-get install -y zsh
-      - name: Install PyYAML for the CI template guard
-        run: |
-          python3 -m venv "$RUNNER_TEMP/ci-templates-venv"
-          "$RUNNER_TEMP/ci-templates-venv/bin/pip" install "pyyaml==6.0.3"
-          echo "$RUNNER_TEMP/ci-templates-venv/bin" >> "$GITHUB_PATH"
       - name: Token counter tests
         run: bash scripts/count-load.test.sh
       - name: Outcome measurement tests
@@ -307,13 +324,6 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-      - name: Install zsh for the copy-guard shell tests
-        run: sudo apt-get update && sudo apt-get install -y zsh
-      - name: Install PyYAML for the CI template guard
-        run: |
-          python3 -m venv "$RUNNER_TEMP/ci-templates-venv"
-          "$RUNNER_TEMP/ci-templates-venv/bin/pip" install "pyyaml==6.0.3"
-          echo "$RUNNER_TEMP/ci-templates-venv/bin" >> "$GITHUB_PATH"
       - name: Harness live check tests
         run: bash scripts/harness-live.test.sh
       - name: Harness refresh tests
@@ -330,13 +340,6 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-      - name: Install zsh for the copy-guard shell tests
-        run: sudo apt-get update && sudo apt-get install -y zsh
-      - name: Install PyYAML for the CI template guard
-        run: |
-          python3 -m venv "$RUNNER_TEMP/ci-templates-venv"
-          "$RUNNER_TEMP/ci-templates-venv/bin/pip" install "pyyaml==6.0.3"
-          echo "$RUNNER_TEMP/ci-templates-venv/bin" >> "$GITHUB_PATH"
       - name: Sonar parity check tests
         run: bash scripts/check-sonar-parity.test.sh
 
@@ -351,13 +354,6 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-      - name: Install zsh for the copy-guard shell tests
-        run: sudo apt-get update && sudo apt-get install -y zsh
-      - name: Install PyYAML for the CI template guard
-        run: |
-          python3 -m venv "$RUNNER_TEMP/ci-templates-venv"
-          "$RUNNER_TEMP/ci-templates-venv/bin/pip" install "pyyaml==6.0.3"
-          echo "$RUNNER_TEMP/ci-templates-venv/bin" >> "$GITHUB_PATH"
       - name: Migrate defect report tests
         run: bash scripts/defect-report.test.sh
 
@@ -372,13 +368,6 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-      - name: Install zsh for the copy-guard shell tests
-        run: sudo apt-get update && sudo apt-get install -y zsh
-      - name: Install PyYAML for the CI template guard
-        run: |
-          python3 -m venv "$RUNNER_TEMP/ci-templates-venv"
-          "$RUNNER_TEMP/ci-templates-venv/bin/pip" install "pyyaml==6.0.3"
-          echo "$RUNNER_TEMP/ci-templates-venv/bin" >> "$GITHUB_PATH"
       - name: Migrate gate baseline tests
         run: bash scripts/migrate-baseline.test.sh
 
@@ -453,3 +442,60 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Run hooks.test.mjs
         run: node adapters/opencode/hooks.test.mjs
+
+  # The one check to require in branch protection. It runs even when a job failed or was cancelled
+  # (if: always()) and fails unless every job in `needs` finished with result success. The only job
+  # that may be skipped is fence-snapshot-frozen, and only on a push, where its own `if` skips it
+  # by design; on a pull request it must succeed. It also fails when a job of this workflow is
+  # missing from `needs`, so a new job cannot be left out of the aggregate unnoticed.
+  all-checks:
+    name: All checks
+    if: always()
+    needs:
+      - validate
+      - lint-patterns
+      - plugin-validate
+      - shell-lint
+      - seeded-gate-tests
+      - golden-tests
+      - template-copy-tests
+      - version-docs-tests
+      - harness-tests
+      - sonar-parity-tests
+      - defect-report-tests
+      - migrate-baseline-tests
+      - lint-negative-tests
+      - fence-snapshot-frozen
+      - token-count
+      - opencode-adapter-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Every job succeeded, or was skipped by design
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          bad=$(jq -r --arg ev "$EVENT" '
+            to_entries[]
+            | select(if .key == "fence-snapshot-frozen" and $ev != "pull_request"
+                     then .value.result != "skipped"
+                     else .value.result != "success" end)
+            | "\(.key)=\(.value.result)"' <<<"$NEEDS")
+          if [ -n "$bad" ]; then
+            echo "Jobs that did not pass:"
+            echo "$bad"
+            exit 1
+          fi
+          in_file=$(awk '/^jobs:/ { on = 1; next } on && /^  [a-z0-9-]+:[[:space:]]*$/ { sub(/:.*/, "", $1); print $1 }' .github/workflows/validate-skills.yml | grep -vx all-checks | sort)
+          in_needs=$(jq -r 'keys[]' <<<"$NEEDS" | sort)
+          if [ "$in_file" != "$in_needs" ]; then
+            echo "The jobs of this workflow and the needs of all-checks differ:"
+            diff <(echo "$in_file") <(echo "$in_needs") || true
+            exit 1
+          fi
+          echo "All $(echo "$in_needs" | wc -l | tr -d ' ') jobs passed or were skipped by design"

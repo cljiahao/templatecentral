@@ -1,15 +1,24 @@
 #!/usr/bin/env bash
-# scripts/lint-skills-pool.test.sh — tests for the probe pool in scripts/lint-skills.test.sh.
+# scripts/lint-skills-pool.test.sh — tests for the probe pool and the LINT_TEST_JOBS check in scripts/lint-skills.test.sh.
 # The pool code is cut out of that file (between its "probe pool" marker lines) and driven with probes
-# written here. Each failing case has a clean control. Three guards are removed in turn (a result with
-# no end marker, a job that exits non-zero, a probe that wrote no file); each removal must let the
-# planted case through, so these tests would notice the guard going missing. An interrupt must stop
-# the probes and remove the temp root. The assertions do not depend on timing or CPU count.
-# Usage: bash scripts/lint-skills-pool.test.sh   (needs ps; run it outside a sandbox that hides processes)
+# written here. The JOBS check is run on the top of that file, cut at the temp dir line.
+# Each failing case has a clean control. Guards are removed in turn: the result end marker, the job
+# status check, the missing-result check, the JOBS check, the order of mktemp before it, the process-group
+# cleanup (replaced by a ps-based one), the keep-the-dir rule, the serial point. Each removal must let the
+# planted case through, so these tests would notice the guard going missing.
+# Cleanup is tested with ps on PATH, with ps absent and with a ps that always fails.
+# Nothing here reads a clock: probes and the driver meet through FIFOs (a read waits for the other side),
+# and a driver that dies early is reported by an "exited" line, so a broken pool cannot hang the test.
+# The one strict-serial property (JOBS=1 finishes the last probe before the parent-side code) is tested
+# in two halves: the pool's own run (p_ok, the result file is there at the serial point) and a mutant run
+# with the serial point removed (a probe that the parent code releases, so the file is not there). A probe
+# that ran for a fixed time would be a wall-time assertion, so the guard's absence is shown by the mutant.
+# Usage: bash scripts/lint-skills-pool.test.sh   (run it outside a sandbox that hides or blocks mktemp)
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$ROOT/scripts/lint-skills.test.sh"
+BASH_BIN=$(command -v bash)
 W=$(mktemp -d "${TMPDIR:-/tmp}/lint-pool-test.XXXXXX") || exit 1
 trap 'rm -rf "${W:?}"' EXIT
 RUN=0
@@ -19,8 +28,20 @@ check() { # check <want> <got> <description>
   if [[ "$1" == "$2" ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: $3 — expected [$1], got [$2]"; fi
 }
 
+# yn <command...> — yes when the command succeeds, else no.
+yn() { if "$@"; then echo yes; else echo no; fi; }
+# has <text> <needle> — yes when text contains needle.
+has() { case $1 in *"$2"*) echo yes ;; *) echo no ;; esac; }
+# ordered <text> <first> <second> — yes when first appears before second.
+ordered() { case $1 in *"$2"*"$3"*) echo yes ;; *) echo no ;; esac; }
+# alive <pid> — yes when the process exists.
+alive() { if [[ -n "$1" ]] && kill -0 "$1" 2>/dev/null; then echo yes; else echo no; fi; }
+# isdir <path> — yes when the directory exists.
+isdir() { if [[ -d "$1" ]]; then echo yes; else echo no; fi; }
+
 awk '/^# ── probe pool ─/ { on = 1 } on { print } /^# ── end probe pool ─/ { exit }' "$SRC" > "$W/pool.sh"
-check yes "$([[ "$(wc -l < "$W/pool.sh")" -gt 20 && -n "$(grep -F pool_collect "$W/pool.sh" || true)" ]] && echo yes || echo no)" "the pool code was found in $SRC"
+check yes "$(yn grep -qF pool_collect "$W/pool.sh")" "the pool code (pool_collect) was found in $SRC"
+check yes "$(yn grep -qF pool_stop_group "$W/pool.sh")" "the pool code (pool_stop_group) was found in $SRC"
 
 cat > "$W/probes.sh" <<'PROBES'
 p_ok() { emit PASS; }
@@ -30,25 +51,31 @@ p_empty() { : > "$T/r$NJOB"; }
 p_truncated() { printf 'PASS\nPASS\n' > "$T/r$NJOB"; }
 p_status() { emit PASS; exit 5; }
 p_private() { if mkdir "$T/w$NJOB"; then emit PASS; else emit "FAIL: probe $NJOB shares its dir"; fi; }
-p_waits_for_go() { local i; for (( i = 0; i < 2000; i++ )); do [[ -e "$T/go" ]] && break; sleep 0.05; done; emit "FAIL: first"; }
-p_opens_go() { : > "$T/go"; emit "FAIL: last"; }
-p_hang() { sleep 600 & echo "$!" > "$T/hang.pid"; wait; }
+p_waits_for_go() { local x; read -r x <&7; emit "FAIL: first"; }
+p_opens_go() { echo go >&7; emit "FAIL: last"; }
+p_gated() { local x; read -r x <&7; emit PASS; }
+p_hang() { sleep 600 & echo "$!" > "$T/hang.pid"; echo started > "$NOTE"; wait; }
 PROBES
 
 # write_driver <jobs> <override file or -> <probe>... — a script that runs the probes through the pool; sets D to its dir.
+# $EXTRA (text) runs after the probes are started and before they are collected.
+EXTRA=
 write_driver() {
   local jobs=$1 over=$2 p
   shift 2
   D="$W/run$((++RUN))"
   mkdir -p "$D"
   {
-    printf 'set -uo pipefail\nT=%q\nJOBS=%q\nPASS=0\nFAIL=0\nONLY=\n' "$D/t" "$jobs"
+    printf 'echo $$ > %q\nset -uo pipefail\nset -m\nT=%q\nJOBS=%q\nNOTE=%q\nPASS=0\nFAIL=0\nONLY=\n' "$D/dpid" "$D/t" "$jobs" "$D/note"
     cat <<'HEAD'
 mkdir -p "$T"
+mkfifo "$T/gate"
+exec 7<>"$T/gate"
 HEAD
     printf 'source %q\nsource %q\n' "$W/pool.sh" "$W/probes.sh"
-    [[ "$over" == - ]] || printf 'source %q\n' "$over"
+    if [[ "$over" != - ]]; then printf 'source %q\n' "$over"; fi
     for p in "$@"; do printf 'pool_start %q %q\n' "$p" "$p"; done
+    printf '%s\n' "$EXTRA"
     cat <<'TAIL'
 pool_collect
 echo "passed=$PASS failed=$FAIL"
@@ -60,7 +87,7 @@ TAIL
 # drive <jobs> <override file or -> <probe>... — run the driver to the end; sets OUT and RC.
 drive() {
   write_driver "$@"
-  OUT=$(bash "$D/driver.sh" 2>&1); RC=$?
+  OUT=$("$BASH_BIN" "$D/driver.sh" 2>&1); RC=$?
 }
 
 for jobs in 1 3; do
@@ -70,11 +97,14 @@ for jobs in 1 3; do
 
   drive "$jobs" - p_ok p_wrong p_ok
   check 1 "$RC" "jobs=$jobs: a planted wrong expectation exits non-zero"
-  check yes "$([[ "$OUT" == *"FAIL: planted — expected [a], got [b]"* && "$OUT" == *"passed=2 failed=1" ]] && echo yes || echo no)" "jobs=$jobs: the planted failure is printed and counted"
+  check yes "$(has "$OUT" "FAIL: planted — expected [a], got [b]")" "jobs=$jobs: the planted failure is printed"
+  check yes "$(has "$OUT" "passed=2 failed=1")" "jobs=$jobs: the planted failure is counted"
 
   drive "$jobs" - p_ok p_exit_early p_ok
   check 1 "$RC" "jobs=$jobs: a probe that exits early without a result exits non-zero"
-  check yes "$([[ "$OUT" == *"FAIL: p_exit_early — the probe wrote no result"* && "$OUT" == *"1 missing"* && "$OUT" == *"passed=2 failed=1" ]] && echo yes || echo no)" "jobs=$jobs: the early exit is named and counted as missing"
+  check yes "$(has "$OUT" "FAIL: p_exit_early — the probe wrote no result")" "jobs=$jobs: the early exit is named"
+  check yes "$(has "$OUT" "1 missing")" "jobs=$jobs: the early exit is counted as missing"
+  check yes "$(has "$OUT" "passed=2 failed=1")" "jobs=$jobs: the early exit costs one failure"
 
   drive "$jobs" - p_empty
   check 1 "$RC" "jobs=$jobs: an empty result file exits non-zero"
@@ -87,7 +117,7 @@ for jobs in 1 3; do
 done
 
 drive 3 - p_waits_for_go p_ok p_opens_go
-check yes "$([[ "$OUT" == *"FAIL: first"*"FAIL: last"* ]] && echo yes || echo no)" "failures print in probe order, not in finishing order"
+check yes "$(ordered "$OUT" "FAIL: first" "FAIL: last")" "failures print in probe order, not in finishing order (the first probe cannot finish before the last)"
 
 cat > "$W/no-trailer-guard.sh" <<'M'
 trailer_ok() { return 0; }
@@ -105,17 +135,160 @@ check 0 "$RC" "guard removed (job status): the crashing job passes, so the test 
 drive 3 "$W/no-missing-guard.sh" p_exit_early
 check 0 "$RC" "guard removed (missing result): the early exit passes, so the test above would catch the removal"
 
-write_driver 2 - p_hang p_ok
-bash "$D/driver.sh" > "$D/out" 2>&1 &
-dpid=$!
-for (( i = 0; i < 2000; i++ )); do [[ -s "$D/t/hang.pid" ]] && break; sleep 0.05; done
-hpid=$(cat "$D/t/hang.pid" 2>/dev/null || true)
-check yes "$([[ -n "$hpid" ]] && echo yes || echo no)" "interrupt: the hanging probe started"
-kill -TERM "$dpid" 2>/dev/null || true
-wait "$dpid"; drc=$?
-check 143 "$drc" "interrupt: the driver exits 143 on TERM"
-check no "$([[ -d "$D/t" ]] && echo yes || echo no)" "interrupt: the temp root is removed"
-check no "$([[ -n "$hpid" ]] && kill -0 "$hpid" 2>/dev/null && echo yes || echo no)" "interrupt: the hanging probe is stopped"
+# Serial point. Control: one job, the result file is there when the serial point returns.
+EXTRA=$(cat <<'X'
+pool_serial_point
+if [[ -e "$T/r1" ]]; then echo "at-serial-point r1=yes"; else echo "at-serial-point r1=no"; fi
+echo go >&7
+X
+)
+drive 1 - p_ok
+check yes "$(has "$OUT" "at-serial-point r1=yes")" "jobs=1: the last probe has finished at the serial point"
+# More than one job: the serial point does not wait, so the parent-side code overlaps a probe it releases.
+drive 3 - p_gated
+check yes "$(has "$OUT" "at-serial-point r1=no")" "jobs=3: parent-side code overlaps a running probe"
+check 0 "$RC" "jobs=3: the released probe passes"
+# Guard removed: the serial point does nothing, one job, a probe the parent releases.
+echo 'pool_serial_point() { :; }' > "$W/no-serial-point.sh"
+drive 1 "$W/no-serial-point.sh" p_gated
+check yes "$(has "$OUT" "at-serial-point r1=no")" "guard removed (serial point): the parent-side code runs before the last probe finished, which the jobs=1 control above would catch"
+EXTRA=
+
+# Interrupt cleanup. interrupt_run <path dir or -> <override file or -> <probe>... starts the driver in the
+# background, waits (on the FIFO) until the hanging probe says it started, sends TERM and waits for the
+# "exited" line. Sets D, HPID, DRC (driver exit status) and OUT.
+interrupt_run() {
+  local pdir=$1 over=$2
+  shift 2
+  write_driver 2 "$over" "$@"
+  mkfifo "$D/note"
+  exec 3<>"$D/note"
+  (
+    if [[ "$pdir" == - ]]; then "$BASH_BIN" "$D/driver.sh" > "$D/out" 2>&1 & else PATH="$pdir" "$BASH_BIN" "$D/driver.sh" > "$D/out" 2>&1 & fi
+    wait $!
+    echo "exited $?" > "$D/note"
+  ) &
+  local line dpid
+  read -r line <&3
+  HPID=
+  DRC=
+  if [[ "$line" == started ]]; then
+    HPID=$(cat "$D/t/hang.pid")
+    dpid=$(cat "$D/dpid")
+    kill -TERM "$dpid" 2>/dev/null || true
+    read -r line <&3
+  fi
+  DRC=${line#exited }
+  exec 3<&-
+  OUT=$(cat "$D/out")
+}
+
+# tool_dir <dir> <ps behavior: none|fail> — a PATH dir with the tools the pool needs, and a ps or none.
+tool_dir() {
+  local d=$1 t p
+  mkdir -p "$d"
+  for t in sleep sed tail mv rm mkdir mkfifo cat awk wc head grep dirname env date mktemp find tr; do
+    p=$(command -v "$t") && ln -s "$p" "$d/$t"
+  done
+  if [[ "$2" == fail ]]; then
+    printf '#!/bin/sh\nexit 1\n' > "$d/ps"
+    chmod +x "$d/ps"
+  fi
+}
+tool_dir "$W/nops" none
+tool_dir "$W/badps" fail
+check no "$(yn test -e "$W/nops/ps")" "the ps-less PATH has no ps"
+
+cleanup_cases() { # cleanup_cases <label> <path dir or ->
+  interrupt_run "$2" - p_hang p_ok
+  check yes "$(yn test -n "$HPID")" "$1: the hanging probe started"
+  check 143 "$DRC" "$1: the driver exits 143 on TERM"
+  check no "$(isdir "$D/t")" "$1: the temp root is removed"
+  check no "$(has "$OUT" WARNING)" "$1: no warning is printed"
+  check no "$(alive "$HPID")" "$1: the hanging probe and its group are stopped"
+  kill -KILL "$HPID" 2>/dev/null || true
+}
+cleanup_cases "interrupt with ps" -
+cleanup_cases "interrupt without ps on PATH" "$W/nops"
+cleanup_cases "interrupt with a failing ps" "$W/badps"
+
+# Guard removed: a ps-based cleanup under a failing ps leaves the probe's child alive.
+cat > "$W/ps-cleanup.sh" <<'M'
+pool_cleanup() {
+  local k
+  trap '' INT TERM
+  for k in $(ps -A -o pid=,ppid= 2>/dev/null | awk -v me="$$" '$2 == me { print $1 }'); do kill -KILL "$k" 2>/dev/null || true; done
+  rm -rf "$T"
+}
+M
+interrupt_run "$W/badps" "$W/ps-cleanup.sh" p_hang p_ok
+check yes "$(alive "$HPID")" "guard removed (process groups, ps-based cleanup under a failing ps): the child survives, which the control above would catch"
+kill -KILL "$HPID" 2>/dev/null || true
+
+# A group that cannot be confirmed gone: warn and keep the temp root.
+cat > "$W/unconfirmed.sh" <<'M'
+CLEAN_TRIES=2
+kill() { case "$*" in "-0 --"*) return 0 ;; esac; builtin kill "$@"; }
+M
+interrupt_run - "$W/unconfirmed.sh" p_hang p_ok
+check 143 "$DRC" "unconfirmed death: the driver still exits 143"
+check yes "$(has "$OUT" "could not be confirmed stopped")" "unconfirmed death: a warning is printed"
+check yes "$(isdir "$D/t")" "unconfirmed death: the temp root is kept"
+kill -KILL "$HPID" 2>/dev/null || true
+rm -rf "$D/t"
+
+cat > "$W/rm-anyway.sh" <<'M'
+CLEAN_TRIES=2
+kill() { case "$*" in "-0 --"*) return 0 ;; esac; builtin kill "$@"; }
+pool_cleanup() { trap '' INT TERM; rm -rf "$T"; }
+M
+interrupt_run - "$W/rm-anyway.sh" p_hang p_ok
+check no "$(isdir "$D/t")" "guard removed (keep the dir): the temp root goes although a group is alive, which the unconfirmed-death test above would catch"
+kill -KILL "$HPID" 2>/dev/null || true
+
+# LINT_TEST_JOBS. The top of the script is cut at the temp dir line and followed by a line that prints accepted.
+awk '{ print } /^T=\$\(mktemp/ { exit }' "$SRC" > "$W/head.sh"
+echo 'echo accepted' >> "$W/head.sh"
+check yes "$(yn grep -q '^T=[$](mktemp' "$W/head.sh")" "the top of the script was cut at the temp dir line"
+
+# run_head <script> <env assignment or -u NAME>... — run it with TMPDIR in an empty dir; sets OUT, RC, LEFT (entries left in it).
+run_head() {
+  local script=$1
+  shift
+  rm -rf "$W/tmpd"
+  mkdir -p "$W/tmpd"
+  OUT=$(env "$@" TMPDIR="$W/tmpd" "$BASH_BIN" "$script" 2>&1); RC=$?
+  LEFT=$(find "$W/tmpd" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')
+}
+
+for v in 0 -1 abc 007 2.5 " 3" "" 99999999999999999999 257 1000; do
+  run_head "$W/head.sh" "LINT_TEST_JOBS=$v"
+  check 2 "$RC" "LINT_TEST_JOBS=[$v] exits 2"
+  check yes "$(has "$OUT" "LINT_TEST_JOBS must be a whole number from 1 to 256")" "LINT_TEST_JOBS=[$v] names the range"
+  check no "$(has "$OUT" accepted)" "LINT_TEST_JOBS=[$v] stops before the script goes on"
+  check 0 "$LEFT" "LINT_TEST_JOBS=[$v] leaves no temp dir"
+done
+for v in 1 256 17; do
+  run_head "$W/head.sh" "LINT_TEST_JOBS=$v"
+  check 0 "$RC" "control: LINT_TEST_JOBS=$v is accepted"
+  check yes "$(has "$OUT" accepted)" "control: LINT_TEST_JOBS=$v goes on"
+  check 1 "$LEFT" "control: LINT_TEST_JOBS=$v makes its temp dir after the check"
+done
+run_head "$W/head.sh" -u LINT_TEST_JOBS
+check 0 "$RC" "control: LINT_TEST_JOBS unset is accepted (the CPU count is used)"
+
+# Guard removed: no JOBS check.
+awk '/^if ! \[\[ "\$JOBS" =~/ { print "if false; then"; next } { print }' "$W/head.sh" > "$W/head-no-check.sh"
+check yes "$(has "$(cat "$W/head-no-check.sh")" 'if false; then')" "the mutant without the JOBS check was built"
+run_head "$W/head-no-check.sh" LINT_TEST_JOBS=0
+check 0 "$RC" "guard removed (JOBS check): 0 is accepted, which the exit 2 test above would catch"
+run_head "$W/head-no-check.sh" LINT_TEST_JOBS=99999999999999999999
+check 0 "$RC" "guard removed (JOBS check): a 20-digit value is accepted, which the exit 2 test above would catch"
+
+# Guard removed: the temp dir is made before the check.
+{ grep '^T=[$](mktemp' "$W/head.sh"; grep -v '^T=[$](mktemp' "$W/head.sh"; } > "$W/head-mktemp-first.sh"
+run_head "$W/head-mktemp-first.sh" LINT_TEST_JOBS=abc
+check 1 "$LEFT" "guard removed (check before mktemp): a rejected value leaves a temp dir, which the no-temp-dir test above would catch"
 
 echo "lint-skills-pool.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
