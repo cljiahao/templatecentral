@@ -1140,6 +1140,7 @@ function do_lines(   i, n, L, line) {
 function do_bundle(   i, n, L, line, v, seen) {
   n = split(T, L, "\n")
   for (i = 1; i <= n; i++) {
+    if (index(L[i], "\r")) fail("carriage return in .claude/bundle-budget.txt (line " i "): save it with LF line endings")
     line = L[i]; sub(/#.*$/, "", line); gsub(/^[ \t]+|[ \t]+$/, "", line)
     if (line == "") continue
     if (line !~ /^max_gzip_kb[ \t]+[0-9]+$/) fail("bundle-budget.txt line " i " is not 'max_gzip_kb <whole number>'")

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SBOM: writes a CycloneDX JSON bill of materials to dist/sbom/bom.cdx.json (SBOM_OUT overrides the path).
-# pnpm projects use `pnpm sbom` on the lockfile (production dependencies). Python projects are built from the project's own environment (VIRTUAL_ENV, else .venv)
+# pnpm projects use `pnpm sbom` on the lockfile (every dependency group: a bundler ships a devDependency that the code imports). Python projects are built from the project's own environment (VIRTUAL_ENV, else .venv)
 # by py-env.py (shared with check-licences.sh), from the installed package metadata, checked against requirements.txt when there is one. Nothing is downloaded, uploaded or signed in to.
 # Limit: a requirements.txt line behind a marker that applies here but is not installed passes silently, and the SBOM omits it.
 # A project with both manifests gets two files, <name>-pnpm.json and <name>-python.json, and no <name>.json.
@@ -63,7 +63,7 @@ sbom_pnpm() {
   command -v pnpm > /dev/null 2>&1 || die "pnpm is not installed. Install it (corepack enable), then run this again."
   command -v node > /dev/null 2>&1 || die "node is not installed. Install Node.js, then run this again."
   if [ ! -f pnpm-lock.yaml ]; then die "pnpm-lock.yaml is missing. Run pnpm install and commit the lockfile: the SBOM is built from it."; fi
-  pnpm sbom --sbom-format cyclonedx --lockfile-only --prod > "$tmp/raw.json" 2> "$tmp/err.txt" || die "pnpm sbom failed: $(head -n 3 "$tmp/err.txt" | tr '\n' ' ')Use a pnpm release that has the sbom command (see packageManager in package.json)."
+  pnpm sbom --sbom-format cyclonedx --lockfile-only > "$tmp/raw.json" 2> "$tmp/err.txt" || die "pnpm sbom failed: $(head -n 3 "$tmp/err.txt" | tr '\n' ' ')Use a pnpm release that has the sbom command (see packageManager in package.json)."
   check_and_sort_pnpm "$tmp/raw.json" "$1"
 }
 

@@ -121,14 +121,18 @@ base_fixture nostack
 run "$D"
 check 2 "$EC" "a folder with no stack file fails closed"
 
-# LICENCES_SCOPE: prod by default, all on request, anything else is refused.
+# pnpm always asks for every dependency group (a bundler ships a devDependency); LICENCES_SCOPE only changes Python, and anything but prod or all is refused.
 pnpm_fixture scope "$(report MIT left-pad)"
 stub_tool "$D/stub" pnpm << 'EOS'
 echo "$*" > "$PWD/args.txt"
 echo '{"MIT":[{"name":"left-pad","versions":["1"]}]}'
 EOS
 run "$D" PATH="$D/stub:$PATH"
-has "--prod" "$(cat "$D/args.txt")" "the default scope asks pnpm for production dependencies"
+hasnt "--prod" "$(cat "$D/args.txt")" "the default scope asks pnpm for every dependency group"
+has "licenses list --json" "$(cat "$D/args.txt")" "pnpm is asked for the JSON licence report"
+run "$D" PATH="$D/stub:$PATH" LICENCES_SCOPE=prod
+check 0 "$EC" "LICENCES_SCOPE=prod runs ($OUT)"
+hasnt "--prod" "$(cat "$D/args.txt")" "scope prod does not narrow the pnpm report"
 run "$D" PATH="$D/stub:$PATH" LICENCES_SCOPE=all
 check 0 "$EC" "LICENCES_SCOPE=all runs ($OUT)"
 hasnt "--prod" "$(cat "$D/args.txt")" "scope all asks pnpm for every dependency"
@@ -743,6 +747,13 @@ if [ "$real_ok" -eq 1 ]; then
     check 0 "$EC" "real $stack scaffold passes the licence gate ($OUT)"
     echo "real run $stack: $OUT"
     has "packages, pnpm)" "$OUT" "real $stack run checked pnpm packages and was not skipped"
+    # Dev tooling is judged by default: without its exceptions the dev-only packages are named (control: the run above passed with them).
+    mv "$D/.claude/licence-exceptions.txt" "$D/.claude/exc.off"
+    run "$D"
+    check 1 "$EC" "real $stack scaffold without exceptions reports dev tooling licences"
+    has "eslint-plugin-sonarjs@" "$OUT" "real $stack failure names a devDependency (sonarjs)"
+    has "lightningcss@" "$OUT" "real $stack failure names a devDependency (lightningcss)"
+    mv "$D/.claude/exc.off" "$D/.claude/licence-exceptions.txt"
     if [ "$stack" = nextjs ]; then
       grep -v '^CC-BY-4.0$' "$LIST" > "$D/.claude/allowed-licences.txt"
       run "$D"
@@ -755,11 +766,6 @@ if [ "$real_ok" -eq 1 ]; then
       has "@img/sharp-libvips" "$OUT" "real failure names the sharp libvips package"
       has "has licence LGPL-3.0-or-later" "$OUT" "real failure names the licence"
       cp "$EXC" "$D/.claude/licence-exceptions.txt"
-      run "$D" LICENCES_SCOPE=all
-      check 1 "$EC" "real nextjs scaffold with scope all fails on a dev-only licence"
-      has "has licence" "$OUT" "scope all names the finding"
-      echo "real run nextjs scope all: EC=$EC"
-      printf '%s\n' "$OUT"
     fi
   done
 

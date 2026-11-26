@@ -121,6 +121,110 @@ printf '# no key here\n' > "$D/.claude/bundle-budget.txt"
 run "$D"
 check 2 "$EC" "a budget file without the key is rejected"
 
+# Budget-file parser parity with gate-ratchet.sh: every form the ratchet reads differently or refuses is refused here too, so the two never disagree in the unsafe direction (the gate passing a budget the ratchet would flag).
+# budget_text <label> <text as printf %b> <want exit>: the budget file holds exactly this text.
+budget_text() {
+  printf '%b' "$2" > "$D/.claude/bundle-budget.txt"
+  run "$D"
+  check "$3" "$EC" "budget file '$1' exits $3 ($OUT)"
+}
+fixture parser vite-react 100
+blob 1 "$D/dist/a.js"
+budget_text "control: one clean line" 'max_gzip_kb 100\n' 0
+budget_text "no trailing newline" 'max_gzip_kb 100' 0
+budget_text "duplicate key" 'max_gzip_kb 100\nmax_gzip_kb 900\n' 2
+has "more than one max_gzip_kb line" "$OUT" "duplicate key message says why"
+budget_text "key with a colon" 'max_gzip_kb: 900\n' 2
+budget_text "key with an equals sign" 'max_gzip_kb=900\n' 2
+budget_text "plus sign" 'max_gzip_kb +900\n' 2
+budget_text "hex" 'max_gzip_kb 0x384\n' 2
+budget_text "exponent" 'max_gzip_kb 4e3\n' 2
+budget_text "leading zero" 'max_gzip_kb 0900\n' 2
+budget_text "huge value" 'max_gzip_kb 99999999999999999999\n' 2
+budget_text "empty file" '' 2
+budget_text "carriage return" 'max_gzip_kb 100\r\n' 2
+has "carriage return in " "$OUT" "CRLF message names the cause"
+has "/.claude/bundle-budget.txt: save it with LF" "$OUT" "CRLF message names the file and the fix"
+budget_text "carriage return mid-file" '# note\r\nmax_gzip_kb 100\n' 2
+
+# The folder the gate reads is fixed and fresh: tracked build output is refused, and a build that wrote somewhere else leaves nothing to measure.
+# git_fixture <name> <stack> <budget-kb>: a fixture that is a git repository.
+git_fixture() {
+  fixture "$1" "$2" "$3"
+  (cd "$D" && git init -q . > /dev/null 2>&1)
+}
+git_fixture tracked-ok vite-react 100
+blob 5 "$D/dist/a.js"
+run "$D"
+check 0 "$EC" "control: untracked build output in a git project passes ($OUT)"
+git_fixture tracked-dist vite-react 100
+blob 5 "$D/dist/a.js"
+(cd "$D" && git add -f dist/a.js > /dev/null 2>&1)
+run "$D"
+check 2 "$EC" "a tracked dist is refused"
+has "build output is tracked by git (dist/a.js)" "$OUT" "message names the tracked file"
+git_fixture tracked-next nextjs 100
+blob 5 "$D/.next/static/a.js"
+(cd "$D" && git add -f .next/static/a.js > /dev/null 2>&1)
+run "$D"
+check 2 "$EC" "a tracked .next is refused"
+has "build output is tracked by git" "$OUT" "message says it is tracked"
+git_fixture tracked-other nextjs 100
+blob 5 "$D/dist/a.js"
+(cd "$D" && git add -f dist/a.js > /dev/null 2>&1)
+run "$D"
+check 2 "$EC" "a tracked dist is refused on a Next.js project too, whatever the stack reads"
+fixture outdir vite-react 100
+blob 5 "$D/build/a.js"
+run "$D"
+check 2 "$EC" "a build written to another folder (build.outDir) leaves dist missing and exits 2"
+has "no build output at dist" "$OUT" "message names the folder the gate reads"
+fixture emptydir vite-react 100
+mkdir -p "$D/dist"
+run "$D"
+check 2 "$EC" "an empty dist exits 2"
+has "no .js or .css files under dist" "$OUT" "message says the folder holds nothing to measure"
+fixture nextdistmissing nextjs 100
+blob 5 "$D/dist/a.js"
+run "$D"
+check 2 "$EC" "a Next.js build with no .next/static exits 2 even when dist holds files"
+has "no build output at .next/static" "$OUT" "message names the folder the gate reads"
+
+# The stack comes from harness.json (a frozen file): a browser stack with no config in the folder is never a skip.
+# recorded <name> <stack in harness.json> [config file]: a project whose harness.json records <stack>.
+recorded() {
+  D="$T/$1"
+  mkdir -p "$D/.claude"
+  printf '{\n  "templatecentral_version": "8.0.0",\n  "stack": "%s",\n  "seeded_at": "2026-01-01"\n}\n' "$2" > "$D/.claude/harness.json"
+  printf 'max_gzip_kb 100\n' > "$D/.claude/bundle-budget.txt"
+  if [ -n "${3:-}" ]; then : > "$D/$3"; fi
+}
+recorded rec-vite vite-react vite.config.ts
+blob 5 "$D/dist/a.js"
+run "$D"
+check 0 "$EC" "control: recorded vite-react with its config measures ($OUT)"
+recorded rec-next-moved nextjs
+mkdir -p "$D/apps/web"
+: > "$D/apps/web/next.config.ts"
+echo '{"dependencies":{}}' > "$D/package.json"
+blob 5 "$D/apps/web/.next/static/a.js"
+run "$D"
+check 2 "$EC" "recorded nextjs with the app moved into a subfolder and the root package.json emptied is not a skip"
+has "records the stack as nextjs" "$OUT" "message names the recorded stack"
+has "BUNDLE_DIR" "$OUT" "message says how to point the gate at the subfolder"
+run "$D" BUNDLE_DIR=apps/web
+check 0 "$EC" "the same project passes once BUNDLE_DIR names the subfolder ($OUT)"
+recorded rec-vite-moved vite-react
+run "$D"
+check 2 "$EC" "recorded vite-react with no vite config is not a skip"
+recorded rec-fastapi fastapi
+run "$D"
+check 0 "$EC" "recorded fastapi still skips ($OUT)"
+has "skipped" "$OUT" "fastapi skip names the reason"
+recorded rec-nestjs nestjs
+run "$D"
+check 0 "$EC" "recorded nestjs still skips ($OUT)"
+
 fixture override vite-react 1
 blob 5 "$D/dist/a.js"
 run "$D"

@@ -1110,8 +1110,10 @@ mutate "|| exit 0 after the jscpd step (github-ts)" github-ts/.github/workflows/
 mutate "|| echo after diff-cover (azure-py)" azure-py/azure-pipelines.yml '--fail-under=80' '--fail-under=80 || echo ignored' static
 mutate "|| exit 0 after nosonar (azure gates)" azure/azure-pipelines/templatecentral-gates.yml 'bash .claude/ci-gates.sh nosonar' 'bash .claude/ci-gates.sh nosonar || exit 0' static
 mutate "|| echo after the merge command (github-py pytest is the merge) " github-py/.github/workflows/ci.yml '--cov-report=xml -q' '--cov-report=xml -q || echo ignored' static
+# shellcheck disable=SC2016
 mutate "tracked .venv check removed (github-py)" github-py/.github/workflows/ci.yml '          if [ -n "$(git ls-files .venv)" ]; then echo "::error::.venv is tracked by git; remove it (git rm -r --cached .venv): a committed environment is not trusted."; exit 1; fi\n' '' static
 mutate "venv --clear removed (github-py)" github-py/.github/workflows/ci.yml 'python -m venv --clear .venv' 'python -m venv .venv' static
+# shellcheck disable=SC2016
 mutate "tracked .venv check removed (azure-py)" azure-py/azure-pipelines.yml '          if [ -n "$(git ls-files .venv)" ]; then echo "##vso[task.logissue type=error].venv is tracked by git; remove it (git rm -r --cached .venv): a committed environment is not trusted."; exit 1; fi\n' '' static
 mutate "venv --clear removed (azure-py)" azure-py/azure-pipelines.yml 'python -m venv --clear .venv' 'python -m venv .venv' static
 # The tracked-environment line itself, run as the job runs it: a tracked .venv fails the step, a clean tree passes.

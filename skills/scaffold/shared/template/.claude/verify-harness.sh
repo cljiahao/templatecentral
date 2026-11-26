@@ -52,12 +52,18 @@ while IFS='|' read -r gid lh ci || [ -n "$gid" ]; do
   case "$gid" in ""|"#"*) continue ;; esac
   if [ -z "$lh" ] || [ -z "$ci" ]; then echo "verify-harness: $gates line for '$gid' needs three | separated fields" >&2; exit 2; fi
   listed=$((listed + 1))
-  # A gate whose lefthook needle is a seeded path must be a hashed entry of harness.json, so removing the entry cannot hide the file.
-  case "$lh" in
-    scripts/*|.claude/*)
-      if ! awk -F'\t' -v p="${lh%% *}" '$1 == p { f = 1 } END { exit !f }' <<< "$entries"; then echo "GATE FILE UNREGISTERED: $gid names ${lh%% *}, which $manifest does not list as a seeded file; restore the entry with regen-harness.sh" >&2; drift=1; fi
-      ;;
+  # A gate whose lefthook needle is a seeded path, and the config files its script reads, must be hashed entries of harness.json, so removing an entry cannot hide the file.
+  need=''
+  case "$lh" in scripts/*|.claude/*) need=${lh%% *} ;; esac
+  case "$gid" in
+    licences) need="$need .claude/allowed-licences.txt .claude/licence-exceptions.txt scripts/py-env.py" ;;
+    sbom) need="$need scripts/py-env.py" ;;
+    bundle) need="$need .claude/bundle-budget.txt" ;;
+    changesize) need="$need .claude/change-size-exclude.txt" ;;
   esac
+  for nf in $need; do
+    if ! awk -F'\t' -v p="$nf" '$1 == p { f = 1 } END { exit !f }' <<< "$entries"; then echo "GATE FILE UNREGISTERED: $gid reads $nf, which $manifest does not list as a seeded file; restore the entry with regen-harness.sh" >&2; drift=1; fi
+  done
   if [ "$lh" != "-" ] && [ -n "$hook_text" ] && ! has "$hook_text" "$lh"; then echo "GATE MISSING: $gid is not run by lefthook.yml (expects '$lh')" >&2; drift=1; fi
   if [ "$ci" != "-" ] && [ -n "$gh_text" ] && ! has "$gh_text" "$ci"; then echo "GATE MISSING: $gid is not run by .github/workflows/ci.yml (expects '$ci')" >&2; drift=1; fi
   if [ "$ci" != "-" ] && [ -n "$az_text" ] && ! has "$az_text" "$ci"; then echo "GATE MISSING: $gid is not run by the Azure pipeline files (expects '$ci')" >&2; drift=1; fi

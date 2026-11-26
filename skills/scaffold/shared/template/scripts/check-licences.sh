@@ -3,7 +3,8 @@
 # Reads the installed packages only (pnpm licenses list for package.json, the project's own Python environment for requirements.txt or pyproject.toml): no account, no key, no hosted service.
 # A project with both manifests is checked for both. Dependencies must be installed first: a missing node_modules or Python environment fails, it never passes.
 # Python needs the project environment (VIRTUAL_ENV, else .venv) and every package named in requirements.txt must be installed in it.
-# LICENCES_SCOPE=prod|all defaults to prod because dev tools are not shipped: pnpm gets --prod, and Python checks only the packages named in the hashed requirements.txt (the environment may also hold dev tools). all checks everything installed.
+# pnpm projects always check every dependency group, because a bundler (next, vite) ships a package from devDependencies when the code imports it, and nothing the change can edit proves otherwise. Dev tooling that needs a licence outside the list is named in licence-exceptions.txt, one package at a time.
+# LICENCES_SCOPE=prod|all applies to Python only and defaults to prod: Python checks only the packages named in the hashed requirements.txt (the environment may also hold dev tools), because that file is what the deploy installs. all checks everything installed.
 # The Python reading lives in scripts/py-env.py next to this script, shared with generate-sbom.sh. In GitHub Actions and Azure Pipelines the list-path overrides are refused.
 # Strict by design: several Python licence classifiers on one package are joined with AND, so a dual-licensed package that lists two classifiers needs both allowed.
 # Exit: 0 ok, 1 a licence is not allowed, 2 the check could not run.
@@ -39,11 +40,7 @@ trap 'rm -rf "$tmp"' EXIT
 list_pnpm() {
   command -v pnpm > /dev/null 2>&1 || die "pnpm is not installed. Install it (corepack enable) and run pnpm install first."
   command -v node > /dev/null 2>&1 || die "node is not installed. Install Node.js, then run this again."
-  if [ "$scope" = all ]; then
-    pnpm licenses list --json > "$tmp/pnpm.json" 2> "$tmp/pnpm.err" || die "pnpm licenses list failed: $(head -n 3 "$tmp/pnpm.err" | tr '\n' ' ')Run pnpm install first."
-  else
-    pnpm licenses list --json --prod > "$tmp/pnpm.json" 2> "$tmp/pnpm.err" || die "pnpm licenses list failed: $(head -n 3 "$tmp/pnpm.err" | tr '\n' ' ')Run pnpm install first."
-  fi
+  pnpm licenses list --json > "$tmp/pnpm.json" 2> "$tmp/pnpm.err" || die "pnpm licenses list failed: $(head -n 3 "$tmp/pnpm.err" | tr '\n' ' ')Run pnpm install first."
   node -e '
     let s = "";
     process.stdin.on("data", (d) => { s += d; }).on("end", () => {

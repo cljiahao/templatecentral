@@ -73,7 +73,8 @@ echo "$*" > "$PWD/args.txt"
 cat "$BOM_FILE"
 EOS
 run "$D" PATH="$D/stub:$PATH"
-has "sbom --sbom-format cyclonedx --lockfile-only --prod" "$(cat "$D/args.txt")" "pnpm is called for the lockfile, production dependencies, CycloneDX"
+has "sbom --sbom-format cyclonedx --lockfile-only" "$(cat "$D/args.txt")" "pnpm is called for the lockfile, CycloneDX"
+hasnt "--prod" "$(cat "$D/args.txt")" "pnpm is asked for every dependency group, not production only"
 
 pnpm_fixture sorted
 stub "$D/stub" pnpm << 'EOS'
@@ -444,6 +445,7 @@ if [ "$real_ok" -eq 1 ]; then
   run "$D"
   check 0 "$EC" "real nextjs scaffold produces an SBOM ($OUT)"
   echo "real run nextjs: $OUT ($(wc -c < "$D/dist/sbom/bom.cdx.json" | tr -d ' ') bytes, $(grep -c '"purl"' "$D/dist/sbom/bom.cdx.json") components with a purl)"
+  has "eslint-plugin-sonarjs" "$(cat "$D/dist/sbom/bom.cdx.json")" "real nextjs SBOM lists a devDependency, not production only"
   cp "$D/dist/sbom/bom.cdx.json" "$T/first.json"
   run "$D"
   check 0 "$EC" "a second real run succeeds"
@@ -459,6 +461,7 @@ if [ "$real_ok" -eq 1 ]; then
     run "$D"
     check 0 "$EC" "real $stack scaffold produces an SBOM ($OUT)"
     echo "real run $stack: $OUT ($(grep -c '"purl"' "$D/dist/sbom/bom.cdx.json") components with a purl)"
+    has "eslint-plugin-sonarjs" "$(cat "$D/dist/sbom/bom.cdx.json")" "real $stack SBOM lists a devDependency, not production only"
   done
 
   D="$T/real-py"

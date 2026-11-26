@@ -5,3 +5,12 @@
 @img/sharp-* LGPL-3.0-or-later
 # certifi ships the CA bundle that fastapi's HTTP stack (uvicorn[standard]) needs: MPL-2.0 is file-level copyleft and the package is used unmodified.
 certifi MPL-2.0
+# Dev tooling the licence gate also covers (pnpm checks every dependency group): none of it is part of the shipped code, each is used unmodified.
+# Lint plugins that read the source: SonarJS and its analyzer data (LGPL-3.0-only), no-unsanitized and axe-core (MPL-2.0).
+@sonarsource/analyzer-commons-configurations LGPL-3.0-only
+eslint-plugin-sonarjs LGPL-3.0-only
+eslint-plugin-no-unsanitized MPL-2.0
+axe-core MPL-2.0
+# lightningcss and its per-platform binaries compile the stylesheets (MPL-2.0).
+lightningcss MPL-2.0
+lightningcss-* MPL-2.0

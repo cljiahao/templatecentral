@@ -905,6 +905,28 @@ check 1 "$EC" "bundle budget raise cannot be waived by label ($OUT)"
 passes .claude/bundle-budget.txt "max_gzip_kb 400" "max_gzip_kb 300" "bundle budget lowered"
 edit .claude/bundle-budget.txt "max_gzip_kb 400" "max_gzip_kb lots"
 expect 2 "bundle budget with a bad value fails closed" "UNREADABLE .claude/bundle-budget.txt"
+# Parser parity with check-bundle-size.sh: forms the gate refuses are refused here, and a number written in a way that reads differently is never read as a lower one.
+# bundle_text <label> <text as printf %b> <want exit> [fragment]: the budget file holds exactly this text on a branch off main (base is 400).
+bundle_text() {
+  git_ checkout -q -B work main
+  printf '%b' "$2" > "$R/.claude/bundle-budget.txt"
+  git_ commit -q -am work
+  ratchet
+  check "$3" "$EC" "bundle budget $1: exits $3 ($OUT)"
+  if [ -n "${4:-}" ]; then has "$4" "$OUT" "bundle budget $1: reports $4"; fi
+}
+bundle_text "no trailing newline, lowered" 'max_gzip_kb 300' 0
+bundle_text "duplicate key" 'max_gzip_kb 400\nmax_gzip_kb 900\n' 2 "UNREADABLE .claude/bundle-budget.txt"
+bundle_text "key with a colon" 'max_gzip_kb: 900\n' 2 "UNREADABLE"
+bundle_text "key with an equals sign" 'max_gzip_kb=900\n' 2 "UNREADABLE"
+bundle_text "plus sign" 'max_gzip_kb +900\n' 2 "UNREADABLE"
+bundle_text "hex" 'max_gzip_kb 0x384\n' 2 "UNREADABLE"
+bundle_text "exponent" 'max_gzip_kb 4e3\n' 2 "UNREADABLE"
+bundle_text "leading zero is read as the number, a raise" 'max_gzip_kb 0900\n' 1 "now 900"
+bundle_text "huge value, a raise" 'max_gzip_kb 99999999999999999999\n' 1 ".claude/bundle-budget.txt"
+bundle_text "empty file" '' 2 "UNREADABLE"
+bundle_text "carriage return" 'max_gzip_kb 400\r\n' 2 "carriage return in .claude/bundle-budget.txt"
+bundle_text "carriage return on a comment line" '# note\r\nmax_gzip_kb 400\n' 2 "carriage return"
 drop .claude/bundle-budget.txt
 expect 1 "bundle budget deleted" ".claude/bundle-budget.txt"
 # Each keyless gate row is frozen in the manifest, so removing one fails the ratchet.

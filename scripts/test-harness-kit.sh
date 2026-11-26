@@ -1704,6 +1704,16 @@ git -C "$V" init -q
 vcommit() { git -C "$1" add -A && git -C "$1" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q --allow-empty --no-verify -m fixture; }
 sha() { python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$1"; }
 
+# gate_support <gate id>: the config files the gate's script reads, which verify-harness.sh also requires as hashed entries.
+gate_support() {
+  case "$1" in
+    licences) echo ".claude/allowed-licences.txt .claude/licence-exceptions.txt scripts/py-env.py" ;;
+    sbom) echo "scripts/py-env.py" ;;
+    bundle) echo ".claude/bundle-budget.txt" ;;
+    changesize) echo ".claude/change-size-exclude.txt" ;;
+  esac
+}
+
 # gate_entries <dir>: stubs every script or config a gate row names inside <dir> and prints the harness.json entries that register them, each led by a comma.
 gate_entries() {
   local d="$1" gid lh ci gp
@@ -1717,6 +1727,11 @@ gate_entries() {
         printf ',"%s":{"path":"%s","origin_hash":"%s"}' "g-$gid" "$gp" "$(sha "$d/$gp")"
         ;;
     esac
+    for gp in $(gate_support "$gid"); do
+      mkdir -p "$d/$(dirname "$gp")"
+      [[ -f "$d/$gp" ]] || echo "$gp" > "$d/$gp"
+      printf ',"%s":{"path":"%s","origin_hash":"%s"}' "s-$gid-${gp//[^A-Za-z0-9]/_}" "$gp" "$(sha "$d/$gp")"
+    done
   done < "$d/.claude/gates.txt"
 }
 
@@ -1810,6 +1825,26 @@ while IFS='|' read -r gid lh ci; do
 done <<< "$gate_lines"
 gate_verify() { vcommit "$GV"; (cd "$GV" && bash "$KIT/verify-harness.sh" 2>&1); }
 out=$(gate_verify); check 0 "$?" "verify-harness passes when every runner has every listed gate"
+# A gate's script, and the config files it reads, must stay hashed entries of harness.json: removing one entry is a finding that names the gate and the file (control: the full manifest passes above).
+cp "$GV/.claude/harness.json" "$GV/.claude/harness.full"
+while IFS='|' read -r gid lh ci; do
+  files=""
+  case "$lh" in scripts/*|.claude/*) files=${lh%% *} ;; esac
+  files="$files $(gate_support "$gid")"
+  for gf in $files; do
+    python3 - "$GV/.claude/harness.full" "$GV/.claude/harness.json" "$gf" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1]))
+m["seeded_files"] = {k: v for k, v in m["seeded_files"].items() if v["path"] != sys.argv[3]}
+json.dump(m, open(sys.argv[2], "w"))
+PY
+    out=$(gate_verify); rc=$?
+    check 1 "$rc" "verify-harness fails when the harness.json entry for $gf is removed (gate $gid)"
+    check 1 "$(grep -c "GATE FILE UNREGISTERED: $gid reads $gf," <<<"$out")" "verify-harness names gate $gid and file $gf"
+  done
+done <<< "$gate_lines"
+cp "$GV/.claude/harness.full" "$GV/.claude/harness.json"
+out=$(gate_verify); check 0 "$?" "verify-harness passes again once the entries are restored ($out)"
 cp "$REPO_ROOT/skills/scaffold/shared/template-settings-ts/.claude/settings.json" "$GV/.claude/settings.json"
 out=$(gate_verify); check 0 "$?" "verify-harness passes on the seeded settings.json ($out)"
 sed 's/"Bash(curl \*)",/"Bash(curl)",/' "$REPO_ROOT/skills/scaffold/shared/template-settings-ts/.claude/settings.json" > "$GV/.claude/settings.json"

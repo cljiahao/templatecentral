@@ -478,9 +478,12 @@ JS
     ;;
   bundle)
     [ -f scripts/check-bundle-size.sh ] || fail "scripts/check-bundle-size.sh is missing"
-    # Only a project with a Next.js or Vite config emits a browser bundle; any other stack skips the build and the script reports why.
-    if compgen -G 'next.config.*' >/dev/null || compgen -G 'vite.config.*' >/dev/null; then
-      pnpm run build || fail "the build failed, so the bundle size cannot be measured (output above)."
+    # Only a project with a Next.js or Vite config emits a browser bundle; any other stack skips the build and the script reports why. The frontend folder is BUNDLE_DIR, else the current one.
+    # The build output folders are deleted first, so the gate can only measure what this build wrote; check-bundle-size.sh also refuses a tracked dist or .next.
+    bdir=${BUNDLE_DIR:-.}
+    rm -rf "$bdir/dist" "$bdir/.next"
+    if compgen -G "$bdir/next.config.*" >/dev/null || compgen -G "$bdir/vite.config.*" >/dev/null; then
+      (cd "$bdir" && pnpm run build) || fail "the build failed, so the bundle size cannot be measured (output above)."
     fi
     bash scripts/check-bundle-size.sh || fail "bundle size check failed (output above). Lazy-load heavy routes or drop the large dependency; raise .claude/bundle-budget.txt only after a human decision."
     ;;

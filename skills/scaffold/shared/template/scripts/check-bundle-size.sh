@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Bundle-size budget for nextjs and vite-react: after a build, the gzip size of the emitted JS and CSS must stay within max_gzip_kb in .claude/bundle-budget.txt.
 # Reads the build output only (.next/static for Next.js, dist for Vite): no network. The frontend folder is the current one, or BUNDLE_DIR when it sits in a subfolder.
-# A folder with no next.config.* or vite.config.* exits 0 with a one-line reason, unless its package.json depends on next or vite: that fails, it never passes silently.
+# A folder with no next.config.* or vite.config.* exits 0 with a one-line reason, unless its package.json depends on next or vite, or .claude/harness.json records the stack as nextjs or vite-react: that fails, it never passes silently.
+# The stack comes from harness.json, which the gate ratchet freezes as content and verify-harness.sh hashes, so moving the app into a subfolder cannot turn the gate into a skip: set BUNDLE_DIR to the frontend folder.
+# The folder read is fixed (.next/static for Next.js, dist for Vite) and a tracked dist or .next is refused, so the gate measures a fresh build only: ci-gates.sh deletes both before it builds, and a build that wrote elsewhere leaves nothing to measure and exits 2.
+# Will not catch: a build that emits a large bundle some other way than into those folders (a second output, a server-rendered payload), or a project whose harness.json was never seeded.
 # Exit: 0 within budget (or no browser bundle), 1 over budget, 2 it could not measure (no build, bad budget, unreadable output).
-# A trailing '# comment' on the budget line is allowed. In CI the budget-file override is refused.
+# A trailing '# comment' on the budget line is allowed. A second max_gzip_kb line or a carriage return in the budget file is refused. In CI the budget-file override is refused.
 # Usage: bash scripts/check-bundle-size.sh        Env: BUNDLE_DIR frontend folder, BUNDLE_BUDGET_FILE budget file path (relative paths start at the folder you run this from).
 set -uo pipefail
 export LC_ALL=C
@@ -31,6 +34,12 @@ if [ -n "${BUNDLE_DIR:-}" ]; then
   cd "$BUNDLE_DIR" 2> /dev/null || die "BUNDLE_DIR '$BUNDLE_DIR' is not a folder."
 fi
 
+# The stack recorded when the harness was seeded (a frozen file); empty when there is no harness.json or no stack in it.
+recorded=''
+if [ -f "$root/.claude/harness.json" ]; then
+  recorded=$(sed -n '/"stack"[[:space:]]*:/{s/^.*"stack"[[:space:]]*:[[:space:]]*"\([^"]*\)".*$/\1/p;q;}' "$root/.claude/harness.json") || die "cannot read $root/.claude/harness.json"
+fi
+
 if ls next.config.* > /dev/null 2>&1; then
   stack=nextjs
   dir=.next/static
@@ -40,11 +49,20 @@ elif ls vite.config.* > /dev/null 2>&1; then
 elif [ -f package.json ] && grep -qE '"(next|vite)"[[:space:]]*:' package.json; then
   die "package.json depends on next or vite, but there is no next.config.* or vite.config.* in ${BUNDLE_DIR:-the current folder}. Run this from the frontend folder, or set BUNDLE_DIR to it."
 else
+  case "$recorded" in
+    nextjs | vite-react) die ".claude/harness.json records the stack as $recorded, but there is no next.config.* or vite.config.* in ${BUNDLE_DIR:-the current folder}. Run this from the frontend folder, or set BUNDLE_DIR to it." ;;
+  esac
   echo "check-bundle-size: skipped, only nextjs and vite-react projects emit a browser bundle to measure."
   exit 0
 fi
 
+# Build output that git tracks is not a build: refuse it before reading anything from it.
+tracked=$(git ls-files -- dist .next 2> /dev/null) || tracked=''
+if [ -n "$tracked" ]; then die "build output is tracked by git (${tracked%%$'\n'*}). Remove it from git (git rm -r --cached dist .next) and add both to .gitignore: the gate measures a fresh build only."; fi
+
 if [ ! -f "$budget_file" ]; then die "$budget_file is missing. Restore it from the scaffold: it holds 'max_gzip_kb <number>'."; fi
+if grep -q "$(printf '\r')" "$budget_file"; then die "carriage return in $budget_file: save it with LF line endings."; fi
+if [ "$(awk '$1 == "max_gzip_kb" { n++ } END { print n + 0 }' "$budget_file")" -gt 1 ]; then die "$budget_file has more than one max_gzip_kb line: keep exactly one."; fi
 max_kb=$(awk '$1 == "max_gzip_kb" { $1 = ""; sub(/#.*$/, ""); sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print; exit }' "$budget_file") || die "cannot read $budget_file"
 case "$max_kb" in
   '' | *[!0-9]* | 0* | [0-9][0-9][0-9][0-9][0-9][0-9][0-9]*) die "$budget_file needs a line 'max_gzip_kb <whole number above 0, 6 digits at most, no leading zeros>', for example 'max_gzip_kb 400' (got '$max_kb')." ;;
