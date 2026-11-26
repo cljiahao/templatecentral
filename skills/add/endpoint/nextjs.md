@@ -27,8 +27,6 @@ src/app/api/
 
 ### 2. Implement the Route Handler
 
-Keep route handlers thin — delegate to server-side data access:
-
 > Handlers access data via `integrations/`, not the feature's `api/` services, which `fetch('/api/...')` and would call the route itself. Data access below is a **placeholder** for the database or integration capability.
 
 > **Wrap every handler in `withLogging`** — Next.js has no global request logging, and `pnpm check` fails on any unwrapped route.
@@ -79,8 +77,6 @@ export const POST = withLogging(async (request) => {
 ```
 
 ### 3. Dynamic Segments
-
-For routes with resource IDs:
 
 ```ts
 // src/app/api/projects/[id]/route.ts
@@ -163,18 +159,9 @@ Build and tests pass; the route answers correctly via `curl` or the browser.
 ## Response Conventions
 
 - **Success**: Return `{ data: … }` with the appropriate status (200, 201) — the envelope the feature services, pagination, and error-handling guides all parse
-- **Error**: Use `handleApiError()` which logs and returns consistent JSON error response
-- **Not Found**: Return `{ error: 'Not found' }` with status 404
-- **Validation**: Parse with Zod's `safeParse()` and return 400 with `z.flattenError(error)` on failure
 
 ## Rules
 
-- **Tests ride with the change** — new or changed behaviour under `src/app/api/**` gets a test under `test/api/` in the same change, per the test-value rule (`docs/CONSTITUTION.md` §4).
-- Keep handlers thin; business logic lives elsewhere
-- Use `handleApiError()` for errors; do not return raw errors or stack traces
-- Use `NextResponse.json()` for all responses
-- Use dynamic segments `[id]` for resource IDs
 - **Authenticate in the handler.** `src/proxy.ts` (after `templatecentral:add` (auth)) only checks session-cookie *presence* — it does not validate the session. Every non-public handler must call `const session = await auth.api.getSession({ headers: request.headers })` and return `new Response(null, { status: 401 })` when it is `null`, then enforce ownership/role checks. Without auth added, every API route is public — run `templatecentral:add` (auth) first
-- Zod-parse `request.json()` and return 400 on failure; do not use it unvalidated
-- Do not expose internal error details
+- Never return raw errors, stack traces or internal error details; use `handleApiError()`
 - Add every new API route to `src/lib/constants/routes.ts`
