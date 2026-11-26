@@ -432,6 +432,11 @@ sub "$R/CHANGELOG.md" 's/^- two$/- **two** words/'; commit lt; git -C "$R" check
 migfrags; printf -- '- two other words\n' > "$R/changelog.d/two.added.md"
 printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
 run "migration PR changes a word beside the bold markers" 1 "in no added fragment"
+mkunrel mig-bold3; git -C "$R" checkout -q main
+sub "$R/CHANGELOG.md" 's/^- two$/- two words/'; commit lt; git -C "$R" checkout -q -B pr2
+migfrags; printf -- '- two **words**\n' > "$R/changelog.d/two.added.md"
+printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
+runq "migration PR adds bold markers to a removed line" 0
 mkunrel mig-edit; migfrags; printf '%s' "${EMPTIED/- old/- old2}" > "$R/CHANGELOG.md"; commit f
 run "migration PR also edits a released line" 1 "release rule"
 mkunrel mig-nofrag; printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
