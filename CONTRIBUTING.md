@@ -39,6 +39,12 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 4. Add the detection signal to the Stack Detection table in `AGENTS.md`
 5. Add the stack to `README.md` → **What You Get**
 
+## Running the gates locally
+
+`bash scripts/run-gates.sh --changed [<base-ref>]` runs only the gates of `validate-skills.yml` whose inputs your diff touches (committed, staged, unstaged and untracked files since the merge base; default base `origin/main`), prints PASS or FAIL with CPU seconds per gate and exits non-zero when one fails. `--all` runs every gate, `--list [--changed]` prints the gates and runs nothing.
+
+The path-to-gate map is `scripts/run-gates.map`. A path the map does not list, a change to the runner or the map and any change under `.github/` run every gate, and the test fails when a workflow command is missing from the map, so a new CI gate must get a row. This is a local convenience: CI always runs the full set, and a pass here is not a pass in CI. It does not run inline workflow steps (shellcheck, `bash -n`); the header of the script lists what it cannot catch.
+
 ## Pull Request Checklist
 
 - [ ] `SKILL.md` has valid `name` and `description` frontmatter
@@ -50,6 +56,7 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 - [ ] `bash scripts/test-harness-kit.sh` passes locally if any `skills/scaffold/shared/harness-kit*.md` file or anything under `skills/scaffold/shared/template*/` was touched
 - [ ] `bash scripts/test-template-copy.sh` and `bash scripts/lint-skills.test.sh` pass locally if the template trees (`skills/scaffold/shared/template*`, `skills/scaffold/<stack>/template*`, or an add/migrate leaf's `template*`), a `template.manifest`, the Step 0 / Step B3 copy fences (including the `PART=stack` and `PART=agents` runs in a stack's `source-files.md`) or `scripts/lint-skills.sh` were touched
 - [ ] `bash scripts/pre-guard.test.sh` passes locally if a repo guard script was touched
+- [ ] `bash scripts/run-gates.sh --changed` passes locally (a new CI gate also gets a row in `scripts/run-gates.map`)
 - [ ] README updated if the skill count, capability list, or stack list changed
 - [ ] CHANGELOG.md updated under `[Unreleased]`
 - [ ] CI passes (frontmatter validation + `lint-patterns` job run automatically)

@@ -1,0 +1,229 @@
+# scripts/run-gates.map — path-to-gate map for scripts/run-gates.sh (a local convenience; CI runs every gate).
+# Rows are <path glob><TAB><gate command>. The first row whose glob matches a path decides for that path;
+# every row with that exact glob applies. A glob uses shell case patterns (* also matches /). A gate
+# command is written as the workflow writes it, with optional leading VAR=value words (the env of the
+# workflow step) and {BASE} for the base ref. `@all` as the gate selects every gate. A path that matches no
+# row selects every gate, so list a path only when its gates are known. `@skip<TAB>command<TAB>reason`
+# names a workflow command that is not a standalone gate. scripts/run-gates.sh, this file and .github/*
+# select every gate in the script itself.
+# Keep this in step with .github/workflows/validate-skills.yml: scripts/run-gates.test.sh fails when a
+# workflow command is missing here, when a gate here is not in the workflow or when a script is missing.
+
+# check-fences.sh --has-mappings answers "are there mappings" with exit 0 or 1 and is the guard of the --from-templates gate
+@skip	bash scripts/check-fences.sh --has-mappings	exit 1 is a normal answer, not a failure
+
+# Skills. Template trees and scaffold, migrate, cleanup and review leaves feed nearly every gate.
+skills/*template*	@all
+skills/scaffold/*	@all
+skills/migrate/*	@all
+skills/cleanup/*	@all
+skills/review/*	@all
+skills/*.md	bash scripts/lint-skills.sh skills/
+skills/*.md	bash scripts/lint-skills.test.sh
+skills/*.md	bash scripts/lint-skills-pool.test.sh
+skills/*.md	STRICT_DOC_SYNC=1 bash scripts/validate-manifest.sh .claude-plugin
+skills/*.md	bash scripts/check-doc-sync.sh
+skills/*.md	bash scripts/check-versions.sh
+skills/*.md	bash scripts/count-load.sh --base origin/main
+skills/*.md	bash scripts/count-load.sh --summary all --base origin/main
+skills/*.md	bash scripts/check-fences.sh
+skills/*.md	bash scripts/check-fences.sh --from-templates
+skills/*.md	bash scripts/check-fences.test.sh
+skills/*.md	bash scripts/check-fences-frozen.test.sh
+skills/*.md	bash scripts/check-golden.sh
+skills/*.md	bash scripts/check-golden.sh --from-templates
+skills/*.md	bash scripts/check-template-comments.sh
+skills/*.md	bash scripts/test-template-copy.sh
+skills/*	@all
+
+# Frozen data, fixtures, adapters and repo-level files.
+tests/golden/line-budget.txt	bash scripts/lint-skills.sh skills/
+tests/golden/line-budget.txt	bash scripts/lint-skills.test.sh
+tests/golden/line-budget.txt	bash scripts/lint-skills-pool.test.sh
+tests/golden/line-budget.txt	bash scripts/check-line-budget-frozen.test.sh
+tests/golden/line-budget.txt	bash scripts/check-line-budget-frozen.sh {BASE}
+tests/golden/fences/*	bash scripts/lint-skills.sh skills/
+tests/golden/fences/*	bash scripts/lint-skills.test.sh
+tests/golden/fences/*	bash scripts/lint-skills-pool.test.sh
+tests/golden/fences/*	bash scripts/check-fences.sh
+tests/golden/fences/*	bash scripts/check-fences.sh --from-templates
+tests/golden/fences/*	bash scripts/check-fences.test.sh
+tests/golden/fences/*	bash scripts/check-fences-frozen.test.sh
+tests/golden/fences/*	bash scripts/check-fences-frozen.sh {BASE}
+tests/golden/fences/*	bash scripts/check-golden.sh
+tests/golden/fences/*	bash scripts/check-golden.sh --from-templates
+tests/golden/fences/*	bash scripts/regen-golden.test.sh
+tests/golden/*	@all
+tests/fixtures/defects/*	bash scripts/defect-report.test.sh
+adapters/*	node adapters/opencode/hooks.test.mjs
+adapters/*	bash scripts/check-tests-wired.sh
+.claude-plugin/*	@all
+.claude/*	@all
+docs/*	@all
+AGENTS.md	@all
+README.md	bash scripts/lint-skills.sh skills/
+README.md	STRICT_DOC_SYNC=1 bash scripts/validate-manifest.sh .claude-plugin
+README.md	bash scripts/check-doc-sync.sh
+README.md	bash scripts/check-versions.sh
+README.md	bash scripts/count-load.sh --base origin/main
+README.md	bash scripts/count-load.sh --summary all --base origin/main
+EXAMPLES.md	bash scripts/lint-skills.sh skills/
+EXAMPLES.md	STRICT_DOC_SYNC=1 bash scripts/validate-manifest.sh .claude-plugin
+EXAMPLES.md	bash scripts/check-doc-sync.sh
+EXAMPLES.md	bash scripts/check-versions.sh
+EXAMPLES.md	bash scripts/count-load.sh --base origin/main
+EXAMPLES.md	bash scripts/count-load.sh --summary all --base origin/main
+CONTRIBUTING.md	bash scripts/lint-skills.sh skills/
+CONTRIBUTING.md	STRICT_DOC_SYNC=1 bash scripts/validate-manifest.sh .claude-plugin
+CONTRIBUTING.md	bash scripts/check-doc-sync.sh
+CONTRIBUTING.md	bash scripts/check-versions.sh
+CONTRIBUTING.md	bash scripts/count-load.sh --base origin/main
+CONTRIBUTING.md	bash scripts/count-load.sh --summary all --base origin/main
+FUTURE.md	bash scripts/lint-skills.sh skills/
+FUTURE.md	STRICT_DOC_SYNC=1 bash scripts/validate-manifest.sh .claude-plugin
+FUTURE.md	bash scripts/check-doc-sync.sh
+FUTURE.md	bash scripts/check-versions.sh
+FUTURE.md	bash scripts/count-load.sh --base origin/main
+FUTURE.md	bash scripts/count-load.sh --summary all --base origin/main
+SECURITY.md	bash scripts/lint-skills.sh skills/
+SECURITY.md	STRICT_DOC_SYNC=1 bash scripts/validate-manifest.sh .claude-plugin
+SECURITY.md	bash scripts/check-doc-sync.sh
+SECURITY.md	bash scripts/check-versions.sh
+SECURITY.md	bash scripts/count-load.sh --base origin/main
+SECURITY.md	bash scripts/count-load.sh --summary all --base origin/main
+CHANGELOG.md	bash scripts/lint-skills.sh skills/
+CHANGELOG.md	STRICT_DOC_SYNC=1 bash scripts/validate-manifest.sh .claude-plugin
+CHANGELOG.md	bash scripts/check-doc-sync.sh
+CHANGELOG.md	bash scripts/check-versions.sh
+CHANGELOG.md	bash scripts/count-load.sh --base origin/main
+CHANGELOG.md	bash scripts/count-load.sh --summary all --base origin/main
+
+# Scripts: the gate itself, its test and the gates that call it.
+scripts/lint-skills.sh	bash scripts/lint-skills.sh skills/
+scripts/lint-skills.sh	bash scripts/lint-skills.test.sh
+scripts/lint-skills.sh	bash scripts/lint-skills-pool.test.sh
+scripts/lint-skills.sh	STRICT_DOC_SYNC=1 bash scripts/validate-manifest.sh .claude-plugin
+scripts/lint-skills.sh	bash scripts/check-doc-sync.sh
+scripts/lint-skills.sh	bash scripts/check-golden.sh
+scripts/lint-skills.sh	bash scripts/check-golden.sh --from-templates
+scripts/lint-skills.sh	bash scripts/post-edit-lint.test.sh
+scripts/lint-skills.sh	bash scripts/check-line-budget-frozen.test.sh
+scripts/lint-skills.test.sh	bash scripts/lint-skills.test.sh
+scripts/lint-skills.test.sh	bash scripts/lint-skills-pool.test.sh
+scripts/lint-skills-pool.test.sh	bash scripts/lint-skills-pool.test.sh
+scripts/check-fences.py	bash scripts/check-fences.sh
+scripts/check-fences.py	bash scripts/check-fences.sh --from-templates
+scripts/check-fences.py	bash scripts/check-fences.test.sh
+scripts/check-fences.py	bash scripts/lint-skills.sh skills/
+scripts/check-fences.py	bash scripts/lint-skills.test.sh
+scripts/check-fences.py	bash scripts/lint-skills-pool.test.sh
+scripts/check-fences.py	bash scripts/regen-golden.test.sh
+scripts/check-fences.py	bash scripts/post-edit-lint.test.sh
+scripts/check-fences.sh	bash scripts/check-fences.sh
+scripts/check-fences.sh	bash scripts/check-fences.sh --from-templates
+scripts/check-fences.sh	bash scripts/check-fences.test.sh
+scripts/check-fences.test.sh	bash scripts/check-fences.test.sh
+scripts/check-fences-frozen.sh	bash scripts/check-fences-frozen.sh {BASE}
+scripts/check-fences-frozen.sh	bash scripts/check-fences-frozen.test.sh
+scripts/check-fences-frozen.sh	bash scripts/check-fences.test.sh
+scripts/check-fences-frozen.test.sh	bash scripts/check-fences-frozen.test.sh
+scripts/check-line-budget-frozen.sh	bash scripts/check-line-budget-frozen.sh {BASE}
+scripts/check-line-budget-frozen.sh	bash scripts/check-line-budget-frozen.test.sh
+scripts/check-line-budget-frozen.sh	bash scripts/lint-skills.sh skills/
+scripts/check-line-budget-frozen.sh	bash scripts/lint-skills.test.sh
+scripts/check-line-budget-frozen.test.sh	bash scripts/check-line-budget-frozen.test.sh
+scripts/check-golden.sh	bash scripts/check-golden.sh
+scripts/check-golden.sh	bash scripts/check-golden.sh --from-templates
+scripts/check-golden.sh	bash scripts/check-golden.test.sh
+scripts/check-golden.sh	bash scripts/regen-golden.test.sh
+scripts/check-golden.sh	bash scripts/extract-fences.test.sh
+scripts/check-golden.test.sh	bash scripts/check-golden.test.sh
+scripts/extract-fences.py	bash scripts/extract-fences.test.sh
+scripts/extract-fences.py	bash scripts/check-golden.sh
+scripts/extract-fences.py	bash scripts/check-golden.sh --from-templates
+scripts/extract-fences.py	bash scripts/check-golden.test.sh
+scripts/extract-fences.test.sh	bash scripts/extract-fences.test.sh
+scripts/regen-golden.sh	bash scripts/regen-golden.test.sh
+scripts/regen-golden.sh	bash scripts/check-golden.sh
+scripts/regen-golden.sh	bash scripts/check-golden.sh --from-templates
+scripts/regen-golden.sh	bash scripts/check-golden.test.sh
+scripts/regen-golden.test.sh	bash scripts/regen-golden.test.sh
+scripts/check-research-content.py	bash scripts/check-research-content.test.sh
+scripts/check-research-content.test.sh	bash scripts/check-research-content.test.sh
+scripts/check-doc-sync.sh	bash scripts/check-doc-sync.sh
+scripts/check-doc-sync.sh	bash scripts/check-doc-sync.test.sh
+scripts/check-doc-sync.test.sh	bash scripts/check-doc-sync.test.sh
+scripts/check-docs.test.sh	bash scripts/check-docs.test.sh
+scripts/validate-manifest.sh	STRICT_DOC_SYNC=1 bash scripts/validate-manifest.sh .claude-plugin
+scripts/validate-manifest.sh	bash scripts/check-doc-sync.sh
+scripts/validate-manifest.sh	bash scripts/check-doc-sync.test.sh
+scripts/check-versions.py	bash scripts/check-versions.sh
+scripts/check-versions.py	bash scripts/check-versions.test.sh
+scripts/check-versions.py	bash scripts/lint-skills.sh skills/
+scripts/check-versions.py	bash scripts/lint-skills.test.sh
+scripts/check-versions.sh	bash scripts/check-versions.sh
+scripts/check-versions.sh	bash scripts/check-versions.test.sh
+scripts/check-versions.sh	bash scripts/lint-skills.sh skills/
+scripts/check-versions.sh	bash scripts/lint-skills.test.sh
+scripts/check-versions.test.sh	bash scripts/check-versions.test.sh
+scripts/deploy-smoke.sh	bash scripts/check-versions.sh
+scripts/deploy-smoke.sh	bash scripts/check-versions.test.sh
+scripts/count-load.sh	bash scripts/count-load.sh --base origin/main
+scripts/count-load.sh	bash scripts/count-load.sh --summary all --base origin/main
+scripts/count-load.sh	bash scripts/count-load.test.sh
+scripts/count-load.test.sh	bash scripts/count-load.test.sh
+scripts/measure-outcomes.sh	bash scripts/measure-outcomes.sh
+scripts/measure-outcomes.sh	bash scripts/measure-outcomes.test.sh
+scripts/measure-outcomes.sh	bash scripts/test-budget.test.sh
+scripts/measure-outcomes.test.sh	bash scripts/measure-outcomes.test.sh
+scripts/measure-seeded-load.sh	bash scripts/measure-seeded-load.sh
+scripts/measure-seeded-load.sh	bash scripts/measure-seeded-load.test.sh
+scripts/measure-seeded-load.test.sh	bash scripts/measure-seeded-load.test.sh
+scripts/post-edit-lint.sh	bash scripts/post-edit-lint.test.sh
+scripts/post-edit-lint.sh	bash scripts/pre-guard.test.sh
+scripts/post-edit-lint.test.sh	bash scripts/post-edit-lint.test.sh
+scripts/pre-guard.sh	bash scripts/pre-guard.test.sh
+scripts/pre-guard.sh	bash scripts/post-edit-lint.test.sh
+scripts/bash-guard.sh	bash scripts/pre-guard.test.sh
+scripts/pre-guard.test.sh	bash scripts/pre-guard.test.sh
+scripts/check-template-comments.sh	bash scripts/check-template-comments.sh
+scripts/check-template-comments.sh	bash scripts/test-harness-kit.sh
+scripts/check-template-comments.exempt	bash scripts/check-template-comments.sh
+scripts/check-sonar-parity.sh	bash scripts/check-sonar-parity.test.sh
+scripts/check-sonar-parity.py	bash scripts/check-sonar-parity.test.sh
+scripts/regen-sonar-parity-presets.py	bash scripts/check-sonar-parity.test.sh
+scripts/sonar-parity.tsv	bash scripts/check-sonar-parity.test.sh
+scripts/sonar-parity-presets/*	bash scripts/check-sonar-parity.test.sh
+scripts/check-sonar-parity.test.sh	bash scripts/check-sonar-parity.test.sh
+scripts/check-tests-wired.sh	bash scripts/check-tests-wired.sh
+scripts/check-tests-wired.sh	bash scripts/check-tests-wired.test.sh
+scripts/check-tests-wired.test.sh	bash scripts/check-tests-wired.test.sh
+scripts/workflow-job-ids.sh	bash scripts/workflow-job-ids.sh .github/workflows/validate-skills.yml
+scripts/workflow-job-ids.sh	bash scripts/workflow-job-ids.test.sh
+scripts/workflow-job-ids.test.sh	bash scripts/workflow-job-ids.test.sh
+scripts/test-harness-kit.sh	bash scripts/test-harness-kit.sh
+scripts/test-ci-templates.sh	bash scripts/test-ci-templates.sh
+scripts/test-template-copy.sh	bash scripts/test-template-copy.sh
+scripts/build-agents-dist.sh	bash scripts/test-template-copy.sh
+scripts/validate-scaffold-configs.sh	bash scripts/test-template-copy.sh
+scripts/test-budget.test.sh	bash scripts/test-budget.test.sh
+scripts/gate-budget.test.sh	bash scripts/gate-budget.test.sh
+scripts/gate-budget.test.sh	bash scripts/test-harness-kit.sh
+scripts/remove-example.test.sh	bash scripts/remove-example.test.sh
+scripts/remove-example.test.sh	bash scripts/remove-example-edge.test.sh
+scripts/remove-example-edge.test.sh	bash scripts/remove-example.test.sh
+scripts/remove-example-edge.test.sh	bash scripts/remove-example-edge.test.sh
+scripts/gate-ratchet.test.sh	bash scripts/gate-ratchet.test.sh
+scripts/supply-chain.test.sh	bash scripts/supply-chain.test.sh
+scripts/seeded-dockerfiles.test.sh	bash scripts/seeded-dockerfiles.test.sh
+scripts/seeded-gates.test.sh	bash scripts/seeded-gates.test.sh
+scripts/seeded-review-gate.test.sh	bash scripts/seeded-review-gate.test.sh
+scripts/seeded-remove-harness.test.sh	bash scripts/seeded-remove-harness.test.sh
+scripts/day-one.test.sh	bash scripts/day-one.test.sh
+scripts/harness-live.test.sh	bash scripts/harness-live.test.sh
+scripts/harness-refresh.test.sh	bash scripts/harness-refresh.test.sh
+scripts/defect-report.test.sh	bash scripts/defect-report.test.sh
+scripts/migrate-baseline.test.sh	bash scripts/migrate-baseline.test.sh
+scripts/quality-baseline.test.sh	bash scripts/quality-baseline.test.sh
+scripts/review-scope.test.sh	bash scripts/review-scope.test.sh
+scripts/run-gates.test.sh	bash scripts/run-gates.test.sh
