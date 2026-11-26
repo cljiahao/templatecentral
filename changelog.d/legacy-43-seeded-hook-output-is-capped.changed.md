@@ -1,0 +1,1 @@
+- Seeded hook output is capped: type-check, Stop and SubagentStop at 2,000 chars with the dropped line count named; comment-check at 10 findings of 160 chars plus an "N more" line; PreToolUse deny and ask messages at 200 chars. Exit codes and blocking are unchanged.

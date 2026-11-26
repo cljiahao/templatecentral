@@ -1,0 +1,1 @@
+- FastAPI CI and the seeded dev requirements no longer use `pytest-xdist` / `-n auto`: it measured slower than serial at this suite size.

@@ -60,8 +60,14 @@ Each gate gets a time limit (`RUN_GATES_TIMEOUT` seconds, default 3600); a gate 
 - [ ] `bash scripts/pre-guard.test.sh` passes locally if a repo guard script was touched
 - [ ] `bash scripts/run-gates.sh --changed` passes locally (a new CI gate also gets a row in `scripts/run-gates.map`)
 - [ ] README updated if the skill count, capability list, or stack list changed
-- [ ] CHANGELOG.md updated under `[Unreleased]`
+- [ ] A changelog fragment `changelog.d/<slug>.<added|changed|removed|fixed|security>.md` is added; `CHANGELOG.md` is not edited (`bash scripts/changelog-check.sh origin/main` passes; format in `changelog.d/README.md`)
 - [ ] CI passes (frontmatter validation + `lint-patterns` job run automatically)
+
+## Release PR
+
+Normal PRs never edit `CHANGELOG.md`, and `## [Unreleased]` in it stays empty: an entry goes into a `changelog.d/` fragment, never under that heading. `scripts/changelog-check.sh` fails any PR that leaves an entry there, and `changelog-assemble.sh` refuses to run while one is there.
+
+The release PR runs `bash scripts/changelog-assemble.sh <N.N.N> <YYYY-MM-DD>` and bumps `version` in `.claude-plugin/plugin.json` and `templatecentral_version` in `.claude/harness.json`. It changes nothing else: those two files may differ from the merge base only in the version value, which must be higher. `scripts/changelog-check.sh` replays the assemble and requires a byte-for-byte match (rules in `changelog.d/README.md`).
 
 ## Commit Style
 

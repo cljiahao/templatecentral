@@ -1,0 +1,1 @@
+- `scaffold-verify.yml` now runs headless without reporting false deviations: the prompt supplies the scaffold Step 1 answers (including no plugin install, so the run leaves `~/.claude` alone) and takes the documented headless skip of the env-file copy.

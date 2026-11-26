@@ -218,6 +218,30 @@ scripts/quality-baseline.test.sh	bash scripts/quality-baseline.test.sh
 scripts/review-scope.test.sh	bash scripts/review-scope.test.sh
 scripts/run-gates.test.sh	bash scripts/run-gates.test.sh
 
+# changelog-fragment.yml: the fragment tools, their tests, and the PR check on the fragments and CHANGELOG.md
+changelog.d/*	bash scripts/changelog-check.test.sh
+changelog.d/*	bash scripts/changelog-assemble.test.sh
+changelog.d/*	bash scripts/changelog-check.sh {BASE}
+changelog.d/*	bash scripts/measure-seeded-load.test.sh
+CHANGELOG.md	bash scripts/changelog-check.test.sh
+CHANGELOG.md	bash scripts/changelog-assemble.test.sh
+CHANGELOG.md	bash scripts/changelog-check.sh {BASE}
+scripts/changelog-check.sh	bash scripts/changelog-check.test.sh
+scripts/changelog-check.sh	bash scripts/changelog-assemble.test.sh
+scripts/changelog-check.sh	bash scripts/changelog-check.sh {BASE}
+scripts/changelog-assemble.sh	bash scripts/changelog-check.test.sh
+scripts/changelog-assemble.sh	bash scripts/changelog-assemble.test.sh
+scripts/changelog-assemble.sh	bash scripts/changelog-check.sh {BASE}
+scripts/changelog-lib.sh	bash scripts/changelog-check.test.sh
+scripts/changelog-lib.sh	bash scripts/changelog-assemble.test.sh
+scripts/changelog-lib.sh	bash scripts/changelog-check.sh {BASE}
+scripts/changelog-check.test.sh	bash scripts/changelog-check.test.sh
+scripts/changelog-check.test.sh	bash scripts/changelog-assemble.test.sh
+scripts/changelog-check.test.sh	bash scripts/changelog-check.sh {BASE}
+scripts/changelog-assemble.test.sh	bash scripts/changelog-check.test.sh
+scripts/changelog-assemble.test.sh	bash scripts/changelog-assemble.test.sh
+scripts/changelog-assemble.test.sh	bash scripts/changelog-check.sh {BASE}
+
 # Reviewed non-reads. The audit (run-gates.sh --check) flags a gate script that names a mapped path. Each
 # row below records a name that is a fixture built in a temp dir, a comment, or a test that only names a
 # script it calls (a script-to-script edge is a map row above). Format: @noread<TAB>gate<TAB>map globs
@@ -248,3 +272,8 @@ scripts/run-gates.test.sh	bash scripts/run-gates.test.sh
 @noread	bash scripts/check-golden.sh --from-templates	scripts/test-template-copy.sh
 # The test of this script names the gates and paths it maps, by design, in fixtures and in the real-map checks:
 @noread	bash scripts/run-gates.test.sh	*
+# The changelog tools: fixture READMEs in scratch repos, the fragment dir's own README, and a comment that
+# lists the version gates a release replays:
+@noread	bash scripts/changelog-check.test.sh	README.md
+@noread	bash scripts/changelog-assemble.test.sh	README.md
+@noread	bash scripts/changelog-check.sh {BASE}	README.md scripts/check-golden.sh scripts/regen-golden.sh scripts/check-doc-sync.sh scripts/validate-manifest.sh scripts/check-versions.sh

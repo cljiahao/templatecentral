@@ -583,6 +583,11 @@ drop() { # drop <path> <gate>: --check the real repo with the map row <path><TAB
 check 2 "$(drop CHANGELOG.md 'bash scripts/measure-seeded-load.test.sh')" "real_changelog_row_for_measure_seeded_load_exit"
 has "$(out)" 'audit: gate [bash scripts/measure-seeded-load.test.sh] names "CHANGELOG.md"' "real_changelog_row_for_measure_seeded_load_message"
 check 2 "$(drop CHANGELOG.md 'bash scripts/lint-skills.test.sh')" "real_changelog_row_for_lint_skills_test_exit"
+check 2 "$(drop 'changelog.d/*' 'bash scripts/measure-seeded-load.test.sh')" "real_fragment_row_for_measure_seeded_load_exit"
+has "$(out)" 'audit: gate [bash scripts/measure-seeded-load.test.sh] names "changelog.d"' "real_fragment_row_for_measure_seeded_load_message"
+check 2 "$(drop 'changelog.d/*' 'bash scripts/changelog-check.sh {BASE}')" "real_fragment_row_for_changelog_check_exit"
+has "$(out)" 'audit: gate [bash scripts/changelog-check.sh {BASE}] names "changelog.d"' "real_fragment_row_for_changelog_check_message"
+has "$(cd "$REAL" && lim bash "$RG" --list 2>&1)" "bash scripts/changelog-check.sh" "real_list_holds_the_changelog_gate"
 # the pool test reaches CHANGELOG.md through lint-skills.test.sh, so the audit cannot see it: the row is kept by hand
 check 1 "$(grep -c -x -F "$(printf 'CHANGELOG.md\tbash scripts/lint-skills-pool.test.sh')" "$RM")" "real_changelog_row_for_lint_skills_pool_test_present"
 check 2 "$(drop scripts/check-template-comments.exempt 'bash scripts/test-harness-kit.sh')" "real_exempt_row_for_harness_kit_exit"
