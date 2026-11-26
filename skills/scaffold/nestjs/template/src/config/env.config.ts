@@ -13,7 +13,7 @@ const envSchema = z.object({
   // Comma-separated IPs/CIDRs or "*"; see resolveTrustProxy() in app.factory.ts.
   TRUST_PROXY: z.string().optional(),
   // Not validated here: an invalid value must deny framing, not fail boot.
-  APPCENTRAL_PORTAL_ORIGIN: z.string().optional(),
+  EMBED_PARENT_ORIGIN: z.string().optional(),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
 });
 
@@ -36,7 +36,7 @@ export const appConfig = {
   ENVIRONMENT: env.ENVIRONMENT,
   PORT: env.PORT,
   TRUST_PROXY: env.TRUST_PROXY,
-  APPCENTRAL_PORTAL_ORIGIN: env.APPCENTRAL_PORTAL_ORIGIN,
+  EMBED_PARENT_ORIGIN: env.EMBED_PARENT_ORIGIN,
   LOG_LEVEL: env.LOG_LEVEL,
 };
 

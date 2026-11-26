@@ -1,11 +1,11 @@
 #!/bin/sh
-# APPCENTRAL_PORTAL_ORIGIN (injected by appCentral at runtime) is the only origin allowed to
+# EMBED_PARENT_ORIGIN (injected by the hosting platform at runtime) is the only origin allowed to
 # frame this app. It must be exactly one https origin — ^https://[a-z0-9-]+(\.[a-z0-9-]+)+$ —
 # with no path, port, wildcard, quotes, whitespace, semicolons or newlines, so it can never
 # inject extra CSP directives or headers. Unset or invalid denies all framing.
 tc_portal_host=
-case "${APPCENTRAL_PORTAL_ORIGIN:-}" in
-  https://*) tc_portal_host=${APPCENTRAL_PORTAL_ORIGIN#https://} ;;
+case "${EMBED_PARENT_ORIGIN:-}" in
+  https://*) tc_portal_host=${EMBED_PARENT_ORIGIN#https://} ;;
 esac
 case "$tc_portal_host" in
   "" | *[!abcdefghijklmnopqrstuvwxyz0123456789.-]* | .* | *. | *..*) tc_portal_host= ;;

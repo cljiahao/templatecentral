@@ -314,6 +314,20 @@ jobs:
           done
       - name: Quality baseline script tests
         run: bash scripts/quality-baseline.test.sh
+      - name: Review scope and remove-example scripts parse and pass shellcheck
+        run: |
+          set -euo pipefail
+          for f in skills/review/review/review-scope.sh skills/cleanup/remove-example/remove-example.sh; do
+            [ -x "$f" ] || { echo "$f is missing or not executable"; exit 1; }
+            bash -n "$f"
+            shellcheck "$f"
+          done
+      - name: Review scope script tests
+        run: bash scripts/review-scope.test.sh
+      - name: Remove-example script tests
+        run: bash scripts/remove-example.test.sh
+      - name: Remove-example edge tests
+        run: bash scripts/remove-example-edge.test.sh
       - name: Skill fence snapshot tests
         run: bash scripts/check-fences.test.sh
       - name: Fence snapshot freeze tests

@@ -15,7 +15,7 @@ Stack: Next.js ≥16.3.8 (16.3.8 fixes critical unauthenticated RCE security adv
 - Server components by default — add `'use client'` only for interactivity
 - Add UI primitives with `npx shadcn@latest add`, not by hand
 - Pages compose from features; data fetching does not go in page components
-- `src/proxy.ts` applies `applyFrameProtection` (frame headers from `APPCENTRAL_PORTAL_ORIGIN`) to every response; `templatecentral:add (auth)` extends it with route protection, which must not return JSON for unauthorized requests — use `new Response(null, { status: 401 })`. JSON responses from proxy create information-disclosure vectors
+- `src/proxy.ts` applies `applyFrameProtection` (frame headers from `EMBED_PARENT_ORIGIN`) to every response; `templatecentral:add (auth)` extends it with route protection, which must not return JSON for unauthorized requests — use `new Response(null, { status: 401 })`. JSON responses from proxy create information-disclosure vectors
 
 ## Architecture
 

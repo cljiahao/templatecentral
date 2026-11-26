@@ -13,7 +13,7 @@ def test_frame_ancestors_accepts_portal_origin() -> None:
     [
         "",
         "*",
-        "http://appcentral.example.gov.sg",
+        "http://portal.example.gov.sg",
         "https://*.example.gov.sg",
         "https://example.gov.sg:8443",
         "https://example.gov.sg/path",
