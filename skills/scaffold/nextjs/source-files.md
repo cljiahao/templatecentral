@@ -21,7 +21,7 @@ The source files are real files in `<skill-dir>/nextjs/template/` (and `AGENTS.m
 - `src/app/error.tsx` — Root error boundary for render errors no route-segment `error.tsx` catches.
 - `src/app/not-found.tsx` — Styled 404 with the navbar, the footer and a link home; the Vite template's `NotFoundPage` matches it.
 - `src/app/api/health/route.ts` — The single health endpoint. `/api/health` is the path the Dockerfile `HEALTHCHECK` probes and the only one `templatecentral:add (auth)` puts in `PUBLIC_API_PREFIXES` — do not add a sibling handler at `/api`, which would start returning 401 the moment auth lands.
-- `src/lib/security/frame-protection.ts` — The app's CSP and anti-clickjacking headers, applied by `src/proxy.ts`. When the platform injects `APPCENTRAL_PORTAL_ORIGIN` and it passes the origin check, only that portal may frame the app; otherwise framing is denied. The only place the CSP is set.
+- `src/lib/security/frame-protection.ts` — The app's CSP and anti-clickjacking headers, applied by `src/proxy.ts`. When the platform injects `EMBED_PARENT_ORIGIN` and it passes the origin check, only that portal may frame the app; otherwise framing is denied. The only place the CSP is set.
 - `src/proxy.ts` — Applies those headers to every response. `templatecentral:add (auth)` replaces it with a route-protection proxy that keeps the `applyFrameProtection` call.
 - `src/components/layout/navbar.tsx` — The wordmark comes from `BrandText`; update that widget, not this file.
 - `src/components/layout/site-footer.tsx` — Pass `links` once the project has real footer pages.

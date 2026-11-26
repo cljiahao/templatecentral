@@ -109,7 +109,7 @@ Targets on new code, the SonarQube default gate: cognitive complexity 15, duplic
 
 **Security Headers**
 - `helmet` in `security.setup.ts`; do not remove or weaken CSP, HSTS or frame-ancestors
-- `frame-ancestors` is `'none'` + `frameguard: deny` unless `portalFrameAncestor()` accepts `APPCENTRAL_PORTAL_ORIGIN` (one https origin, never `*` or a list); do not loosen its regex
+- `frame-ancestors` is `'none'` + `frameguard: deny` unless `portalFrameAncestor()` accepts `EMBED_PARENT_ORIGIN` (one https origin, never `*` or a list); do not loosen its regex
 
 **CORS**
 - Origins come from `CLIENT_URL`, never `origin: '*'`

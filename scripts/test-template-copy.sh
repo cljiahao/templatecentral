@@ -1386,6 +1386,23 @@ check 1 "$([[ $ec -ne 0 && "$out" == *"verify-harness.sh failed"* && "$out" == *
 fin_copy "$T/fin-control"; commit_fixture "$T/fin-control"
 out=$(fin_run "$T/fin-control"); ec=$?
 check 0 "$ec" "part_finish_verify_control: the same fixture without the edit passes ($out)"
+# the line-count guard: an awk that prints nothing, or drops a line, must stop the run and leave harness.json byte-identical; a pass-through awk is the control
+realawk=$(command -v awk); mkdir -p "$T/stubawk"
+for mode in empty dropline passthrough; do
+  case $mode in
+    empty) printf '#!/bin/sh\nexit 0\n' > "$T/stubawk/awk" ;;
+    dropline) printf '#!/bin/sh\n%s "$@" | sed 1d\n' "$realawk" > "$T/stubawk/awk" ;;
+    *) printf '#!/bin/sh\nexec %s "$@"\n' "$realawk" > "$T/stubawk/awk" ;;
+  esac
+  chmod +x "$T/stubawk/awk"
+  fin_copy "$T/fin-awk-$mode"; cp "$T/fin-awk-$mode/.claude/harness.json" "$T/fin-awk-$mode.before"
+  out=$(PATH="$T/stubawk:$PATH" fin_run "$T/fin-awk-$mode"); ec=$?
+  if [ "$mode" = passthrough ]; then
+    check 0 "$ec" "part_finish_awk_control: a pass-through awk finishes ($out)"
+  else
+    check 1 "$([[ $ec -ne 0 && "$out" == *"does not have the lines of the original"* && "$out" == *"$STOPLINE"* ]] && cmp -s "$T/fin-awk-$mode.before" "$T/fin-awk-$mode/.claude/harness.json" && echo 1 || echo 0)" "part_finish_awk_${mode}_stops_and_keeps_the_manifest ($out)"
+  fi
+done
 # END finish_extra
 tgt="$T/finish"
 out=$(TC_STACK=nextjs TC_PART=finish TC_CI=github bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?

@@ -35,10 +35,10 @@
 # run on pull requests) or is not a mapping, no workflow that counts, or no python3 with PyYAML.
 # Will not catch: a test script that runs but asserts nothing or skips itself on its arguments; an allowed
 # env name set to a value that changes what the script does; a non-test step in the same job that writes
-# $GITHUB_ENV or $GITHUB_PATH and so changes the shell or the PATH of a later test step; a job `needs` chain, a job `container`, a
-# `matrix` or a `timeout-minutes` that keeps the step from running or ends it early; a `uses` step that
-# edits the tree before the run; and a test that only a `workflow_run`, schedule or manual trigger runs,
-# which is not counted.
+# $GITHUB_ENV or $GITHUB_PATH and so changes the shell or the PATH of a later test step; a job
+# `needs` chain, a job `container`, a `matrix` or a `timeout-minutes` that keeps the step from
+# running or ends it early; a `uses` step that edits the tree before the run; and a test that only a
+# `workflow_run`, schedule or manual trigger runs, which is not counted.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

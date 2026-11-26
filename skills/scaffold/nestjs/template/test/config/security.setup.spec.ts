@@ -7,7 +7,7 @@ it.each([
   [portal, portal],
   [undefined, null],
   ['*', null],
-  ['http://appcentral.example.gov.sg', null],
+  ['http://portal.example.gov.sg', null],
   ['https://*.example.gov.sg', null],
   ['https://example.gov.sg:8443', null],
   ['https://example.gov.sg/path', null],
