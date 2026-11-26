@@ -43,6 +43,6 @@ steps:
       bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Gate ratchet (no gate weaker than the base branch)
     env: { LABELS: $(LABELS) }
-  # Gate-time note for this job only: a fresh checkout holds one timing row per gate run above, so it checks the per-gate limit and the total of those gates, and cannot see a regression. Exits 0 (prints the note when over budget); exits 2 when the budget file, the gate list or the timing record is broken. Skipped when an earlier step fails.
+  # Prints the gate-time note for the gates this job ran. Exits 0 when over budget and 2 when the budget file, gate list or timing record is broken. Skipped when an earlier step fails.
   - bash: bash .claude/gate-budget.sh check
     displayName: Gate-time budget note

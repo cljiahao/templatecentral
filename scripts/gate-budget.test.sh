@@ -235,7 +235,8 @@ sigrun() {
   if ! await "$P/status"; then note "the runner did not end after $sig to the $tgt"; kill -9 -- "-$wp" 2>/dev/null; return 1; fi
   sleep 0.6
   SR_STATUS=$(cat "$P/status")
-  SR_ROWS=$(wc -l < "$P/.claude/gate-times.tsv" 2>/dev/null | tr -d ' '); SR_ROWS=${SR_ROWS:-0}
+  SR_ROWS=0
+  if [ -f "$P/.claude/gate-times.tsv" ]; then SR_ROWS=$(wc -l < "$P/.claude/gate-times.tsv" | tr -d ' '); fi
   alive "$P/pids/gate" || return 1; SR_GATE=$ALIVE
   alive "$P/pids/gc" || return 1; SR_GC=$ALIVE
   # Cleanup only, after every observation is taken.
@@ -276,9 +277,13 @@ probe_sig_hup_wrapper() { write_launcher; sigcase C HUP wrapper; }
 probe_hook_signal_exit() {
   write_launcher
   rm -rf "$P/status" "$P/wpid"
-  LSTDIN=1 perl "$T/launch.pl" "$P" bash .claude/gate-budget.sh hook >/dev/null 2>&1 </dev/null &
+  # A copy of the script that writes a marker once its traps are set, so the signal never lands early.
+  rm -f "$P/ready"
+  awk '/^  input=/ { print "  echo up > ready" } { print }' "$P/.claude/gate-budget.sh" > "$P/.claude/gate-budget-ready.sh"
+  if ! grep -q 'echo up > ready' "$P/.claude/gate-budget-ready.sh"; then note "could not add the ready marker"; return 1; fi
+  LSTDIN=1 perl "$T/launch.pl" "$P" bash .claude/gate-budget-ready.sh hook >/dev/null 2>&1 </dev/null &
   await "$P/wpid" || return 1
-  sleep 1
+  if ! await "$P/ready"; then note "the hook never reported ready"; kill -9 -- "-$(cat "$P/wpid")" 2>/dev/null; return 1; fi
   kill -s TERM -- "-$(cat "$P/wpid")"
   await "$P/status" || { kill -9 -- "-$(cat "$P/wpid")" 2>/dev/null; return 1; }
   [ "$(cat "$P/status")" = "exit 0" ]
@@ -320,7 +325,11 @@ probe_unreadable_record() {
   chmod 000 "$P/.claude/gate-times.tsv"
   out=$(cd "$P" && bash .claude/gate-budget.sh record deps 1 9 0 2>&1); rc=$?
   chmod 600 "$P/.claude/gate-times.tsv"
-  [ "$rc" = 2 ] && [[ "$out" == *"cannot read"* ]] && [ "$(cat "$P/.claude/gate-times.tsv")" = "$before" ]
+  local cout crc
+  chmod 000 "$P/.claude/gate-times.tsv"
+  cout=$(cd "$P" && bash .claude/gate-budget.sh check 2>&1); crc=$?
+  chmod 600 "$P/.claude/gate-times.tsv"
+  [ "$rc" = 2 ] && [[ "$out" == *"cannot read"* ]] && [ "$(cat "$P/.claude/gate-times.tsv")" = "$before" ] && [ "$crc" = 2 ] && [[ "$cout" == *"cannot read"* ]]
 }
 # One name rule: record takes 40 characters and refuses 41 with a clear error, and check never meets a name record wrote.
 probe_name_len() {
@@ -451,6 +460,7 @@ guard newproj probe_hook_script_missing .claude/session-context.sh '/gate-budget
 guard newproj probe_hook_script_crash .claude/session-context.sh '/the gate-time hook exited with status/d' "the session hook says when the script crashes"
 if [ "$(id -u)" != 0 ]; then
   guard newproj probe_unreadable_record .claude/gate-budget.sh 's/ || fail "cannot read [$]rec; the history is kept, fix its permissions"//' "an unreadable record is not read as empty"
+  guard newproj probe_unreadable_record .claude/gate-budget.sh '/^  \[ -r "[$]rec" \] || fail "cannot read/d' "check names an unreadable record"
 fi
 pguard probe_protect_script 's/\.claude\/gate-budget\.sh|\*\/\.claude\/gate-budget\.sh|//' "protect-files asks about the budget script"
 guard newproj probe_ignore_patterns .gitignore '/gate-budget\.??????/d' "temp files git-ignored"

@@ -151,6 +151,7 @@ run_check() {
     return 0
   fi
   [ -f "$rec" ] || fail "$rec is not a regular file; remove it"
+  [ -r "$rec" ] || fail "cannot read $rec; the history is kept, fix its permissions"
   validate_record || exit 2
   out=$(report) || fail "cannot compute the gate times"
   if [ -z "$out" ]; then return 0; fi
