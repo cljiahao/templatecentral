@@ -67,6 +67,17 @@ sbom_pnpm() {
   check_and_sort_pnpm "$tmp/raw.json" "$1"
 }
 
+# Refuses a Python environment that git tracks: a committed .venv can carry .pth files or fake package metadata that run or lie inside the gate.
+refuse_tracked_env() {
+  local d tracked
+  for d in .venv "${VIRTUAL_ENV:-}"; do
+    if [ -z "$d" ]; then continue; fi
+    tracked=$(git ls-files -- "$d" 2> /dev/null) || tracked=''
+    tracked=${tracked%%$'\n'*}
+    if [ -n "$tracked" ]; then die "the Python environment '$d' is tracked by git ($tracked is committed). Remove it from git (git rm -r --cached $d) and add it to .gitignore; a committed environment cannot be trusted."; fi
+  done
+}
+
 # Writes the SBOM of a Python project to $1, built from the packages installed in the project environment.
 sbom_python() {
   local py='' req='' rc=''
@@ -77,15 +88,16 @@ sbom_python() {
   else
     die "no project Python environment (VIRTUAL_ENV or .venv). Create the environment and install first: uv venv && uv pip install --require-hashes -r requirements.txt"
   fi
+  refuse_tracked_env
   if [ -f requirements.txt ]; then req=requirements.txt; fi
-  "$py" "$helper" sbom "$req" "$1" 2> "$tmp/err.txt"
+  "$py" -I "$helper" sbom "$req" "$1" 2> "$tmp/err.txt"
   rc=$?
   if [ "$rc" -eq 3 ]; then
     fail "$(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"
   elif [ "$rc" -ne 0 ]; then
     die "cannot read the installed Python packages: $(head -n 3 "$tmp/err.txt" | tr '\n' ' ')"
   fi
-  "$py" "$helper" check "$1" 2> "$tmp/err.txt"
+  "$py" -I "$helper" check "$1" 2> "$tmp/err.txt"
   rc=$?
   if [ "$rc" -eq 3 ]; then
     fail "$(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"

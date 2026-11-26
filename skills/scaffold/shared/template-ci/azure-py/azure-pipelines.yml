@@ -23,7 +23,8 @@ jobs:
       - bash: |
           set -euo pipefail
           # The licence and SBOM gates read the project environment at .venv.
-          python -m venv .venv
+          if [ -n "$(git ls-files .venv)" ]; then echo "##vso[task.logissue type=error].venv is tracked by git; remove it (git rm -r --cached .venv): a committed environment is not trusted."; exit 1; fi
+          python -m venv --clear .venv
           echo "##vso[task.setvariable variable=VIRTUAL_ENV]$PWD/.venv"
           echo "##vso[task.prependpath]$PWD/.venv/bin"
           .venv/bin/python -m pip install --require-hashes -r requirements.txt

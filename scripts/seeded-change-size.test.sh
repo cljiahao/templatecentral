@@ -401,6 +401,47 @@ run "$D" BASE_REF=main
 check 2 "$EC" "outside a git repository it fails closed"
 has "not a git repository" "$OUT" "message says not a git repository"
 
+# Attributes added by the change must not make a text file look binary (a binary weighs one line per 4 KB, text one per line).
+# attr_change <name> <attributes text> <path>: three 20000-line files under src/ plus the attributes file at <path>, all in the change.
+attr_change() {
+  repo "$1"
+  mkdir -p "$D/src" "$D/sub"
+  for i in 1 2 3; do seq 1 20000 > "$D/src/f$i.txt"; done
+  if [ -n "$2" ]; then printf '%s\n' "$2" > "$D/$3"; fi
+  commit_all
+  run "$D" BASE_REF=main
+}
+attr_change attrclean "" ""
+check 1 "$EC" "control: three 20000-line text files fail the budget"
+has "60000 changed lines" "$OUT" "control counts every line"
+attr_change attrdiff 'src/** -diff' .gitattributes
+check 1 "$EC" "a -diff attribute added by the change does not hide the lines"
+has "60001 changed lines" "$OUT" "-diff attribute: every line still counted"
+attr_change attrbinary 'src/** binary' .gitattributes
+check 1 "$EC" "a binary attribute added by the change does not hide the lines"
+has "60001 changed lines" "$OUT" "binary attribute: every line still counted"
+attr_change attrsub '* -diff' sub/.gitattributes
+check 1 "$EC" "a -diff attribute in a subfolder does not hide the lines"
+attr_change attrsub2 '* -diff' src/.gitattributes
+check 1 "$EC" "a -diff attribute in the changed folder does not hide the lines"
+has "60001 changed lines" "$OUT" "folder attribute: every line still counted"
+repo attrbase
+printf 'src/** -diff\n' > "$D/.gitattributes"
+base_commit
+mkdir -p "$D/src"
+for i in 1 2 3; do seq 1 20000 > "$D/src/f$i.txt"; done
+commit_all
+run "$D" BASE_REF=main
+check 0 "$EC" "an attribute already on the base branch is honoured ($OUT)"
+repo attrbin
+mkdir -p "$D/src"
+head -c 5000000 /dev/urandom > "$D/src/video.bin"
+printf 'src/** -diff\n' > "$D/.gitattributes"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a real binary is still weighed by size under a -diff attribute"
+has "1222 changed lines" "$OUT" "5000000 bytes plus the attributes line"
+
 # Real run: a freshly scaffolded nextjs project, committed as the base, then one real edit.
 D="$T/real"
 mkdir -p "$D"

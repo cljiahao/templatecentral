@@ -4,7 +4,7 @@
 # Counts committed and uncommitted changes to tracked files, plus untracked files that are not ignored.
 # Budgets (env overrides): CHANGE_SIZE_MAX_LINES lines added plus deleted, CHANGE_SIZE_MAX_FILES files changed.
 # Not counted: paths matching .claude/change-size-exclude.txt (lockfiles), and files marked linguist-generated in .gitattributes. Both are read at the merge base, so a change cannot exclude itself; this needs git 2.40 or newer. A rename counts as a delete plus an add.
-# A binary file weighs one line per 4 KB, rounded up, so a large binary is not free.
+# A binary file weighs one line per 4 KB, rounded up, so a large binary is not free. Whether a file is binary is decided from its content: the diff and binary attributes are read at the merge base only (git --attr-source, core.attributesFile off, no textconv), so a changed .gitattributes cannot make a text file look binary. A line in .git/info/attributes on a local clone is the author's own file, not part of the change.
 # Exit: 0 within budget, 1 over budget, 2 it could not measure (no git, no base ref, bad budget).
 # In GitHub Actions and Azure Pipelines the budget and exclude-file overrides are refused.
 # Usage: bash scripts/check-change-size.sh [base-ref]        Env: CHANGE_SIZE_EXCLUDE_FILE overrides the exclude file path.
@@ -62,11 +62,12 @@ else
   printf 'check-change-size: %s is not on %s yet, so nothing is excluded and every changed line counts. Exclusions apply once the file is on the base branch.\n' "$exclude_path" "$base" >&2
 fi
 git check-attr --source="$mb" linguist-generated -- "$exclude_path" > /dev/null 2> "$tmp/err.txt" || die "git check-attr --source needs git 2.40 or newer to read the attributes at the merge base ($(git --version)): $(head -n 1 "$tmp/err.txt")"
+git --attr-source="$mb" check-attr diff -- "$exclude_path" > /dev/null 2> "$tmp/err.txt" || die "git --attr-source needs git 2.40 or newer, so the diff and binary attributes cannot be read at the merge base ($(git --version)): $(head -n 1 "$tmp/err.txt")"
 
 tab=$(printf '\t')
 : > "$tmp/counted.txt"
 
-git -c core.quotepath=false diff --numstat -z --no-renames "$mb" > "$tmp/numstat.z" 2> "$tmp/err.txt" || die "git diff failed: $(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"
+git --attr-source="$mb" -c core.attributesFile=/dev/null -c core.quotepath=false diff --no-textconv --numstat -z --no-renames "$mb" > "$tmp/numstat.z" 2> "$tmp/err.txt" || die "git diff failed: $(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"
 while IFS= read -r -d '' rec; do
   added=${rec%%"$tab"*}
   rest=${rec#*"$tab"}

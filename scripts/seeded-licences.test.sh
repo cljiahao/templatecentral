@@ -218,7 +218,7 @@ check 1 "$EC" "python licence outside the list fails"
 has "gpl-lib@3.0 has licence GPL-3.0-only" "$OUT" "python message names the package and licence"
 
 # Python read by the real metadata code from a fake environment.
-# env_fixture <name> <requirements text>: a Python project whose .venv/bin/python is the real interpreter without the global site-packages; sets D and SITE.
+# env_fixture <name> <requirements text>: a Python project with a real empty venv (no global site-packages; the gate reads it with python -I, so PYTHONPATH cannot feed it); sets D and SITE.
 # raw_env_fixture <name> <requirements text>: like env_fixture, with the lock text written as given.
 # env_fixture <name> <requirements text>: the lock text gets a --hash continuation under each bare name==version line, as uv pip compile writes it.
 env_fixture() {
@@ -227,10 +227,9 @@ env_fixture() {
 }
 raw_env_fixture() {
   base_fixture "$1"
-  SITE="$D/site"
-  mkdir -p "$D/.venv/bin" "$SITE"
-  printf '#!/bin/sh\nexec python3 -S "$@"\n' > "$D/.venv/bin/python"
-  chmod +x "$D/.venv/bin/python"
+  mkdir -p "$D"
+  python3 -m venv --without-pip "$D/.venv" > /dev/null 2>&1 || { FAIL=$((FAIL + 1)); echo "FAIL: cannot create a venv for $1"; }
+  SITE=$(echo "$D"/.venv/lib/python*/site-packages)
   printf '%s' "$2" > "$D/requirements.txt"
 }
 # dist <name> <version> [header line ...]: a fake installed distribution in $SITE.
@@ -246,7 +245,7 @@ nopkg==1.0
 '
 dist okpkg 1.0 'License-Expression: MIT'
 dist nopkg 1.0
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 1 "$EC" "real metadata: a package with no licence fails"
 has "nopkg@1.0 has licence Unknown" "$OUT" "real metadata: names the unlicensed package"
 
@@ -254,7 +253,7 @@ env_fixture py-covered 'ok_pkg==1.0 \
     --hash=sha256:aa
 '
 dist ok-pkg 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "real metadata: a requirement that is installed passes, names normalised ($OUT)"
 
 env_fixture py-marker 'okpkg==1.0
@@ -262,7 +261,7 @@ winonly==1.0 ; sys_platform == '"'win32'"' \
     --hash=sha256:aa
 '
 dist okpkg 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "real metadata: a requirement behind a marker that is not installed does not fail ($OUT)"
 
 env_fixture py-missing 'okpkg==1.0
@@ -270,21 +269,21 @@ fastapi==0.1 \
     --hash=sha256:aa
 '
 dist okpkg 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 2 "$EC" "a package named in requirements.txt but not installed fails closed"
 has "requirements.txt lists fastapi, which is not installed" "$OUT" "message names the missing package"
 hasnt "ok (" "$OUT" "no ok line when a requirement is missing"
 
 env_fixture py-empty 'fastapi==0.1
 '
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 2 "$EC" "an environment with nothing installed fails closed"
 
 env_fixture py-noenv 'okpkg==1.0
 '
 rm -r "$D/.venv"
 dist okpkg 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 2 "$EC" "no project environment fails, even when the global python3 has packages"
 has "no project Python environment" "$OUT" "message says there is no environment"
 has "Create the environment and install first" "$OUT" "message says how to fix it"
@@ -292,21 +291,19 @@ has "Create the environment and install first" "$OUT" "message says how to fix i
 env_fixture py-virtualenv 'okpkg==1.0
 '
 dist okpkg 1.0 'License-Expression: MIT'
-mkdir -p "$D/venvx/bin"
-mv "$D/.venv/bin/python" "$D/venvx/bin/python"
-rm -r "$D/.venv"
-run "$D" PYTHONPATH="$SITE" VIRTUAL_ENV="$D/venvx"
+mv "$D/.venv" "$D/venvx"
+run "$D" VIRTUAL_ENV="$D/venvx"
 check 0 "$EC" "VIRTUAL_ENV names the environment ($OUT)"
 
 env_fixture py-two-classifiers 'twolic==1.0
 '
 dist twolic 1.0 'Classifier: License :: OSI Approved :: MIT License' 'Classifier: License :: OSI Approved :: BSD License'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "several allowed classifiers on one package pass ($OUT)"
 env_fixture py-two-classifiers-bad 'twolic==1.0
 '
 dist twolic 1.0 'Classifier: License :: OSI Approved :: MIT License' 'Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 1 "$EC" "several classifiers are joined with AND, so one outside the list fails"
 has "twolic@1.0 has licence GNU General Public License v3 (GPLv3) AND MIT License" "$OUT" "message shows the joined classifiers"
 
@@ -320,25 +317,25 @@ both_fixture() { # both_fixture <name> <pnpm licence> <python licence>
   chmod +x "$D/stub/pnpm"
 }
 both_fixture both-good MIT MIT
-run "$D" PYTHONPATH="$SITE" PATH="$D/stub:$PATH"
+run "$D" PATH="$D/stub:$PATH"
 check 0 "$EC" "python plus package.json: both clean passes ($OUT)"
 has "ok (2 packages, pnpm+python)" "$OUT" "both stacks are counted"
 both_fixture both-pnpm-bad GPL-3.0-only MIT
-run "$D" PYTHONPATH="$SITE" PATH="$D/stub:$PATH"
+run "$D" PATH="$D/stub:$PATH"
 check 1 "$EC" "python plus package.json: a bad pnpm package fails"
 has "tool-lib@1.2.3 has licence GPL-3.0-only" "$OUT" "the pnpm finding is named"
 both_fixture both-py-bad MIT GPL-3.0-only
-run "$D" PYTHONPATH="$SITE" PATH="$D/stub:$PATH"
+run "$D" PATH="$D/stub:$PATH"
 check 1 "$EC" "python plus package.json: a bad Python package fails"
 has "okpkg@1.0 has licence GPL-3.0-only" "$OUT" "the Python finding is named"
 both_fixture both-noenv MIT MIT
 rm -r "$D/.venv"
-run "$D" PYTHONPATH="$SITE" PATH="$D/stub:$PATH"
+run "$D" PATH="$D/stub:$PATH"
 check 2 "$EC" "python plus package.json: a missing Python environment is not skipped"
 has "no project Python environment" "$OUT" "the missing environment is named"
 both_fixture both-nopnpm MIT MIT
 printf '#!/bin/sh\nexit 1\n' > "$D/stub/pnpm"
-run "$D" PYTHONPATH="$SITE" PATH="$D/stub:$PATH"
+run "$D" PATH="$D/stub:$PATH"
 check 2 "$EC" "python plus package.json: a failing pnpm is not skipped"
 
 # A distribution with no Name is a finding named by its folder, never skipped.
@@ -347,7 +344,7 @@ env_fixture py-nameless 'okpkg==1.0
 dist okpkg 1.0 'License-Expression: MIT'
 mkdir -p "$SITE/nameless-1.0.dist-info"
 printf 'Metadata-Version: 2.4\nVersion: 1.0\n' > "$SITE/nameless-1.0.dist-info/METADATA"
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 1 "$EC" "a Python distribution with no Name fails instead of being skipped"
 has "nameless-1.0.dist-info" "$OUT" "the finding names the dist-info folder"
 has "Unknown" "$OUT" "the nameless distribution has an unknown licence"
@@ -390,13 +387,13 @@ has "tab-lib@1.0.0 has licence MIT GPL-3.0-only" "$OUT" "the full licence string
 env_fixture py-tab 'tabpkg==1.0
 '
 dist tabpkg 1.0 "License: MIT$(printf '\t')GPL-3.0-only"
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 1 "$EC" "a Python licence with a tab inside fails"
 has "tabpkg@1.0 has licence MIT GPL-3.0-only" "$OUT" "the full Python licence string is named"
 env_fixture py-tab-ok 'tabpkg==1.0
 '
 dist tabpkg 1.0 "License: MIT$(printf '\t')BSD License"
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 1 "$EC" "a tab-joined unknown pair still fails (control for the allowed list)"
 
 # A lock line behind an environment marker is still checked when it is installed, and may be absent when it is not.
@@ -406,7 +403,7 @@ uvloop==1.0 ; sys_platform != '"'win32'"' \
 '
 dist ok 1.0 'License-Expression: MIT'
 dist uvloop 1.0 'License-Expression: GPL-3.0-only'
-run "$D" PYTHONPATH="$SITE" PATH="$D/stub:$PATH"
+run "$D" PATH="$D/stub:$PATH"
 check 1 "$EC" "a marker line that is installed with a bad licence fails"
 has "uvloop@1.0 has licence GPL-3.0-only" "$OUT" "the marker-line finding is named"
 env_fixture py-marker-good 'ok==1.0
@@ -415,20 +412,20 @@ uvloop==1.0 ; sys_platform != '"'win32'"' \
 '
 dist ok 1.0 'License-Expression: MIT'
 dist uvloop 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "control: a marker line installed with an allowed licence passes ($OUT)"
 has "ok (2 packages, python)" "$OUT" "the marker package is counted"
 env_fixture py-marker-absent 'ok==1.0
 uvloop==1.0 ; sys_platform == '"'win32'"'
 '
 dist ok 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "a marker line that is not installed passes ($OUT)"
 env_fixture py-plain-absent 'ok==1.0
 uvloop==1.0
 '
 dist ok 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 2 "$EC" "a line without a marker that is not installed fails closed"
 has "requirements.txt lists uvloop, which is not installed" "$OUT" "message names the missing package"
 
@@ -438,7 +435,7 @@ refused() {
   raw_env_fixture py-refused "$2"
   dist ok 1.0 'License-Expression: MIT'
   dist bad 1.0 'License-Expression: GPL-3.0-only'
-  run "$D" PYTHONPATH="$SITE"
+  run "$D"
   check 2 "$EC" "$1 is refused"
   has "requirements.txt line $3 '$4'" "$OUT" "message names line $3 for $1"
   has "name==version with hashes" "$OUT" "message says the lock must list every package as name==version with hashes for $1"
@@ -488,31 +485,31 @@ refused 'a comment line ending in a backslash' $'# via x \\\nok==1.0 \\\n'"$H" 1
 for opt in '--require-hashes' '--index-url https://example.invalid/simple' '--index-url=https://example.invalid/simple' '-i https://example.invalid/simple' '--extra-index-url x' '-f x' '--find-links x' '--no-binary :all:' '--only-binary :all:' '--trusted-host x' '--prefer-binary'; do
   raw_env_fixture py-opt-ok "$opt"$'\nok==1.0 \\\n'"$H"
   dist ok 1.0 'License-Expression: MIT'
-  run "$D" PYTHONPATH="$SITE"
+  run "$D"
   check 0 "$EC" "control: the allowed option '$opt' passes ($OUT)"
 done
 raw_env_fixture py-bom $'\xef\xbb\xbfok==1.0 \\\n'"$H"
 dist ok 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "control: a UTF-8 BOM before the first name parses ($OUT)"
 raw_env_fixture py-crlf $'# via x\r\nok==1.0 \\\r\n    --hash=sha256:aa \\\r\n    --hash=sha256:bb\r\n'
 dist ok 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "control: CRLF line endings parse ($OUT)"
 raw_env_fixture py-comments $'# a comment\n\nok==1.0 \\\n    --hash=sha256:aa\n    # via something\nuvloop==1.0 ; sys_platform == "win32" \\\n    --hash=sha256:bb\n'
 dist ok 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "control: full-line comments, blank lines and a not-installed marker line parse ($OUT)"
 raw_env_fixture py-coding-word $'# coding standards note\nok==1.0 \\\n'"$H"
 dist ok 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "control: a comment on line 1 with the word coding but no : or = passes ($OUT)"
 # pip drops everything after a # once a continuation is joined, and expands ${VAR} before it reads a line: both are refused outside full-line comments.
 # hashrule <label> <lock text> <line number> <message part>
 hashrule() {
   raw_env_fixture py-hashrule "$2"
   dist ok 1.0 'License-Expression: MIT'
-  run "$D" PYTHONPATH="$SITE"
+  run "$D"
   check 2 "$EC" "$1 is refused"
   has "requirements.txt line $3 '" "$OUT" "message names line $3 for $1"
   has "$4" "$OUT" "message says why for $1"
@@ -536,15 +533,15 @@ hashrule 'a comment line ending in a backslash' $'# via x \\\nok==1.0 \\\n'"$H" 
 hashrule 'a continuation that is not a hash' $'ok==1.0 \\\n    other\n' 2 'a continuation line must be --hash=<alg>:<hex> only'
 raw_env_fixture py-spaces $'ok==1.0   \\\n '"--hash=sha256:aa"$' \\\n   --hash=sha256:bb\n'
 dist ok 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "control: several spaces before a backslash and a one-space hash indent pass ($OUT)"
 raw_env_fixture py-tab-comment $'# a\ttab in a note\nok==1.0 \\\n'"$H"
 dist ok 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "control: a tab inside a full-line comment passes ($OUT)"
 raw_env_fixture py-dollar-comment $'# cost $5 and ${X} in a note\n  # indented $ note\nok==1.0 \\\n'"$H"
 dist ok 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "control: a $ and a # inside full-line comments pass ($OUT)"
 
 # The lock is read as bytes: a byte pip could read as a line break or another encoding is refused, naming the line and the byte.
@@ -554,14 +551,14 @@ byte_case() {
   raw_env_fixture py-byte $'ok==1.0 \\\n'"$H"
   printf '%b' "$body" >> "$D/requirements.txt"
   dist ok 1.0 'License-Expression: MIT'
-  run "$D" PYTHONPATH="$SITE"
+  run "$D"
   check 2 "$EC" "$1 is refused"
   has "requirements.txt line $4: byte $5 is not allowed" "$OUT" "message names line $4 and byte $5 for $1"
   has "plain ASCII" "$OUT" "message says the lock must be plain ASCII for $1"
   raw_env_fixture py-byte-ok $'ok==1.0 \\\n'"$H"
   printf '%b' "$control" >> "$D/requirements.txt"
   dist ok 1.0 'License-Expression: MIT'
-  run "$D" PYTHONPATH="$SITE"
+  run "$D"
   check 0 "$EC" "control: the same file without the bad byte passes for $1 ($OUT)"
 }
 byte_case 'a vertical tab in a comment' '# c@evil==1.0 --hash=sha256:aa\n' '\x0b' 3 0x0b
@@ -580,7 +577,7 @@ byte_case 'a DEL byte in a comment' '# c@\n' '\x7f' 3 0x7f
 coding_case() {
   raw_env_fixture py-coding "$2"
   dist ok 1.0 'License-Expression: MIT'
-  run "$D" PYTHONPATH="$SITE"
+  run "$D"
   check 2 "$EC" "$1 is refused"
   has "requirements.txt line $3 '" "$OUT" "message names line $3 for $1"
   has "coding comment" "$OUT" "message says why for $1"
@@ -591,16 +588,16 @@ coding_case 'a coding comment on line 2' $'# x\n# coding: utf-7\nok==1.0 \\\n'"$
 coding_case 'an indented coding comment on line 1' $'  \t# vim: set fileencoding=utf-8 coding:utf-8\nok==1.0 \\\n'"$H" 1
 raw_env_fixture py-coding-late $'# x\n# y\n# coding: utf-7\nok==1.0 \\\n'"$H"
 dist ok 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "control: a coding comment on line 3 is only a comment ($OUT)"
 raw_env_fixture py-bom-crlf $'\xef\xbb\xbf# via x\r\nok==1.0 \\\r\n    --hash=sha256:aa\r\n'
 dist ok 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "control: a BOM with CRLF line endings parses ($OUT)"
 # The helper never shows a traceback: a missing file or a directory is a clean refusal.
 PYENV="$(dirname "$GATE")/py-env.py"
 for target in "$T/no-such-requirements.txt" "$T"; do
-  PO=$(python3 -S "$PYENV" licences "$target" prod 2>&1)
+  PO=$(python3 -I "$PYENV" licences "$target" prod 2>&1)
   check 3 $? "helper exits 3 for the unreadable path $target"
   has "cannot read $target" "$PO" "helper says it cannot read the path"
   hasnt "Traceback" "$PO" "helper shows no traceback for the unreadable path"
@@ -611,10 +608,10 @@ env_fixture py-scope 'okpkg==1.0
 '
 dist okpkg 1.0 'License-Expression: MIT'
 dist devtool 2.0 'License-Expression: GPL-3.0-only'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "prod scope ignores an installed package that is not locked ($OUT)"
 has "ok (1 packages, python)" "$OUT" "prod scope counts the locked package only"
-run "$D" PYTHONPATH="$SITE" LICENCES_SCOPE=all
+run "$D" LICENCES_SCOPE=all
 check 1 "$EC" "all scope checks the whole environment"
 has "devtool@2.0 has licence GPL-3.0-only" "$OUT" "all scope names the dev package"
 
@@ -641,8 +638,74 @@ env_fixture py-pyproject ''
 rm "$D/requirements.txt"
 : > "$D/pyproject.toml"
 dist okpkg 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "a pyproject-only project lists everything installed ($OUT)"
+
+# Project code must not run inside the gate: the helper is read with python -I, so a module named like a standard one next to it or in the working folder, PYTHONPATH and PYTHONSTARTUP have no effect.
+# shadow_case <name> <folder under the project> <module>: a project holding a copy of the gate and helper, and a hostile <module>.py in <folder>.
+shadow_case() {
+  env_fixture "$1" 'okpkg==1.0
+'
+  dist okpkg 1.0 'License-Expression: MIT'
+  mkdir -p "$D/scripts"
+  cp "$GATE" "$D/scripts/check-licences.sh"
+  cp "$(dirname "$GATE")/py-env.py" "$D/scripts/py-env.py"
+  if [ -n "$3" ]; then printf 'print("PWNED")\nraise SystemExit(0)\n' > "$D/$2/$3.py"; fi
+}
+REALGATE=$GATE
+shadow_run() { # shadow_run [VAR=value ...]: runs the project's own copy of the gate
+  GATE="$D/scripts/check-licences.sh"
+  run "$D" "$@"
+  GATE=$REALGATE
+}
+shadow_case shadow-clean . ''
+shadow_run
+check 0 "$EC" "control: a project with no shadow module passes ($OUT)"
+for mod in json uuid shlex re datetime; do
+  shadow_case "shadow-s-$mod" scripts "$mod"
+  shadow_run
+  check 0 "$EC" "a $mod.py next to the helper does not run ($OUT)"
+  hasnt "PWNED" "$OUT" "a $mod.py next to the helper printed nothing"
+  shadow_case "shadow-c-$mod" . "$mod"
+  shadow_run
+  check 0 "$EC" "a $mod.py in the working folder does not run ($OUT)"
+  hasnt "PWNED" "$OUT" "a $mod.py in the working folder printed nothing"
+done
+shadow_case shadow-env . ''
+mkdir -p "$D/evil"
+printf 'print("PWNED")\nraise SystemExit(0)\n' > "$D/evil/json.py"
+printf 'print("PWNED")\nraise SystemExit(0)\n' > "$D/startup.py"
+shadow_run PYTHONPATH="$D/evil" PYTHONSTARTUP="$D/startup.py"
+check 0 "$EC" "PYTHONPATH and PYTHONSTARTUP do not run project code ($OUT)"
+hasnt "PWNED" "$OUT" "PYTHONPATH and PYTHONSTARTUP printed nothing"
+
+# A committed environment is not trusted: a tracked .venv (or a tracked VIRTUAL_ENV folder) is refused before anything is read from it, and a .pth planted in it never runs.
+# tracked_case <name> <tracked path relative to the project>: a git project that tracks <path>.
+tracked_case() {
+  env_fixture "$1" 'okpkg==1.0
+'
+  dist okpkg 1.0 'License-Expression: MIT'
+  if [ "$2" != .claude/allowed-licences.txt ]; then printf 'import os; print("PWNED")\n' > "$SITE/evil.pth"; fi
+  (cd "$D" && git init -q . && git add -f "$2" > /dev/null 2>&1)
+}
+tracked_case tracked-clean .claude/allowed-licences.txt
+run "$D"
+check 0 "$EC" "control: a git project with no tracked environment passes ($OUT)"
+tracked_case tracked-venv .venv/pyvenv.cfg
+run "$D"
+check 2 "$EC" "a tracked .venv is refused"
+has "tracked by git" "$OUT" "message says the environment is tracked"
+has ".venv/pyvenv.cfg" "$OUT" "message names the tracked path"
+hasnt "PWNED" "$OUT" "a tracked .venv printed nothing"
+tracked_case tracked-pth ".venv/${SITE#"$D"/.venv/}/evil.pth"
+run "$D"
+check 2 "$EC" "a tracked .pth plant in the .venv is refused"
+hasnt "PWNED" "$OUT" "the planted .pth never ran"
+tracked_case tracked-venvx .venv/pyvenv.cfg
+(cd "$D" && git rm -r -q --cached .venv && mv .venv venvx && git add -f venvx > /dev/null 2>&1)
+run "$D" VIRTUAL_ENV="$D/venvx"
+check 2 "$EC" "a tracked VIRTUAL_ENV folder is refused"
+has "tracked by git" "$OUT" "message says the VIRTUAL_ENV folder is tracked"
 
 # real_required <what>: the real run needs tools that are missing.
 real_required() {

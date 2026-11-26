@@ -29,7 +29,8 @@ jobs:
         run: |
           set -euo pipefail
           # The licence and SBOM gates read the project environment at .venv.
-          python -m venv .venv
+          if [ -n "$(git ls-files .venv)" ]; then echo "::error::.venv is tracked by git; remove it (git rm -r --cached .venv): a committed environment is not trusted."; exit 1; fi
+          python -m venv --clear .venv
           echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           .venv/bin/python -m pip install --require-hashes -r requirements.txt

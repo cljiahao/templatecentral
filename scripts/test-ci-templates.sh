@@ -815,7 +815,8 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'if': "hashFiles('uv.lock') != ''", 'uses': 'astral-sh/setup-uv'},
                                      {'run': 'set -euo pipefail\n'
                                              '# The licence and SBOM gates read the project environment at .venv.\n'
-                                             'python -m venv .venv\n'
+                                             'if [ -n "$(git ls-files .venv)" ]; then echo "::error::.venv is tracked by git; remove it (git rm -r --cached .venv): a committed environment is not trusted."; exit 1; fi\n'
+                                             'python -m venv --clear .venv\n'
                                              'echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"\n'
                                              'echo "$PWD/.venv/bin" >> "$GITHUB_PATH"\n'
                                              '.venv/bin/python -m pip install --require-hashes -r requirements.txt\n'
@@ -875,7 +876,8 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                     {'task': 'UsePythonVersion@0', 'inputs': {'versionSpec': '3.14'}},
                                     {'bash': 'set -euo pipefail\n'
                                              '# The licence and SBOM gates read the project environment at .venv.\n'
-                                             'python -m venv .venv\n'
+                                             'if [ -n "$(git ls-files .venv)" ]; then echo "##vso[task.logissue type=error].venv is tracked by git; remove it (git rm -r --cached .venv): a committed environment is not trusted."; exit 1; fi\n'
+                                             'python -m venv --clear .venv\n'
                                              'echo "##vso[task.setvariable variable=VIRTUAL_ENV]$PWD/.venv"\n'
                                              'echo "##vso[task.prependpath]$PWD/.venv/bin"\n'
                                              '.venv/bin/python -m pip install --require-hashes -r requirements.txt\n'
@@ -1108,6 +1110,18 @@ mutate "|| exit 0 after the jscpd step (github-ts)" github-ts/.github/workflows/
 mutate "|| echo after diff-cover (azure-py)" azure-py/azure-pipelines.yml '--fail-under=80' '--fail-under=80 || echo ignored' static
 mutate "|| exit 0 after nosonar (azure gates)" azure/azure-pipelines/templatecentral-gates.yml 'bash .claude/ci-gates.sh nosonar' 'bash .claude/ci-gates.sh nosonar || exit 0' static
 mutate "|| echo after the merge command (github-py pytest is the merge) " github-py/.github/workflows/ci.yml '--cov-report=xml -q' '--cov-report=xml -q || echo ignored' static
+mutate "tracked .venv check removed (github-py)" github-py/.github/workflows/ci.yml '          if [ -n "$(git ls-files .venv)" ]; then echo "::error::.venv is tracked by git; remove it (git rm -r --cached .venv): a committed environment is not trusted."; exit 1; fi\n' '' static
+mutate "venv --clear removed (github-py)" github-py/.github/workflows/ci.yml 'python -m venv --clear .venv' 'python -m venv .venv' static
+mutate "tracked .venv check removed (azure-py)" azure-py/azure-pipelines.yml '          if [ -n "$(git ls-files .venv)" ]; then echo "##vso[task.logissue type=error].venv is tracked by git; remove it (git rm -r --cached .venv): a committed environment is not trusted."; exit 1; fi\n' '' static
+mutate "venv --clear removed (azure-py)" azure-py/azure-pipelines.yml 'python -m venv --clear .venv' 'python -m venv .venv' static
+# The tracked-environment line itself, run as the job runs it: a tracked .venv fails the step, a clean tree passes.
+for host_file in github-py/.github/workflows/ci.yml azure-py/azure-pipelines.yml; do
+  line=$(grep -m1 'git ls-files .venv' "$CI_DIR/$host_file" | sed 's/^ *//')
+  rm -rf "$T/venvchk" && mkdir -p "$T/venvchk" && (cd "$T/venvchk" && git init -q . && echo x > a.txt && git add -A && git -c user.email=t@e.x -c user.name=t commit -q -m c)
+  if (cd "$T/venvchk" && bash -c "$line" > /dev/null 2>&1); then ok "clean tree passes the tracked .venv step ($host_file)"; else bad "clean tree failed the tracked .venv step ($host_file)"; fi
+  (cd "$T/venvchk" && mkdir -p .venv/lib && echo 'import os' > .venv/lib/evil.pth && git add -f .venv && git -c user.email=t@e.x -c user.name=t commit -q -m venv)
+  if (cd "$T/venvchk" && bash -c "$line" > /dev/null 2>&1); then bad "a tracked .venv passed the step ($host_file)"; else ok "a tracked .venv fails the step ($host_file)"; fi
+done
 mutate "if: false on the jscpd step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Duplication (production source <= 3%, per .jscpd.json)\n        run: pnpm exec jscpd' '      - if: false\n        name: Duplication (production source <= 3%, per .jscpd.json)\n        run: pnpm exec jscpd' static
 mutate "if: false on the nosonar step (github-py)" github-py/.github/workflows/ci.yml '      - name: No NOSONAR suppression markers' '      - if: false\n        name: No NOSONAR suppression markers' static
 mutate "if: false on the merge step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Merge shard reports (writes coverage/cobertura-coverage.xml)' '      - if: false\n        name: Merge shard reports (writes coverage/cobertura-coverage.xml)' static

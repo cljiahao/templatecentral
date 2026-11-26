@@ -55,6 +55,17 @@ list_pnpm() {
   ' < "$tmp/pnpm.json" || die "cannot read the pnpm licence report"
 }
 
+# Refuses a Python environment that git tracks: a committed .venv can carry .pth files or fake package metadata that run or lie inside the gate.
+refuse_tracked_env() {
+  local d tracked
+  for d in .venv "${VIRTUAL_ENV:-}"; do
+    if [ -z "$d" ]; then continue; fi
+    tracked=$(git ls-files -- "$d" 2> /dev/null) || tracked=''
+    tracked=${tracked%%$'\n'*}
+    if [ -n "$tracked" ]; then die "the Python environment '$d' is tracked by git ($tracked is committed). Remove it from git (git rm -r --cached $d) and add it to .gitignore; a committed environment cannot be trusted."; fi
+  done
+}
+
 # Prints "name@version<TAB>licence" for each package installed in the project's Python environment.
 list_python() {
   local py='' req=''
@@ -65,8 +76,9 @@ list_python() {
   else
     die "no project Python environment (VIRTUAL_ENV or .venv). Create the environment and install first: uv venv && uv pip install --require-hashes -r requirements.txt"
   fi
+  refuse_tracked_env
   if [ -f requirements.txt ]; then req=requirements.txt; fi
-  "$py" "$helper" licences "$req" "$scope" 2> "$tmp/py.err" || die "cannot read the installed Python packages: $(head -n 3 "$tmp/py.err" | tr '\n' ' ')"
+  "$py" -I "$helper" licences "$req" "$scope" 2> "$tmp/py.err" || die "cannot read the installed Python packages: $(head -n 3 "$tmp/py.err" | tr '\n' ' ')"
 }
 
 # Reads the data file; prints "name<TAB>licence" for each package whose licence is not allowed, then one sentinel line "__judged__<TAB>count".

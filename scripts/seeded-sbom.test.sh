@@ -19,6 +19,10 @@ has() { # has <needle> <haystack> <description>
   if [[ "$2" == *"$1"* ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: $3 — [$1] not in [$2]"; fi
 }
 
+hasnt() { # hasnt <needle> <haystack> <description>
+  if [[ "$2" != *"$1"* ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: $3 — [$1] is in [$2]"; fi
+}
+
 T=$(mktemp -d "${TMPDIR:-/tmp}/seeded-sbom.XXXXXX") || exit 2
 trap 'rm -rf "$T"' EXIT
 
@@ -36,6 +40,7 @@ run() {
 # stub <dir> <name>: an executable stub tool whose body is read from stdin.
 stub() {
   mkdir -p "$1"
+  rm -f "$1/$2"
   { echo '#!/bin/sh'; cat; } > "$1/$2"
   chmod +x "$1/$2"
 }
@@ -155,7 +160,7 @@ mkdir -p "$D"
 run "$D"
 check 2 "$EC" "a folder with no stack file cannot generate"
 
-# env_fixture <name> <requirements text>: a Python project whose .venv/bin/python is the real interpreter without the global site-packages; sets D and SITE.
+# env_fixture <name> <requirements text>: a Python project with a real empty venv (no global site-packages; the gate reads it with python -I, so PYTHONPATH cannot feed it); sets D and SITE.
 # raw_env_fixture <name> <requirements text>: like env_fixture, with the lock text written as given.
 # env_fixture <name> <requirements text>: the lock text gets a --hash continuation under each bare name==version line, as uv pip compile writes it.
 env_fixture() {
@@ -164,10 +169,9 @@ env_fixture() {
 }
 raw_env_fixture() {
   D="$T/$1"
-  SITE="$D/site"
-  mkdir -p "$D/.venv/bin" "$SITE"
-  printf '#!/bin/sh\nexec python3 -S "$@"\n' > "$D/.venv/bin/python"
-  chmod +x "$D/.venv/bin/python"
+  mkdir -p "$D"
+  python3 -m venv --without-pip "$D/.venv" > /dev/null 2>&1 || { FAIL=$((FAIL + 1)); echo "FAIL: cannot create a venv for $1"; }
+  SITE=$(echo "$D"/.venv/lib/python*/site-packages)
   printf '%s' "$2" > "$D/requirements.txt"
 }
 # dist <name> <version> [header line ...]: a fake installed distribution in $SITE.
@@ -183,7 +187,7 @@ beta==2.0
 '
 dist beta 2.0 'Requires-Dist: alpha'
 dist alpha 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "python control from installed metadata ($OUT)"
 has "(python, CycloneDX)" "$OUT" "the output line names the kind"
 J="$D/dist/sbom/bom.cdx.json"
@@ -199,46 +203,46 @@ ghost==2.0
 dist alpha 1.0
 mkdir -p "$D/dist/sbom"
 echo old > "$D/dist/sbom/bom.cdx.json"
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 1 "$EC" "a requirement that is not installed fails"
 has "requirements.txt lists ghost, which is not installed" "$OUT" "message names the missing package"
 check 1 "$(gone "$D/dist/sbom/bom.cdx.json")" "a failed Python run leaves no stale SBOM"
 
 raw_env_fixture py-formfeed $'alpha==1.0 \\\n    --hash=sha256:aa\n# c\x0cghost==2.0 --hash=sha256:aa\n'
 dist alpha 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 1 "$EC" "a form feed in a lock comment is refused, not read as a line break"
 has "requirements.txt line 3: byte 0x0c is not allowed" "$OUT" "message names the line and the byte"
 raw_env_fixture py-coding $'# coding: utf-7 +AAo-ghost==2.0\nalpha==1.0 \\\n    --hash=sha256:aa\n'
 dist alpha 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 1 "$EC" "a coding comment in a lock is refused"
 has "a coding comment makes pip decode" "$OUT" "message says why"
 raw_env_fixture py-trailing $'alpha==1.0 # c \\\n    --hash=sha256:aa\n'
 dist alpha 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 1 "$EC" "a trailing comment before a continuation is refused"
 has "a # is only allowed at the start of a line" "$OUT" "message says why"
 raw_env_fixture py-envvar $'--find-links ${X}\nalpha==1.0 \\\n    --hash=sha256:aa\n'
 dist alpha 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 1 "$EC" "an environment variable in a lock is refused"
 has "a \$ is only allowed in a full-line comment" "$OUT" "message says why"
 raw_env_fixture py-bomcrlf $'\xef\xbb\xbfalpha==1.0 \\\r\n    --hash=sha256:aa\r\n'
 dist alpha 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "control: a lock with a BOM and CRLF line endings generates ($OUT)"
 
 env_fixture py-empty 'alpha==1.0
 '
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 1 "$EC" "an environment with nothing installed fails"
 
 env_fixture py-noenv 'alpha==1.0
 '
 dist alpha 1.0
 rm -r "$D/.venv"
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 2 "$EC" "no project environment cannot generate, even when the global python3 has packages"
 has "no project Python environment" "$OUT" "message says there is no environment"
 has "Create the environment and install first" "$OUT" "message says how to fix it"
@@ -247,7 +251,7 @@ env_fixture py-pyproject ''
 rm "$D/requirements.txt"
 echo '[project]' > "$D/pyproject.toml"
 dist alpha 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "a pyproject-only project lists everything installed ($OUT)"
 has '"purl": "pkg:pypi/alpha@1.0"' "$(cat "$D/dist/sbom/bom.cdx.json")" "the pyproject-only SBOM lists the installed package"
 
@@ -255,12 +259,12 @@ env_fixture py-badjson 'alpha==1.0
 '
 dist alpha 1.0
 stub "$D/.venv/bin" python << 'EOS'
-if [ "$2" = check ]; then exec python3 "$@"; fi
+if [ "$3" = check ]; then exec python3 "$@"; fi
 out=
 for a in "$@"; do out=$a; done
 echo 'not json' > "$out"
 EOS
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 1 "$EC" "a generator that writes invalid JSON does not pass"
 has "not valid JSON" "$OUT" "message says the document is invalid"
 hasnt_ok=$(printf '%s' "$OUT" | grep -c 'wrote ')
@@ -273,14 +277,14 @@ dist alpha 1.0
 stub "$D/.venv/bin" python << 'EOS'
 exit 5
 EOS
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 2 "$EC" "a Python helper that crashes cannot generate (exit 2, not a finding)"
 has "cannot read the installed Python packages" "$OUT" "message says the helper crashed"
 stub "$D/.venv/bin" python << 'EOS'
 echo "bad document" >&2
 exit 3
 EOS
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 1 "$EC" "a Python helper that reports a bad document fails (exit 1)"
 pnpm_fixture node-crash
 stub "$D/stub" node << 'EOS'
@@ -304,7 +308,7 @@ env_fixture py-nameless 'alpha==1.0
 dist alpha 1.0 'License-Expression: MIT'
 mkdir -p "$SITE/nameless-1.0.dist-info"
 printf 'Metadata-Version: 2.4\nVersion: 1.0\n' > "$SITE/nameless-1.0.dist-info/METADATA"
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 1 "$EC" "a package with no Name fails the SBOM"
 has "nameless-1.0.dist-info" "$OUT" "message names the dist-info folder"
 
@@ -318,7 +322,7 @@ dist a 1 'License-Expression: Apache-2.0'
 dist b 1 'License: BSD-3-Clause'
 dist c 1 'Classifier: License :: OSI Approved :: MIT License'
 dist d 1
-run "$D" PYTHONPATH="$SITE"
+run "$D"
 check 0 "$EC" "licence fallbacks generate ($OUT)"
 J="$D/dist/sbom/bom.cdx.json"
 has '"expression": "Apache-2.0"' "$(cat "$J")" "License-Expression becomes an expression"
@@ -335,15 +339,82 @@ echo "lockfileVersion: '9.0'" > "$D/pnpm-lock.yaml"
 stub "$D/stub" pnpm << 'EOS'
 cat "$BOM_FILE"
 EOS
-run "$D" PYTHONPATH="$SITE" PATH="$D/stub:$PATH"
+run "$D" PATH="$D/stub:$PATH"
 check 0 "$EC" "python plus package.json both generate ($OUT)"
 check 1 "$(exists "$D/dist/sbom/bom.cdx-pnpm.json")" "the pnpm file is written"
 check 1 "$(exists "$D/dist/sbom/bom.cdx-python.json")" "the Python file is written"
 check 1 "$(gone "$D/dist/sbom/bom.cdx.json")" "no single file when both manifests exist"
 rm -r "$D/.venv"
-run "$D" PYTHONPATH="$SITE" PATH="$D/stub:$PATH"
+run "$D" PATH="$D/stub:$PATH"
 check 2 "$EC" "python plus package.json: a missing Python environment is not skipped"
 check 1 "$(gone "$D/dist/sbom/bom.cdx-pnpm.json")" "a failed run leaves no half-written pnpm file"
+
+# Project code must not run inside the gate: the helper is read with python -I, so a module named like a standard one next to it or in the working folder, PYTHONPATH and PYTHONSTARTUP have no effect.
+# shadow_case <name> <folder under the project> <module>: a project holding a copy of the gate and helper, and a hostile <module>.py in <folder>.
+shadow_case() {
+  env_fixture "$1" 'okpkg==1.0
+'
+  dist okpkg 1.0 'License-Expression: MIT'
+  mkdir -p "$D/scripts"
+  cp "$GATE" "$D/scripts/generate-sbom.sh"
+  cp "$(dirname "$GATE")/py-env.py" "$D/scripts/py-env.py"
+  if [ -n "$3" ]; then printf 'print("PWNED")\nraise SystemExit(0)\n' > "$D/$2/$3.py"; fi
+}
+REALGATE=$GATE
+shadow_run() { # shadow_run [VAR=value ...]: runs the project's own copy of the gate
+  GATE="$D/scripts/generate-sbom.sh"
+  run "$D" "$@"
+  GATE=$REALGATE
+}
+shadow_case shadow-clean . ''
+shadow_run
+check 0 "$EC" "control: a project with no shadow module passes ($OUT)"
+for mod in json uuid shlex re datetime; do
+  shadow_case "shadow-s-$mod" scripts "$mod"
+  shadow_run
+  check 0 "$EC" "a $mod.py next to the helper does not run ($OUT)"
+  hasnt "PWNED" "$OUT" "a $mod.py next to the helper printed nothing"
+  shadow_case "shadow-c-$mod" . "$mod"
+  shadow_run
+  check 0 "$EC" "a $mod.py in the working folder does not run ($OUT)"
+  hasnt "PWNED" "$OUT" "a $mod.py in the working folder printed nothing"
+done
+shadow_case shadow-env . ''
+mkdir -p "$D/evil"
+printf 'print("PWNED")\nraise SystemExit(0)\n' > "$D/evil/json.py"
+printf 'print("PWNED")\nraise SystemExit(0)\n' > "$D/startup.py"
+shadow_run PYTHONPATH="$D/evil" PYTHONSTARTUP="$D/startup.py"
+check 0 "$EC" "PYTHONPATH and PYTHONSTARTUP do not run project code ($OUT)"
+hasnt "PWNED" "$OUT" "PYTHONPATH and PYTHONSTARTUP printed nothing"
+
+# A committed environment is not trusted: a tracked .venv (or a tracked VIRTUAL_ENV folder) is refused before anything is read from it, and a .pth planted in it never runs.
+# tracked_case <name> <tracked path relative to the project>: a git project that tracks <path>.
+tracked_case() {
+  env_fixture "$1" 'okpkg==1.0
+'
+  dist okpkg 1.0 'License-Expression: MIT'
+  SITE=$(echo "$D"/.venv/lib/python*/site-packages)
+  if [ "$2" != package.json ]; then printf 'import os; print("PWNED")\n' > "$SITE/evil.pth"; fi
+  (cd "$D" && git init -q . && git add -f "$2" > /dev/null 2>&1)
+}
+tracked_case tracked-clean package.json
+run "$D" PATH="$D/stub:$PATH"
+check 0 "$EC" "control: a git project with no tracked environment passes ($OUT)"
+tracked_case tracked-venv .venv/pyvenv.cfg
+run "$D" PATH="$D/stub:$PATH"
+check 2 "$EC" "a tracked .venv is refused"
+has "tracked by git" "$OUT" "message says the environment is tracked"
+has ".venv/pyvenv.cfg" "$OUT" "message names the tracked path"
+hasnt "PWNED" "$OUT" "a tracked .venv printed nothing"
+tracked_case tracked-pth ".venv/${SITE#"$D"/.venv/}/evil.pth"
+run "$D" PATH="$D/stub:$PATH"
+check 2 "$EC" "a tracked .pth plant in the .venv is refused"
+hasnt "PWNED" "$OUT" "the planted .pth never ran"
+tracked_case tracked-venvx .venv/pyvenv.cfg
+(cd "$D" && git rm -r -q --cached .venv && mv .venv venvx && git add -f venvx > /dev/null 2>&1)
+run "$D" PATH="$D/stub:$PATH" VIRTUAL_ENV="$D/venvx"
+check 2 "$EC" "a tracked VIRTUAL_ENV folder is refused"
+has "tracked by git" "$OUT" "message says the VIRTUAL_ENV folder is tracked"
 
 # real_required <what>: the real run needs tools that are missing.
 real_required() {
