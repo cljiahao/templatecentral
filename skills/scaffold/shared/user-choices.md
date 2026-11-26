@@ -6,7 +6,6 @@
 
 Ask these together, in one message, and only for what the user has not already answered. Each has a default, which applies when the user does not choose. Record the answers: the stack guide and the shared kit use them instead of asking again, and ask only for a choice left open here.
 
-- extra project skills — any repeated workflow to capture as a project skill beyond the verify skills the template ships (the stack guide lists candidates). Default: none.
 - `CLAUDE.md` — whether the user works in Claude Code, so the guide writes a one-line `CLAUDE.md` that imports `AGENTS.md`. Default: yes when this scaffold runs in Claude Code, otherwise no.
 - task management — whether to append the structured task-management section to `AGENTS.md`. Default: no.
 - remove example code — whether to delete the example feature with the cleanup utility once the project is verified and runs. Default: no; the example stays until the user removes it.
