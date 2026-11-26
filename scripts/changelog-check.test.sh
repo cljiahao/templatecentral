@@ -422,6 +422,16 @@ sub "$R/CHANGELOG.md" 's/^- two$/- two `a in <version> here/'; commit lt; git -C
 migfrags; printf -- '- two \x60a in <version> here\x60\n' > "$R/changelog.d/two.added.md"
 printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
 run "migration PR rewords a line with an odd backtick count" 1 "in no added fragment"
+mkunrel mig-bold; git -C "$R" checkout -q main
+sub "$R/CHANGELOG.md" 's/^- two$/- **two** words/'; commit lt; git -C "$R" checkout -q -B pr2
+migfrags; printf -- '- two words\n' > "$R/changelog.d/two.added.md"
+printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
+runq "migration PR drops bold markers from a removed line" 0
+mkunrel mig-bold2; git -C "$R" checkout -q main
+sub "$R/CHANGELOG.md" 's/^- two$/- **two** words/'; commit lt; git -C "$R" checkout -q -B pr2
+migfrags; printf -- '- two other words\n' > "$R/changelog.d/two.added.md"
+printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
+run "migration PR changes a word beside the bold markers" 1 "in no added fragment"
 mkunrel mig-edit; migfrags; printf '%s' "${EMPTIED/- old/- old2}" > "$R/CHANGELOG.md"; commit f
 run "migration PR also edits a released line" 1 "release rule"
 mkunrel mig-nofrag; printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f

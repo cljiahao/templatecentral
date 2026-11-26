@@ -11,8 +11,8 @@
 #   may only be modified or added: deleted or type-changed fails. Each copy needs exactly one
 #   version line; minified JSON or a repeated key fails closed.
 #   Migration PR (the only CHANGELOG.md change empties "## [Unreleased]"): the same as a normal
-#   PR, and every entry removed from CHANGELOG.md is a line of an added fragment (backticks are
-#   ignored in that comparison, so a fragment may wrap a stray < in them).
+#   PR, and every entry removed from CHANGELOG.md is a line of an added fragment (backticks and *
+#   are ignored in that comparison, so a fragment may wrap a stray < in backticks or drop bold).
 #   Release PR (any other CHANGELOG.md change): the diff must be exactly what
 #   changelog-assemble.sh makes, plus the version bump. Rules, each reported by number when it
 #   fails:
@@ -133,7 +133,7 @@ while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
       continue
     fi
     cat "$work/frag" >> "$work/fragtext"
-    awk '{ o = $0; gsub(/`/, ""); print $0 "\t" o }' "$work/frag" >> "$work/fragpairs"
+    awk '{ o = $0; gsub(/[`*]/, ""); print $0 "\t" o }' "$work/frag" >> "$work/fragpairs"
     n_added=$((n_added + 1))
     continue
   fi
@@ -163,10 +163,10 @@ fi
 
 # Migration PR: the only CHANGELOG.md change empties [Unreleased] into the added fragments.
 migration=0 bt=$(printf '\x60')
-# Succeeds when the removed line $1 is a reworded fragment line: the same text once backticks are
-# dropped, and every code span of the removed line kept as it was (a reword may add spans, it may
-# not drop, move or change one). Odd backtick counts fail closed. Used only when no fragment line
-# equals the removed line exactly.
+# Succeeds when the removed line $1 is a reworded fragment line: the same text once backticks
+# and * are dropped, and every code span of the removed line kept as it was (a reword may add
+# spans, it may not drop, move or change one). Odd backtick counts fail closed. Used only when
+# no fragment line equals the removed line exactly.
 reword_ok() {
   local line=$1 cand i only parts
   only=${line//[!$bt]/}
@@ -179,7 +179,7 @@ reword_ok() {
       i=$((i + 2))
     done
     if [[ $i -ge ${#parts[@]} ]]; then return 0; fi
-  done < <(S="${line//"$bt"/}" awk -F '\t' '$1 == ENVIRON["S"] { print $2 }' "$work/fragpairs")
+  done < <(S="${line//[$bt*]/}" awk -F '\t' '$1 == ENVIRON["S"] { print $2 }' "$work/fragpairs")
   return 1
 }
 if [[ $cl_seen -eq 1 && $cl_status == M && ! -s $work/entries && $n_added -ge 1 && $n_bad -eq 0 ]] \
