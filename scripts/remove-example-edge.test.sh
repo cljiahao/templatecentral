@@ -151,6 +151,24 @@ mkshim() {
     "exec $real \"\$@\"" >"$H/bin/$cmd"
   chmod +x "$H/bin/$cmd"
 }
+# mksigshim <dir> <cmd> <sig> <marker>: a shim for <cmd> that runs the real command and then sends <sig> to its parent (the
+# script), once, on the first call whose arguments contain the marker; the signal lands right after the command finished.
+mksigshim() {
+  local H=$1 cmd=$2 sig=$3 marker=$4 real
+  real=$(command -v "$cmd")
+  mkdir -p "$H/bin"
+  printf '%s\n' '#!/bin/bash' \
+    "case \"\$*\" in *\"$marker\"*)" \
+    "  if [ ! -e \"$H/fired\" ]; then" \
+    "    : >\"$H/fired\"" \
+    "    $real \"\$@\"; rc=\$?" \
+    "    kill -s $sig \$PPID" \
+    "    exit \$rc" \
+    "  fi ;;" \
+    "esac" \
+    "exec $real \"\$@\"" >"$H/bin/$cmd"
+  chmod +x "$H/bin/$cmd"
+}
 PID=
 # launch <hook-dir> <script> args...: the script in the background through the launcher, output in <hook-dir>/out
 launch() {
@@ -394,6 +412,59 @@ g_swap() { # <kind: link|dir>
 g_swap_link() { g_swap link; }
 g_swap_dir() { g_swap dir; }
 
+# a TERM that lands right after the edit was installed: the edit is rolled back and the message is true. Control: no signal.
+# Mutants: the replaced record written after the install (the old order); the record dropped
+g_install_sig() {
+  local J=$T/j.instsig D h H=$T/j.instsig/h o R=src/api/routes.py orig
+  mkdir -p "$J"; D=$J/c; sd fastapi "$D"; h=$(treehash "$D"); orig=$(cat "$D/$R")
+  mksigshim "$J/hc" ln TERM "no such marker"
+  launch "$J/hc" "$SC" "$D" --apply; wait "$PID"; RC=$?
+  check "install control (no signal): exit 0" "0" "$RC"
+  contains "install control: applied" "applied" "$(cat "$J/hc/out")"
+  check "install control: the edit is in place" "1" "$(changed01 "$orig" "$(cat "$D/$R")")"
+  rm -rf "$J/p"; D=$J/p; sd fastapi "$D"
+  mksigshim "$H" ln TERM "$R"
+  launch "$H" "$SC" "$D" --apply; wait "$PID"; RC=$?; o=$(cat "$H/out")
+  check "TERM right after the install: fired" "1" "$(exists01 "$H/fired")"
+  check "TERM right after the install: exit code" "143" "$RC"
+  contains "TERM right after the install: says every file was restored" "every file was restored" "$o"
+  check "TERM right after the install: the target holds the original" "$orig" "$(cat "$D/$R")"
+  check "TERM right after the install: the project is as it was" "$h" "$(treehash "$D")"
+  local REC=$'  printf \'%s\\t%s\\t%s\\n\' "$target" "$snap" "$staged" >>"$STAGE/replaced"\n'
+  local RMT=$'  if ! rm -f -- "$tmp"; then fail_apply "cannot remove the temp file of ${target#"$ROOT"/}"; fi\n'
+  if mutant "$J" "$REC" '' && mutadd "$RMT" "$RMT$REC"; then
+    rm -rf "$J/p2" "$J/h2"; sd fastapi "$J/p2"
+    mksigshim "$J/h2" ln TERM "$R"
+    launch "$J/h2" "$MUT" "$J/p2" --apply; wait "$PID"
+    check "mutant with the record written after the install leaves the edit in place" "1" "$(changed01 "$h" "$(treehash "$J/p2")")"
+  fi
+}
+
+# a file created at the edit target while the original is held: the install refuses it, the new file is kept, nothing is lost
+g_install_race() {
+  local J=$T/j.instrace D H=$T/j.instrace/h o R=src/api/routes.py orig held
+  mkdir -p "$J"; D=$J/p; sd fastapi "$D"; orig=$(cat "$D/$R")
+  mkshim "$H" ln pause "$R"
+  launch "$H" "$SC" "$D" --apply
+  if ! waitready "$H"; then echo "FAIL install race: the hook never fired"; finish "$H"; return; fi
+  printf 'mine\n' >"$D/$R"
+  finish "$H"; settle "$H"; o=$(cat "$H/out")
+  check "file created at the edit target: exit 1" "1" "$RC"
+  contains "file created at the edit target: says the name is taken" "the name is taken" "$o"
+  check "file created at the edit target: the new file is kept" "mine" "$(cat "$D/$R")"
+  held=$(find "$D/src/api" -name '.remove-example.held.*' | awk 'NR == 1')
+  check "file created at the edit target: the original is kept under the held name" "$orig" "$(if [ -n "$held" ]; then cat "$held"; fi)"
+  contains "file created at the edit target: the rollback does not claim a full restore" "ROLLBACK INCOMPLETE" "$o"
+  if mutant "$J" $'ln -- "$tmp" "$target"' $'ln -f -- "$tmp" "$target"'; then
+    rm -rf "$J/p2" "$J/h2"; sd fastapi "$J/p2"
+    mkshim "$J/h2" ln pause "$R"
+    launch "$J/h2" "$MUT" "$J/p2" --apply
+    if waitready "$J/h2"; then printf 'mine\n' >"$J/p2/$R"; fi
+    finish "$J/h2"; settle "$J/h2"
+    check "mutant that overwrites on install loses the new file" "1" "$(changed01 "mine" "$(cat "$J/p2/$R")")"
+  fi
+}
+
 # a file to delete that changes after the checks (forced or not): it is compared again when it is moved aside, refused, put back
 g_mid_delete() {
   local J=$T/j.middel D h H=$T/j.middel/h o
@@ -515,7 +586,7 @@ g_inode() {
   ln "$D/src/api/routes.py" "$J/link.py"
   xr "$D" --apply >/dev/null
   check "an edited file is replaced by a rename: a hard link keeps the old bytes" "$old" "$(cat "$J/link.py")"
-  if mutant "$J" $'  take "$target" "$snap"\n  if ! mv -- "$tmp" "$target"; then' $'  HELD=$target.none\n  if ! cat -- "$tmp" >"$target"; then'; then
+  if mutant "$J" $'  take "$target" "$snap"\n' $'  HELD=$target.none\n' && mutadd $'ln -- "$tmp" "$target"' $'cat -- "$tmp" >"$target"'; then
     rm -rf "$J/p2" "$J/link2.py"; sd fastapi "$J/p2"; ln "$J/p2/src/api/routes.py" "$J/link2.py"
     mx "$J/p2" --apply >/dev/null
     check "mutant with an in-place write changes the bytes the hard link sees" "1" "$(changed01 "$old" "$(cat "$J/link2.py")")"
@@ -801,7 +872,7 @@ g_manifest_b() {
     $'|| $3 !~ /^[1-9][0-9]*$/' ''
 }
 
-JOBS="sig_int sig_term sig_hup sig_nth_int sig_nth_term sig_nth_hup pipe sig_early sig_keep rm_fail swap_link swap_dir mid_delete cp_fail inode rmdir unreadable special_root edit_refusals marker streams usage cdpath force_paths manifest_a manifest_b"
+JOBS="install_sig install_race sig_int sig_term sig_hup sig_nth_int sig_nth_term sig_nth_hup pipe sig_early sig_keep rm_fail swap_link swap_dir mid_delete cp_fail inode rmdir unreadable special_root edit_refusals marker streams usage cdpath force_paths manifest_a manifest_b"
 n=0
 for j in $JOBS; do
   ( "g_$j"; echo "job $j done" ) >"$T/o.$j" 2>&1 &

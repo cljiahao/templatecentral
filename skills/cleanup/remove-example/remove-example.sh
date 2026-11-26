@@ -37,10 +37,11 @@
 #   segments, or with a symlink component; a symlink, special file, unreadable file or file name with a newline inside a deleted
 #   directory; an unreadable directory (find fails); a delete root or edit target that is not a regular file or directory;
 #   a CR in an edited file; an expected line that is missing, matches twice, or sits in a file with no final newline; a block
-#   that differs from the scaffold's in any line; overlapping edits; a --force path that matches nothing; a deleted file (one not forced) or an
+#   that differs from the scaffold's in any line; overlapping edits; a --force path that matches nothing; a deleted file or an
 #   edited file (forced or not) that changed between the checks and the moment it is moved aside; an edit target that became a
-#   directory or symlink; a write or
-#   delete that fails; INT, TERM or HUP during the apply (all rolled back); a CDPATH or a project path with a newline; a project path that is /.
+#   directory or symlink; a file created at an edit target while the original is held (the install uses a hard link, which
+#   refuses an existing name; the new file is kept and the run is rolled back); a write or delete that fails;
+#   INT, TERM or HUP during the apply (all rolled back); a CDPATH or a project path with a newline; a project path that is /.
 # Not caught: a file whose content changed but still equals the scaffold's current example (nothing is lost then); example code a
 #   user copied elsewhere; imports of the example from files the manifest does not name (the build and typecheck show these); a
 #   write through a file handle opened before the move, landing after the compare and before the rm (every change made through
@@ -383,8 +384,9 @@ rollback() {
   local bad=0 t s h rel d
   trap '' INT TERM HUP PIPE
   ROLLED=1
-  while IFS="$TAB" read -r t s; do
+  while IFS="$TAB" read -r t s n; do
     if [ -z "$t" ]; then continue; fi
+    if ! cmp -s -- "$n" "$t" 2>/dev/null; then continue; fi
     if ! restore_file "$s" "$t"; then echo "remove-example: could not restore $t" >&2; bad=1; fi
   done <"$STAGE/replaced"
   while IFS="$TAB" read -r t h s; do
@@ -392,7 +394,7 @@ rollback() {
     if [ ! -e "$h" ] && [ ! -L "$h" ]; then continue; fi
     if [ ! -e "$t" ] && [ ! -L "$t" ]; then
       if ! mv -- "$h" "$t"; then echo "remove-example: could not put back $t; the file is at $h" >&2; bad=1; fi
-    elif cmp -s -- "$h" "$s"; then
+    elif cmp -s -- "$h" "$s" && cmp -s -- "$s" "$t"; then
       if ! rm -f -- "$h"; then echo "remove-example: could not remove the spare copy $h" >&2; bad=1; fi
     else
       echo "remove-example: $t was changed; the file as it was found is kept at $h" >&2; bad=1
@@ -442,7 +444,7 @@ while IFS="$TAB" read -r file staged snap; do
   m=$(file_mode "$target") || die "cannot read the mode of $file; nothing was changed"
   cat -- "$staged" >"$tmp" || die "cannot write the new $file; nothing was changed"
   chmod "$m" "$tmp" || die "cannot set the mode of the new $file; nothing was changed"
-  printf '%s\t%s\t%s\n' "$target" "$tmp" "$snap" >>"$STAGE/plan"
+  printf '%s\t%s\t%s\t%s\n' "$target" "$tmp" "$snap" "$staged" >>"$STAGE/plan"
 done <"$STAGE/editfiles"
 
 # take <target> <copy>: move the file aside (one rename, so a change made after the checks is not lost), then compare what was
@@ -465,11 +467,12 @@ take() {
 # all edits before any delete; from here a signal rolls back (and a closed stderr must not stop the rollback)
 APPLYING=1
 trap '' PIPE
-while IFS="$TAB" read -r target tmp snap; do
+while IFS="$TAB" read -r target tmp snap staged; do
   if [ -z "$target" ]; then continue; fi
   take "$target" "$snap"
-  if ! mv -- "$tmp" "$target"; then fail_apply "cannot replace ${target#"$ROOT"/}"; fi
-  printf '%s\t%s\n' "$target" "$snap" >>"$STAGE/replaced"
+  printf '%s\t%s\t%s\n' "$target" "$snap" "$staged" >>"$STAGE/replaced"
+  if ! ln -- "$tmp" "$target"; then fail_apply "cannot install ${target#"$ROOT"/}: the name is taken (a file was created during the apply) or links are refused"; fi
+  if ! rm -f -- "$tmp"; then fail_apply "cannot remove the temp file of ${target#"$ROOT"/}"; fi
   if ! rm -f -- "$HELD"; then fail_apply "cannot remove the old copy of ${target#"$ROOT"/}"; fi
 done <"$STAGE/plan"
 
