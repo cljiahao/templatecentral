@@ -23,32 +23,15 @@ Read the stack from the `<!-- templateCentral: <stack>@` marker on `AGENTS.md` l
 
 ## Scoping
 
-Check for `.claude/review-baseline.md` in the project root before identifying files.
+Run `bash "<skill-dir>/review/review-scope.sh" "<project-dir>" --session <path> ...` with one `--session` per file written or edited this session and not yet committed (none if there are none). It prints the review scope, one project-relative path per line: the files committed since `last-reviewed-commit` in `.claude/review-baseline.md` (not the baseline file itself), plus the session files, without duplicates. A listed path that no longer exists was deleted in the range: skip it, it is not an error. With no baseline file, the scope is the session files. It writes nothing. A `--session` path must exist in the project or be a file deleted since HEAD. A non-zero exit means the project or the baseline is unsafe to use (a shallow clone says to fetch more history): show its message to the user and stop.
 
-**If the baseline file exists:**
-- Read `last-reviewed-commit` from it
-- Run `git diff <last-reviewed-commit>..HEAD --name-only` to get committed changes since baseline
-- Add any files written or edited this session that are not yet committed
-- Deduplicate — this union is your review scope
+**Called by `templatecentral:scaffold`:** the scope is only the files the agent edited by hand during the scaffold: the stack guide's Step 1 and Step 2 edits (project name, branding, settings), the filled-in `docs/CONSTITUTION.md` and the generated READMEs. Files copied unchanged from the plugin's templates are out of scope, even though this session wrote them. Pass only those files as `--session`.
 
-**If no baseline file exists:**
-- Fall back to all files written or edited this session
-
-**Called by `templatecentral:scaffold`:** the scope is only the files the agent edited by hand during the scaffold: the stack guide's Step 1 and Step 2 edits (project name, branding, settings), the filled-in `docs/CONSTITUTION.md` and the generated READMEs. Files copied unchanged from the plugin's templates are out of scope, even though this session wrote them.
-
-If the resulting scope is empty (no changes since baseline, no session edits), report `No changes since last review — nothing to check.` and stop. Do not update the baseline.
+If the scope is empty, report `No changes since last review — nothing to check.` and stop. Do not record the baseline.
 
 ## Baseline
 
-After completing the review (whether violations were found or not), write or overwrite `.claude/review-baseline.md` in the project root:
-
-```
-last-reviewed-commit: <git rev-parse HEAD>
-stack: <detected stack>
-reviewed-at: <YYYY-MM-DD>
-```
-
-If the project has no commits yet, skip writing the baseline. This is always the case for the post-scaffold review, so the baseline is first written by the first review after the project's first commit.
+After completing the review (whether violations were found or not), run `bash "<skill-dir>/review/review-scope.sh" "<project-dir>" --record-baseline --stack <detected stack>`. It prints the commit it is scoped at on stderr (`scope computed at HEAD`); pass `--at <sha>` with `--record-baseline` to record only when HEAD is still that commit. It replaces `.claude/review-baseline.md` (whole file or not at all) with the current commit, the stack and today's date. A project with no commit yet gets no baseline; that is always the case for the post-scaffold review, so the baseline is first written by the first review after the project's first commit.
 
 ## What to check
 
