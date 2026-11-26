@@ -47,7 +47,7 @@ If it exists, change nothing except: when the import is missing, append `@AGENTS
 
 **Import-present rule (Phase 5 uses it too):** some line outside a code fence, trimmed of `\r` and spaces, equals `@AGENTS.md` or `@./AGENTS.md`.
 
-This append runs before Step 4f hashes and Step 4f-1b snapshots `CLAUDE.md`, so both include the line.
+This append runs before Step 4f hashes and Step 4f-3's finish call snapshots `CLAUDE.md`, so both include the line.
 
 **Step 4d: Seed the agent harness (shared kit)**
 
@@ -91,7 +91,7 @@ Execute kit **Step E** with the copy script at `<skill-dir>/../scaffold/shared/t
 
 **Step 4f-1b: Seed the base snapshot**
 
-Execute kit **Step E2**: it snapshots every seeded file into `.claude/.harness-base/`, the 3-way-merge base for Phase 5d. Commit it; `protect-files.sh` guards it.
+No command here. The `TC_PART=finish` call of Step 4f-3 writes `.claude/.harness-base/`, the 3-way-merge base for Phase 5d, from the final bytes. A call here would snapshot files Step 4f-3 still changes and would run `verify-harness.sh` against a half-finished harness. Commit the folder with the rest; `protect-files.sh` guards it.
 
 **Step 4f-1c: Generate per-folder documentation**
 
@@ -109,9 +109,9 @@ ln -s .claude .agents
 
 **Never commit the symlink**: add `.agents` to `.gitignore` (it is recreated per machine). A tracked symlink breaks Windows CI agents.
 
-**Step 4f-3: Finish the AGENTS.md tail and re-baseline**
+**Step 4f-3: Finish the AGENTS.md tail, then re-hash and snapshot**
 
-Execute kit **Step G** up to its post-scaffold utilities list: write the AGENTS.md tail between its markers (an existing generic tail with no markers must be wrapped in them by hand first; the script refuses otherwise; here the script is `<skill-dir>/../scaffold/shared/tc-copy.sh`; use that path in the kit's `TC_PART=tail` call), then the re-baseline block. Run Prettier (TS) only on files this phase wrote (`pnpm exec prettier --write AGENTS.md FUTURE.md docs/CONSTITUTION.md docs/harness.md <each README.md written by Step E3>`), never `.`. Then wire the git hooks per kit Step B2's re-sync note (`pnpm exec lefthook install` / `lefthook install` in the venv). Once `verify-harness.sh` passes, delete `AGENTS.md.bak`.
+Execute kit **Step G** up to its post-scaffold utilities list: write the AGENTS.md tail between its markers (an existing generic tail with no markers must be wrapped in them by hand first; the script refuses otherwise; here the script is `<skill-dir>/../scaffold/shared/tc-copy.sh`; use that path in the kit's `TC_PART=tail` call). Run Prettier (TS) only on files this phase wrote (`pnpm exec prettier --write AGENTS.md FUTURE.md docs/CONSTITUTION.md docs/harness.md <each README.md written by Step E3>`), never `.`. Then run the kit's `TC_PART=finish` call once, with the script at `<skill-dir>/../scaffold/shared/tc-copy.sh`: it re-hashes every `origin_hash`, refreshes `.claude/.harness-base/` and runs `verify-harness.sh` once the project has a commit. Then wire the git hooks per kit Step B2's re-sync note (`pnpm exec lefthook install` / `lefthook install` in the venv). Once `verify-harness.sh` passes, delete `AGENTS.md.bak`.
 
 **Step 4f-4: Prove the harness is live**
 

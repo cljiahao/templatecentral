@@ -4,9 +4,11 @@
 # Usage: TC_STACK=<stack> TC_PART=<part> [TC_CI=<host>] bash tc-copy.sh <target>
 #        TC_PART=leaf TC_LEAF=<add|migrate>/<path/to/leaf-stem> [TC_TREE=<tree>] bash tc-copy.sh <target>
 #   TC_STACK  nestjs | nextjs | vite-react | fastapi (not used by TC_PART=leaf)
-#   TC_PART   base | settings | ci | late | stack | agents | tail | manifest | leaf   (see skills/scaffold/shared/harness-kit.md, Step 0)
+#   TC_PART   base | settings | ci | late | stack | agents | tail | manifest | finish | leaf   (see skills/scaffold/shared/harness-kit.md, Step 0)
 #             manifest writes .claude/harness.json (kit Step E); TC_ADO_WIKI (true|false, default false)
 #             sets its adoWiki field
+#             finish ends the seeding (kit Step G): refuses while a placeholder is left, re-hashes every
+#             seeded_files entry, mirrors each file into .claude/.harness-base/, runs verify-harness once committed
 #   TC_CI     github | azure | none; required for TC_PART=ci, empty for every other part
 #   TC_LEAF   for leaf: the leaf's stem under skills/, e.g. add/auth/nestjs; its template trees and
 #             template.manifest sit in skills/<TC_LEAF>/
@@ -27,6 +29,8 @@ NL='
 '
 TAB=$(printf '\t')
 stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
+# tmpnew <file>: creates a new empty file; fails when the name already exists, even as a dangling symlink, so a planted link is never written through.
+tmpnew() { [ ! -e "$1" ] && [ ! -L "$1" ] && ( set -C; : > "$1" ) 2>/dev/null; }
 src=${BASH_SOURCE[0]:-$0}
 hops=0
 while [ -L "$src" ] && [ "$hops" -lt 40 ]; do
@@ -109,8 +113,8 @@ case "$PART" in
       none) SEL= ;;
       *) stop "unknown CI '$CI' (want github, azure or none)" ;;
     esac ;;
-  manifest)
-    [ -z "$CI" ] || stop "TC_CI must stay empty for TC_PART=manifest"
+  manifest | finish)
+    [ -z "$CI" ] || stop "TC_CI must stay empty for TC_PART=$PART"
     SEL= ;;
   stack | agents)
     [ -z "$CI" ] || stop "TC_CI must stay empty for TC_PART=$PART"
@@ -223,6 +227,7 @@ if [ "$PART" = manifest ]; then
     if [ -L "$TGT/$p" ]; then stop "$TGT/$p is a symlink"; fi
     [ -f "$TGT/$p" ] || continue
     case "$p" in *[\"\\]*) stop "the path $p holds a quote or backslash" ;; esac
+    case "$p" in *"$TAB"*) stop "the path $p holds a tab" ;; esac
     h=$(sha "$TGT/$p") || stop "cannot hash $p"
     body="$body,$NL    \"$p\": { \"origin_hash\": \"$h\", \"path\": \"$p\" }"
   done <<TC_LIST
@@ -230,6 +235,7 @@ $list
 TC_LIST
   [ -n "$body" ] || stop "no seeded file found in $TGT"
   tmp="$TGT/$mf.tmp.$$"
+  tmpnew "$tmp" || stop "cannot create $tmp: the name is taken or the folder is not writable"
   {
     printf '{\n  "templatecentral_version": "%s",\n  "stack": "%s",\n  "seeded_at": "%s",\n' "$ver" "$STACK" "$(date -u +%Y-%m-%d)"
     printf '  "adoWiki": %s,\n' "${TC_ADO_WIKI:-false}"
@@ -237,6 +243,78 @@ TC_LIST
   } > "$tmp" || { rm -f -- "$tmp"; stop "writing $TGT/$mf failed"; }
   mv -- "$tmp" "$TGT/$mf" || { rm -f -- "$tmp"; stop "writing $TGT/$mf failed"; }
   echo "Wrote $TGT/$mf ($(printf '%s' "$body" | grep -c origin_hash) entries, templatecentral_version $ver)."
+  exit 0
+fi
+if [ "$PART" = finish ]; then
+  # Ends the seeding: placeholder check, re-hash of every manifest entry, base-snapshot mirror, verify-harness.
+  WHAT="finish seeding"
+  mf=.claude/harness.json
+  if [ -L "$TGT/.claude" ] || [ -L "$TGT/$mf" ] || [ ! -f "$TGT/$mf" ]; then stop "$TGT/$mf is missing or a symlink: run kit Step E first"; fi
+  if [ -L "$TGT/.claude/.harness-base" ]; then stop "$TGT/.claude/.harness-base is a symlink, so the snapshot would be written outside the project"; fi
+  if [ -d "$TGT/.claude/.harness-base" ]; then
+    links=$(find "$TGT/.claude/.harness-base" -type l 2>/dev/null) || stop "cannot scan $TGT/.claude/.harness-base for symlinks"
+    [ -z "$links" ] || stop "a symlink sits inside $TGT/.claude/.harness-base ($(printf '%s' "$links" | head -n 1)), so the snapshot would be written outside the project: remove it and rerun"
+  fi
+  for d in docs/CONSTITUTION.md FUTURE.md docs/harness.md; do
+    [ -e "$TGT/$d" ] || [ -L "$TGT/$d" ] || continue
+    [ -f "$TGT/$d" ] || stop "cannot read $d: it is not a regular file"
+    grep -nE '__TC_|\[Fill in' "$TGT/$d" >&2
+    case $? in
+      0) stop "$d still holds a placeholder (lines above): fill it in or delete it where it says so" ;;
+      1) ;;
+      *) stop "cannot read $d" ;;
+    esac
+  done
+  sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 -- "$1"; else sha256sum -- "$1"; fi | cut -d' ' -f1; }
+  paths=$(sed -n 's/^ *"[^"]*": { "origin_hash": "[0-9a-f]*", "path": "\([^"]*\)" },\{0,1\}$/\1/p' "$TGT/$mf")
+  [ -n "$paths" ] || stop "$TGT/$mf lists no seeded file in the one-line entry shape"
+  want=$(grep -o '"path":' "$TGT/$mf" | wc -l)
+  have=$(printf '%s\n' "$paths" | wc -l)
+  [ "$((want))" -eq "$((have))" ] || stop "$mf holds $((want)) \"path\" keys but $((have)) entries in the one-line shape: rewrite it with TC_PART=manifest"
+  mapf="$TGT/$mf.map.$$"
+  tmp="$TGT/$mf.tmp.$$"
+  tmpnew "$mapf" || stop "cannot create $mapf: the name is taken or the folder is not writable"
+  found=0
+  while IFS= read -r p; do
+    case "/$p/" in
+      //* | */../*) rm -f -- "$mapf"; stop "the path $p in $mf is absolute or holds a .. segment" ;;
+    esac
+    case "$p" in *"$TAB"*) rm -f -- "$mapf"; stop "the path $p in $mf holds a tab" ;; esac
+    if [ -L "$TGT/$p" ]; then rm -f -- "$mapf"; stop "$TGT/$p is a symlink"; fi
+    if [ ! -f "$TGT/$p" ]; then echo "Skipped $p: not present in $TGT, so its entry keeps the old hash."; continue; fi
+    h=$(sha "$TGT/$p") || { rm -f -- "$mapf"; stop "cannot hash $p"; }
+    printf '%s\t%s\n' "$p" "$h" >> "$mapf" || { rm -f -- "$mapf"; stop "cannot write $mapf"; }
+    found=$((found + 1))
+  done <<TC_LIST
+$paths
+TC_LIST
+  [ "$found" -gt 0 ] || { rm -f -- "$mapf"; stop "none of the files $mf lists exists in $TGT"; }
+  tmpnew "$tmp" || { rm -f -- "$mapf"; stop "cannot create $tmp: the name is taken or the folder is not writable"; }
+  # The map file is named by ARGV[1], so an empty map could never be mistaken for the manifest.
+  awk -F'\t' 'FILENAME == ARGV[1] { h[$1] = $2; next }
+    match($0, /"origin_hash": "[0-9a-f]*", "path": "/) {
+      rest = substr($0, RSTART + RLENGTH); p = substr(rest, 1, index(rest, "\"") - 1)
+      if (p in h) $0 = substr($0, 1, RSTART - 1) "\"origin_hash\": \"" h[p] "\", \"path\": \"" p substr(rest, length(p) + 1)
+    } { print }' "$mapf" "$TGT/$mf" > "$tmp" || { rm -f -- "$mapf" "$tmp"; stop "re-hashing $mf failed"; }
+  rm -f -- "$mapf"
+  if [ "$(wc -l < "$tmp")" -ne "$(wc -l < "$TGT/$mf")" ] || [ ! -s "$tmp" ]; then rm -f -- "$tmp"; stop "the re-hashed $mf does not have the lines of the original: $mf is unchanged"; fi
+  n=0
+  while IFS= read -r p; do
+    [ -f "$TGT/$p" ] || continue
+    mkdir -p -- "$TGT/.claude/.harness-base/$(dirname -- "$p")" || { rm -f -- "$tmp"; stop "cannot create the snapshot folder for $p; the snapshot may be partly written, $mf is unchanged, and a rerun is safe"; }
+    cp -- "$TGT/$p" "$TGT/.claude/.harness-base/$p" || { rm -f -- "$tmp"; stop "cannot mirror $p into .claude/.harness-base/; the snapshot may be partly written, $mf is unchanged, and a rerun is safe"; }
+    n=$((n + 1))
+  done <<TC_LIST
+$paths
+TC_LIST
+  mv -- "$tmp" "$TGT/$mf" || { rm -f -- "$tmp"; stop "writing $TGT/$mf failed"; }
+  echo "Re-hashed $mf and mirrored $n files into .claude/.harness-base/."
+  top=$(cd "$TGT" && git rev-parse --show-toplevel 2>/dev/null)
+  if [ "$top" = "$real" ] && (cd "$TGT" && git rev-parse --verify -q HEAD >/dev/null 2>&1); then
+    (cd "$TGT" && bash .claude/verify-harness.sh) || stop "verify-harness.sh failed (output above); $mf and .claude/.harness-base are already rewritten, so fix the cause and rerun this part, which is safe"
+  else
+    echo "verify-harness.sh not run: the project has no commit of its own yet (run it after the first commit)."
+  fi
   exit 0
 fi
 if [ "$PART" = ci ] && [ "$CI" = none ]; then
