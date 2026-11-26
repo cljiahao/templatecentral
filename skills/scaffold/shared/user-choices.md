@@ -12,4 +12,4 @@ Ask these together, in one message, and only for what the user has not already a
 - remove example code — whether to delete the example feature with the cleanup utility once the project is verified and runs. Default: no; the example stays until the user removes it.
 - Azure DevOps Code Wiki (`adoWiki`) — whether `docs/` is published as a wiki, so it also gets a `.order` file. Default: no.
 - post-scaffold checks — the check command, test, dependency-update and review utilities run after the harness is seeded. Default: run them. Skipping them leaves problems undetected, so tell the user that and skip only on their explicit confirmation.
-- Claude Code plugins — whether to install the `caveman` and `superpowers` plugins (user-scoped). Default: install them when this scaffold runs in Claude Code.
+- Claude Code plugins — whether to install the `caveman` and `superpowers` plugins (user-scoped). Default: no.
