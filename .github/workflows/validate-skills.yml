@@ -397,6 +397,24 @@ jobs:
           FENCE_SNAPSHOT_CHANGE_OK: ${{ contains(github.event.pull_request.labels.*.name, 'fence-snapshot-change') && '1' || '' }}
         run: bash scripts/check-fences-frozen.sh "origin/$BASE_REF"
 
+  line-budget-frozen:
+    name: Line-budget allowance unchanged
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Line-budget allowance check tests
+        run: bash scripts/check-line-budget-frozen.test.sh
+      - name: Fail when a line-budget allowance grew
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash scripts/check-line-budget-frozen.sh "origin/$BASE_REF"
+
   token-count:
     name: Scaffold load size
     runs-on: ubuntu-24.04
@@ -438,9 +456,9 @@ jobs:
         run: node adapters/opencode/hooks.test.mjs
 
   # The one check to require in branch protection. It runs even when a job failed or was cancelled
-  # (if: always()) and fails unless every job in `needs` finished with result success. The only job
-  # that may be skipped is fence-snapshot-frozen, and only on a push, where its own `if` skips it
-  # by design; on a pull request it must succeed. It also fails when a job of this workflow is
+  # (if: always()) and fails unless every job in `needs` finished with result success. The only jobs
+  # that may be skipped are fence-snapshot-frozen and line-budget-frozen, and only on a push, where
+  # their own `if` skips them by design; on a pull request they must succeed. It also fails when a job of this workflow is
   # missing from `needs`, so a new job cannot be left out of the aggregate unnoticed.
   all-checks:
     name: All checks
@@ -460,6 +478,7 @@ jobs:
       - migrate-baseline-tests
       - lint-negative-tests
       - fence-snapshot-frozen
+      - line-budget-frozen
       - token-count
       - opencode-adapter-tests
     runs-on: ubuntu-24.04
@@ -476,7 +495,7 @@ jobs:
           set -euo pipefail
           bad=$(jq -r --arg ev "$EVENT" '
             to_entries[]
-            | select(if .key == "fence-snapshot-frozen" and $ev != "pull_request"
+            | select(if (.key == "fence-snapshot-frozen" or .key == "line-budget-frozen") and $ev != "pull_request"
                      then .value.result != "skipped"
                      else .value.result != "success" end)
             | "\(.key)=\(.value.result)"' <<<"$NEEDS")
