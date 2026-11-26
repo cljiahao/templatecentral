@@ -171,6 +171,8 @@ jobs:
         run: bash scripts/check-tests-wired.test.sh
       - name: Workflow job id reader tests
         run: bash scripts/workflow-job-ids.test.sh
+      - name: Local changed-gates runner tests
+        run: bash scripts/run-gates.test.sh
 
   seeded-gate-tests:
     name: Seeded gate tests
