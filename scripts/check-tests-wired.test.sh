@@ -5,7 +5,7 @@
 # line from running (heredoc, quote, function, branch, loop, continuation, exit, trap, errexit off, `||`, `&&`),
 # a step `shell`, `working-directory` or `if`, `defaults.run` at job and workflow level, continue-on-error, a
 # pull_request trigger with a filter, a workflow that never runs on a pull request, YAML anchors and folded
-# blocks, an unparsable workflow, missing PyYAML, and the node and test-*.sh scope. The last case runs the
+# blocks, env at workflow, job and step level, an unparsable workflow, missing PyYAML, and the node and test-*.sh scope. The last case runs the
 # check on this repo.
 # Usage: bash scripts/check-tests-wired.test.sh   (needs python3 with PyYAML)
 set -uo pipefail
@@ -45,7 +45,6 @@ wired_b() {
 
 HEAD_PR='on:
   pull_request:
-    paths: ["scripts/**"]
 jobs:'
 
 wf wired <<EOF
@@ -478,15 +477,17 @@ check 1 "$RC" "bypass: pull_request with a list value does not count"
 trig trig_empty_list '  pull_request: []'
 check 1 "$RC" "bypass: pull_request with an empty list value does not count"
 trig trig_paths '  pull_request:
-    paths: ["scripts/**"]
+    paths: ["scripts/**"]'
+check 1 "$RC" "bypass: pull_request with paths does not count"
+trig trig_paths_ignore '  pull_request:
     paths-ignore: ["docs/**"]'
-check 0 "$RC" "control: pull_request with paths and paths-ignore counts"
-trig trig_types_ok '  pull_request:
+check 1 "$RC" "bypass: pull_request with paths-ignore does not count"
+trig trig_types_no_reopened '  pull_request:
     types: [synchronize, opened, ready_for_review]'
-check 0 "$RC" "control: pull_request with the repo's types list (any order) counts"
+check 1 "$RC" "bypass: pull_request with types lacking reopened does not count"
 trig trig_types_labels '  pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]'
-check 0 "$RC" "control: pull_request with the validate-skills types list counts"
+    types: [unlabeled, opened, labeled, synchronize, reopened]'
+check 0 "$RC" "control: pull_request with the validate-skills types list (any order) counts"
 trig trig_types_labels_only '  pull_request:
     types: [labeled, unlabeled]'
 check 1 "$RC" "bypass: pull_request with only labeled and unlabeled does not count"
@@ -535,6 +536,40 @@ OUT=$(WIRED_PYTHONS="" bash "$CHECK" "$T/nopy/scripts" "$T/nopy/wf" 2>&1); RC=$?
 check 1 "$RC" "bypass: an empty interpreter list fails closed"
 run nopy
 check 0 "$RC" "control: the default interpreters pass the same tree"
+
+# ── env at workflow, job and step level ──
+# envcase <name> <workflow env block> <job env block> <step env block> — ci.yml wires a and b through one job.
+envcase() {
+  tree "$1"
+  printf 'on: pull_request\n%sjobs:\n  x:\n%s    steps:\n      - %s\n        run: bash scripts/a.test.sh\n      - run: bash scripts/b.test.sh\n' "$2" "$3" "$4" > "$T/$1/wf/ci.yml"
+  run "$1"
+}
+envcase env_wf_bad 'env:
+  BASH_ENV: /tmp/x
+' '' 'name: t'
+check 1 "$RC" "bypass: workflow env BASH_ENV wires nothing"
+envcase env_job_bad '' '    env:
+      BASH_ENV: /tmp/x
+' 'name: t'
+check 1 "$RC" "bypass: job env BASH_ENV wires nothing"
+envcase env_step_bad '' '' 'env: {BASH_ENV: /tmp/x}'
+check 1 "$RC" "bypass: step env BASH_ENV leaves that step unwired (a.test.sh)"
+check yes "$(has "$OUT" "scripts/a.test.sh is not run")" "step env: a.test.sh named"
+check no "$(has "$OUT" "scripts/b.test.sh is not run")" "step env: the clean step still wires b.test.sh"
+envcase env_str_bad '' '    env: not-a-mapping
+' 'name: t'
+check 1 "$RC" "bypass: a job env that is a string wires nothing"
+envcase env_empty_bad '' '    env: ""
+' 'name: t'
+check 1 "$RC" "bypass: a job env that is an empty string wires nothing"
+envcase env_ok_all 'env:
+  STRICT_DOC_SYNC: "1"
+' '    env:
+      BASE_REF: main
+' 'env: {EVENT: x, NEEDS: y, FENCE_SNAPSHOT_CHANGE_OK: z}'
+check 0 "$RC" "control: allowed env names at all three levels count"
+envcase env_none '' '' 'name: t'
+check 0 "$RC" "control: no env at any level counts"
 
 OUT=$(bash "$CHECK" 2>&1); RC=$?
 check 0 "$RC" "this repo: every repo test is run by a workflow step ($OUT)"

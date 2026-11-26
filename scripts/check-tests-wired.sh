@@ -8,10 +8,10 @@
 #
 # A workflow is read as YAML (python3 with PyYAML, python3 first, then /usr/bin/python3; WIRED_PYTHONS can
 # name other interpreters, for the self-test). It counts only when its `on` holds pull_request and that
-# trigger carries no filter that can skip a pull request: no `branches`, no `branches-ignore`, no other key
-# but `paths` and `paths-ignore`, and `types` only when it is absent or equals (in any order) one of the two
-# value lists the workflows use today: opened, synchronize, ready_for_review (ai-review.yml); or opened,
-# synchronize, reopened, labeled, unlabeled (validate-skills.yml).
+# trigger carries no filter that can skip a pull request: no `branches`, `branches-ignore`, `paths` or
+# `paths-ignore` (each one means "not every pull request"), no other key but `types`, and `types` only when
+# it is absent or equals (in any order) the one list that holds opened, synchronize and reopened that the
+# repo uses today: opened, synchronize, reopened, labeled, unlabeled (validate-skills.yml).
 #
 # A run block wires a test only when EVERY line of it is on this allow-list, matched whole:
 #   a blank line
@@ -24,17 +24,19 @@
 # `set`) makes the whole block wire nothing: all or nothing, never line by line. A fix for a workflow that
 # fails this rule is to split the step so the test command stands in its own block.
 # A step wires nothing when it has `if`, `shell`, `working-directory`, or `continue-on-error` other than
-# false. A job wires nothing when it has `shell`, `continue-on-error` other than false, an `if` other than
-# exactly `github.event_name == 'pull_request'`, or `defaults.run`. A workflow with `defaults.run` wires
-# nothing. A block folded with `>` is one line, so only its first command counts.
+# false, or an `env` that is not a mapping or holds a name off the closed list below. A job wires nothing
+# when it has `shell`, `continue-on-error` other than false, an `if` other than exactly
+# `github.event_name == 'pull_request'`, `defaults.run`, or such an `env`. A workflow with `defaults.run` or
+# such an `env` wires nothing. The closed list is the env names validate-skills.yml uses today: BASE_REF,
+# EVENT, FENCE_SNAPSHOT_CHANGE_OK, NEEDS, STRICT_DOC_SYNC (BASH_ENV, ENV, SHELLOPTS and the rest are out). A block folded with `>` is one line, so only its first command counts.
 #
 # It fails closed: no test file, no workflow file, a workflow that cannot be parsed (even one that does not
 # run on pull requests) or is not a mapping, no workflow that counts, or no python3 with PyYAML.
-# Will not catch: a test script that runs but asserts nothing or skips itself on its arguments; a step
-# `env` such as BASH_ENV that changes the shell; a job `needs` chain, a job `container`, a `matrix` or a
-# `timeout-minutes` that keeps the step from running or ends it early; a `uses` step that edits the tree
-# before the run; a workflow that this repo's `paths:` filters keep from starting; and a test that only a
-# `workflow_run`, schedule or manual trigger runs, which is not counted.
+# Will not catch: a test script that runs but asserts nothing or skips itself on its arguments; an allowed
+# env name set to a value that changes what the script does; a job `needs` chain, a job `container`, a
+# `matrix` or a `timeout-minutes` that keeps the step from running or ends it early; a `uses` step that
+# edits the tree before the run; and a test that only a `workflow_run`, schedule or manual trigger runs,
+# which is not counted.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -69,11 +71,11 @@ workflow_files = sys.argv[3:3 + nwf]
 tests = sys.argv[3 + nwf:]
 
 ALLOWED_JOB_IF = "github.event_name == 'pull_request'"
-ALLOWED_PR_KEYS = {"paths", "paths-ignore", "types"}
+ALLOWED_PR_KEYS = {"types"}
 ALLOWED_PR_TYPES = [
-    ["opened", "ready_for_review", "synchronize"],
     ["labeled", "opened", "reopened", "synchronize", "unlabeled"],
 ]
+ALLOWED_ENV = {"BASE_REF", "EVENT", "FENCE_SNAPSHOT_CHANGE_OK", "NEEDS", "STRICT_DOC_SYNC"}
 BLANK = re.compile(r" *")
 INVOKE = re.compile(r"(bash|node) ([A-Za-z0-9_][A-Za-z0-9_./-]*)((?: [A-Za-z0-9_./=:@%+,-]+)*) *")
 
@@ -119,6 +121,13 @@ def has_default_run(node):
     return not isinstance(defaults, dict) or "run" in defaults
 
 
+def env_ok(node):
+    if "env" not in node:
+        return True
+    env = node["env"]
+    return isinstance(env, dict) and all(str(k) in ALLOWED_ENV for k in env)
+
+
 def wired_commands(run):
     found = set()
     for line in str(run).split("\n"):
@@ -146,7 +155,7 @@ for path in workflow_files:
     if not pull_request_counts(doc):
         continue
     counted += 1
-    if has_default_run(doc):
+    if has_default_run(doc) or not env_ok(doc):
         continue
     jobs = doc.get("jobs")
     if not isinstance(jobs, dict):
@@ -156,7 +165,7 @@ for path in workflow_files:
             continue
         if "if" in job and str(job["if"]).strip() != ALLOWED_JOB_IF:
             continue
-        if continue_on_error(job) or "shell" in job or has_default_run(job):
+        if continue_on_error(job) or "shell" in job or has_default_run(job) or not env_ok(job):
             continue
         steps = job.get("steps")
         if not isinstance(steps, list):
@@ -164,7 +173,7 @@ for path in workflow_files:
         for step in steps:
             if not isinstance(step, dict) or "run" not in step:
                 continue
-            if "if" in step or "shell" in step or "working-directory" in step or continue_on_error(step):
+            if "if" in step or "shell" in step or "working-directory" in step or continue_on_error(step) or not env_ok(step):
                 continue
             wired |= wired_commands(step["run"])
 
