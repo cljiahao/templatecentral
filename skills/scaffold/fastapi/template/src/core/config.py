@@ -21,7 +21,7 @@ class CommonSettings(BaseSettings):
     # Closed set: an unknown value must fail at boot, not slip past main.py's prod/uat check and run with auto-reload.
     ENVIRONMENT: Literal["dev", "uat", "prod"] = Field(default="dev")
     # Only origin allowed to frame this app; see core/security_headers.py.
-    APPCENTRAL_PORTAL_ORIGIN: str = Field(default="")
+    EMBED_PARENT_ORIGIN: str = Field(default="")
 
 
 class APISettings(BaseSettings):

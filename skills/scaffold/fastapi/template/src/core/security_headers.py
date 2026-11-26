@@ -7,7 +7,7 @@ _PORTAL_ORIGIN_RE = re.compile(r"https://[a-z0-9-]+(\.[a-z0-9-]+)+")
 
 
 def frame_ancestors(portal_origin: str) -> bytes | None:
-    """Return the validated APPCENTRAL_PORTAL_ORIGIN as a frame-ancestors source, else None."""
+    """Return the validated EMBED_PARENT_ORIGIN as a frame-ancestors source, else None."""
     if _PORTAL_ORIGIN_RE.fullmatch(portal_origin):
         return portal_origin.encode()
     return None
@@ -17,7 +17,7 @@ def _build() -> list[tuple[bytes, bytes]]:
     # Frame protection is skipped in dev so the /docs UI renders in IDE preview panes.
     is_dev = common_settings.ENVIRONMENT == "dev"
     # Only the portal origin may frame the app.
-    portal = frame_ancestors(common_settings.APPCENTRAL_PORTAL_ORIGIN)
+    portal = frame_ancestors(common_settings.EMBED_PARENT_ORIGIN)
     headers = [
         (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
         (b"x-content-type-options", b"nosniff"),

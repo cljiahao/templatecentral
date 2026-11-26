@@ -38,7 +38,7 @@ The harness refresh updates harness files only; source the plugin generated earl
 
 ## frame-ancestors
 
-- Fix: the steps in `skills/migrate/portal-frame-ancestors.md`. Skip when the app must never be framed.
+- Fix: the steps in `skills/migrate/frame-ancestors.md`. Skip when the app must never be framed.
 - Current: the framing files that guide lists, under `skills/scaffold/`.
 
 ## Review by hand: NestJS roles guard

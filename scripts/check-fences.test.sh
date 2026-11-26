@@ -489,6 +489,26 @@ expect_fail "$r" "BADDELETE skills/add/s.md :: S :: 0 is deleted twice" "P6_same
 r=$(three del-both)
 mv_fence "$r" A 0 slice-a; del_row "$r" 0 slice-b
 expect_fail "$r" "is also mapped in moved.d" "P6_same_row_in_moved_and_deleted"
+# Each probe below pairs a clean control with the broken case; the broken case fails on its guard alone.
+r=$(three del-dup-same-file)
+rm_fence "$r" A; del_row "$r" 0 slice-a
+expect_ok "$r" "P6b_control_one_row"
+del_row "$r" 0 slice-a
+expect_fail "$r" "BADDELETE skills/add/s.md :: S :: 0 is deleted twice" "P6b_same_row_twice_in_one_file"
+r=$(three del-nofile)
+rm_fence "$r" A; del_row "$r" 0 slice-a
+expect_ok "$r" "P5b_control_row_for_an_existing_file"
+printf 'skills/add/nope.md\tS\t0\t%s\n' "$(snap_sha "$r" 0)" >> "$r/$G/deleted.d/slice-a.tsv"
+expect_fail "$r" "BADDELETE skills/add/nope.md :: S :: 0 is not in the snapshot" "P5b_row_for_a_file_that_does_not_exist"
+r=$(three del-wrong-index)
+rm_fence "$r" A; del_row "$r" 0 slice-a
+expect_ok "$r" "P5c_control_row_names_the_removed_fence"
+r=$(three del-wrong-index-bad)
+rm_fence "$r" A; del_row "$r" 1 slice-a
+expect_fail "$r" "MISMATCH skills/add/s.md :: S :: 0" "P5c_row_names_the_wrong_index_of_the_right_file"
+r=$(three del-wrong-index-hash)
+rm_fence "$r" A; del_row "$r" 1 slice-a "$(snap_sha "$r" 0)"
+expect_fail "$r" "BADDELETE skills/add/s.md :: S :: 1 has a sha256 that differs" "P5c_wrong_index_with_the_removed_fences_hash"
 r=$(three del-extra)
 rm_fence "$r" A; del_row "$r" 0 slice-a
 printf '\n```ts\nD\n```\n' >> "$r/skills/add/s.md"
