@@ -3,7 +3,9 @@
 # (skills/**/template*/, CONVENTIONS.md §1) and the guards that stop a check passing on nothing.
 #
 # Usage: bash scripts/lint-skills.test.sh   (run from anywhere; needs python3)
-#   ONLY=<regex> runs just the tests whose name matches; JOBS=<n> sets the parallelism (default 4);
+#   ONLY=<regex> runs just the tests whose name matches; LINT_TEST_JOBS=<n> sets how many run at once
+#   (a whole number from 1 to 256, default: the CPU count; 1 runs them strictly one after another,
+#   the parent-side checks included; anything else, empty included, exits 2 before a temp dir exists);
 #   LINT=<path> runs the tests against another copy of the linter.
 #
 # Each case copies skills/ to a scratch dir, damages it, runs scripts/lint-skills.sh on the copy
@@ -11,21 +13,162 @@
 # path glob must fail when the glob matches nothing (<check>_fails_on_empty_match) and when the code
 # it anchors on is gone (<check>_fails_when_anchor_deleted); otherwise moving code out of markdown
 # would let it pass while verifying nothing.
+#
+# Will not catch: a machine that runs out of disk or memory under high parallelism (lower LINT_TEST_JOBS);
+# a probe process that leaves its process group (the pool stops only the groups it started, and then
+# keeps the work dirs and warns when a group cannot be confirmed gone).
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT" || exit 2
-T=$(mktemp -d) || exit 1
-trap 'rm -rf "$T"' EXIT
-JOBS="${JOBS:-4}"
 LINT="${LINT:-scripts/lint-skills.sh}"
+MAX_JOBS=256
+CPUS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)
+[[ "$CPUS" =~ ^[1-9][0-9]*$ ]] || CPUS=4
+(( CPUS <= MAX_JOBS )) || CPUS=$MAX_JOBS
+JOBS="${LINT_TEST_JOBS-$CPUS}"
+if ! [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || (( ${#JOBS} > 3 )) || (( JOBS > MAX_JOBS )); then
+  echo "lint-skills.test: LINT_TEST_JOBS must be a whole number from 1 to $MAX_JOBS, got [$JOBS]" >&2
+  exit 2
+fi
+set -m
+[[ $- == *m* ]] || { echo "lint-skills.test: the shell cannot start each probe in its own process group (set -m failed)" >&2; exit 2; }
+T=$(mktemp -d "${TMPDIR:-/tmp}/lint-skills-test.XXXXXX") || exit 1
 
 PASS=0
 FAIL=0
-NJOB=0
 check() { # check <want> <got> <description>
   if [[ "$1" == "$2" ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: $3 — expected [$1], got [$2]"; fi
 }
+
+# ── probe pool ───────────────────────────────────────────────────────────────
+# Probes run in a ring of JOBS background jobs, each in its own subshell with its own work dir
+# $T/w<n>. A probe reports through emit, which writes $T/r<n> whole and ends it with TRAILER;
+# pool_collect reads the files in probe order and counts a probe as passed only when it exited
+# 0, left a complete result file and that file says PASS. Everything else is a FAIL.
+# LINT_TEST_JOBS=1 runs the probes one after another; pool_serial_point makes the parent-side code
+# that follows wait for the last probe, so 1 means strictly serial.
+# set -m gives every probe job a process group of its own (group id = the job's pid). The pool tracks
+# those pids itself: it stops a probe's group when it reaps the probe and at exit (EXIT, INT, TERM),
+# and needs no ps. A group it cannot confirm gone keeps its work dir and a warning is printed.
+TRAILER='--probe-end--'
+NJOB=0
+REAPED=0
+PNAME=()
+PIDS=()
+PSTAT=()
+
+# pool_stop_group <pid> — kill the process group the probe job <pid> leads; true when no member is left.
+pool_stop_group() {
+  kill -KILL -- "-$1" 2>/dev/null || true
+  kill -KILL "$1" 2>/dev/null || true
+  wait "$1" 2>/dev/null || true
+  ! kill -0 -- "-$1" 2>/dev/null
+}
+
+CLEAN_TRIES=50
+pool_cleanup() {
+  local n tries left=0
+  trap '' INT TERM
+  for (( n = REAPED + 1; n <= NJOB; n++ )); do
+    for (( tries = 0; tries < CLEAN_TRIES; tries++ )); do
+      pool_stop_group "${PIDS[$n]}" && break
+      sleep 0.1
+    done
+    if (( tries == CLEAN_TRIES )); then left=$((left + 1)); fi
+  done
+  if (( left > 0 )); then
+    echo "lint-skills.test: WARNING: $left probe process group(s) could not be confirmed stopped; $T is left in place" >&2
+    return 0
+  fi
+  rm -rf "$T"
+}
+trap pool_cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# emit <message> — a probe's one result: PASS or a FAIL: message.
+emit() {
+  printf '%s\n%s\n' "$1" "$TRAILER" > "$T/r$NJOB.tmp" && mv -f "$T/r$NJOB.tmp" "$T/r$NJOB"
+}
+
+# pool_reap_one — wait for the oldest probe that is still running, keep its exit status and stop any process it left
+# in its group. REAPED moves only after the wait, so an interrupt during the wait leaves that probe to pool_cleanup.
+pool_reap_one() {
+  local n=$((REAPED + 1))
+  wait "${PIDS[$n]}"
+  PSTAT[n]=$?
+  kill -KILL -- "-${PIDS[$n]}" 2>/dev/null || true
+  REAPED=$n
+}
+
+# pool_drain — wait for every probe started so far.
+pool_drain() {
+  while (( REAPED < NJOB )); do pool_reap_one; done
+}
+
+# pool_serial_point — with one job the probes run strictly one after another: finish them before the
+# parent-side code that follows. With more jobs the parent-side code overlaps the probes.
+pool_serial_point() {
+  if (( JOBS == 1 )); then pool_drain; fi
+}
+
+# pool_start <test name> <probe function> <args...> — run the probe in the background once a slot is free.
+# The probe reads /dev/null as stdin: under set -m a background job keeps the terminal, and a probe that
+# read stdin would stop on SIGTTIN and hang wait.
+pool_start() {
+  if [[ -n "${ONLY:-}" && ! "$1" =~ $ONLY ]]; then return 0; fi
+  while (( NJOB - REAPED >= JOBS )); do pool_reap_one; done
+  NJOB=$((NJOB + 1))
+  PNAME[NJOB]=$1
+  shift
+  ( "$@" ) </dev/null &
+  PIDS[NJOB]=$!
+}
+
+# status_ok <n> — the probe job exited 0.
+status_ok() { [[ "${PSTAT[$1]:-}" == 0 ]]; }
+
+# trailer_ok <n> — the result file is complete: its last line is TRAILER.
+trailer_ok() { [[ "$(tail -n 1 "$T/r$1")" == "$TRAILER" ]]; }
+
+# missing_results_fail <missing> <found> — probes without a result file are failures, and the run says how many.
+missing_results_fail() {
+  if (( $1 > 0 )); then
+    FAIL=$(($1 + FAIL))
+    echo "FAIL: pool — $NJOB probes started, $2 results found, $1 missing"
+  fi
+}
+
+# result_state <n> — ok, or why the probe's result cannot be trusted.
+result_state() {
+  status_ok "$1" || { echo "the probe job exited with status ${PSTAT[$1]:-unknown}"; return 0; }
+  trailer_ok "$1" || { echo "the probe result is truncated or empty"; return 0; }
+  echo ok
+}
+
+# pool_collect — wait for the rest, then print every failure in probe order and count the results.
+pool_collect() {
+  local n state body found=0 missing=0
+  pool_drain
+  for (( n = 1; n <= NJOB; n++ )); do
+    if [[ ! -e "$T/r$n" ]]; then
+      missing=$((missing + 1))
+      echo "FAIL: ${PNAME[$n]} — the probe wrote no result (it crashed, was killed or exited early)"
+      continue
+    fi
+    found=$((found + 1))
+    state=$(result_state "$n")
+    if [[ "$state" != ok ]]; then
+      FAIL=$((FAIL + 1)); echo "FAIL: ${PNAME[$n]} — $state"
+      continue
+    fi
+    body=$(sed '$d' "$T/r$n")
+    if [[ "$body" == PASS ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "$body"; fi
+  done
+  missing_results_fail "$missing" "$found"
+}
+# ── end probe pool ───────────────────────────────────────────────────────────
 
 # section <output> <header substring> — the lines of one check's section.
 section() {
@@ -48,27 +191,49 @@ damage_and_lint() {
   OUT=$(bash "$LINT" "$w/skills${SLASH:+/}" 2>&1 || true)
 }
 
-# fails <test name> <header substring> <mutation function> <expected FAIL text> — the section must
-# report FAIL and the text must be in it. Tests run JOBS at a time; ONLY=<regex> selects by name.
-fails() {
-  if [[ -n "${ONLY:-}" && ! "$1" =~ $ONLY ]]; then return 0; fi
-  NJOB=$((NJOB + 1))
-  (
-    damage_and_lint "$T/w$NJOB" "$3"
-    sec=$(section "$OUT" "$2")
-    if [[ -z "$sec" ]]; then
-      echo "FAIL: $1 — no section '$2' in the lint output" > "$T/r$NJOB"
-    elif ! grep -q '^FAIL:' <<<"$sec"; then
-      echo "FAIL: $1 — '$2' did not fail: $(tail -1 <<<"$sec")" > "$T/r$NJOB"
-    elif [[ "$sec" != *"$4"* ]]; then
-      echo "FAIL: $1 — '$2' failed without the expected text [$4]: $(grep -v '^FAIL:' <<<"$sec" | head -3)" > "$T/r$NJOB"
-    else
-      echo PASS > "$T/r$NJOB"
-    fi
-    rm -rf "$T/w$NJOB"
-  ) &
-  if (( NJOB % JOBS == 0 )); then wait; fi
+probe_fails() { # probe_fails <test name> <header substring> <mutation function> <expected FAIL text>
+  local sec
+  damage_and_lint "$T/w$NJOB" "$3"
+  sec=$(section "$OUT" "$2")
+  if [[ -z "$sec" ]]; then
+    emit "FAIL: $1 — no section '$2' in the lint output"
+  elif ! grep -q '^FAIL:' <<<"$sec"; then
+    emit "FAIL: $1 — '$2' did not fail: $(tail -1 <<<"$sec")"
+  elif [[ "$sec" != *"$4"* ]]; then
+    emit "FAIL: $1 — '$2' failed without the expected text [$4]: $(grep -v '^FAIL:' <<<"$sec" | head -3)"
+  else
+    emit PASS
+  fi
+  rm -rf "$T/w$NJOB"
 }
+
+probe_passes() { # probe_passes <test name> <header substring> <mutation function>
+  local sec
+  damage_and_lint "$T/w$NJOB" "$3"
+  sec=$(section "$OUT" "$2")
+  if [[ -z "$sec" ]]; then
+    emit "FAIL: $1 — no section '$2' in the lint output"
+  elif grep -q '^FAIL:' <<<"$sec"; then
+    emit "FAIL: $1 — '$2' failed: $(head -3 <<<"$sec")"
+  else
+    emit PASS
+  fi
+  rm -rf "$T/w$NJOB"
+}
+
+probe_passes_all() { # probe_passes_all <test name> <mutation function>
+  damage_and_lint "$T/w$NJOB" "$2"
+  if [[ "$OUT" == *"=== All checks passed ==="* ]]; then
+    emit PASS
+  else
+    emit "FAIL: $1 — the lint did not pass: $(grep -m3 '^FAIL:' <<<"$OUT")"
+  fi
+  rm -rf "$T/w$NJOB"
+}
+
+# fails <test name> <header substring> <mutation function> <expected FAIL text> — the section must
+# report FAIL and the text must be in it. ONLY=<regex> selects tests by name.
+fails() { pool_start "$1" probe_fails "$@"; }
 
 # fails_both <same arguments as fails> — the test as written, then again with the skills path given a trailing slash, as CI gives it.
 fails_both() {
@@ -79,48 +244,12 @@ fails_both() {
 }
 
 # passes <test name> <header substring> <mutation function> — the section must exist and report no FAIL.
-passes() {
-  if [[ -n "${ONLY:-}" && ! "$1" =~ $ONLY ]]; then return 0; fi
-  NJOB=$((NJOB + 1))
-  (
-    damage_and_lint "$T/w$NJOB" "$3"
-    sec=$(section "$OUT" "$2")
-    if [[ -z "$sec" ]]; then
-      echo "FAIL: $1 — no section '$2' in the lint output" > "$T/r$NJOB"
-    elif grep -q '^FAIL:' <<<"$sec"; then
-      echo "FAIL: $1 — '$2' failed: $(head -3 <<<"$sec")" > "$T/r$NJOB"
-    else
-      echo PASS > "$T/r$NJOB"
-    fi
-    rm -rf "$T/w$NJOB"
-  ) &
-  if (( NJOB % JOBS == 0 )); then wait; fi
-}
+passes() { pool_start "$1" probe_passes "$@"; }
 
 # passes_all <test name> <mutation function> — the whole lint must pass on the damaged copy.
-passes_all() {
-  if [[ -n "${ONLY:-}" && ! "$1" =~ $ONLY ]]; then return 0; fi
-  NJOB=$((NJOB + 1))
-  (
-    damage_and_lint "$T/w$NJOB" "$2"
-    if [[ "$OUT" == *"=== All checks passed ==="* ]]; then
-      echo PASS > "$T/r$NJOB"
-    else
-      echo "FAIL: $1 — the lint did not pass: $(grep -m3 '^FAIL:' <<<"$OUT")" > "$T/r$NJOB"
-    fi
-    rm -rf "$T/w$NJOB"
-  ) &
-  if (( NJOB % JOBS == 0 )); then wait; fi
-}
+passes_all() { pool_start "$1" probe_passes_all "$@"; }
 
-collect() {
-  wait
-  local f
-  for f in "$T"/r*; do
-    [[ -f "$f" ]] || continue
-    if [[ "$(cat "$f")" == PASS ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); cat "$f"; fi
-  done
-}
+collect() { pool_collect; }
 
 # ── mutations ────────────────────────────────────────────────────────────────
 # strip_token <token> <replacement> <file or dir>... — rewrite every occurrence, so no other file
@@ -736,13 +865,20 @@ owasp_section_only_in_tree() { owasp_split_to_ref; mkdir -p "$S/add/ai-security/
 owasp_section_deleted() { strip_token '### LLM10' '### LLX10' "$S/add/ai-security/implementation.md"; }
 
 # ── baseline ─────────────────────────────────────────────────────────────────
+# probe_baseline <test name> <slash flag> — the lint must pass on the unmodified tree.
+probe_baseline() {
+  SLASH=$2
+  damage_and_lint "$T/w$NJOB" none
+  if [[ "$OUT" == *"=== All checks passed ==="* ]]; then
+    emit PASS
+  else
+    emit "FAIL: $1 (${OUT##*$'\n'}) — expected [0], got [1]"
+  fi
+  rm -rf "$T/w$NJOB"
+}
 if [[ -z "${ONLY:-}" ]]; then
-  damage_and_lint "$T/base" none
-  if [[ "$OUT" == *"=== All checks passed ==="* ]]; then BASE_RC=0; else BASE_RC=1; fi
-  check 0 "$BASE_RC" "baseline_passes: lint passes on the unmodified tree (${OUT##*$'\n'})"
-  SLASH=1; damage_and_lint "$T/base-slash" none; SLASH=
-  if [[ "$OUT" == *"=== All checks passed ==="* ]]; then BASE_RC=0; else BASE_RC=1; fi
-  check 0 "$BASE_RC" "baseline_passes_with_a_trailing_slash: the command CI runs passes (${OUT##*$'\n'})"
+  pool_start baseline_passes probe_baseline "baseline_passes: lint passes on the unmodified tree" ""
+  pool_start baseline_passes_with_a_trailing_slash probe_baseline "baseline_passes_with_a_trailing_slash: the command CI runs passes" 1
 fi
 
 # ── template trees ───────────────────────────────────────────────────────────
@@ -1045,6 +1181,7 @@ depth_slash_forms_agree() {
   check 1 "$([[ "$a" == *"OK:"* && "$b" == *"OK:"* ]] && echo 1 || echo 0)" "nesting_depth_passes_with_the_template_trees_in_both_forms"
   rm -rf "$w"
 }
+pool_serial_point
 depth_slash_forms_agree
 
 # ── the copy script: renamed copies, B3 scope, selectors, and ordering ────────
@@ -1494,6 +1631,8 @@ run_pfd() {
     fi
   done
 }
+
+pool_serial_point
 
 # ── file line budget: the check alone, on a scratch tree (a full lint per probe is too slow) ──
 # lb_probe builds a tree that passes (the clean control), applies one mutation and expects the

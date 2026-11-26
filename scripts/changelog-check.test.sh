@@ -107,6 +107,12 @@ while IFS= read -r body; do
   run "fragment body rejected: $body" 1 "breaks the rule"
 done <<'LIST'
 > # x
+- = x
+- ok\n  = x
+- < x
+- ok\n  < x
+- ok\n   three-space continuation
+  two-space first line
 - > # x
 - ok\n  > # x
 - ok\n  > quoted text
