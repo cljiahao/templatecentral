@@ -632,6 +632,23 @@ cok "ban: U+FFFB" 1 '- a \xef\xbf\xbb b\n' "invisible"
 cok "ban: tag character U+E0001" 1 '- a \xf3\xa0\x80\x81 b\n' "invisible"
 cok "ban: tag character U+E007F" 1 '- a \xf3\xa0\x81\xbf b\n' "invisible"
 cok "control: U+200A and U+2010 pass" 0 '- a \xe2\x80\x8a \xe2\x80\x90 b\n'
+# Round 8. Variation selectors, joiners, fillers and the object replacement character.
+cok "ban: ZWJ U+200D" 1 '- a \xe2\x80\x8d b\n' "invisible"
+cok "ban: ZWNJ U+200C" 1 '- a \xe2\x80\x8c b\n' "invisible"
+cok "ban: variation selector U+FE00" 1 '- a \xef\xb8\x80 b\n' "invisible"
+cok "ban: variation selector U+FE0F" 1 '- a \xef\xb8\x8f b\n' "invisible"
+cok "ban: variation selector U+E0100" 1 '- a \xf3\xa0\x84\x80 b\n' "invisible"
+cok "ban: variation selector U+E01EF" 1 '- a \xf3\xa0\x87\xaf b\n' "invisible"
+cok "ban: combining grapheme joiner U+034F" 1 '- a \xcd\x8f b\n' "invisible"
+cok "ban: Hangul choseong filler U+115F" 1 '- a \xe1\x85\x9f b\n' "invisible"
+cok "ban: Hangul jungseong filler U+1160" 1 '- a \xe1\x85\xa0 b\n' "invisible"
+cok "ban: Hangul filler U+3164" 1 '- a \xe3\x85\xa4 b\n' "invisible"
+cok "ban: halfwidth Hangul filler U+FFA0" 1 '- a \xef\xbe\xa0 b\n' "invisible"
+cok "ban: object replacement U+FFFC" 1 '- a \xef\xbf\xbc b\n' "invisible"
+cok "ban: all new classes in one line" 1 '- a \xef\xb8\x8f b \xcd\x8f \xe3\x85\xa4 \xef\xbe\xa0 \xf3\xa0\x84\x80\n' "invisible"
+cok "control: just outside the new ranges pass" 0 \
+  '- a \xef\xb7\xbf \xef\xb8\x90 \xf3\xa0\x83\xbf \xf3\xa0\x87\xb0 \xcd\x8e \xe1\x85\x9e \xe1\x85\xa1 \xe3\x85\xa3 \xef\xbd\x9f \xef\xbe\xa1 \xef\xbf\xbd b\n'
+cok "control: emoji without variation selector passes" 0 '- a \xe2\x9d\xa4 \xf0\x9f\x91\x8d b\n'
 # A tool that fails stops the check; it never accepts.
 FAKE="$T/fakebin"; mkdir -p "$FAKE"; printf '#!/bin/sh\nexit 2\n' > "$FAKE/grep"; chmod +x "$FAKE/grep"
 CENV=("PATH=$FAKE:$PATH"); cok "grep failure is an error, not an accept" 1 '- fine text\n' "grep failed"

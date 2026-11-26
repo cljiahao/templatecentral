@@ -33,30 +33,32 @@
 #   changed nothing else. The golden hashes depend on template content, not on the version, and
 #   pristine-hashes.txt is regenerated from the tag after the release, not in the release PR.
 #
-# Catches: no fragment added; unknown category; empty fragment; a fragment that breaks the rules of
-#   changelog-lib.sh, cl_content_ok. Bytes: any control byte but LF (CR, TAB, NUL, ESC, DEL), a
+# Catches: no fragment added; unknown category; empty fragment; a fragment that breaks the rules
+#   of changelog-lib.sh, cl_content_ok. Bytes: any control byte but LF (CR, TAB, NUL, ESC, DEL), a
 #   last line with no newline, invalid UTF-8 (overlong, surrogate, stray or lone byte), an
-#   invisible or reordering character (C1 controls, soft hyphen, zero width, bidi marks and
-#   overrides, line and paragraph separators, BOM, tag characters). Lines: a blank line; a line
-#   that is not "- text" (first line and after), "  - text" or "  text" (two spaces). Text:
-#   starts with anything but a letter, digit, backtick, [ ( " ' or # and a digit (a PR
-#   reference); has no letter or digit; starts like a list marker (1. or 1)). Backticks: odd
-#   count on a line, two in a row, one after a backslash. Outside backtick spans: < before a
-#   letter, / ! or ? (raw HTML, comment, CDATA, PI, autolink), "](", "][" or "] [" (link
-#   destination or label), "]:" anywhere (link reference definition), a [ or ] that does not
-#   balance on its line (a label cannot run over a line break or hide behind a backslash).
-#   So a heading, quote, fence, thematic break, setext underline, table or HTML block is
-#   rejected, and the script and Markdown agree on every line break and every code span;
-#   symlink, submodule or type-changed fragment; subdirectory; name outside the pattern (incl.
-#   spaces, newlines); fragment added then deleted in the same PR; README.md counted as a
-#   fragment; missing base ref or merge base; entries left under "## [Unreleased]"; in a normal
-#   PR a fragment deleted or modified (policy: a fragment belongs to the PR that added it), a
-#   changed, deleted or type-changed version file, a version value change, a minified or
-#   duplicate-key version file; a normal PR that edits CHANGELOG.md (it must then pass the replay,
-#   so free edits, history rewrites and fake release headings fail); a release PR with a
-#   fragment left or added, a path off the allow-list (this includes the assemble script, the
-#   lib, this check and the workflow), an extra or duplicate key in a version file, a version
-#   that is not greater; CHANGELOG.md deleted or type-changed; a malformed heading.
+#   invisible or reordering character (C1 controls, soft hyphen, zero width space, joiner and
+#   non-joiner, bidi marks and overrides, line and paragraph separators, BOM, tag characters,
+#   variation selectors, U+034F, the Hangul fillers, U+FFFC; so a ZWJ emoji sequence, an emoji
+#   with a variation selector and text that needs U+200C are refused). Lines: a blank line; a line
+#   that is not "- text" (first line and after), "  - text" or "  text" (two spaces). Text: starts
+#   with anything but a letter, digit, backtick, [ ( " ' or # and a digit (a PR reference); has no
+#   letter or digit; starts like a list marker (1. or 1)). Backticks: odd count on a line, two in
+#   a row, one after a backslash. Outside backtick spans: < before a letter, / ! or ? (raw HTML,
+#   comment, CDATA, PI, autolink), "](", "][" or "] [" (link destination or label), "]:" anywhere
+#   (link reference definition), a [ or ] that does not balance on its line (a label cannot run
+#   over a line break or hide behind a backslash). So a heading, quote, fence, thematic break,
+#   setext underline, table or HTML block is rejected, and the script and Markdown agree on every
+#   line break and every code span; symlink, submodule or type-changed fragment; subdirectory;
+#   name outside the pattern (incl. spaces, newlines); fragment added then deleted in the same PR;
+#   README.md counted as a fragment; missing base ref or merge base; entries left under "##
+#   [Unreleased]"; in a normal PR a fragment deleted or modified (policy: a fragment belongs to
+#   the PR that added it), a changed, deleted or type-changed version file, a version value
+#   change, a minified or duplicate-key version file; a normal PR that edits CHANGELOG.md (it must
+#   then pass the replay, so free edits, history rewrites and fake release headings fail); a
+#   release PR with a fragment left or added, a path off the allow-list (this includes the
+#   assemble script, the lib, this check and the workflow), an extra or duplicate key in a version
+#   file, a version that is not greater; CHANGELOG.md deleted or type-changed; a malformed
+#   heading.
 # Does not catch: a fragment whose text is wrong or meaningless; inline Markdown inside a valid
 #   line that cannot open a block or hide a backtick: emphasis, entity references (&lt;), bare
 #   URLs of any scheme (javascript: too), "www." hosts and email addresses (some renderers link
@@ -173,7 +175,9 @@ migration=0 bt=$(printf '\x60')
 # and * are dropped, every code span of the removed line kept in order in the fragment line (a
 # reword may wrap more text in backticks, but not drop, move or change a span), and the same
 # number of lone * (a * with a space or a line edge on both sides is
-# a multiplication or a bullet, not emphasis: it may not appear or vanish). Odd backtick counts
+# a multiplication or a bullet, not emphasis: it may not appear or vanish; a * between two
+# non-space characters is dropped from the key and may appear or vanish: a removed line "- a*b"
+# is accepted for the fragment line "- ab"). Odd backtick counts
 # fail closed. Used only when no fragment line equals the removed line exactly.
 spans_of() {
   local parts i=1 out=""

@@ -29,8 +29,10 @@ cl_name_category() {
 #    line. So Markdown and bash see the same lines: only LF ends one.
 # 2. Valid UTF-8 only, as an allow-list of byte sequences (no overlong form, surrogate, lone
 #    continuation byte or byte C0, C1, F5 to FF), and none of the invisible or reordering code
-#    points: C1 controls, soft hyphen, U+061C, U+180E, U+200B-U+200F, U+2028-U+202E,
-#    U+2060-U+206F, U+FEFF, U+FFF9-U+FFFB and the tag characters U+E0000-U+E007F.
+#    points: C1 controls, soft hyphen, U+034F, U+061C, U+115F, U+1160, U+180E, U+200B-U+200F
+#    (zero width space, joiner, non-joiner, marks), U+2028-U+202E, U+2060-U+206F, U+3164,
+#    U+FE00-U+FE0F and U+E0100-U+E01EF (variation selectors), U+FEFF, U+FFA0, U+FFF9-U+FFFC
+#    and the tag characters U+E0000-U+E007F.
 # 3. Lines: no blank line. The first line is "- text"; after it "- text", "  - text" (nested)
 #    or "  text" (exactly two spaces). Text starts with a letter, digit, backtick, "[", "(", a
 #    double or single quote, or "#" and a digit (a PR reference), holds a letter or digit, and
@@ -56,6 +58,9 @@ cl_content_ok() {
   re_utf8+=$'|\xf4[\x80-\x8f]'$c$c$')*$'
   re_ban=$'\xc2[\x80-\x9f]|\xc2\xad|\xd8\x9c|\xe1\xa0\x8e|\xe2\x80[\x8b-\x8f]|\xe2\x80[\xa8-\xae]'
   re_ban+=$'|\xe2\x81[\xa0-\xaf]|\xef\xbb\xbf|\xef\xbf[\xb9-\xbb]|\xf3\xa0[\x80-\x81]'$c
+  re_ban+=$'|\xef\xb8[\x80-\x8f]|\xf3\xa0[\x84-\x86]'$c$'|\xf3\xa0\x87[\x80-\xaf]'
+  re_ban+=$'|\xcd\x8f|\xe1\x85[\x9f\xa0]'
+  re_ban+=$'|\xe3\x85\xa4|\xef\xbe\xa0|\xef\xbf\xbc'
   local awk_bal='BEGIN { s = ENVIRON["S"]; d = 0; n = length(s)
     for (i = 1; i <= n; i++) {
       c = substr(s, i, 1)

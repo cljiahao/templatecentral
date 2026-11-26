@@ -173,6 +173,8 @@ n=0
 for body in '- a \x80 b\n' '- a \xc0\xaf b\n' '- a \xe0\x80\xaf b\n' '- a \xed\xa0\x80 b\n' '- a \xff b\n' \
   '- a \xc2\x85 b\n' '- a \xc2\xad b\n' '- a \xe2\x80\x8b b\n' '- a \xe2\x80\xae b\n' \
   '- a \xe2\x81\xa0 b\n' '- a \xef\xbb\xbf b\n' '- a \xf3\xa0\x80\x81 b\n' \
+  '- a \xef\xb8\x8f b\n' '- a \xcd\x8f b\n' '- a \xe3\x85\xa4 b\n' '- a \xf3\xa0\x84\x80 b\n' \
+  '- a \xef\xbf\xbc b\n' '- a \xe2\x80\x8d b\n' \
   '- [foo\n  bar]: http://evil\n' '- [x\n  y\n  z]: /u\n' '- [a\\]b]: http://evil\n' \
   '- [^1]: x\n' '- see [a] [b]\n' '- see [a\n'; do
   n=$((n + 1)); mk "lib-r7-$n"; frag a.added.md; printf -- "$body" > "$R/changelog.d/b.fixed.md"; commit
