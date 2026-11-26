@@ -24,9 +24,7 @@ Add a migration script to `package.json`:
 
 Run `TC_PART=leaf TC_LEAF=add/database/typescript/nextjs-kysely bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/typescript/nextjs-kysely/template/` (listed in `<skill-dir>/database/typescript/nextjs-kysely/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**`src/integrations/database/kysely-client.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nextjs-kysely/template/src/integrations/database/kysely-client.ts` by the copy step; do not re-type it.
+**`src/integrations/database/kysely-client.ts`**
 
 > **Why the singleton**: Next.js hot-reloads modules in development; caching the Kysely instance (and the pool created inside it) on `globalThis` prevents connection exhaustion.
 
@@ -99,27 +97,19 @@ RDS_CA_BUNDLE_PATH=certs/rds-global-bundle.pem
 
 #### B3. Define Database Types
 
-**`src/integrations/database/types.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nextjs-kysely/template/src/integrations/database/types.ts` by the copy step; do not re-type it.
+**`src/integrations/database/types.ts`**
 
 > **Tip**: After the database exists, run `pnpm exec kysely-codegen` to auto-generate types from the live schema instead of maintaining them manually.
 
 #### B4. Create Barrel Export
 
-**`src/integrations/database/index.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nextjs-kysely/template/src/integrations/database/index.ts` by the copy step; do not re-type it.
+**`src/integrations/database/index.ts`**
 
 #### B5. Create First Migration
 
-**`src/integrations/database/migrations/001_initial.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nextjs-kysely/template/src/integrations/database/migrations/001_initial.ts` by the copy step; do not re-type it.
+**`src/integrations/database/migrations/001_initial.ts`**
 
 Migration runner script, **`src/integrations/database/migrate.ts`** (copied above):
-
-Copied verbatim from `<skill-dir>/database/typescript/nextjs-kysely/template/src/integrations/database/migrate.ts` by the copy step; do not re-type it.
 
 Run migrations with: `pnpm migrate`
 
@@ -198,11 +188,7 @@ Confirm the build succeeds with no type errors.
 
 ## Rules
 
-- **Opt-in only** — add a database only on request.
-- Client and schemas live in `src/integrations/database/`.
 - Keep the cached singleton — it prevents connection exhaustion on hot reload.
-- Do not hardcode credentials; keep connection config in `.env` / `.env.local` and document in `.env.example`.
-- Import database code only on the server, never in client components (`'use server'`, API routes, Server Components).
 - **Kysely**: Write manual `up`/`down` migration files in `src/integrations/database/migrations/`, named `NNN_<description>.ts` with the next unused number — Kysely runs them in name order and fails on a file that sorts before an executed one. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant pool config; query code is unchanged.
 
 ---
