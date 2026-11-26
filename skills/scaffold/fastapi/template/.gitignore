@@ -59,5 +59,10 @@ Thumbs.db
 # Per-developer skill telemetry written by .claude/hooks/skill-usage-log.sh
 .claude/skill-usage.log
 
+# Per-developer gate timings written by .claude/ci-gates.sh and the once-per-session marker from .claude/gate-budget.sh
+.claude/gate-times.tsv
+.claude/gate-budget.seen
+.claude/gate-times.??????
+.claude/gate-budget.??????
 # Local review records written by scripts/record-review.sh (per machine, never committed)
 .claude/review/

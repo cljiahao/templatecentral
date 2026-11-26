@@ -6,6 +6,7 @@
 # Test scripts: every package.json script whose name has a test, coverage, lint, typecheck, build, check, verify, ci, format or audit word keeps its word list. Any change is a finding except these known-safe words: --reporter, --coverage.reporter, --outputFile (with or without a value), --coverage.reportsDirectory=, --silent, --color, --no-color. A script that is gone is a finding; a new script is covered by the flag checks and the CI and lefthook comparison.
 # pytest: any change to a [tool.pytest.ini_options] key or a new key is a finding, except raising --cov-fail-under and the markers, pythonpath and asyncio_default_fixture_loop_scope keys.
 # Type checkers: tsconfig and pyright strictness may tighten, never loosen; a new tsconfig or pyright config may not switch strictness off.
+# Gate-time budget: .claude/gate-budget.conf may not be deleted, and its three limits may not rise; a conf with no merge-base copy is held to the seeded defaults (600, 180, 25) and may not set a higher limit or leave one out. The kind is not enforced, so a human applying the allow-gate-change label can waive a raise or a deletion, by design.
 # Allow-lists: dep-audit-allow.txt may only lose lines; comment-hygiene-patterns.txt may only gain lines at the end.
 set -uo pipefail
 
@@ -70,6 +71,7 @@ kind_of() {
     .claude/registry-hosts.txt | */.claude/registry-hosts.txt) KIND=hosts ;;
     .claude/dep-audit-allow.txt | */.claude/dep-audit-allow.txt) KIND=allow ;;
     .claude/comment-hygiene-patterns.txt | */.claude/comment-hygiene-patterns.txt) KIND=patterns ;;
+    .claude/gate-budget.conf | */.claude/gate-budget.conf) KIND=gatetime ;;
     tsconfig.json | tsconfig.*.json | */tsconfig.json | */tsconfig.*.json) KIND=tsconfig ;;
     pyrightconfig.json | */pyrightconfig.json) KIND=pyright ;;
     pnpm-workspace.yaml | */pnpm-workspace.yaml) KIND=pnpmws ;;
@@ -1101,6 +1103,18 @@ function do_budget() {
   emit("max", "test-budget-ratio", num_in(substr(T, MS + 21, ML - 21)))
 }
 
+function do_gatetime(   i, n, L, line, k, v) {
+  n = split(T, L, "\n")
+  for (i = 1; i <= n; i++) {
+    line = L[i]
+    if (line == "" || line ~ /^#/) continue
+    if (line !~ /^[a-z_]+=[0-9]+$/) fail("gate-budget.conf line " i " is not key=integer")
+    k = substr(line, 1, index(line, "=") - 1); v = substr(line, index(line, "=") + 1)
+    if (k == "total_budget_seconds" || k == "per_gate_budget_seconds" || k == "regression_percent") emit("max", "gatetime:" k, v)
+    else if (k != "runs_kept") fail("gate-budget.conf line " i ": unknown key " k)
+  }
+}
+
 function do_hosts(   i, n, L, line) {
   n = split(T, L, "\n")
   for (i = 1; i <= n; i++) {
@@ -1202,6 +1216,7 @@ END {
   else if (K == "budget") do_budget()
   else if (K == "gates") do_gates()
   else if (K == "hosts") do_hosts()
+  else if (K == "gatetime") do_gatetime()
   else if (K == "pnpmws") do_pnpmws()
   else if (K == "dependabot") do_dependabot()
   else if (K == "npmrc") do_npmrc()
@@ -1252,7 +1267,7 @@ END {
   for (i = 1; i <= no; i++) {
     k = order[i]; split(k, p, SUBSEP)
     if (!(k in hagg)) { printf "WEAKENED %s: %s %s was %s, now removed\n", F, p[1], p[2], label(p[1], bagg[k]); bad = 1 }
-    else if (p[1] == "max" && hagg[k] + 0 > bagg[k] + 0) { printf "WEAKENED %s: limit %s was %s, now %s\n", F, p[2], bagg[k], hagg[k]; bad = 1 }
+    else if (p[1] == "max" && hagg[k] + 0 > bagg[k] + 0) { printf "WEAKENED %s: limit %s was %s%s, now %s\n", F, p[2], bagg[k], (SEEDED + 0 ? " (seeded default)" : ""), hagg[k]; bad = 1 }
     else if (p[1] != "max" && hagg[k] + 0 < bagg[k] + 0) {
       printf "WEAKENED %s: %s %s was %s, now %s\n", F, (p[1] == "sev" ? "lint rule" : "threshold"), p[2], label(p[1], bagg[k]), label(p[1], hagg[k]); bad = 1
     }
@@ -1337,6 +1352,7 @@ while IFS=$'\t' read -r kind path _; do
   fi
   file_bad=0
   newfile=""
+  seeded=0
   if [ "$kind" != guard ] && [ "$kind" != allow ] && [ "$kind" != patterns ]; then
     if ! msg=$(awk -v K="$kind" -v B="$have_base" -f "$wd/facts.awk" "$wd/head" 2>&1 > "$wd/head.f"); then
       printf 'UNREADABLE %s: %s (fail closed)\n' "$path" "$msg"
@@ -1344,12 +1360,12 @@ while IFS=$'\t' read -r kind path _; do
       continue
     fi
     if [ "$have_base" -eq 0 ]; then
-      case "$kind" in tsconfig | pyright) newfile=1; : > "$wd/base.f" ;; conftest) : > "$wd/base.f" ;; *) continue ;; esac
+      case "$kind" in tsconfig | pyright) newfile=1; : > "$wd/base.f" ;; conftest) : > "$wd/base.f" ;; gatetime) seeded=1; printf 'max\tgatetime:total_budget_seconds\t600\nmax\tgatetime:per_gate_budget_seconds\t180\nmax\tgatetime:regression_percent\t25\n' > "$wd/base.f" ;; *) continue ;; esac
     elif ! msg=$(awk -v K="$kind" -v B="$have_base" -f "$wd/facts.awk" "$wd/base" 2>&1 > "$wd/base.f"); then
       printf 'NOTE %s: unreadable at the merge base (%s); compared with an empty baseline\n' "$path" "$msg"
       : > "$wd/base.f"
     fi
-    if ! awk -v F="$path" -v NEWFILE="$newfile" -f "$wd/compare.awk" "$wd/base.f" "$wd/head.f"; then
+    if ! awk -v F="$path" -v NEWFILE="$newfile" -v SEEDED="$seeded" -f "$wd/compare.awk" "$wd/base.f" "$wd/head.f"; then
       file_bad=1
     fi
   fi

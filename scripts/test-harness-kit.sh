@@ -1640,6 +1640,8 @@ done
 
 # ── session-context.sh ────────────────────────────────────────────────────────
 
+# A project that keeps its harness has the budget script; without it the hook prints one line (gate-budget.test.sh probes that).
+mkdir -p "$CC/.claude" && cp "$TPL/template/.claude/gate-budget.sh" "$TPL/template/.claude/gate-budget.conf" "$TPL/template/.claude/gates.txt" "$CC/.claude/"
 printf '# Project AGENTS\nrouting line\n' > "$CC/AGENTS.md"
 mkdir -p "$CC/docs" && printf '# Constitution\nbinding rule\n' > "$CC/docs/CONSTITUTION.md"
 run_hook "$KIT/session-context.sh" "$CC" '{"source":"startup"}'
@@ -1651,6 +1653,7 @@ done
 run_hook "$KIT/session-context.sh" "$CC" '{"source":"compact"}'
 check "0 3 yes yes" "$EC $(wc -l <<<"$OUT" | tr -d ' ') $(ok_if grep -q 'docs/CONSTITUTION.md' <<<"$OUT") $(ok_if test -z "$(grep -En 'routing line|binding rule' <<<"$OUT")")" "session-context.sh prints three invariant lines on compact and neither AGENTS.md nor the CONSTITUTION"
 PR=$(new_repo main)
+mkdir -p "$PR/.claude" && cp "$TPL/template/.claude/gate-budget.sh" "$TPL/template/.claude/gate-budget.conf" "$TPL/template/.claude/gates.txt" "$PR/.claude/"
 run_hook "$KIT/session-context.sh" "$PR" '{"source":"startup"}'
 check "0 1 yes" "$EC $(wc -l <<<"$OUT" | tr -d ' ') $(ok_if grep -q 'protected branch main' <<<"$OUT")" "session-context.sh names a protected branch on startup"
 check 1 "$(grep -c 'CONSTITUTION' "$KIT/session-context.sh")" "session-context.sh points to the CONSTITUTION once"

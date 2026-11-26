@@ -6,6 +6,58 @@ branch=${2:-}
 branch=${branch#refs/heads/}
 base="origin/$branch"
 
+# Every gate but `list` is timed: this script runs again as a child with TC_GATE_TIMED set (an exported TC_GATE_TIMED turns the recording off), then records name, seconds and exit status through gate-budget.sh. stdin, stdout and stderr pass through.
+# Why a background child with job control, not a foreground run: bash defers a trap until its foreground command ends, so a TERM sent to this process alone could not stop the gate, and a plain background job starts with SIGINT ignored, which every grandchild would inherit (a timed run would then survive Ctrl-C that kills an untimed one). `set -m` gives the child its own process group with default signals, so INT behaves as in an untimed run, and this process forwards INT, TERM and HUP to that whole group; the handlers are installed before the launch, and a signal that lands during the launch is forwarded right after it. When the child is gone the row is recorded with the gate's own status, then the signal is raised again with its default action, as an untimed run dies of TERM or HUP at once; INT is raised again only when the gate died of it, because an untimed bash lets a gate that survived INT finish with its own status. The caller sees what an untimed run gives, and a signal sent to this process alone also stops the gate, which an untimed run does not do. A gate that reads the terminal is in a background group and would stop; gates are not interactive.
+if [ -z "${TC_GATE_TIMED:-}" ] && [ -n "$gate" ] && [ "$gate" != list ]; then
+  t0=$(date +%s)
+  got=
+  child=
+  # Forwards signal $1 to the child's group (to the child alone when job control is off) and remembers it.
+  forward() {
+    got=$1
+    if [ -n "$child" ]; then
+      kill -s "$1" -- "-$child" 2>/dev/null || kill -s "$1" "$child" 2>/dev/null
+    fi
+  }
+  trap 'forward INT' INT
+  trap 'forward TERM' TERM
+  trap 'forward HUP' HUP
+  set -m
+  TC_GATE_TIMED=1 bash "$0" "$@" <&0 &
+  child=$!
+  set +m
+  if [ -n "$got" ]; then forward "$got"; fi
+  wait "$child"
+  rc=$?
+  while kill -0 "$child" 2>/dev/null; do
+    wait "$child"
+    rc=$?
+  done
+  if [ -n "$got" ]; then
+    # A wait cut short by a signal reports 128 plus the signal, not the gate's status; ask once more for the real one.
+    wait "$child"
+    rc=$?
+  fi
+  budget="$(dirname "$0")/gate-budget.sh"
+  if [ ! -f "$budget" ]; then
+    echo "gate-budget: $budget is missing; the timing of $gate was not recorded" >&2
+  else
+    bash "$budget" record "$gate" "$t0" "$(date +%s)" "$rc"
+    rec_rc=$?
+    if [ "$rec_rc" -ne 0 ]; then echo "gate-budget: recording the timing of $gate failed (status $rec_rc)" >&2; fi
+  fi
+  reraise=0
+  case "$got" in
+    TERM | HUP) reraise=1 ;;
+    INT) if [ "$rc" -eq 130 ]; then reraise=1; fi ;;
+  esac
+  if [ "$reraise" -eq 1 ]; then
+    trap - INT TERM HUP
+    kill -s "$got" "$$"
+  fi
+  exit "$rc"
+fi
+
 fail() {
   if [ -n "${TF_BUILD:-}" ]; then echo "##vso[task.logissue type=error]$1"; else echo "::error::$1"; fi
   exit 1
