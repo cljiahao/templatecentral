@@ -200,11 +200,21 @@ alive() {
 # fixture <A|C>: a gate script that records its pid and a background grandchild, then waits. C handles INT, TERM and HUP by stopping the grandchild and exiting 7.
 fixture() {
   {
-    printf 'echo $$ > "$PIDS/gate"\n'
-    printf 'sleep 300 </dev/null >/dev/null 2>&1 &\n'
-    printf 'gc=$!\necho "$gc" > "$PIDS/gc"\n'
-    if [ "$1" = C ]; then printf "trap 'kill \"\$gc\" 2>/dev/null; exit 7' INT TERM HUP\n"; fi
-    printf 'echo up > "$PIDS/ready"\nwait\n'
+    cat <<'FEOF'
+echo $$ > "$PIDS/gate"
+sleep 300 </dev/null >/dev/null 2>&1 &
+gc=$!
+echo "$gc" > "$PIDS/gc"
+FEOF
+    if [ "$1" = C ]; then
+      cat <<'FEOF'
+trap 'kill "$gc" 2>/dev/null; exit 7' INT TERM HUP
+FEOF
+    fi
+    cat <<'FEOF'
+echo up > "$PIDS/ready"
+wait
+FEOF
   } > "$P/scripts/test-budget.sh"
 }
 # sigrun <timed|plain> <A|C> <INT|TERM|HUP> <wrapper|group>: runs the gate, sends the signal, waits for the end. Sets SR_STATUS, SR_ROWS, SR_GATE, SR_GC (1 when still alive); returns 1 when the run cannot be judged.

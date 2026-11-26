@@ -13,4 +13,5 @@ workflows|scripts/check-workflows.sh|ci-gates.sh workflows
 envexample|scripts/check-env-example.sh|ci-gates.sh envexample
 dockerfile|-|ci-gates.sh dockerfile
 workarounds|scripts/check-workarounds.sh|ci-gates.sh workarounds
+review|scripts/check-review-record.sh|-
 diffcover|-|ci-gates.sh diffcover

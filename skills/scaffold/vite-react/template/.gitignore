@@ -57,3 +57,5 @@ yarn-error.log*
 .claude/gate-budget.seen
 .claude/gate-times.??????
 .claude/gate-budget.??????
+# Local review records written by scripts/record-review.sh (per machine, never committed)
+.claude/review/
