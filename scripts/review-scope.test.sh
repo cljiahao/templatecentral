@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2016 # mutant patterns and grep needles are literal script text
 # Behavioural test for skills/review/review/review-scope.sh.
 # Real git fixtures in a temp dir. Every refusal has a clean control that passes, and a mutant of the script (one check removed)
 # that lets the bad input through, so the test proves each check is what stops it. No timing, no network.
@@ -408,7 +407,7 @@ mkdir -p "$T/cd/proj"
 check "env: CDPATH is ignored for a relative project path" "$WANT" "$(cd "$T" && CDPATH=$T/cd out proj)"
 CDPATH=$T/cd MCWD=$T mutant_ne "no unset of CDPATH" 's|^unset CDPATH GIT_DIR.*$|:|' "$WANT" proj
 MCWD=.
-check "usage: the revision range ends with --" "1" "$(grep -c '"\$BSHA..HEAD" --' "$SRC")"
+check "usage: the revision range ends with --" "1" "$(grep -c $'"\\$BSHA..HEAD" --' "$SRC")"
 g "$P" tag -f "$H1" -m x >/dev/null 2>&1 || true
 # a file named like the revision range must not be read as a path
 check "control: scope with a tag named like the baseline stays right" "$WANT" "$(out "$P")"
@@ -419,7 +418,7 @@ mkrepo "$T/rel/app" >/dev/null 2>&1 || true
 mkdir -p "$T/rel/app/app"; echo x >"$T/rel/app/app/x.ts"; echo y >"$T/rel/app/x.ts"
 check "relative project, session path app/x.ts is the project's own app/x.ts" "app/x.ts
 rc=0" "$(cd "$T/rel" && out app --session app/x.ts)"
-MCWD=$T/rel mutant_ne "prefix form read for a relative project" 's|^    [*]) rel=[$]{p#./} ;;$|    *) rel=${p#"$PROJ"/}; rel=${rel#./} ;;|' "app/x.ts
+MCWD=$T/rel mutant_ne "prefix form read for a relative project" $'s|^    [*]) rel=[$]{p#./} ;;$|    *) rel=${p#"$PROJ"/}; rel=${rel#./} ;;|' "app/x.ts
 rc=0" app --session app/x.ts || true
 MCWD=.
 ln -s "$P" "$T/plink"
@@ -480,6 +479,25 @@ mutant_ne "no --relative" 's|--name-only --relative -z|--name-only -z|' "src/a.t
 rc=0" "$MONO/backend"
 contains "subdirectory project: record writes inside the project" "baseline written" "$(out "$MONO/backend" --record-baseline --stack nestjs)"
 check "subdirectory project: the baseline is in the subdirectory only" "0" "$(exists01 "$MONO/.claude/review-baseline.md")"
+
+# the baseline file is not part of its own scope once it is committed
+BC=$T/bcommit
+mkrepo "$BC"
+run "$BC" --record-baseline --stack nextjs >/dev/null 2>&1
+g "$BC" add -A; g "$BC" commit -qm baseline
+check "a committed baseline: an empty scope (the baseline file does not list itself)" "rc=0" "$(out "$BC")"
+mkdir -p "$BC/sub/.claude"; echo x >"$BC/sub/.claude/review-baseline.md"; echo y >"$BC/src/c.ts"; g "$BC" add -A; g "$BC" commit -qm more
+check "control: a file named like the baseline in another directory, and a source file, are listed" "src/c.ts${NL}sub/.claude/review-baseline.md
+rc=0" "$(out "$BC")"
+mutant_ne "no baseline exclude" $'s|-- \':(exclude,literal).claude/review-baseline.md\' ||' "src/c.ts${NL}sub/.claude/review-baseline.md
+rc=0" "$BC"
+BM=$T/bmono
+mkdir -p "$BM/backend/src" "$BM/other"; git init -q -b main "$BM" 2>/dev/null || git init -q "$BM"
+echo a >"$BM/backend/src/a.ts"; echo b >"$BM/other/b.ts"; g "$BM" add -A; g "$BM" commit -qm one
+run "$BM/backend" --record-baseline --stack nestjs >/dev/null 2>&1
+echo b2 >>"$BM/other/b.ts"; g "$BM" add -A; g "$BM" commit -qm two
+check "a committed baseline in a subdirectory project: an empty scope" "rc=0" "$(out "$BM/backend")"
+mutant_ne "no baseline exclude (subdirectory project)" $'s|-- \':(exclude,literal).claude/review-baseline.md\' ||' "rc=0" "$BM/backend"
 
 # rename and deletion in the diff
 RD=$T/rd

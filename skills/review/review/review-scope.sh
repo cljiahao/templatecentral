@@ -3,7 +3,7 @@
 # Usage: review-scope.sh <project-dir> [--session <path>]...
 #        review-scope.sh <project-dir> --record-baseline --stack <nestjs|nextjs|vite-react|fastapi> [--at <sha>]
 # Scope mode (default, writes nothing): prints one project-relative path per line, sorted, without duplicates: the files
-#   committed since the baseline commit (git diff <sha>..HEAD --name-only) plus every --session path (the files the agent
+#   committed since the baseline commit (git diff <sha>..HEAD --name-only, without .claude/review-baseline.md itself) plus every --session path (the files the agent
 #   wrote or edited this session, uncommitted ones included). No baseline file: the --session paths only. Empty output means an
 #   empty scope: report "No changes since last review — nothing to check." and stop without recording. The scope run prints
 #   "review-scope: scope computed at HEAD <sha>" on stderr.
@@ -32,7 +32,9 @@
 set -u
 unset CDPATH GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_PREFIX
 
+# die <message>: print the message on stderr and exit 1.
 die() { echo "review-scope: $1" >&2; exit 1; }
+# usage: print the usage line on stderr and exit 2.
 usage() { echo "usage: review-scope.sh <project-dir> [--session <path>]... | <project-dir> --record-baseline --stack <stack>" >&2; exit 2; }
 
 PROJ=
@@ -187,7 +189,7 @@ TMP=$(mktemp "${TMPDIR:-/tmp}/review-scope.XXXXXX") || die "cannot create a temp
 trap 'rm -f "$TMP" "$TMP.diff"' EXIT
 : >"$TMP"
 if [ -n "$BSHA" ]; then
-  git -c core.warnAmbiguousRefs=false -C "$ROOT" diff --name-only --relative -z "$BSHA..HEAD" -- >"$TMP.diff" || die "git diff failed"
+  git -c core.warnAmbiguousRefs=false -C "$ROOT" diff --name-only --relative -z "$BSHA..HEAD" -- ':(exclude,literal).claude/review-baseline.md' >"$TMP.diff" || die "git diff failed"
   while IFS= read -r -d '' f; do
     case "$f" in *"$NL"*) die "a changed file name holds a newline: refusing" ;; esac
     printf '%s\n' "$f" >>"$TMP"

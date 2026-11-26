@@ -23,11 +23,10 @@ absent() { case "$3" in *"$2"*) echo "FAIL $1: [$2] found in [$3]"; fail=1 ;; *)
 sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 -- "$1"; else sha256sum -- "$1"; fi 2>/dev/null | cut -d' ' -f1; }
 # listing <dir>: sorted "hash path" of every file and "L path target" of every symlink. The hashes come from one batched
 # shasum call: a shasum per file cost about 6 s per listing (CPU time, perl start-up), a batch costs about 0.1 s.
-HASHER="shasum -a 256"
-if ! command -v shasum >/dev/null 2>&1; then HASHER=sha256sum; fi
-# shellcheck disable=SC2086 # HASHER is a command with its option, split on purpose
+HASHER=(shasum -a 256)
+if ! command -v shasum >/dev/null 2>&1; then HASHER=(sha256sum); fi
 listing() { (cd "$1" && {
-  find . -type f -exec $HASHER {} + 2>/dev/null | sed 's/^\([0-9a-f]*\)  */\1 /'
+  find . -type f -exec "${HASHER[@]}" {} + 2>/dev/null | sed 's/^\([0-9a-f]*\)  */\1 /'
   find . -type l -print | while IFS= read -r f; do printf 'L %s %s\n' "$f" "$(readlink "$f")"; done
 } | LC_ALL=C sort); }
 treehash() { listing "$1" | { shasum -a 256 2>/dev/null || sha256sum; } | cut -d' ' -f1; }
@@ -119,7 +118,7 @@ for s in nextjs vite-react fastapi nestjs; do
         c=$(grep -c -x -F -e "$key" "$TPL/$p")
         check "$s manifest: line in $p appears exactly once" "1" "$c"
         if [ "$t" = rmblock ]; then
-          at=$(grep -n -x -F -e "$key" "$TPL/$p" | head -n 1 | cut -d: -f1)
+          at=$(KEY=$key awk '$0 == ENVIRON["KEY"] { print NR; exit }' "$TPL/$p")
           cnt=$(fld "$row" 3)
           last=$(fld "$row" 5)
           check "$s manifest: block in $p ends with its last line" "$last" "$(sed -n "$((at + cnt - 1))p" "$TPL/$p")"
@@ -484,7 +483,7 @@ mutate() { # name sed-expr
 D=$T/mut1
 seed "$D" nextjs
 printf '\n// local\n' >>"$D/src/features/example/index.ts"
-if mutate "no byte compare" 's|if \[ -f "[$]TPL/[$]rel" \] \&\& cmp -s -- "[$]abs" "[$]TPL/[$]rel"; then|if true; then|;s#cmp -s -- "[$]STAGE/snapdel/[$]rel" "[$]TPL/[$]rel" || die "[^"]*" ;;#: ;;#'; then
+if mutate "no byte compare" 's|if \[ -f "[$]TPL/[$]rel" \] \&\& cmp -s -- "[$]STAGE/snapdel/[$]rel" "[$]TPL/[$]rel"; then|if true; then|'; then
   bash "$MUT" "$D" --apply >/dev/null 2>&1
   check "mutant without the byte compare deletes the modified file" "0" "$(exists01 "$D/src/features/example/index.ts")"
 fi
@@ -622,14 +621,14 @@ fi
 D=$T/mut-link-edit
 seed "$D" nextjs
 s_link_edit "$D"
-if mutate "symlink check (edit file)" 's|if \[ -L "[$]acc" \]; then return 1; fi|:|;s#if \[ -f "[$]target" \] [&][&] \[ ! -L "[$]target" \]; then#if true; then#'; then
+if mutate "symlink check (edit file)" 's|if \[ -L "[$]acc" \]; then return 1; fi|:|;s#if \[ -L "[$]HELD" \] || \[ ! -f "[$]HELD" \]; then fail_apply#if false; then fail_apply#'; then
   mrun "$D" --apply >/dev/null
   check "mutant without the symlink check replaces the symlink with a file" "0" "$(if [ -L "$D/$PAGE" ]; then echo 1; else echo 0; fi)"
 fi
 D=$T/mut-link-del
 seed "$D" fastapi
 s_link_del "$D"
-if mutate "symlink check (delete file)" 's|if \[ -L "[$]acc" \]; then return 1; fi|:|'; then
+if mutate "symlink check (delete file)" 's|if \[ -L "[$]acc" \]; then return 1; fi|:|;s#if \[ -L "[$]HELD" \] || \[ ! -f "[$]HELD" \]; then fail_apply#if false; then fail_apply#'; then
   mrun "$D" --apply >/dev/null
   check "mutant without the symlink check deletes the user's link" "0" "$(exists01 "$D/src/api/services/example.py")"
 fi

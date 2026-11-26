@@ -17,10 +17,14 @@
 #   its path (or the manifest's directory row) is named with --force <path>. A manifest path that the scaffold itself lacks is
 #   always a blocker (the plugin is damaged), and an edit row cannot be forced: change those lines by hand.
 # All checks run before the first write, and any blocker makes the whole run refuse: no file is deleted or edited.
-# Apply order: re-check every file against the copy taken during the checks, write each edited file as a temp file in its own
-#   directory (same mode) and rename it over the original, then delete the files, then the empty directories. On any failure,
-#   and on INT, TERM or HUP after the apply started, everything already done is restored from the copies; the exit code is 1 for a
-#   failure and 130 (INT), 143 (TERM) or 129 (HUP) for a signal. If even the restore fails the copies are kept and their
+# The checks copy every file to delete or edit into a temp directory (a forced file too); the copy is what is compared with the
+#   scaffold. Apply order: compare every file with its copy again (any change refuses the run, nothing written); write each edited
+#   file as a temp file in its own directory (same mode); then, one file at a time, rename the live file aside to a
+#   .remove-example.held.* name in its own directory, compare the renamed file with its copy, and only when identical put the new
+#   file in its place (an edit) or delete it; a different file is renamed back, and the run fails and rolls back. Last the empty
+#   directories. On any failure, and on INT, TERM or HUP after the apply started, everything done is restored (held files are put
+#   back, edits and deletes come back from the copies); a closed stderr (SIGPIPE) cannot stop the restore. The exit code is 1
+#   for a failure and 130 (INT), 143 (TERM) or 129 (HUP) for a signal. If even the restore fails the copies are kept and their
 #   directory is printed. A signal before the apply started changes nothing.
 # Re-running after a removal is a no-op: a file whose expected lines are all absent counts as done only when every delete
 #   path is already gone; otherwise it is reported as a mismatch.
@@ -34,21 +38,24 @@
 #   directory; an unreadable directory (find fails); a delete root or edit target that is not a regular file or directory;
 #   a CR in an edited file; an expected line that is missing, matches twice, or sits in a file with no final newline; a block
 #   that differs from the scaffold's in any line; overlapping edits; a --force path that matches nothing; a deleted file (one not forced) or an
-#   edited file that changed between the checks and the apply; an edit target that became a directory or symlink; a write or
+#   edited file (forced or not) that changed between the checks and the moment it is moved aside; an edit target that became a
+#   directory or symlink; a write or
 #   delete that fails; INT, TERM or HUP during the apply (all rolled back); a CDPATH or a project path with a newline; a project path that is /.
 # Not caught: a file whose content changed but still equals the scaffold's current example (nothing is lost then); example code a
 #   user copied elsewhere; imports of the example from files the manifest does not name (the build and typecheck show these); a
-#   change made in the instant between the final re-check and the write; deleted directories come back with default modes after
-#   a rollback; a project seeded by an older plugin version: its example files can differ from today's scaffold (the BLOCK output
-#   names both versions; do not --force a whole directory to get past it, compare each file first); SIGKILL or a power loss in
-#   the middle of the apply (no rollback runs: stray .remove-example.* temp files and a half-removed example stay, and the
-#   copies in the temp directory are the only originals); an edited file loses its owner, ACLs, extended attributes and hard
-#   links, because the rename replaces the inode (the mode is kept); a --force file changed between the checks and the apply (the
-#   copy is taken then, with nothing to compare it to); a "<!-- templateCentral: " line below line 1 is ignored on purpose.
+#   write through a file handle opened before the move, landing after the compare and before the rm (every change made through
+#   the path is caught); a file the user creates at a deleted path during the apply (the run fails and the new file is left);
+#   deleted directories come back with default modes after a rollback; a project seeded by an older plugin version: its example
+#   files can differ from today's scaffold (the BLOCK output names both versions; do not --force a whole directory to get past
+#   it, compare each file first); SIGKILL or a power loss in the middle of the apply (no rollback runs: stray .remove-example.*
+#   temp files, a half-removed example, and a file sitting under a .remove-example.held.* name stay, and the copies in the temp
+#   directory are the originals); an edited file loses its owner, ACLs, extended attributes and hard links, because the rename
+#   replaces the inode (the mode is kept); a "<!-- templateCentral: " line below line 1 is ignored on purpose.
 # Not probed: the check that the temp copy of an original could be written (a full disk); a rename that fails after the file
 #   guard (needs a race inside one mv call); owner and ACL loss (needs root and a second user); that awk reads the edit snapshot
-#   and not the live file (the re-check before the write catches the same change); the second to fourth unreadable-directory
-#   guards, which fire only when the earlier ones are disabled; SIGKILL and a power loss (nothing can run then).
+#   and not the live file (the compare at the apply catches the same change); a held name that already exists (it holds the
+#   script's process id, so a test cannot create it first); the second to fourth unreadable-directory guards, which fire only
+#   when the earlier ones are disabled; SIGKILL and a power loss (nothing can run then).
 # Needs bash 3.2+, awk, chmod, cmp, cp, find, grep, mktemp, mv, rm, rmdir, sed, sort, stat, tail.
 set -u
 unset CDPATH
@@ -57,7 +64,9 @@ NL='
 '
 TAB=$(printf '\t')
 CR=$(printf '\r')
+# die <message>: print the message on stderr and exit 1.
 die() { echo "remove-example: $1" >&2; exit 1; }
+# usage: print the usage line on stderr and exit 2.
 usage() { echo "usage: remove-example.sh <project-dir> [--apply] [--force <path>]..." >&2; exit 2; }
 
 PROJ=
@@ -120,9 +129,10 @@ APPLYING=0
 DONE=0
 ROLLED=0
 : >"$STAGE/temps"
+# cleanup: the EXIT trap; rolls back an apply that was cut short, removes the temp files and the temp directory.
 cleanup() {
   local t
-  trap '' INT TERM HUP
+  trap '' INT TERM HUP PIPE
   if [ "$APPLYING" -eq 1 ] && [ "$DONE" -eq 0 ] && [ "$ROLLED" -eq 0 ]; then
     echo "remove-example: stopped during the apply; restoring the project" >&2
     rollback
@@ -132,7 +142,8 @@ cleanup() {
   done <"$STAGE/temps"
   if [ "$KEEP_STAGE" -eq 0 ]; then rm -rf "$STAGE"; fi
 }
-on_signal() { trap '' INT TERM HUP; echo "remove-example: interrupted by SIG$1" >&2; exit "$2"; }
+# on_signal <name> <code>: the INT, TERM and HUP trap; says which signal, then exits (the EXIT trap rolls back).
+on_signal() { trap '' INT TERM HUP PIPE; echo "remove-example: interrupted by SIG$1" >&2; exit "$2"; }
 trap cleanup EXIT
 trap 'on_signal INT 130' INT
 trap 'on_signal TERM 143' TERM
@@ -183,10 +194,13 @@ bad=$(awk -F'\t' '
 
 blockers=0
 VERSION_NOTE=0
+# block <message>: print one BLOCK line on stderr and count it.
 block() { echo "BLOCK  $1" >&2; blockers=$((blockers + 1)); }
+# block_differs <message>: a BLOCK for a file that differs from the scaffold; also asks for the version NOTE.
 block_differs() { VERSION_NOTE=1; block "$1"; }
 
 FORCE_USED=
+# is_forced <path>: succeeds when the path was named with --force, and records that it matched something.
 is_forced() {
   case "$NL$FORCE" in *"$NL$1$NL"*) FORCE_USED=$FORCE_USED$1$NL; return 0 ;; esac
   return 1
@@ -203,6 +217,14 @@ done <<<"$FORCE"
 : >"$STAGE/forced"
 : >"$STAGE/dirs"
 ALL_GONE=1
+
+# snap_delete <rel>: copy a file to delete into the stage as it is now; the copy is what is compared with the scaffold, with
+# the live file at the apply, and what a rollback restores. Forced files get the same copy.
+snap_delete() {
+  local dir=$STAGE/snapdel
+  case "$1" in */*) dir=$STAGE/snapdel/${1%/*} ;; esac
+  mkdir -p -- "$dir" && cp -p -- "$ROOT/$1" "$STAGE/snapdel/$1"
+}
 
 # delete rows
 while IFS= read -r row || [ -n "$row" ]; do
@@ -228,7 +250,8 @@ while IFS= read -r row || [ -n "$row" ]; do
   while IFS= read -r abs; do
     rel=${abs#"$ROOT"/}
     if [ ! -r "$abs" ]; then block "$rel is not readable"; continue; fi
-    if [ -f "$TPL/$rel" ] && cmp -s -- "$abs" "$TPL/$rel"; then
+    if ! snap_delete "$rel"; then block "$rel cannot be copied for the rollback"; continue; fi
+    if [ -f "$TPL/$rel" ] && cmp -s -- "$STAGE/snapdel/$rel" "$TPL/$rel"; then
       printf '%s\n' "$rel" >>"$STAGE/deletes"
       echo "DELETE $rel"
     elif is_forced "$rel" || is_forced "$p"; then
@@ -355,15 +378,26 @@ restore_file() {
   mv -f -- "$t" "$target"
 }
 
-# rollback: undo what the apply did so far.
+# rollback: undo what the apply did so far (restore edited files, put held files back, recreate directories, restore deleted files).
 rollback() {
-  local bad=0 t s rel d
-  trap '' INT TERM HUP
+  local bad=0 t s h rel d
+  trap '' INT TERM HUP PIPE
   ROLLED=1
   while IFS="$TAB" read -r t s; do
     if [ -z "$t" ]; then continue; fi
     if ! restore_file "$s" "$t"; then echo "remove-example: could not restore $t" >&2; bad=1; fi
   done <"$STAGE/replaced"
+  while IFS="$TAB" read -r t h s; do
+    if [ -z "$t" ]; then continue; fi
+    if [ ! -e "$h" ] && [ ! -L "$h" ]; then continue; fi
+    if [ ! -e "$t" ] && [ ! -L "$t" ]; then
+      if ! mv -- "$h" "$t"; then echo "remove-example: could not put back $t; the file is at $h" >&2; bad=1; fi
+    elif cmp -s -- "$h" "$s"; then
+      if ! rm -f -- "$h"; then echo "remove-example: could not remove the spare copy $h" >&2; bad=1; fi
+    else
+      echo "remove-example: $t was changed; the file as it was found is kept at $h" >&2; bad=1
+    fi
+  done <"$STAGE/holds"
   while IFS= read -r d; do
     if [ -z "$d" ]; then continue; fi
     if ! mkdir -p -- "$d"; then echo "remove-example: could not recreate $d" >&2; bad=1; fi
@@ -388,18 +422,11 @@ fail_apply() {
   exit 1
 }
 
-# copies of every file to delete, taken now; they are also what the rollback restores
+# early re-check: nothing changed since the checks (every file is compared again when it is moved aside)
 while IFS= read -r rel; do
   if [ -z "$rel" ]; then continue; fi
-  case "$rel" in */*) mkdir -p -- "$STAGE/snapdel/${rel%/*}" || die "cannot create a temp directory" ;; *) mkdir -p -- "$STAGE/snapdel" || die "cannot create a temp directory" ;; esac
-  cp -p -- "$ROOT/$rel" "$STAGE/snapdel/$rel" || die "cannot copy $rel; nothing was changed"
-  case "$NL$(cat "$STAGE/forced")$NL" in
-    *"$NL$rel$NL"*) ;;
-    *) cmp -s -- "$STAGE/snapdel/$rel" "$TPL/$rel" || die "$rel changed while the script ran; nothing was changed" ;;
-  esac
+  if ! cmp -s -- "$STAGE/snapdel/$rel" "$ROOT/$rel"; then die "$rel changed while the script ran; nothing was changed"; fi
 done <"$STAGE/deletes"
-
-# re-check: nothing changed since the checks
 while IFS="$TAB" read -r file staged snap; do
   if [ -z "$file" ]; then continue; fi
   if ! cmp -s -- "$snap" "$ROOT/$file"; then die "$file changed while the script ran; nothing was changed"; fi
@@ -418,23 +445,40 @@ while IFS="$TAB" read -r file staged snap; do
   printf '%s\t%s\t%s\n' "$target" "$tmp" "$snap" >>"$STAGE/plan"
 done <"$STAGE/editfiles"
 
-# all edits before any delete; from here a signal rolls back
+# take <target> <copy>: move the file aside (one rename, so a change made after the checks is not lost), then compare what was
+# moved with the copy from the checks. A difference, or anything but a regular file, puts it back through the rollback and
+# stops. Leaves the held name in HELD.
+: >"$STAGE/holds"
+HELDN=0
+HELD=
+take() {
+  local target=$1 copy=$2 label=${1#"$ROOT"/}
+  HELDN=$((HELDN + 1))
+  HELD=${target%/*}/.remove-example.held.$$.$HELDN
+  if [ -e "$HELD" ] || [ -L "$HELD" ]; then fail_apply "cannot hold $label: $HELD exists"; fi
+  printf '%s\t%s\t%s\n' "$target" "$HELD" "$copy" >>"$STAGE/holds"
+  if ! mv -- "$target" "$HELD"; then fail_apply "cannot move $label aside"; fi
+  if [ -L "$HELD" ] || [ ! -f "$HELD" ]; then fail_apply "$label is no longer a regular file"; fi
+  if ! cmp -s -- "$HELD" "$copy"; then fail_apply "$label changed while the script ran; it was put back"; fi
+}
+
+# all edits before any delete; from here a signal rolls back (and a closed stderr must not stop the rollback)
 APPLYING=1
+trap '' PIPE
 while IFS="$TAB" read -r target tmp snap; do
   if [ -z "$target" ]; then continue; fi
-  if [ -f "$target" ] && [ ! -L "$target" ]; then
-    printf '%s\t%s\n' "$target" "$snap" >>"$STAGE/replaced"
-    if ! mv -f -- "$tmp" "$target"; then fail_apply "cannot replace ${target#"$ROOT"/}"; fi
-  else
-    fail_apply "${target#"$ROOT"/} is no longer a regular file"
-  fi
+  take "$target" "$snap"
+  if ! mv -- "$tmp" "$target"; then fail_apply "cannot replace ${target#"$ROOT"/}"; fi
+  printf '%s\t%s\n' "$target" "$snap" >>"$STAGE/replaced"
+  if ! rm -f -- "$HELD"; then fail_apply "cannot remove the old copy of ${target#"$ROOT"/}"; fi
 done <"$STAGE/plan"
 
 while IFS= read -r rel; do
   if [ -z "$rel" ]; then continue; fi
   printf '%s\n' "$rel" >>"$STAGE/removed"
-  if ! rm -f -- "$ROOT/$rel"; then fail_apply "cannot delete $rel"; fi
-  if [ -e "$ROOT/$rel" ]; then fail_apply "$rel is still there after the delete"; fi
+  take "$ROOT/$rel" "$STAGE/snapdel/$rel"
+  if ! rm -f -- "$HELD"; then fail_apply "cannot delete $rel"; fi
+  if [ -e "$HELD" ] || [ -e "$ROOT/$rel" ]; then fail_apply "$rel is still there after the delete"; fi
 done <"$STAGE/deletes"
 
 while IFS= read -r d; do
