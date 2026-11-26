@@ -1,0 +1,1 @@
+- The AGENTS.md tail carries one line telling the agent to fix a stale README or doc in the same change, without asking.

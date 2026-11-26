@@ -1,0 +1,28 @@
+name: Changelog Fragment
+# PR gate: every PR adds a changelog.d/ fragment and leaves CHANGELOG.md alone, except the release
+# PR, which folds the fragments with scripts/changelog-assemble.sh and bumps the version in
+# plugin.json and harness.json (scripts/changelog-check.sh replays it and holds it to that).
+# The two test scripts run first so a broken checker cannot pass a PR.
+on:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: changelog-fragment-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  changelog-fragment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Fragment tools tests
+        run: |
+          bash scripts/changelog-check.test.sh
+          bash scripts/changelog-assemble.test.sh
+      - name: Require a changelog fragment
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash scripts/changelog-check.sh "origin/$BASE_REF"

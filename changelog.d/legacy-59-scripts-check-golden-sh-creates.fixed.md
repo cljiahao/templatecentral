@@ -1,0 +1,1 @@
+- `scripts/check-golden.sh` creates its scratch folder under `$TMPDIR`, as the other scripts do.

@@ -1,0 +1,1 @@
+- `user-prompt-guard` (seeded `UserPromptSubmit` hook, both copies) no longer scans prompts for injection phrases; it blocks inline credentials only (LLM02), unchanged. The harness docs and tests describe only that check.

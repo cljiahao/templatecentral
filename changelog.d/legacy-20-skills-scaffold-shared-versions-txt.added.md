@@ -1,0 +1,1 @@
+- `skills/scaffold/shared/versions.txt` as the one place a seeded or named version lives, with `scripts/check-versions.sh` (and a planted-drift test, both run in CI) failing when a template file, CI template, seeded script, skill fence or repo workflow disagrees, or when skill prose states a version for a listed package.

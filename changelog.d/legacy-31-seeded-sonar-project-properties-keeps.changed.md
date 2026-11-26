@@ -1,0 +1,1 @@
+- Seeded `sonar-project.properties` keeps only the keys the repo checks read (scope and exclusions) and no longer tells users to register a project or run a scanner with a token.

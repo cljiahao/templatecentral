@@ -1,0 +1,1 @@
+- The AGENTS.md tail names both hook-manager bypass envs (`LEFTHOOK=0` / `HUSKY=0`) and points the Stop hook at the repo's own Stop gate; the per-repo cue comment is gone.
