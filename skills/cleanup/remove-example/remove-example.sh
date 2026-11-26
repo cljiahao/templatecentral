@@ -347,7 +347,7 @@ while IFS= read -r file; do
       out = ENVIRON["OUT"]
       printf "" > out
       for (i = 1; i <= nl; i++) { if (i in gone) continue; if (i in subs) print subs[i] >> out; else print L[i] >> out }
-      close(out)
+      if (close(out) != 0) { print "the new file could not be written"; exit 6 }
     }
   ' "$STAGE/rows.$n" "$tplfile" "$snap")
   rc=$?
