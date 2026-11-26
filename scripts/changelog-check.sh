@@ -7,7 +7,9 @@
 #   Every PR: "## [Unreleased]" in CHANGELOG.md at HEAD has no entry. Entries live in fragments.
 #   Normal PR (CHANGELOG.md not in the diff): adds at least one valid fragment under changelog.d/
 #   and no invalid entry there. It deletes no fragment and does not change the version value in
-#   .claude-plugin/plugin.json or .claude/harness.json (other edits to those files are fine).
+#   .claude-plugin/plugin.json or .claude/harness.json (other edits are fine). Those two files
+#   may only be modified or added: deleted or type-changed fails. Each copy needs exactly one
+#   version line; minified JSON or a repeated key fails closed.
 #   Migration PR (the only CHANGELOG.md change empties "## [Unreleased]"): the same as a normal
 #   PR, and every entry removed from CHANGELOG.md is a line of an added fragment.
 #   Release PR (any other CHANGELOG.md change): the diff must be exactly what
@@ -31,12 +33,13 @@
 #   pristine-hashes.txt is regenerated from the tag after the release, not in the release PR.
 #
 # Catches: no fragment added; unknown category; empty or whitespace-only fragment; no bullet line;
-#   heading, fence or thematic-break line inside a fragment (also after any number of bullet
-#   markers); symlink, submodule or type-changed fragment; subdirectory; name outside the pattern
+#   heading ("#" not followed by a digit), fence or thematic-break line inside a fragment, also
+#   after any number of bullet markers (- * + and 1. 1), each then a space); symlink, submodule or type-changed fragment; subdirectory; name outside the pattern
 #   (incl. spaces, newlines); fragment added then deleted in the same PR; README.md counted as a
 #   fragment; missing base ref or merge base; entries left under "## [Unreleased]"; in a normal
 #   PR a fragment deleted or modified (policy: a fragment belongs to the PR that added it) and a
-#   changed version value in plugin.json or harness.json; a normal PR that edits CHANGELOG.md (it
+#   changed, deleted or type-changed version file, a version value change, a minified or
+#   duplicate-key version file; a normal PR that edits CHANGELOG.md (it
 #   must then pass the replay, so free edits, history rewrites and fake release headings fail); a
 #   release PR with a fragment left or added, a path off the allow-list (this includes the
 #   assemble script, the lib, this check and the workflow), an extra or duplicate key in a version
@@ -46,7 +49,9 @@
 #   script, changelog-assemble.sh, changelog-lib.sh, the tests or the workflow, because the checks
 #   that run are the PR's own copies and only a release PR is held to the allow-list; a normal PR
 #   that edits plugin.json or harness.json in any way other than the version value; a fragment
-#   that duplicates another fragment's text.
+#   that duplicates another fragment's text; Markdown that is not a heading, fence or break
+#   (table, quote, link reference, raw HTML); a heading marker behind a non-marker token such as
+#   "- (# x"; a Setext underline of one or two characters.
 set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
@@ -78,6 +83,7 @@ git diff --raw -z --no-renames --no-abbrev "$mb" HEAD > "$work/raw" || die "git 
 n_bad=0 n_rel=0 n_added=0 n_del=0 cl_status="" cl_mode="" cl_seen=0
 : > "$work/deleted"
 : > "$work/verfiles"
+: > "$work/verbad"
 : > "$work/relq"
 : > "$work/fragtext"
 while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
@@ -120,7 +126,11 @@ while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
   fi
   case $path in
     .claude-plugin/plugin.json|.claude/harness.json)
-      if [[ $st == M ]]; then printf '%s\n' "$path" >> "$work/verfiles"; fi ;;
+      if [[ $st == M || $st == A ]]; then
+        printf '%s\n' "$path" >> "$work/verfiles"
+      else
+        printf '%s\t%s\n' "$path" "$st" >> "$work/verbad"
+      fi ;;
     *) relq 3 "$label is not on the release allow-list"; continue ;;
   esac
   if [[ $st != M ]]; then relq 3 "$label: release files may only be modified (status $st)"; fi
@@ -157,13 +167,29 @@ if [[ $cl_seen -eq 1 && $cl_status == M && ! -s $work/entries && $n_added -ge 1 
   fi
 fi
 
-# Succeeds when the lines of <path> that carry the version <key> are the same at the merge base
-# and at HEAD. Used in a normal PR, where the version never changes.
+# Loads <p> at the merge base and at HEAD into $work/jb and $work/jh and succeeds when each copy
+# has exactly one line for the version <key>. Returns 1 when a copy is missing and 2 when a copy
+# has no such line (minified JSON) or more than one (duplicate key): both fail closed. Sets
+# VL_NB and VL_NH to the line counts. Shared by ver_same and json_check.
+ver_load() {
+  local p=$1 key=$2 pat
+  pat='^[[:space:]]*"'$key'"[[:space:]]*:'
+  git cat-file blob "$mb:$p" > "$work/jb" 2>/dev/null || return 1
+  git cat-file blob "HEAD:$p" > "$work/jh" 2>/dev/null || return 1
+  VL_NB=$(grep -cE "$pat" "$work/jb"); VL_NH=$(grep -cE "$pat" "$work/jh")
+  [[ $VL_NB -eq 1 && $VL_NH -eq 1 ]] || return 2
+}
+
+# Succeeds when the version <key> line of <path> is the same at the merge base and at HEAD, with
+# exactly one such line in each copy. Used in a normal PR, where the version never changes. A
+# file new at HEAD has no earlier value and passes the value test.
 ver_same() {
   local p=$1 key=$2 pat
   pat='^[[:space:]]*"'$key'"[[:space:]]*:'
-  git cat-file blob "$mb:$p" 2>/dev/null | grep -E "$pat" > "$work/vb"
-  git cat-file blob "HEAD:$p" 2>/dev/null | grep -E "$pat" > "$work/vh"
+  if ! git cat-file -e "$mb:$p" 2>/dev/null; then return 0; fi
+  ver_load "$p" "$key" || return 1
+  grep -E "$pat" "$work/jb" > "$work/vb"
+  grep -E "$pat" "$work/jh" > "$work/vh"
   cmp -s "$work/vb" "$work/vh"
 }
 
@@ -171,6 +197,9 @@ if [[ $cl_seen -eq 0 || $migration -eq 1 ]]; then
   if [[ $n_del -gt 0 ]]; then
     bad "$n_del fragment deletion(s): only the release PR deletes fragments"
   fi
+  while IFS=$'\t' read -r p st; do
+    bad "$p: status $st; a version file may only be modified or added in a normal PR"
+  done < "$work/verbad"
   while IFS= read -r p; do
     key=version
     if [[ $p == .claude/harness.json ]]; then key=templatecentral_version; fi
@@ -245,17 +274,12 @@ semver_gt() {
 # the copies equal once the version value is masked, new version equals the heading and is
 # greater than the old one.
 json_check() {
-  local p=$1 key=$2 pat nb nh vb vh
-  pat='^[[:space:]]*"'$key'"[[:space:]]*:'
-  if ! git cat-file blob "$mb:$p" > "$work/jb" 2>/dev/null; then
-    rel 3 "$p: missing at the merge base"; return
-  fi
-  if ! git cat-file blob "HEAD:$p" > "$work/jh" 2>/dev/null; then
-    rel 3 "$p: missing at HEAD"; return
-  fi
-  nb=$(grep -cE "$pat" "$work/jb"); nh=$(grep -cE "$pat" "$work/jh")
-  if [[ $nb -ne 1 || $nh -ne 1 ]]; then
-    rel 3 "$p: needs exactly one \"$key\" line in each copy (merge base $nb, HEAD $nh)"; return
+  local p=$1 key=$2 vb vh rc
+  ver_load "$p" "$key"; rc=$?
+  if [[ $rc -eq 1 ]]; then rel 3 "$p: missing at the merge base or at HEAD"; return; fi
+  if [[ $rc -eq 2 ]]; then
+    rel 3 "$p: needs exactly one \"$key\" line in each copy (merge base $VL_NB, HEAD $VL_NH)"
+    return
   fi
   local mask='s/^\([[:space:]]*"'$key'"[[:space:]]*:[[:space:]]*\)"[0-9][0-9.]*"/\1"V"/'
   sed "$mask" "$work/jb" > "$work/jb.m"; sed "$mask" "$work/jh" > "$work/jh.m"

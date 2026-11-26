@@ -119,6 +119,14 @@ done <<'LIST'
 - ok\n  - ***
 - ok\n  ----
 - ok\n  = = =
+- + # x
+- * - + # x
+- 1. # x
+- ok\n  + # x
+- ok\n  1) # x
+- + \x60\x60\x60js
+- 2. ~~~
+- + ***
 LIST
 n=0
 while IFS= read -r body; do
@@ -133,7 +141,28 @@ done <<'LIST'
 - ok\n  **Bold:** more
 - ok\n  * star item here
 - ok\n  -- two dashes only
+- + plus marker item
+- 1. numbered item
+- ok\n  + nested plus item
+- ok\n  2) nested numbered item
+- #96 fixed the thing
+- + #96 fixed the thing
+- ok\n  1. see #12
 LIST
+
+# Every marker works as the first line and as a continuation line.
+mk mk-first1; printf -- '1. numbered first line\n' > "$R/changelog.d/a.added.md"; commit f
+run "control, numbered first line" 0
+mk mk-first2; printf -- '+ plus first line\n' > "$R/changelog.d/a.added.md"; commit f
+run "control, plus first line" 0
+mk mk-first3; printf -- '1) paren first line\n' > "$R/changelog.d/a.added.md"; commit f
+run "control, paren first line" 0
+mk mk-cont; printf -- '- ok\n+ plus bullet\n3. numbered bullet\n' > "$R/changelog.d/a.added.md"; commit f
+run "control, plus and numbered continuation bullets" 0
+mk mk-bad1; printf -- '+ # x\n' > "$R/changelog.d/a.added.md"; commit f
+run "plus first line with a heading" 1 "first line"
+mk mk-bad2; printf -- '- ok\n1. # x\n' > "$R/changelog.d/a.added.md"; commit f
+run "numbered bullet line with a heading" 1 "first line"
 
 mk q-frag; frag a.added.md; commit f
 runq "normal PR adding a fragment prints no release rule text" 0
@@ -157,6 +186,19 @@ mk v-harness; frag a.added.md; printf '{\n  "templatecentral_version": "1.0.1"\n
 runq "normal PR bumps harness.json version" 1 "\"templatecentral_version\" value changes only in a release PR"
 mk v-dup; frag a.added.md; printf '{\n  "name": "x",\n  "version": "1.0.0",\n  "version": "1.0.0"\n}\n' > "$R/$PJN"; commit f
 runq "normal PR adds a second version line" 1 "\"version\" value changes only in a release PR"
+mk v-min; frag a.added.md; printf '{"name":"x","version":"1.0.0"}\n' > "$R/$PJN"; commit f
+runq "normal PR: minified plugin.json fails closed" 1 "\"version\" value changes only in a release PR"
+mk v-dup2; frag a.added.md; printf '{\n  "version": "1.0.0",\n  "version": "1.0.0"\n}\n' > "$R/$PJN"; commit f
+runq "normal PR: duplicate version key, value unchanged, fails closed" 1 "\"version\" value changes only in a release PR"
+mk v-dupbase; git -C "$R" checkout -q main; printf '{\n  "name": "x",\n  "version": "1.0.0",\n  "version": "1.0.0"\n}\n' > "$R/$PJN"; commit dup
+git -C "$R" checkout -q -b pr2; frag a.added.md; printf '{\n  "name": "y",\n  "version": "1.0.0",\n  "version": "1.0.0"\n}\n' > "$R/$PJN"; commit f
+runq "normal PR: duplicate version key at the base and at HEAD fails closed" 1 "\"version\" value changes only in a release PR"
+mk v-del; frag a.added.md; git -C "$R" rm -q "$HJN"; commit f
+runq "normal PR deletes harness.json (status D)" 1 "status D"
+mk v-typ; frag a.added.md; rm "$R/$PJN"; ln -s -- ../README.md "$R/$PJN"; commit f
+runq "normal PR replaces plugin.json with a symlink (status T)" 1 "status T"
+mk v-ctl2; frag a.added.md; printf '{\n  "name": "x",\n  "z": 1,\n  "version": "1.0.0"\n}\n' > "$R/$PJN"; commit f
+runq "control: normal PR edits plugin.json beside the version" 0
 
 mk trailnl; frag $'a.added.md\n'; commit f
 run "name with a trailing newline" 1 "name must be"

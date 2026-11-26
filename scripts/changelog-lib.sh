@@ -19,14 +19,16 @@ cl_name_category() {
 }
 
 # Succeeds when the file is a regular, non-symlink file whose first non-blank line is a bullet
-# with text, and whose other non-blank lines are bullets or indented continuations. Each line is
-# peeled: indent, then any number of bullet markers. At every step the rest may not start with a
-# fence marker or a heading, and may not be a thematic break (three or more of - = * _, same
-# character, spaces allowed, so "- - -" and "* * *" count).
+# with text, and whose other non-blank lines are bullets or indented continuations. A marker is
+# "-", "*", "+" or a number with "." or ")", then space. Each line is peeled: indent, then any
+# number of markers. At every step the rest may not start with a fence marker or a heading
+# ("#" not followed by a digit, so "#96" stays a PR reference), and may not be a thematic break
+# (three or more of - = * _, same character, spaces allowed, so "- - -" and "* * *" count).
 cl_content_ok() {
   local f=$1 line t first=1 seen=0
-  local re_blank='^[[:space:]]*$' re_bullet='^[-*][[:space:]]+[^[:space:]]'
-  local re_indent='^[[:space:]]' re_marker='^[-*][[:space:]]+'
+  local re_blank='^[[:space:]]*$' re_indent='^[[:space:]]'
+  local re_marker='^([-*+]|[0-9]+[.)])[[:space:]]+'
+  local re_bullet='^([-*+]|[0-9]+[.)])[[:space:]]+[^[:space:]]'
   local re_rule='^((-[[:space:]]*){3,}|(=[[:space:]]*){3,}'
   re_rule+='|(\*[[:space:]]*){3,}|(_[[:space:]]*){3,})$'
   if [[ -L $f || ! -f $f ]]; then return 1; fi
@@ -41,7 +43,9 @@ cl_content_ok() {
     t=${line#"${line%%[![:space:]]*}"}
     while :; do
       case $t in
-        '```'*|'~~~'*|'#'*) return 1 ;;
+        '```'*|'~~~'*) return 1 ;;
+        '#'[0-9]*) ;;
+        '#'*) return 1 ;;
       esac
       if [[ $t =~ $re_rule ]]; then return 1; fi
       [[ $t =~ $re_marker ]] || break
