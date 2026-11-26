@@ -39,6 +39,14 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 4. Add the detection signal to the Stack Detection table in `AGENTS.md`
 5. Add the stack to `README.md` → **What You Get**
 
+## Running the gates locally
+
+`bash scripts/run-gates.sh --changed [<base-ref>]` runs only the gates of the `pull_request` workflows whose inputs your diff touches (committed, staged, unstaged and untracked files since the merge base; default base `origin/main`), prints PASS or FAIL with CPU seconds per gate and exits non-zero when one fails. `--all` runs every gate, `--list [--changed]` prints the gates and runs nothing.
+
+The path-to-gate map is `scripts/run-gates.map`. A path the map does not list, a change to the runner or the map and any change under `.github/` run every gate, and the test fails when a workflow command is missing from the map, so a new CI gate must get a row. This is a local convenience: CI always runs the full set, and a pass here is not a pass in CI. It does not run inline workflow steps (shellcheck, `bash -n`); the header of the script lists what it cannot catch.
+
+Each gate gets a time limit (`RUN_GATES_TIMEOUT` seconds, default 3600); a gate over it, or killed by a signal, is reported FAIL and its process group is stopped. A gate that passes but prints `SKIP:` or `SKIPPED:` lines (a tool this machine lacks, or `CI` unset) is reported `PASS-WITH-SKIPS`, with the lines shown: it passed here and CI runs what it skipped. `--check` also audits the map: a gate script that names a path the map lists, but is not selected by that path's row, fails the check; add the gate to the row, or record a name that is only a fixture or a comment as a reviewed non-read with an `@noread` row. A workflow `run:` line that uses `scripts/` or `adapters/` in a form the runner does not read (`python3 scripts/x.py`, `bash ./scripts/x.sh`, a `cd scripts`) stops the run with exit 2 until the command is mapped or given an `@skip` row.
+
 ## Pull Request Checklist
 
 - [ ] `SKILL.md` has valid `name` and `description` frontmatter
@@ -50,6 +58,7 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 - [ ] `bash scripts/test-harness-kit.sh` passes locally if any `skills/scaffold/shared/harness-kit*.md` file or anything under `skills/scaffold/shared/template*/` was touched
 - [ ] `bash scripts/test-template-copy.sh` and `bash scripts/lint-skills.test.sh` pass locally if the template trees (`skills/scaffold/shared/template*`, `skills/scaffold/<stack>/template*`, or an add/migrate leaf's `template*`), a `template.manifest`, the Step 0 / Step B3 copy fences (including the `PART=stack` and `PART=agents` runs in a stack's `source-files.md`) or `scripts/lint-skills.sh` were touched
 - [ ] `bash scripts/pre-guard.test.sh` passes locally if a repo guard script was touched
+- [ ] `bash scripts/run-gates.sh --changed` passes locally (a new CI gate also gets a row in `scripts/run-gates.map`)
 - [ ] README updated if the skill count, capability list, or stack list changed
 - [ ] A changelog fragment `changelog.d/<slug>.<added|changed|removed|fixed|security>.md` is added; `CHANGELOG.md` is not edited (`bash scripts/changelog-check.sh origin/main` passes; format in `changelog.d/README.md`)
 - [ ] CI passes (frontmatter validation + `lint-patterns` job run automatically)
