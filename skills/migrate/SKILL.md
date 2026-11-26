@@ -11,7 +11,7 @@ description: Use when adopting or upgrading a project, switching its DB access l
 | **Adopt / upgrade** — no `.claude/harness.json` yet (retrofit the harness into a project built without templateCentral) | `general/implementation.md` |
 | **DB access layer** — fastapi: SQLAlchemy password → AWS IAM auth; nestjs/nextjs: Drizzle → Kysely (vite-react has no database layer: tell the user and stop) | `database/<fastapi\|nestjs\|nextjs>.md` |
 | **Backend extraction** — Next.js API routes → NestJS or FastAPI service | `nextjs-backend-extraction.md` |
-| **Portal framing** — pre-6.2.0 app framed only by its appCentral portal (`APPCENTRAL_PORTAL_ORIGIN`) | `portal-frame-ancestors.md` |
+| **Portal framing** — pre-6.2.0 app framed only by its parent portal (`EMBED_PARENT_ORIGIN`) | `frame-ancestors.md` |
 
 **Step 2** — Run:
 > `<skill-dir>` = this skill's directory ("Base directory for this skill"); substitute the absolute path — it is **not** a shell variable.

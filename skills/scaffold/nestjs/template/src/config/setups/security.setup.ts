@@ -6,7 +6,7 @@ import { appConfig, serviceConfig } from '../env.config';
 // One https origin only; anything else denies, so the value cannot inject CSP directives.
 const PORTAL_ORIGIN_RE = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+$/;
 
-/** The validated APPCENTRAL_PORTAL_ORIGIN, or null when unset or invalid. */
+/** The validated EMBED_PARENT_ORIGIN, or null when unset or invalid. */
 export function portalFrameAncestor(origin: string | undefined): string | null {
   return origin && PORTAL_ORIGIN_RE.test(origin) ? origin : null;
 }
@@ -17,7 +17,7 @@ export async function setupSecurity(app: INestApplication): Promise<void> {
   // Frame protection is skipped in dev so Swagger UI renders in IDE preview panes.
   const isDev = appConfig.ENVIRONMENT === 'dev';
   // Only the portal origin may frame the app.
-  const portal = portalFrameAncestor(appConfig.APPCENTRAL_PORTAL_ORIGIN);
+  const portal = portalFrameAncestor(appConfig.EMBED_PARENT_ORIGIN);
 
   await fastify.register(fastifyHelmet, {
     crossOriginResourcePolicy: { policy: 'cross-origin' },

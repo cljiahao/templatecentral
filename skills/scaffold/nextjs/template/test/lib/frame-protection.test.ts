@@ -13,14 +13,14 @@ describe('applyFrameProtection', () => {
     vi.unstubAllEnvs();
   });
 
-  it('denies all framing when APPCENTRAL_PORTAL_ORIGIN is unset', () => {
+  it('denies all framing when EMBED_PARENT_ORIGIN is unset', () => {
     const res = framed();
     expect(res.headers.get('X-Frame-Options')).toBe('DENY');
     expect(res.headers.get('Content-Security-Policy')).toBe(`frame-ancestors 'none'; ${CSP_BASE}`);
   });
 
   it('allows only the portal origin and drops X-Frame-Options', () => {
-    vi.stubEnv('APPCENTRAL_PORTAL_ORIGIN', 'https://portal.example.com');
+    vi.stubEnv('EMBED_PARENT_ORIGIN', 'https://portal.example.com');
     const res = framed();
     expect(res.headers.get('X-Frame-Options')).toBeNull();
     expect(res.headers.get('Content-Security-Policy')).toBe(
@@ -29,7 +29,7 @@ describe('applyFrameProtection', () => {
   });
 
   it.each([
-    'http://appcentral.example.gov.sg',
+    'http://portal.example.gov.sg',
     'https://*.example.gov.sg',
     'https://example.gov.sg:8443',
     'https://example.gov.sg/path',
@@ -38,7 +38,7 @@ describe('applyFrameProtection', () => {
     'https://localhost',
     '*',
   ])('falls back to deny for invalid origin %s', (origin) => {
-    vi.stubEnv('APPCENTRAL_PORTAL_ORIGIN', origin);
+    vi.stubEnv('EMBED_PARENT_ORIGIN', origin);
     const res = framed();
     expect(res.headers.get('X-Frame-Options')).toBe('DENY');
     expect(res.headers.get('Content-Security-Policy')).toBe(`frame-ancestors 'none'; ${CSP_BASE}`);
@@ -47,7 +47,7 @@ describe('applyFrameProtection', () => {
   it.each(['/api/external', '/api/external/items'])(
     'leaves backend-proxied responses (%s) untouched',
     (pathname) => {
-      vi.stubEnv('APPCENTRAL_PORTAL_ORIGIN', 'https://portal.example.com');
+      vi.stubEnv('EMBED_PARENT_ORIGIN', 'https://portal.example.com');
       const backend = new Response(null, {
         headers: { 'Content-Security-Policy': "default-src 'none'", 'X-Frame-Options': 'DENY' },
       });

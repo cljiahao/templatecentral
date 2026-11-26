@@ -15,7 +15,7 @@ server {
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     add_header X-Content-Type-Options "nosniff" always;
     # Anti-clickjacking — values come from docker/15-frame-protection.envsh at container start:
-    # 'none' + DENY by default, or only the appCentral portal origin (X-Frame-Options then empty,
+    # 'none' + DENY by default, or only the parent portal origin (X-Frame-Options then empty,
     # which nginx does not send). frame-ancestors replaces X-Frame-Options for CSP2+ browsers.
     add_header X-Frame-Options "${TC_X_FRAME_OPTIONS}" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;

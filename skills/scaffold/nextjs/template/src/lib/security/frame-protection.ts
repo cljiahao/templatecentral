@@ -12,7 +12,7 @@ function isBackendProxyPath(pathname: string): boolean {
 }
 
 function portalOrigin(): string | null {
-  const origin = process.env.APPCENTRAL_PORTAL_ORIGIN;
+  const origin = process.env.EMBED_PARENT_ORIGIN;
   return origin && PORTAL_ORIGIN_RE.test(origin) ? origin : null;
 }
 

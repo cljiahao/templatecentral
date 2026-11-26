@@ -6,3 +6,4 @@
 template/src/integrations/database/index.ts 644 - -
 template/src/integrations/database/mongoose-client.ts 644 - -
 template/src/integrations/database/schemas/user.ts 644 - -
+template/test/integrations/database/mongoose-client.test.ts 644 - -
