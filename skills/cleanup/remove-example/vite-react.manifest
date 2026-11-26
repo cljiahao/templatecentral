@@ -1,0 +1,5 @@
+# Example code of a vite-react project. Rows: see remove-example.sh.
+delete	src/features/example
+rmline	src/pages/dashboard.tsx	import { ExampleList } from '@/features/example';	after
+rmblock	src/pages/dashboard.tsx	3	      <p className="text-muted-foreground mt-2">	      </p>	-
+rmblock	src/pages/dashboard.tsx	3	      <div className="mt-8">	      </div>	before
