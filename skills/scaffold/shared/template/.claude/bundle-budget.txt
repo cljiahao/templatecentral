@@ -1,0 +1,2 @@
+# Gzip budget, in KB, for all JS and CSS the build emits (check-bundle-size.sh). Raising it is a human decision.
+max_gzip_kb 400

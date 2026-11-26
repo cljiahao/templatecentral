@@ -1,0 +1,7 @@
+# Licences allowed for named packages only, one per line: <package-name-pattern> <licence>. `*` matches any characters. `#` starts a comment.
+# check-licences.sh accepts the licence for a package whose name matches; every other package still needs a licence from allowed-licences.txt.
+# Adding a line is a human decision (legal review). Say why in a comment above it.
+# libvips binaries that sharp ships for next/image (LGPL-3.0-or-later), used unmodified as a separate library.
+@img/sharp-* LGPL-3.0-or-later
+# certifi ships the CA bundle that fastapi's HTTP stack (uvicorn[standard]) needs: MPL-2.0 is file-level copyleft and the package is used unmodified.
+certifi MPL-2.0

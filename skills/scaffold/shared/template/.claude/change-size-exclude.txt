@@ -1,0 +1,18 @@
+# Paths that do not count toward the change-size budget (check-change-size.sh): one shell pattern per line, matched against the whole path, where * also matches /.
+# Lockfiles only. A generated file counts too, unless .gitattributes marks it linguist-generated. Adding a line is a reviewed change.
+pnpm-lock.yaml
+*/pnpm-lock.yaml
+package-lock.json
+*/package-lock.json
+yarn.lock
+*/yarn.lock
+bun.lock
+*/bun.lock
+bun.lockb
+*/bun.lockb
+uv.lock
+*/uv.lock
+poetry.lock
+*/poetry.lock
+requirements.txt
+*/requirements.txt
