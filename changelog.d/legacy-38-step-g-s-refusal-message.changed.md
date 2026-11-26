@@ -1,0 +1,1 @@
+- Step G's refusal message names the `## AI Harness` heading correctly, and Ctrl-C or SIGTERM during a replace now exits (status 130 / 143) after removing its temp files.

@@ -1,0 +1,1 @@
+- The Step G replace keeps a symlinked `AGENTS.md` (the temp file goes beside the real target), matches BEGIN and END as whole lines outside code fences, and cleans its temp files on failure or interrupt.

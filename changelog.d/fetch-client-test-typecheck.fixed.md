@@ -1,0 +1,1 @@
+- The seeded `fetch-client.test.ts` (Vite + React) typechecks under `noUncheckedIndexedAccess`: the first mock call is read with `?? []` and `?.[1]`, which the keyless-gate CI tests exposed (not part of the gate wiring).

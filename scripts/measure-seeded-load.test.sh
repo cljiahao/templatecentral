@@ -115,7 +115,8 @@ check 1 "$(grep -c 'Authenticate every route that reads or changes user data' "$
 check 1 "$(grep -c 'never install one that hardcodes secrets or makes outbound calls' "$SH/template-tail/AGENTS-tail.md")" "the tail keeps the skills-security line"
 check 4 "$(grep -l 'every security hotspot reviewed' "$REPO_ROOT"/skills/scaffold/*/template-agents/AGENTS.md | wc -l | tr -d ' ')" "every stack gate line keeps the security-hotspot review"
 check 1 "$(grep -c 'is read on demand and is not injected at session start' "$SH/template-late/docs/harness.md")" "harness.md says the constitution is read on demand"
-check 1 "$(grep -c 'read on demand and is not injected at session start' "$REPO_ROOT/CHANGELOG.md")" "CHANGELOG says the constitution is read on demand"
+# Pending entries live in changelog.d/ fragments until a release folds them into CHANGELOG.md.
+check 1 "$(cat "$REPO_ROOT/CHANGELOG.md" "$REPO_ROOT"/changelog.d/*.md | grep -c 'read on demand and is not injected at session start')" "CHANGELOG or a pending fragment says the constitution is read on demand"
 
 echo "measure-seeded-load.test.sh: $PASS passed, $FAIL failed in ${SECONDS}s"
 [[ "$FAIL" -eq 0 ]]

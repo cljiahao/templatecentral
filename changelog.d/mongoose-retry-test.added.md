@@ -1,0 +1,1 @@
+- Test for the Mongoose connect retry in the Next.js add-database leaf (`template/test/integrations/database/mongoose-client.test.ts`), and `deleted.d` probes in `scripts/check-fences.test.sh` (duplicate in one file, row for a missing file, wrong index of the right file).

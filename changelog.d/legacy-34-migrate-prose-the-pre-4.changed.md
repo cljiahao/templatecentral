@@ -1,0 +1,1 @@
+- Migrate prose: the pre-4.0 upgrade prompt and the Phase 4 summary describe the current harness and docs model, and Phase 4 classifies existing per-folder READMEs as boundary docs or file manifests and proposes removing only manifests, after the user confirms.

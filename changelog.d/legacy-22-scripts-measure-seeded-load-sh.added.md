@@ -1,0 +1,1 @@
+- `scripts/measure-seeded-load.sh` scaffolds each stack, prints a bytes and tokens table, and fails when a stack exceeds its budget, a sentence of eight or more words appears in two always-loaded files, or a hook fixture exceeds its output cap. Its own tests and a CI step run in `validate-skills.yml`.

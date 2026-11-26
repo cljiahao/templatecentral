@@ -54,6 +54,7 @@ templatecentral/
 │   ├── tc-audit/            # /tc-audit — full ecosystem + accuracy audit
 │   └── tc-write-skill/      # /tc-write-skill — skill authoring checklist
 ├── AGENTS.md                # Agent orchestration guide
+├── changelog.d/             # One fragment per PR; scripts/changelog-assemble.sh folds them into CHANGELOG.md at release
 └── CHANGELOG.md             # Full version history
 ```
 

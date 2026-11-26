@@ -1,0 +1,6 @@
+- Security guidance, prose only, no scaffold output change:
+  - A "Cryptography and keys" validation rule and an upload malware-scan note.
+  - AI security lines on provider data terms, safe model weight formats, upload safeguards, evaluation sets and an "output can be wrong" notice.
+  - Review checklist items for cryptography and keys, log retention and upload scanning.
+  - FastAPI and Next.js logging notes on shipping logs to a separate system with retention and tamper protection.
+  - Harness-kit notes on repository settings (peer review, signed commits, protected default branch) and optional scanners and artefact signing a project may add to its own CI.

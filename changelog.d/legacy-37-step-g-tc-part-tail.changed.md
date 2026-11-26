@@ -1,0 +1,1 @@
+- Step G (`TC_PART=tail`) is idempotent: it wraps the AGENTS.md tail in `templatecentral-tail` BEGIN/END markers and replaces that block on a re-run instead of appending a second copy. Malformed markers, or an `## AI Harness` heading without markers, stop with an error.

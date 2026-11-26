@@ -1,0 +1,1 @@
+- diff-cover stays at 11.0.3, the version already on main; an earlier refresh in this branch had lowered it to 11.0.1 without a reason.

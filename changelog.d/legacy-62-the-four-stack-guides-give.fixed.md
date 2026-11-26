@@ -1,0 +1,1 @@
+- The four stack guides give the env-file copy a headless outcome (skip, continue, report) when the repo secret guard blocks it and no user can run the copy. `harness-kit-finalize.md` Step H does the same for the plugin install, and the guides' "not finished until Step H" line now reads "done or skipped". The interactive flow is unchanged.

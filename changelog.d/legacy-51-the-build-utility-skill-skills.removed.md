@@ -1,0 +1,1 @@
+- The `build` utility skill (`skills/build/`) is gone: it repeated the stack detection table in `AGENTS.md` and the seeded verify skills. Callers (`add`, `migrate`, `review` update, `standards` validation patterns, scaffold finalize) now run the stack's check command (`pnpm build && pnpm check`; FastAPI `ruff check src/ && python -m pyright src/`).
