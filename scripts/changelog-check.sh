@@ -35,12 +35,16 @@
 #
 # Catches: no fragment added; unknown category; empty fragment; a fragment that breaks the rules of
 #   changelog-lib.sh, cl_content_ok. Bytes: any control byte but LF (CR, TAB, NUL, ESC, DEL), a
-#   last line with no newline. Lines: a blank line; a line that is not "- text" (first line and
-#   after), "  - text" or "  text" (two spaces). Text: starts with anything but a letter, digit,
-#   backtick, [ ( " ' or # and a digit (a PR reference); has no letter or digit; starts like a
-#   list marker (1. or 1)); matches [label]: (link reference definition). Backticks: odd count
-#   on a line, two in a row, one after a backslash. Outside backtick spans: < before a letter,
-#   / ! or ? (raw HTML, comment, CDATA, PI, autolink), "](" or "][" (link destination or label).
+#   last line with no newline, invalid UTF-8 (overlong, surrogate, stray or lone byte), an
+#   invisible or reordering character (C1 controls, soft hyphen, zero width, bidi marks and
+#   overrides, line and paragraph separators, BOM, tag characters). Lines: a blank line; a line
+#   that is not "- text" (first line and after), "  - text" or "  text" (two spaces). Text:
+#   starts with anything but a letter, digit, backtick, [ ( " ' or # and a digit (a PR
+#   reference); has no letter or digit; starts like a list marker (1. or 1)). Backticks: odd
+#   count on a line, two in a row, one after a backslash. Outside backtick spans: < before a
+#   letter, / ! or ? (raw HTML, comment, CDATA, PI, autolink), "](", "][" or "] [" (link
+#   destination or label), "]:" anywhere (link reference definition), a [ or ] that does not
+#   balance on its line (a label cannot run over a line break or hide behind a backslash).
 #   So a heading, quote, fence, thematic break, setext underline, table or HTML block is
 #   rejected, and the script and Markdown agree on every line break and every code span;
 #   symlink, submodule or type-changed fragment; subdirectory; name outside the pattern (incl.
@@ -54,8 +58,9 @@
 #   lib, this check and the workflow), an extra or duplicate key in a version file, a version
 #   that is not greater; CHANGELOG.md deleted or type-changed; a malformed heading.
 # Does not catch: a fragment whose text is wrong or meaningless; inline Markdown inside a valid
-#   line that cannot open a block or hide a backtick: emphasis, entity references (&lt;), a bare
-#   URL of any scheme (javascript: too; some renderers link it), a task box ([ ] x), a
+#   line that cannot open a block or hide a backtick: emphasis, entity references (&lt;), bare
+#   URLs of any scheme (javascript: too), "www." hosts and email addresses (some renderers link
+#   them), look-alike letters (homoglyphs) and combining marks, a task box ([ ] x), a
 #   backslash before another character, a "[text]" that a "[text]:" definition elsewhere in
 #   CHANGELOG.md turns into a link, trailing spaces (a hard break); a fragment under
 #   the wrong category (a migration PR does not compare the category either); a fragment that
@@ -64,6 +69,7 @@
 #   run are the PR's own copies and only a release PR is held to the allow-list; a normal PR
 #   that edits plugin.json or harness.json in any way other than the version value.
 set -uo pipefail
+export LC_ALL=C
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 . "$here/changelog-lib.sh"
@@ -164,21 +170,48 @@ fi
 # Migration PR: the only CHANGELOG.md change empties [Unreleased] into the added fragments.
 migration=0 bt=$(printf '\x60')
 # Succeeds when the removed line $1 is a reworded fragment line: the same text once backticks
-# and * are dropped, and every code span of the removed line kept as it was (a reword may add
-# spans, it may not drop, move or change one). Odd backtick counts fail closed. Used only when
-# no fragment line equals the removed line exactly.
+# and * are dropped, every code span of the removed line kept in order in the fragment line (a
+# reword may wrap more text in backticks, but not drop, move or change a span), and the same
+# number of lone * (a * with a space or a line edge on both sides is
+# a multiplication or a bullet, not emphasis: it may not appear or vanish). Odd backtick counts
+# fail closed. Used only when no fragment line equals the removed line exactly.
+spans_of() {
+  local parts i=1 out=""
+  IFS=$bt read -r -a parts <<< "${1}x"
+  parts[${#parts[@]}-1]=${parts[${#parts[@]}-1]%x}
+  while [[ $i -lt ${#parts[@]} ]]; do out=$out${parts[$i]}$'\x1f'; i=$((i + 2)); done
+  printf '%s' "$out"
+}
+# Succeeds when every span of the list $1 occurs, in order, in the list $2 (both from spans_of).
+spans_kept() {
+  local want have w h=0 sep=$'\x1f'
+  IFS=$sep read -r -a want <<< "$1"
+  IFS=$sep read -r -a have <<< "$2"
+  for w in ${want[@]+"${want[@]}"}; do
+    while [[ $h -lt ${#have[@]} && ${have[$h]} != "$w" ]]; do h=$((h + 1)); done
+    if [[ $h -ge ${#have[@]} ]]; then return 1; fi
+    h=$((h + 1))
+  done
+  return 0
+}
+lone_stars() {
+  local parts i=0 n=0
+  IFS='*' read -r -a parts <<< " ${1} "
+  while [[ $i -lt $((${#parts[@]} - 1)) ]]; do
+    if [[ ${parts[$i]} == *' ' && ${parts[$((i + 1))]} == ' '* ]]; then n=$((n + 1)); fi
+    i=$((i + 1))
+  done
+  printf '%s' "$n"
+}
 reword_ok() {
-  local line=$1 cand i only parts
+  local line=$1 cand spans stars only
   only=${line//[!$bt]/}
   if [[ $(( ${#only} % 2 )) -ne 0 ]]; then return 1; fi
-  IFS=$bt read -r -a parts <<< "$line"
+  spans=$(spans_of "$line"); stars=$(lone_stars "$line")
   while IFS= read -r cand; do
-    i=1
-    while [[ $i -lt ${#parts[@]} ]]; do
-      [[ $cand == *"$bt${parts[$i]}$bt"* ]] || break
-      i=$((i + 2))
-    done
-    if [[ $i -ge ${#parts[@]} ]]; then return 0; fi
+    if spans_kept "$spans" "$(spans_of "$cand")" && [[ $(lone_stars "$cand") == "$stars" ]]; then
+      return 0
+    fi
   done < <(S="${line//[$bt*]/}" awk -F '\t' '$1 == ENVIRON["S"] { print $2 }' "$work/fragpairs")
   return 1
 }

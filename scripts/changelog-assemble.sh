@@ -17,6 +17,7 @@
 #   or no release heading after it, any entry still under [Unreleased]. Entries belong in
 #   fragments, so move them there first.
 set -uo pipefail
+export LC_ALL=C
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 . "$here/changelog-lib.sh"

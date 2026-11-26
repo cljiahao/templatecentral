@@ -168,6 +168,24 @@ for body in '- a\r## [9.9.9] — 2099-01-01\r- b\n' '- a\r\n- b\r\n' '- a\r  ---
   n=$((n + 1)); mk "lib-byte$n"; frag a.added.md; printf -- "$body" > "$R/changelog.d/b.fixed.md"; commit
   refuse "lib rejects bytes: $body" "not a valid fragment" "${V[@]}"
 done
+# Round 7 through assemble: invalid UTF-8, invisible characters, link reference definitions.
+n=0
+for body in '- a \x80 b\n' '- a \xc0\xaf b\n' '- a \xe0\x80\xaf b\n' '- a \xed\xa0\x80 b\n' '- a \xff b\n' \
+  '- a \xc2\x85 b\n' '- a \xc2\xad b\n' '- a \xe2\x80\x8b b\n' '- a \xe2\x80\xae b\n' \
+  '- a \xe2\x81\xa0 b\n' '- a \xef\xbb\xbf b\n' '- a \xf3\xa0\x80\x81 b\n' \
+  '- [foo\n  bar]: http://evil\n' '- [x\n  y\n  z]: /u\n' '- [a\\]b]: http://evil\n' \
+  '- [^1]: x\n' '- see [a] [b]\n' '- see [a\n'; do
+  n=$((n + 1)); mk "lib-r7-$n"; frag a.added.md; printf -- "$body" > "$R/changelog.d/b.fixed.md"; commit
+  refuse "lib rejects (round 7): $body" "not a valid fragment" "${V[@]}"
+done
+for loc in "LANG=en_US.UTF-8" "LC_ALL=en_US.UTF-8" "LANG=C"; do
+  mk "lib-loc-$loc"; frag a.added.md; printf -- '- caf\xc3\xa9 \xe2\x80\x94 \xe4\xb8\xad \xf0\x9f\x98\x80 [t] and [u]\n' > "$R/changelog.d/b.fixed.md"; commit
+  out=$(cd "$R" && env -u LC_ALL "$loc" bash "$ASM" "${V[@]}" 2>&1); rc=$?
+  if [[ $rc -eq 0 ]]; then ok; else fail "non-ASCII fragment refused under $loc: $out"; fi
+  mk "lib-locbad-$loc"; frag a.added.md; printf -- '- a\r\n' > "$R/changelog.d/b.fixed.md"; commit
+  out=$(cd "$R" && env -u LC_ALL "$loc" bash "$ASM" "${V[@]}" 2>&1); rc=$?
+  if [[ $rc -ne 0 ]]; then ok; else fail "CR fragment accepted under $loc"; fi
+done
 mk lib-ok; frag a.added.md; bt='`'; frag b.fixed.md "- use ${bt}x${bt}, see #12 and --- inline
   - nested --flag"; commit
 out=$(cd "$R" && bash "$ASM" "${V[@]}" 2>&1); rc=$?

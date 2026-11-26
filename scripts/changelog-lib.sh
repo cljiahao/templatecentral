@@ -12,7 +12,8 @@ export CL_CATEGORIES CL_DIR
 # bash matches the whole string, so a name with a newline anywhere fails.
 # Prints the category on stdout.
 cl_name_category() {
-  local LC_ALL=C name=$1 re='^[a-z0-9][a-z0-9-]*\.(added|changed|removed|fixed|security)\.md$'
+  local -x LC_ALL=C
+  local name=$1 re='^[a-z0-9][a-z0-9-]*\.(added|changed|removed|fixed|security)\.md$'
   [[ $name =~ $re ]] || return 1
   name=${name%.md}
   printf '%s\n' "${name##*.}"
@@ -21,29 +22,48 @@ cl_name_category() {
 # Succeeds when the file is a regular, non-symlink file that fits the grammar below; otherwise
 # prints "fragment [line N] breaks the rule ...: <line>" and fails. check and assemble both call
 # it on every fragment and emit the file as it is, so the validated bytes are the emitted bytes.
+# Every byte-level command here runs with LC_ALL=C exported, so the verdict is the same in every
+# locale and for a caller that only sources this file. A tool that fails stops the check.
 # 1. Bytes first, on the whole file: no control byte except LF (CR, TAB, NUL, ESC, DEL all fail,
-#    counted with LC_ALL=C tr, never with read), and the last byte is LF. An empty file has no
-#    bullet line. So Markdown and bash see the same lines: only LF ends one.
-# 2. Lines: no blank line. The first line is "- text"; after it "- text", "  - text" (nested)
+#    counted with tr, never with read), and the last byte is LF. An empty file has no bullet
+#    line. So Markdown and bash see the same lines: only LF ends one.
+# 2. Valid UTF-8 only, as an allow-list of byte sequences (no overlong form, surrogate, lone
+#    continuation byte or byte C0, C1, F5 to FF), and none of the invisible or reordering code
+#    points: C1 controls, soft hyphen, U+061C, U+180E, U+200B-U+200F, U+2028-U+202E,
+#    U+2060-U+206F, U+FEFF, U+FFF9-U+FFFB and the tag characters U+E0000-U+E007F.
+# 3. Lines: no blank line. The first line is "- text"; after it "- text", "  - text" (nested)
 #    or "  text" (exactly two spaces). Text starts with a letter, digit, backtick, "[", "(", a
 #    double or single quote, or "#" and a digit (a PR reference), holds a letter or digit, and
 #    does not start with an ordered-list marker ("1." or "1)").
-# 3. Backticks: a line has an even number of them, never two in a row, never one after a
+# 4. Backticks: a line has an even number of them, never two in a row, never one after a
 #    backslash. Then spans pair first with second, third with fourth, on the line alone, which
 #    is what Markdown does, so "inside a span" means the same to the script and to Markdown.
-# 4. Outside spans: no "<" before a letter, "/", "!" or "?" (HTML tag, comment, CDATA, PI,
-#    declaration, autolink: the only constructs that could swallow a backtick), and no "](" or
-#    "][" (a link destination or label could swallow one).
-# 5. Text may not match "[label]:" (a link reference definition).
+# 5. Outside spans: no "<" before a letter, "/", "!" or "?" (HTML tag, comment, CDATA, PI,
+#    declaration, autolink: the only constructs that could swallow a backtick), no "](", "]["
+#    or "] [" (a link destination or label), no "]:" (a link reference definition, wherever its
+#    label starts), and the "[" and "]" balance within the line, a backslash before a bracket
+#    changing nothing, so no label can run over a line break or hide behind an escape.
 # No heading, quote, fence, rule, setext underline, table, list-marker line or HTML block passes.
 cl_content_ok() {
-  local LC_ALL=C
-  local f=$1 line n=0 seen=0 rest t rule bad
+  local -x LC_ALL=C
+  local f=$1 line n=0 seen=0 rest t rule bad out rc i nbt balanced
   local re_first='^([A-Za-z0-9`[("'"'"']|#[0-9])'
-  local bt bs re_ord='^[0-9]+[.)]([[:space:]]|$)' re_span re_ref='^\[[^]]*\]:'
-  local re_alnum='[A-Za-z0-9]' re_html='<[A-Za-z/!?]' re_link='\](\(|\[)'
+  local bt bs re_ord='^[0-9]+[.)]([[:space:]]|$)' parts
+  local re_alnum='[A-Za-z0-9]' re_html='<[A-Za-z/!?]' re_link='\]([(]|[[:space:]]*\[)'
+  local c=$'[\x80-\xbf]' re_utf8 re_ban
+  re_utf8=$'^([ -~]|[\xc2-\xdf]'$c$'|\xe0[\xa0-\xbf]'$c$'|[\xe1-\xec\xee\xef]'$c$c
+  re_utf8+=$'|\xed[\x80-\x9f]'$c$'|\xf0[\x90-\xbf]'$c$c$'|[\xf1-\xf3]'$c$c$c
+  re_utf8+=$'|\xf4[\x80-\x8f]'$c$c$')*$'
+  re_ban=$'\xc2[\x80-\x9f]|\xc2\xad|\xd8\x9c|\xe1\xa0\x8e|\xe2\x80[\x8b-\x8f]|\xe2\x80[\xa8-\xae]'
+  re_ban+=$'|\xe2\x81[\xa0-\xaf]|\xef\xbb\xbf|\xef\xbf[\xb9-\xbb]|\xf3\xa0[\x80-\x81]'$c
+  local awk_bal='BEGIN { s = ENVIRON["S"]; d = 0; n = length(s)
+    for (i = 1; i <= n; i++) {
+      c = substr(s, i, 1)
+      if (c == "[") d++
+      else if (c == "]") { d--; if (d < 0) exit 1 }
+    }
+    exit (d != 0) }'
   bt=$(printf '\x60'); bs=$(printf '\x5c')
-  re_span="^([^${bt}]*)${bt}[^${bt}]*${bt}(.*)\$"
   if [[ -L $f || ! -f $f ]]; then
     echo "fragment is not a regular file"; return 1
   fi
@@ -57,6 +77,19 @@ cl_content_ok() {
   if [[ ${bad//[[:space:]]/} != 1 ]]; then
     echo "fragment breaks the rule \"the last line ends with a newline\""; return 1
   fi
+  out=$(grep -a -n -v -E -e "$re_utf8" "$f"); rc=$?
+  case $rc in
+    0) echo "fragment line ${out%%:*} breaks the rule \"valid UTF-8 only\""; return 1 ;;
+    1) ;;
+    *) echo "fragment cannot be checked: grep failed"; return 1 ;;
+  esac
+  out=$(grep -a -n -E -e "$re_ban" "$f"); rc=$?
+  case $rc in
+    0) echo "fragment line ${out%%:*} breaks the rule \"no invisible or reordering character\""
+       return 1 ;;
+    1) ;;
+    *) echo "fragment cannot be checked: grep failed"; return 1 ;;
+  esac
   while IFS= read -r line; do
     n=$((n + 1))
     rule=""
@@ -71,9 +104,9 @@ cl_content_ok() {
     fi
     if [[ -z $rule ]]; then
       seen=1
-      t=$rest
-      while [[ $t =~ $re_span ]]; do t=${BASH_REMATCH[1]}${BASH_REMATCH[2]}; done
-      bad=${line//[!${bt}]/}
+      IFS=$bt read -r -a parts <<< "${rest}x"
+      nbt=$(( ${#parts[@]} - 1 ))
+      parts[nbt]=${parts[$nbt]%x}
       if [[ ! $rest =~ $re_first ]]; then
         rule="text starts with a letter, digit, backtick, [ ( \" ' or # and a digit"
       elif [[ $rest =~ $re_ord ]]; then
@@ -82,16 +115,26 @@ cl_content_ok() {
         rule="no two backticks in a row"
       elif [[ $rest == *"$bs$bt"* ]]; then
         rule="no backslash before a backtick"
-      elif [[ $(( ${#bad} % 2 )) -ne 0 ]]; then
+      elif [[ $(( nbt % 2 )) -ne 0 ]]; then
         rule="an even number of backticks on a line"
       elif [[ ! $rest =~ $re_alnum ]]; then
         rule="text holds a letter or a digit"
-      elif [[ $rest =~ $re_ref ]]; then
-        rule="text may not look like a link reference definition [label]:"
-      elif [[ $t =~ $re_html ]]; then
-        rule="no < before a letter, / ! or ? outside backticks (raw HTML)"
-      elif [[ $t =~ $re_link ]]; then
-        rule="no ]( or ][ outside backticks (link destination or label)"
+      else
+        t=""; i=0
+        while [[ $i -le $nbt ]]; do t=$t${parts[$i]}; i=$((i + 2)); done
+        balanced=0
+        if [[ $t == *'['* || $t == *']'* ]]; then
+          S=$t awk "$awk_bal" < /dev/null || balanced=1
+        fi
+        if [[ $t =~ $re_html ]]; then
+          rule="no < before a letter, / ! or ? outside backticks (raw HTML)"
+        elif [[ $t == *']:'* ]]; then
+          rule="no ]: outside backticks (link reference definition)"
+        elif [[ $balanced -ne 0 ]]; then
+          rule="[ and ] outside backticks balance on the line (a label cannot run on or hide)"
+        elif [[ $t =~ $re_link ]]; then
+          rule="no ]( ][ or ] [ outside backticks (link destination or label)"
+        fi
       fi
     fi
     if [[ -n $rule ]]; then

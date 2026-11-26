@@ -11,22 +11,23 @@ T=$(mktemp -d "${TMPDIR:-/tmp}/clchk.XXXXXX") || exit 1
 trap 'rm -rf "$T"' EXIT
 PASS=0; FAIL=0
 
+# The scratch base repo is built once; mk copies it, so a case costs a copy, not a git init.
+BASE_REPO="$T/.base"; mkdir -p "$BASE_REPO/changelog.d"
+git -C "$BASE_REPO" init -q -b main
+git -C "$BASE_REPO" config user.email t@example.com; git -C "$BASE_REPO" config user.name t
+git -C "$BASE_REPO" config commit.gpgsign false
+printf '# Changelog\n\n## [Unreleased]\n\n---\n\n## [1.0.0] — 2026-01-01\n\n### Added\n- old\n' > "$BASE_REPO/CHANGELOG.md"
+printf '# fragments\n' > "$BASE_REPO/changelog.d/README.md"
+mkdir -p "$BASE_REPO/.claude-plugin" "$BASE_REPO/.claude" "$BASE_REPO/tests/golden" "$BASE_REPO/skills/scaffold/shared"
+printf '{\n  "name": "x",\n  "version": "1.0.0"\n}\n' > "$BASE_REPO/.claude-plugin/plugin.json"
+printf '{\n  "templatecentral_version": "1.0.0"\n}\n' > "$BASE_REPO/.claude/harness.json"
+printf 'v1.0.0\n' > "$BASE_REPO/README.md"; printf 'v1.0.0\n' > "$BASE_REPO/skills/scaffold/shared/harness-kit-finalize.md"
+printf 'h1\n' > "$BASE_REPO/tests/golden/nextjs-github.sha256"
+git -C "$BASE_REPO" add -A; git -C "$BASE_REPO" commit -qm base
+git -C "$BASE_REPO" checkout -q -b pr
+
 # mk <name>: scratch repo on main, then branch pr checked out. Sets $R.
-mk() {
-  R="$T/$1"; mkdir -p "$R/changelog.d"
-  git -C "$R" init -q -b main
-  git -C "$R" config user.email t@example.com; git -C "$R" config user.name t
-  git -C "$R" config commit.gpgsign false
-  printf '# Changelog\n\n## [Unreleased]\n\n---\n\n## [1.0.0] — 2026-01-01\n\n### Added\n- old\n' > "$R/CHANGELOG.md"
-  printf '# fragments\n' > "$R/changelog.d/README.md"
-  mkdir -p "$R/.claude-plugin" "$R/.claude" "$R/tests/golden" "$R/skills/scaffold/shared"
-  printf '{\n  "name": "x",\n  "version": "1.0.0"\n}\n' > "$R/.claude-plugin/plugin.json"
-  printf '{\n  "templatecentral_version": "1.0.0"\n}\n' > "$R/.claude/harness.json"
-  printf 'v1.0.0\n' > "$R/README.md"; printf 'v1.0.0\n' > "$R/skills/scaffold/shared/harness-kit-finalize.md"
-  printf 'h1\n' > "$R/tests/golden/nextjs-github.sha256"
-  git -C "$R" add -A; git -C "$R" commit -qm base
-  git -C "$R" checkout -q -b pr
-}
+mk() { R="$T/$1"; cp -R "$BASE_REPO" "$R"; }
 commit() { git -C "$R" add -A; git -C "$R" commit -qm "$1"; }
 frag() { printf '%s\n' "- entry" > "$R/changelog.d/$1"; }
 # run <name> <want rc> [msg fragment] [text that must be absent]: run the check in $R against main.
@@ -107,10 +108,10 @@ run "inline backticks, #, --- inside text are fine" 0
 
 # Line grammar: a line is valid only as "- text", then "  - text" or "  text" (two spaces). Text
 # starts from a closed set. Bodies below use printf %b; \x60 is a backtick.
-n=0
+# One repo holds every body as its own fragment; the check reports each bad fragment by name.
+mk rej-all; n=0; bodies=()
 while IFS= read -r body; do
-  n=$((n + 1)); mk "rej$n"; printf -- '%b\n' "$body" > "$R/changelog.d/a.added.md"; commit f
-  run "fragment body rejected: $body" 1 "breaks the rule"
+  n=$((n + 1)); bodies[n]=$body; printf -- '%b\n' "$body" > "$R/changelog.d/rej$n.added.md"
 done <<'LIST'
 > # x
 - = x
@@ -220,11 +221,18 @@ done <<'LIST'
 - see [t][ref]
 - b\x60c) \x60<i>\x60 d\x60 e
 LIST
+commit f
+out=$(cd "$R" && bash "$CHECK" main 2>&1); rc=$?
+if [[ $rc -eq 1 ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: rejected bodies: want rc 1, got $rc"; fi
+for i in $(seq 1 "$n"); do
+  if grep -qF -- "rej$i.added.md: " <<< "$out" && grep -F -- "rej$i.added.md: " <<< "$out" | grep -qF "breaks the rule"; then
+    PASS=$((PASS + 1))
+  else FAIL=$((FAIL + 1)); echo "FAIL: fragment body rejected: ${bodies[$i]}"; fi
+done
 # Controls: every allowed first character, as bullet, nested bullet and continuation.
-n=0
+mk keep-all; n=0; bodies=()
 while IFS= read -r body; do
-  n=$((n + 1)); mk "keep$n"; printf -- '%b\n' "$body" > "$R/changelog.d/a.added.md"; commit f
-  run "control, fragment body accepted: $body" 0
+  n=$((n + 1)); bodies[n]=$body; printf -- '%b\n' "$body" > "$R/changelog.d/keep$n.added.md"
 done <<'LIST'
 - letter first
 - 3 - 2 = 1
@@ -257,6 +265,10 @@ done <<'LIST'
 - ok\n  text with \x60<b>\x60 inside\n  more text
 - ok   trailing spaces   
 LIST
+commit f
+out=$(cd "$R" && bash "$CHECK" main 2>&1); rc=$?
+if [[ $rc -eq 0 ]]; then PASS=$((PASS + n)); else
+  FAIL=$((FAIL + 1)); echo "FAIL: control bodies accepted together: rc $rc: $out"; fi
 
 mk q-frag; frag a.added.md; commit f
 runq "normal PR adding a fragment prints no release rule text" 0
@@ -456,11 +468,13 @@ ASM="$REPO/scripts/changelog-assemble.sh"
 PJ=.claude-plugin/plugin.json; HJ=.claude/harness.json
 mkrel() {
   local old=${2:-1.0.0} new=${3:-1.1.0}
+  if [[ $old == 1.0.0 && $new == 1.1.0 && -d $T/.rel ]]; then R="$T/$1"; cp -R "$T/.rel" "$R"; return; fi
   mk "$1"; git -C "$R" checkout -q main
   if [[ $old != 1.0.0 ]]; then sub "$R/$PJ" "s/1\\.0\\.0/$old/"; sub "$R/$HJ" "s/1\\.0\\.0/$old/"; fi
   frag a.added.md; frag b.fixed.md; commit frags; git -C "$R" checkout -q -b rel
   (cd "$R" && bash "$ASM" "$new" 2026-03-04 >/dev/null 2>&1) || echo "FAIL: setup — assemble failed in $1"
   sub "$R/$PJ" "s/$old/$new/"; sub "$R/$HJ" "s/$old/$new/"
+  if [[ $old == 1.0.0 && $new == 1.1.0 ]]; then cp -R "$R" "$T/.rel"; fi
 }
 
 mkrel rel-min; commit rel
@@ -566,6 +580,119 @@ printf '# Changelog\n\n## [Unreleased]\n\n---\n' > "$R/CHANGELOG.md"; commit rel
 run "CHANGELOG.md symlink replaced by a regular file (status T, mode 100644)" 1 "release rule 1"
 mk rel-nofrag; echo "- entry" >> "$R/CHANGELOG.md"; commit rel
 run "CHANGELOG edit with no fragments at the merge base" 1 "release rule"
+
+# Round 7. Content rules called straight from the lib, so the caller's locale is under test.
+# cok <name> <want rc> <printf %b body> [msg fragment]: cl_content_ok on a scratch file, in a
+# fresh bash that only sources the lib, with the environment words in CENV applied.
+CENV=()
+cok() {
+  local f="$T/cok.md" out rc
+  printf '%b' "$3" > "$f"
+  out=$(env ${CENV[@]+"${CENV[@]}"} bash -c 'source "$1"; cl_content_ok "$2"' _ \
+    "$REPO/scripts/changelog-lib.sh" "$f" 2>&1); rc=$?
+  if [[ $rc -ne $2 ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $1 — want rc $2, got $rc: $out"
+  elif [[ -n "${4:-}" && "$out" != *"$4"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $1 — lacks '$4': $out"
+  else PASS=$((PASS + 1)); fi
+}
+# Locale: same verdict under each locale setting, for a line with an em dash and an accent.
+OKB='- caf\xc3\xa9 \xe2\x80\x94 ok\n'; CRB='- caf\xc3\xa9 \xe2\x80\x94 ok\r\n'
+for loc in "LANG=en_US.UTF-8" "LC_ALL=en_US.UTF-8" "LANG=C"; do
+  CENV=(-u LC_ALL "$loc"); [[ $loc == LC_ALL=* ]] && CENV=("$loc")
+  cok "locale $loc accepts em dash and accent" 0 "$OKB"
+  cok "locale $loc rejects CR" 1 "$CRB" "no control byte"
+done
+CENV=()
+# Valid UTF-8 and ordinary non-ASCII pass.
+cok "accepts em dash, accent, CJK, emoji" 0 '- a \xe2\x80\x94 \xc3\xa9 \xe4\xb8\xad \xf0\x9f\x98\x80 b\n'
+# Invalid UTF-8, one fixture per class.
+cok "utf8: lone continuation byte" 1 '- a \x80 b\n' "valid UTF-8"
+cok "utf8: byte C0" 1 '- a \xc0\xaf b\n' "valid UTF-8"
+cok "utf8: byte C1" 1 '- a \xc1\xbf b\n' "valid UTF-8"
+cok "utf8: overlong 3-byte" 1 '- a \xe0\x80\xaf b\n' "valid UTF-8"
+cok "utf8: overlong 4-byte" 1 '- a \xf0\x80\x80\xaf b\n' "valid UTF-8"
+cok "utf8: surrogate" 1 '- a \xed\xa0\x80 b\n' "valid UTF-8"
+cok "utf8: byte F5" 1 '- a \xf5\x80\x80\x80 b\n' "valid UTF-8"
+cok "utf8: byte FF" 1 '- a \xff b\n' "valid UTF-8"
+cok "utf8: above U+10FFFF" 1 '- a \xf4\x90\x80\x80 b\n' "valid UTF-8"
+cok "utf8: truncated sequence" 1 '- a \xe2\x80 b\n' "valid UTF-8"
+# Banned code points, one fixture per class.
+cok "ban: C1 control U+0085" 1 '- a \xc2\x85 b\n' "invisible"
+cok "ban: soft hyphen U+00AD" 1 '- a \xc2\xad b\n' "invisible"
+cok "ban: U+061C" 1 '- a \xd8\x9c b\n' "invisible"
+cok "ban: U+180E" 1 '- a \xe1\xa0\x8e b\n' "invisible"
+cok "ban: zero width space U+200B" 1 '- a \xe2\x80\x8b b\n' "invisible"
+cok "ban: U+200F" 1 '- a \xe2\x80\x8f b\n' "invisible"
+cok "ban: line separator U+2028" 1 '- a \xe2\x80\xa8 b\n' "invisible"
+cok "ban: U+202E" 1 '- a \xe2\x80\xae b\n' "invisible"
+cok "ban: word joiner U+2060" 1 '- a \xe2\x81\xa0 b\n' "invisible"
+cok "ban: U+206F" 1 '- a \xe2\x81\xaf b\n' "invisible"
+cok "ban: BOM U+FEFF" 1 '- a \xef\xbb\xbf b\n' "invisible"
+cok "ban: U+FFF9" 1 '- a \xef\xbf\xb9 b\n' "invisible"
+cok "ban: U+FFFB" 1 '- a \xef\xbf\xbb b\n' "invisible"
+cok "ban: tag character U+E0001" 1 '- a \xf3\xa0\x80\x81 b\n' "invisible"
+cok "ban: tag character U+E007F" 1 '- a \xf3\xa0\x81\xbf b\n' "invisible"
+cok "control: U+200A and U+2010 pass" 0 '- a \xe2\x80\x8a \xe2\x80\x90 b\n'
+# A tool that fails stops the check; it never accepts.
+FAKE="$T/fakebin"; mkdir -p "$FAKE"; printf '#!/bin/sh\nexit 2\n' > "$FAKE/grep"; chmod +x "$FAKE/grep"
+CENV=("PATH=$FAKE:$PATH"); cok "grep failure is an error, not an accept" 1 '- fine text\n' "grep failed"
+# Each of the two greps failing alone stops the check: the fake exits 2 for one kind of call and
+# runs the real grep for the other (-v marks the UTF-8 call).
+REALGREP=$(command -v grep)
+printf '#!/bin/sh\nfor a in "$@"; do [ "$a" = -v ] && exit 2; done\nexec %s "$@"\n' "$REALGREP" > "$FAKE/grep"
+CENV=("PATH=$FAKE:$PATH"); cok "UTF-8 grep failing alone is an error" 1 '- fine text\n' "grep failed"
+printf '#!/bin/sh\nfor a in "$@"; do [ "$a" = -v ] && exec %s "$@"; done\nexit 2\n' "$REALGREP" > "$FAKE/grep"
+cok "ban grep failing alone is an error" 1 '- fine text\n' "grep failed"
+rm -f "$FAKE/grep"
+printf '#!/bin/sh\nexit 0\n' > "$FAKE/grep"; chmod +x "$FAKE/grep"
+cok "grep that matches every line rejects" 1 '- fine text\n'; CENV=()
+# Link reference definitions and brackets.
+cok "bracket: multi-line label" 1 '- [foo\n  bar]: http://evil\n' "breaks the rule"
+cok "bracket: 3-line label" 1 '- [x\n  y\n  z]: /u\n' "breaks the rule"
+cok "bracket: escaped bracket" 1 '- [a\\]b]: http://evil\n' "breaks the rule"
+cok "bracket: footnote definition" 1 '- [^1]: x\n' "breaks the rule"
+cok "bracket: ]: mid-line" 1 '- see x]: y\n' "breaks the rule"
+cok "bracket: unclosed [" 1 '- see [x here\n' "breaks the rule"
+cok "bracket: stray ]" 1 '- see x] here\n' "breaks the rule"
+cok "bracket: ] [ (shortcut label pair)" 1 '- see [a] [b]\n' "breaks the rule"
+cok "bracket: ][" 1 '- see [a][b]\n' "breaks the rule"
+cok "bracket: ](" 1 '- see [a](b)\n' "breaks the rule"
+cok "bracket control: [text]" 0 '- see [text] here\n'
+cok "bracket control: [a] and [b]" 0 '- see [a] and [b]\n'
+cok "bracket control: span holds brackets and ]:" 0 '- see `a]: [b` here\n'
+# Long line: 10,000 code spans in 40,000 characters stay fast.
+BIGL=$(awk 'BEGIN { printf "- "; for (i = 0; i < 10000; i++) printf "`a` "; printf "end\n" }')
+printf '%s\n' "$BIGL" > "$T/big.md"
+t0=$SECONDS; bash -c 'source "$1"; cl_content_ok "$2"' _ "$REPO/scripts/changelog-lib.sh" "$T/big.md" >/dev/null 2>&1; bigrc=$?; dt=$((SECONDS - t0))
+if [[ $bigrc -eq 0 && $dt -lt 5 ]]; then PASS=$((PASS + 1))
+else FAIL=$((FAIL + 1)); echo "FAIL: 40k-char line with 10k spans: rc $bigrc, ${dt}s"; fi
+
+# Migration compare: lone * and span lists.
+mkunrel mig-star; git -C "$R" checkout -q main
+sub "$R/CHANGELOG.md" 's/^- two$/- 2 * 3 = 6/'; commit lt; git -C "$R" checkout -q -B pr2
+migfrags; printf -- '- 2  3 = 6\n' > "$R/changelog.d/two.added.md"
+printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
+run "migration PR drops a lone * (multiplication)" 1 "in no added fragment"
+mkunrel mig-star2; git -C "$R" checkout -q main
+sub "$R/CHANGELOG.md" 's/^- two$/- 2 3 = 6/'; commit lt; git -C "$R" checkout -q -B pr2
+migfrags; printf -- '- 2 * 3 = 6\n' > "$R/changelog.d/two.added.md"
+printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
+run "migration PR adds a lone *" 1 "in no added fragment"
+mkunrel mig-star3; git -C "$R" checkout -q main
+sub "$R/CHANGELOG.md" 's/^- two$/- 2 * 3 = 6/'; commit lt; git -C "$R" checkout -q -B pr2
+migfrags; printf -- '- 2 * 3 = 6 \x2a\n' > "$R/changelog.d/two.added.md"
+printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
+run "migration PR keeps a lone * but adds another" 1 "in no added fragment"
+mkunrel mig-span; git -C "$R" checkout -q main
+sub "$R/CHANGELOG.md" 's/^- two$/- two x`y`z here/'; commit lt; git -C "$R" checkout -q -B pr2
+migfrags; printf -- '- two \x60x\x60y\x60z\x60 here\n' > "$R/changelog.d/two.added.md"
+printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
+run "migration PR turns a span x\x60y\x60z into spans x and z" 1 "in no added fragment"
+
+mkunrel mig-span2; git -C "$R" checkout -q main
+sub "$R/CHANGELOG.md" 's/^- two$/- two `a`b here/'; commit lt; git -C "$R" checkout -q -B pr2
+migfrags; printf -- '- two \x60ab\x60 here\n' > "$R/changelog.d/two.added.md"
+printf '%s' "$EMPTIED" > "$R/CHANGELOG.md"; commit f
+run "migration PR widens a span from a to ab" 1 "in no added fragment"
 
 echo "changelog-check.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
