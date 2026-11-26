@@ -22,6 +22,9 @@ on:
       - '.claude/**'
       - '.github/workflows/**'
   pull_request:
+    # labeled/unlabeled re-run the workflow so the "Fence snapshot unchanged" job re-reads the
+    # fence-snapshot-change label; without them a label added after the run began is never seen.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
       - 'skills/**'
       - 'scripts/**'
@@ -183,6 +186,10 @@ jobs:
         run: bash scripts/seeded-dockerfiles.test.sh
       - name: Seeded workaround detector, secret scan, nosonar and diff-coverage gates and hook messages
         run: bash scripts/seeded-gates.test.sh
+      - name: Seeded review gate, its wiring probes and the harness removal script
+        run: |
+          bash scripts/seeded-review-gate.test.sh
+          bash scripts/seeded-remove-harness.test.sh
       - name: Day-one proof, every stack and CI host passes its offline seeded gates
         run: bash scripts/day-one.test.sh
       - name: Golden regeneration script tests

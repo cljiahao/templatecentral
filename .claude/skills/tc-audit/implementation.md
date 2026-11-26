@@ -75,7 +75,7 @@ Mark each file CLEAN or list issues with line references.
 - **Hook delivery**: PostToolUse hooks capture output and return `{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":...}}`, always exit 0. Plain stdout on exit 0 never reaches Claude.
 - **Stop hook**: runs tests, prints to stderr and exits 2 only on failure, and exits 0 first when `stop_hook_active` is true. The block cap is a backstop; never raise `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` in seeds.
 - **Exec form and timeouts**: every hook is `"command": "<bin>", "args": ["${CLAUDE_PROJECT_DIR}/..."]` (array-valued `command` never fires) and sets `timeout`.
-- **Guards**: `.env*` edit block (case-insensitive, `.env.example` allowed, reads `tool_input.file_path`), prompt-injection check, `--no-verify` block (reads `tool_input.command`). SubagentStop exits 0 for `stop_hook_active` and read-only agent types.
+- **Guards**: `.env*` edit block (case-insensitive, `.env.example` allowed, reads `tool_input.file_path`), inline-credential check, `--no-verify` block (reads `tool_input.command`). SubagentStop exits 0 for `stop_hook_active` and read-only agent types.
 - **Fail-closed gates**: `verify-harness.sh` fails on a missing/empty/unparseable manifest; the deps gate has no bypass and rejects pnpm-native suppressions; local gitleaks is blocking (`gitleaks git --pre-commit --staged`, no `|| true`).
 - **Migrate parity**: `migrate` Phase 4 runs harness-kit Steps A–E, and `harness.json` hashes are written after the final AGENTS.md edit.
 - **Skills**: seeded project skills are directories (`.claude/skills/<name>/SKILL.md`); `CLAUDE.md` is one line, `@AGENTS.md`; scaffolded AGENTS.md has a `## Skills Security` section.

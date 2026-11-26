@@ -34,9 +34,7 @@ Run `TC_PART=leaf TC_LEAF=add/database/typescript/nestjs-kysely bash "<skill-dir
 
 > The copied `kysely.service.ts` reads `serviceConfig.DATABASE_URL`, which B7 (Configure Environment) adds; the build fails until B7 is done.
 
-**`src/database/kysely.service.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nestjs-kysely/template/src/database/kysely.service.ts` by the copy step; do not re-type it.
+**`src/database/kysely.service.ts`**
 
 > **TLS against a managed Postgres.** `rejectUnauthorized: true` verifies the server
 > certificate against Node's default trust store. Providers whose certs chain to a public
@@ -62,17 +60,13 @@ Copied verbatim from `<skill-dir>/database/typescript/nestjs-kysely/template/src
 
 #### B3. Define Database Types
 
-**`src/database/types.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nestjs-kysely/template/src/database/types.ts` by the copy step; do not re-type it.
+**`src/database/types.ts`**
 
 > **Tip**: `pnpm dlx kysely-codegen` generates these types from a live database. Run it ad hoc, not as a devDependency — its `micromatch → braces` chain has an unfixed High advisory that fails `pnpm audit --audit-level=high`.
 
 #### B4. Create DatabaseModule
 
-**`src/database/database.module.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nestjs-kysely/template/src/database/database.module.ts` by the copy step; do not re-type it.
+**`src/database/database.module.ts`**
 
 #### B5. Register in AppModule
 
@@ -92,13 +86,9 @@ export class AppModule {}
 
 #### B6. Create First Migration
 
-**`src/database/migrations/001_initial.ts`**:
-
-Copied verbatim from `<skill-dir>/database/typescript/nestjs-kysely/template/src/database/migrations/001_initial.ts` by the copy step; do not re-type it.
+**`src/database/migrations/001_initial.ts`**
 
 Migration runner, **`src/database/migrate.ts`** (copied above):
-
-Copied verbatim from `<skill-dir>/database/typescript/nestjs-kysely/template/src/database/migrate.ts` by the copy step; do not re-type it.
 
 Run migrations with: `pnpm migrate`
 
@@ -197,10 +187,6 @@ pnpm check && pnpm build && pnpm test && pnpm test:e2e
 
 ## Rules
 
-- **Opt-in only** — add a database only on request.
-- `DatabaseModule` is `@Global()` so modules need not re-import it.
-- Place `KyselyService` and `DatabaseModule` in `src/database/`.
-- Do not hardcode credentials; keep connection config in `.env` and document in `.env.example`.
 - **Kysely**: Write manual `up`/`down` migration files in `src/database/migrations/`, named `NNN_<description>.ts` with the next unused number — Kysely runs them in name order and fails on a file that sorts before an executed one. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant constructor from `nestjs-kysely-iam.md`; query code is unchanged.
 - **Auth integration** — if `templatecentral:add` (auth) ran first, `nestjs-kysely-auth.md` replaces its 501 stubs; it is loaded alongside this guide, not from it.
 

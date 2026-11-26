@@ -22,6 +22,10 @@ seed() {
   local d=$1
   mkdir -p "$d/.claude/hooks" "$d/.lefthook" "$d/.github/workflows" "$d/scripts"
   cp "$SH/template/scripts/gate-ratchet.sh" "$d/scripts/gate-ratchet.sh"
+  cp "$SH/template/scripts/check-review-record.sh" "$SH/template/scripts/record-review.sh" "$d/scripts/"
+  mkdir -p "$d/.claude/agents"
+  cp "$SH/template/.claude/review-checklist.txt" "$SH/template-ts/.claude/review-checklist-stack.txt" "$d/.claude/"
+  cp "$SH/template/.claude/agents/code-reviewer.md" "$d/.claude/agents/"
   cp -p "$SH"/template/.claude/hooks/* "$SH"/template-ts/.claude/hooks/* "$d/.claude/hooks/"
   cp -p "$SH"/template/.claude/ci-gates.sh "$SH"/template/.claude/gates.txt "$SH"/template/.claude/verify-harness.sh "$d/.claude/"
   cp "$SH/template-settings-ts/.claude/settings.json" "$d/.claude/settings.json"
@@ -32,6 +36,7 @@ seed() {
   (cd "$d" && python3 - <<'MAN'
 import hashlib, json, os
 paths = [os.path.join(r, f) for r, _, fs in os.walk(".claude/hooks") for f in fs]
+paths += ["scripts/check-review-record.sh", "scripts/record-review.sh", ".claude/review-checklist.txt", ".claude/review-checklist-stack.txt", ".claude/agents/code-reviewer.md"]
 paths += [".claude/ci-gates.sh", ".claude/gates.txt", ".claude/verify-harness.sh", ".claude/settings.json", "lefthook.yml", ".gitleaks.toml", ".github/workflows/ci.yml"]
 seeded = {p: {"path": p, "origin_hash": hashlib.sha256(open(p, "rb").read()).hexdigest()} for p in sorted(paths)}
 json.dump({"seeded_files": seeded}, open(".claude/harness.json", "w"))

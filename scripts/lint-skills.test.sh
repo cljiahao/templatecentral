@@ -565,21 +565,23 @@ with open(os.path.join(d, "zz-test.tsv"), "a", encoding="utf-8") as fh:
 PY
 }
 # shellcheck disable=SC2016  # the anchors are literal heading text with backticks
-IAM_A4=("add/database/python/sqlalchemy-iam.md" '### A4. Create `src/database/session.py`' python)
-# shellcheck disable=SC2016  # the anchors are literal heading text with backticks
 IAM_S2=("migrate/database/fastapi.md" '### Step 2 — Replace `src/database/session.py`' python)
 IAM_NEW_S=migrate/database/zz/template/session.py
-IAM_NEW_A=add/database/python/zz/template/session.py
+# shellcheck disable=SC2016  # the anchors are literal heading text with backticks
+IAM_A6=("add/database/python/sqlalchemy-iam.md" '### A6. Update `alembic/env.py`' python)
+# The canonical A4 fence already lives in this template file, mapped in moved.d, so no fence of it
+# is left in the markdown to move or to damage; the canonical-side tests damage this file instead.
+IAM_NEW_A=add/database/python/sqlalchemy-iam/template/src/database/session.py
 iam_copy_moved() { iam_move "${IAM_S2[@]}" "$IAM_NEW_S"; }
-iam_canon_moved() { iam_move "${IAM_A4[@]}" "$IAM_NEW_A"; }
-iam_both_moved() { iam_canon_moved; iam_copy_moved; }
+iam_canon_in_template() { [[ -f "$S/$IAM_NEW_A" ]] || { echo "iam_canon_in_template: $IAM_NEW_A is not in the tree" >&2; exit 1; }; }
+iam_copy_moved_canon_in_template() { iam_canon_in_template; iam_copy_moved; }
 iam_copy_moved_indented() { iam_move "${IAM_S2[@]}" "$IAM_NEW_S" 3; }
 # Indent the canonical fence by 3 spaces in the markdown: the opener, the body and the closer.
 iam_canon_fence_indented() { iam_canon_fence_indent 3; }
 # A fence indented by 4 or more spaces is not a fence to check-fences.py, so it is not one here.
 iam_canon_fence_indented_4() { iam_canon_fence_indent 4; }
 iam_canon_fence_indent() {
-  python3 - "$S/${IAM_A4[0]}" "${IAM_A4[1]}" "$1" <<'PY'
+  python3 - "$S/${IAM_A6[0]}" "${IAM_A6[1]}" "$1" <<'PY'
 import sys
 p, anchor, n = sys.argv[1:4]
 lines = open(p, encoding="utf-8").read().split("\n")
@@ -593,10 +595,10 @@ open(p, "w", encoding="utf-8").write("\n".join(lines))
 PY
 }
 iam_moved_file_byte_diff() { iam_copy_moved; printf '# drift\n' >> "$S/$IAM_NEW_S"; }
-iam_moved_both_byte_diff() { iam_both_moved; printf '# drift\n' >> "$S/$IAM_NEW_A"; }
+iam_moved_both_byte_diff() { iam_copy_moved_canon_in_template; printf '# drift\n' >> "$S/$IAM_NEW_A"; }
 iam_moved_file_no_trailing_newline() { iam_copy_moved; printf '%s' "$(cat "$S/$IAM_NEW_S")" > "$S/$IAM_NEW_S"; }
 iam_moved_file_deleted() { iam_copy_moved; rm -f "$S/$IAM_NEW_S"; }
-iam_canon_moved_file_deleted() { iam_canon_moved; rm -f "$S/$IAM_NEW_A"; }
+iam_canon_template_file_deleted() { iam_canon_in_template; rm -f "$S/$IAM_NEW_A"; }
 iam_moved_file_emptied() { iam_copy_moved; : > "$S/$IAM_NEW_S"; }
 iam_moved_file_symlinked() { iam_copy_moved; mv "$S/$IAM_NEW_S" "$S/$IAM_NEW_S.real"; ln -s session.py.real "$S/$IAM_NEW_S"; }
 iam_moved_outside_template() { iam_copy_moved; mkdir -p "$S/migrate/database/zz/plain"; mv "$S/$IAM_NEW_S" "$S/migrate/database/zz/plain/session.py"; iam_remap 4 skills/migrate/database/zz/plain/session.py; }
@@ -644,7 +646,7 @@ iam_s10_live_sibling_byte_diff() { iam_s10_first_moved; iam_touch "${S10_MAP[@]}
 iam_moved_path_with_empty_segment() { iam_copy_moved; iam_remap 4 skills/migrate/database/zz//template/session.py; }
 # A fence inside a list item may be indented past 3 spaces: the list item's content column sets the limit.
 iam_canon_fence_in_list_item() {
-  python3 - "$S/${IAM_A4[0]}" "${IAM_A4[1]}" <<'PY'
+  python3 - "$S/${IAM_A6[0]}" "${IAM_A6[1]}" <<'PY'
 import sys
 p, anchor = sys.argv[1:3]
 lines = open(p, encoding="utf-8").read().split("\n")
@@ -1201,8 +1203,8 @@ passes add_tree_hook_does_not_enter_the_migrate_inventory "migrate hook inventor
 IAMH="Duplicated IAM session/config blocks match"
 passes iam_pairs_pass_fence_vs_fence "$IAMH" none
 passes iam_pairs_pass_a_moved_copy_side "$IAMH" iam_copy_moved
-passes iam_pairs_pass_a_moved_canonical_side "$IAMH" iam_canon_moved
-passes iam_pairs_pass_when_both_sides_moved "$IAMH" iam_both_moved
+passes iam_pairs_pass_a_canonical_side_in_a_template "$IAMH" iam_canon_in_template
+passes iam_pairs_pass_when_the_copy_side_moved_too "$IAMH" iam_copy_moved_canon_in_template
 passes iam_pairs_pass_a_moved_side_with_an_indent_column "$IAMH" iam_copy_moved_indented
 passes iam_pairs_pass_an_indented_fence "$IAMH" iam_canon_fence_indented
 passes iam_pairs_pass_a_moved_middle_fence_with_typescript_siblings "$IAMH" iam_ky_mid_moved
@@ -1212,7 +1214,7 @@ fails iam_pairs_fail_on_a_byte_change_in_a_live_sibling_after_the_moved_one "$IA
 fails iam_pairs_fail_on_a_byte_change_in_a_live_sibling_before_the_moved_one "$IAMH" iam_ky_first_sibling_byte_diff "NestJS IAM KyselyService"
 fails iam_pairs_fail_on_a_byte_change_in_a_moved_first_fence "$IAMH" iam_s10_moved_file_byte_diff "NestJS IAM envSchema fields"
 fails iam_pairs_fail_on_a_byte_change_in_a_live_sibling_of_a_moved_first_fence "$IAMH" iam_s10_live_sibling_byte_diff "NestJS IAM serviceConfig mapping"
-fails iam_pairs_fail_on_a_fence_indented_past_three_spaces "$IAMH" iam_canon_fence_indented_4 "canonical add/database/python/sqlalchemy-iam.md holds 0 fence(s)"
+fails iam_pairs_fail_on_a_fence_indented_past_three_spaces "$IAMH" iam_canon_fence_indented_4 "canonical add/database/python/sqlalchemy-iam.md holds 1 fence(s) under 'A6."
 fails iam_pairs_fail_on_a_mapping_path_with_an_empty_segment "$IAMH" iam_moved_path_with_empty_segment "outside a template* directory"
 passes iam_pairs_pass_an_indented_fence_in_a_list_item "$IAMH" iam_canon_fence_in_list_item
 fails iam_pairs_fail_on_a_moved_file_with_crlf_line_endings "$IAMH" iam_moved_file_crlf "has drifted"
@@ -1224,7 +1226,7 @@ fails iam_pairs_fail_on_a_moved_file_byte_diff "$IAMH" iam_moved_file_byte_diff 
 fails iam_pairs_fail_on_two_moved_files_byte_diff "$IAMH" iam_moved_both_byte_diff "has drifted"
 fails iam_pairs_fail_when_a_moved_file_has_no_trailing_newline "$IAMH" iam_moved_file_no_trailing_newline "must end in a newline"
 fails iam_pairs_fail_when_the_mapped_copy_file_is_missing "$IAMH" iam_moved_file_deleted "copy mapped file skills/migrate/database/zz/template/session.py"
-fails iam_pairs_fail_when_the_mapped_canonical_file_is_missing "$IAMH" iam_canon_moved_file_deleted "canonical mapped file skills/add/database/python/zz/template/session.py"
+fails iam_pairs_fail_when_the_mapped_canonical_file_is_missing "$IAMH" iam_canon_template_file_deleted "canonical mapped file skills/add/database/python/sqlalchemy-iam/template/src/database/session.py"
 fails iam_pairs_fail_on_an_empty_mapped_file "$IAMH" iam_moved_file_emptied "is empty"
 fails iam_pairs_fail_on_a_symlinked_mapped_file "$IAMH" iam_moved_file_symlinked "through a symlink"
 fails iam_pairs_fail_on_a_mapping_outside_a_template_directory "$IAMH" iam_moved_outside_template "outside a template* directory"
