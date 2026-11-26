@@ -19,7 +19,7 @@
 # against the workflow on every run: a workflow command missing from the map, a map gate that is not in
 # the workflow, and a script the map names that does not exist all stop the run with exit 2.
 # An empty diff prints "no changes" and exits 0; no git diff, a bad base ref or an unreadable map exits 2.
-# Changed paths = committed since the merge base, staged, unstaged and untracked (not git-ignored) files,
+# The paths checked = files committed since the merge base, staged, unstaged and untracked (not git-ignored),
 # read NUL-separated, so a path with a space or newline maps correctly.
 # RUN_GATES_WORKFLOW and RUN_GATES_MAP name other files (for the test of this script only).
 # The script reads the repo, runs existing gates (stdin from /dev/null) and writes only under $TMPDIR (gate logs; kept on failure).
