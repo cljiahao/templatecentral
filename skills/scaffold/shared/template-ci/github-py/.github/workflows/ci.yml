@@ -57,7 +57,22 @@ jobs:
         run: bash .claude/ci-gates.sh licences
       - name: SBOM (CycloneDX bill of materials matches the lockfile)
         run: bash .claude/ci-gates.sh sbom
-      # The dev requirements are not hash-pinned and an sdist can run code, so they install only after the licence and SBOM gates have read the hash-pinned environment.
+      # PR: the PR's commits; push: full history
+      - name: Secret scan (gitleaks CLI, checksum-verified)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash .claude/ci-gates.sh secrets "$BASE_REF"
+      - name: Change size (the PR stays within the line and file budget)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash .claude/ci-gates.sh changesize "$BASE_REF"
+      - name: Bundle size (gzip JS and CSS within .claude/bundle-budget.txt)
+        run: bash .claude/ci-gates.sh bundle
+      - name: Duplication (production source <= 3%, per .jscpd.json)
+        # Pinned by JSCPD_VERSION; bump it deliberately.
+        run: npx --yes jscpd@${JSCPD_VERSION}
+      # The dev requirements are not hash-pinned and an sdist, a build backend or a dropped .pth file can run code, so they install after every gate that does not need the dev tools (licences, SBOM, secret scan, change size, bundle size, duplication). Only steps that need the dev tools run after: ruff, pyright, pytest, diff-cover and the licence check over everything installed.
+      # Residual risk: that code can still change the later steps' inputs (the test run, the typecheck, the diff-cover report) and the gate-time note; the dev packages are reviewed in requirements-dev.txt, so a change there is a reviewed change.
       - name: Install dev tools and check their licences (after the licence and SBOM gates)
         run: |
           set -euo pipefail
@@ -67,9 +82,6 @@ jobs:
           fi
       - run: ruff check src/ test/ && ruff format --check src/ test/
       - run: python -I -m pyright src/
-      - name: Duplication (production source <= 3%, per .jscpd.json)
-        # Pinned by JSCPD_VERSION; bump it deliberately.
-        run: npx --yes jscpd@${JSCPD_VERSION}
       # Serial on purpose: xdist measured slower at this suite size.
       - name: Tests (serial; pytest-cov writes coverage.xml)
         run: python -m pytest test/ --cov=src --cov-report=xml -q
@@ -83,17 +95,6 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: bash .claude/ci-gates.sh diffcover "$BASE_REF"
-      # PR: the PR's commits; push: full history
-      - name: Secret scan (gitleaks CLI, checksum-verified)
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: bash .claude/ci-gates.sh secrets "$BASE_REF"
-      - name: Change size (the PR stays within the line and file budget)
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: bash .claude/ci-gates.sh changesize "$BASE_REF"
-      - name: Bundle size (gzip JS and CSS within .claude/bundle-budget.txt)
-        run: bash .claude/ci-gates.sh bundle
       # Prints the gate-time note for the gates this job ran. Exits 0 when over budget and 2 when the budget file, gate list or timing record is broken. Skipped when an earlier step fails.
       - name: Gate-time budget note
         run: bash .claude/gate-budget.sh check

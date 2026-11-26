@@ -33,7 +33,11 @@ jobs:
           if [ -f uv.lock ]; then .venv/bin/python -I -m pip install --only-binary=:all: uv==0.13.7; fi
         displayName: Install deps
       - template: azure-pipelines/templatecentral-gates.yml
-      # The dev requirements are not hash-pinned and an sdist can run code, so they install only after the licence and SBOM gates have read the hash-pinned environment.
+      # Pinned by JSCPD_VERSION; bump it deliberately.
+      - bash: npx --yes jscpd@$(JSCPD_VERSION)
+        displayName: Duplication (production source <= 3%, per .jscpd.json)
+      # The dev requirements are not hash-pinned and an sdist, a build backend or a dropped .pth file can run code, so they install after every gate that does not need the dev tools (the shared gates above hold licences, SBOM, secret scan, change size and bundle size; duplication runs just before). Only steps that need the dev tools run after: ruff, pyright, pytest, diff-cover and the licence check over everything installed.
+      # Residual risk: that code can still change the later steps' inputs (the test run, the typecheck, the diff-cover report); the dev packages are reviewed in requirements-dev.txt, so a change there is a reviewed change.
       - bash: |
           set -euo pipefail
           if [ -f requirements-dev.txt ]; then
@@ -45,9 +49,6 @@ jobs:
         displayName: Lint and format check
       - bash: python -I -m pyright src/
         displayName: Typecheck
-      # Pinned by JSCPD_VERSION; bump it deliberately.
-      - bash: npx --yes jscpd@$(JSCPD_VERSION)
-        displayName: Duplication (production source <= 3%, per .jscpd.json)
       # Serial on purpose: xdist measured slower at this suite size.
       - bash: python -m pytest test/ --cov=src --cov-report=xml -q
         displayName: Tests with coverage

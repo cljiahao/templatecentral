@@ -517,6 +517,100 @@ commit_all
 run "$D" BASE_REF=main
 check 0 "$EC" "control: linguist-generated at the merge base is still honoured ($OUT)"
 
+# A tracked text file weighs the bytes on its changed lines too: one huge line, CR-only line ends, a huge deleted file and a huge added line all weigh their size, and a one-line edit to a large file stays small.
+# oneline <bytes> <file>: writes one line of that many bytes with a trailing newline.
+oneline() { { head -c "$1" /dev/zero | tr '\0' x; echo; } > "$2"; }
+# crlines <n> <file>: writes n ten-byte records separated by CR only, with no newline at all.
+crlines() { yes recordNNN | head -n "$1" | tr '\n' '\r' > "$2"; }
+
+repo tcontrol
+lines 3 "$D/t.txt"
+base_commit t.txt
+echo changed > "$D/t.txt"
+commit_all
+run "$D" BASE_REF=main
+check 0 "$EC" "control: a small edit to a tracked text file passes ($OUT)"
+
+repo tbig
+lines 3 "$D/t.txt"
+base_commit t.txt
+oneline 5000000 "$D/t.txt"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a tracked text file replaced by one 5 MB line fails"
+has "t.txt" "$OUT" "the 5 MB line message names the file"
+has "1221 lines  t.txt" "$OUT" "the 5 MB line weighs one line per 4 KB"
+
+repo tgrow
+lines 10 "$D/t.txt"
+base_commit t.txt
+oneline 5000000 "$D/extra.txt"
+{ cat "$D/extra.txt"; } >> "$D/t.txt"
+rm "$D/extra.txt"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a modified tracked file that grows by one 5 MB line fails"
+
+repo tcr
+lines 3 "$D/t.txt"
+base_commit t.txt
+crlines 400000 "$D/t.txt"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a tracked file of 400000 CR-only records (4 MB, no newline) fails"
+
+repo tcrcontrol
+lines 3 "$D/t.txt"
+base_commit t.txt
+crlines 4000 "$D/t.txt"
+commit_all
+run "$D" BASE_REF=main
+check 0 "$EC" "control: a small CR-only tracked file passes ($OUT)"
+
+repo tmix
+lines 3 "$D/a.txt"
+lines 3 "$D/b.txt"
+base_commit a.txt b.txt
+oneline 3000000 "$D/a.txt"
+crlines 200000 "$D/b.txt"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a 3 MB one-line file and a 2 MB CR-only file together exceed the budget"
+
+repo tdel
+oneline 5000000 "$D/huge.txt"
+base_commit huge.txt
+(cd "$D" && git rm -q huge.txt && git commit -qm del)
+run "$D" BASE_REF=main
+check 1 "$EC" "deleting a tracked 5 MB one-line file fails"
+
+repo tdelcontrol
+lines 3 "$D/small.txt"
+base_commit small.txt
+(cd "$D" && git rm -q small.txt && git commit -qm del)
+run "$D" BASE_REF=main
+check 0 "$EC" "control: deleting a small tracked file passes ($OUT)"
+
+repo tedit
+seq 1 50000 > "$D/large.txt"
+base_commit large.txt
+(cd "$D" && awk 'NR == 25000 { print "edited"; next } { print }' large.txt > l2 && mv l2 large.txt)
+commit_all
+run "$D" BASE_REF=main
+check 0 "$EC" "a one-line edit to a large tracked file stays small ($OUT)"
+has "ok (2 lines in 1 files" "$OUT" "the one-line edit weighs what git reports"
+
+repo dashpath
+lines 10 "$D/-dash.txt"
+run "$D" BASE_REF=main
+check 0 "$EC" "an untracked path that starts with a dash is read as a file ($OUT)"
+has "ok (10 lines in 1 files" "$OUT" "the dash path weighs its lines"
+
+repo dashbin
+{ rand_bin 5000000; } > "$D/-bin.dat"
+run "$D" BASE_REF=main
+check 1 "$EC" "a 5 MB untracked dash-named binary fails on size, not on a read error"
+
 # Real run: a freshly scaffolded nextjs project, committed as the base, then one real edit.
 D="$T/real"
 mkdir -p "$D"
