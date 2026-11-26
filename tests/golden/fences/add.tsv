@@ -459,7 +459,7 @@ f40903a2ddbcd7fa911b889de8a7c993d802c3b05966ca728774834015434462	skills/add/test
 8833a7347db19452a2a9f35319d2be31845288f77dd09d242b42df2b05aead73	skills/add/test/nestjs.md	Controller Test	0	typescript
 6afb7a406b9834494575754b0aa7d1604c8b0ed9053ba7a61cb31325f3fa8b44	skills/add/test/nestjs.md	E2E Tests	0	typescript
 293a8d4d150c730aabff4e5a8d4d57bc42e8cb6538ad5780f571ae8cc00a4770	skills/add/test/nestjs.md	Service Test with Mocked Repository	0	typescript
-77b85b69951d6fb6b6b5121257b3b95c291686abd963468a2d818b3581c78d8b	skills/add/test/nestjs.md	Test Organization	0	-
+76cbaab46cc1f62d385dde6492761d555a2a69d2afc3503bb1399835c97d776a	skills/add/test/nestjs.md	Test Organization	0	-
 6995f9dbfaa44e50b3722ee34adbb30edcb1f9a919ceb5e57c369943d18bc707	skills/add/test/nextjs.md	2. Test GET Endpoints	0	ts
 7fcf128ee4f141907f47b5b44bdb34b7f648814af79ab47a85fa6a03c7945d5a	skills/add/test/nextjs.md	3. Test POST Endpoints with Validation	0	ts
 81e0938b4a1a24657d7b1d226fed20473f9b75f8e284602a304c59864f1fe928	skills/add/test/nextjs.md	4. Test Dynamic Segment Routes	0	ts

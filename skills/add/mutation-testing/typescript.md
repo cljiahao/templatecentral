@@ -27,9 +27,7 @@ pnpm add -D @stryker-mutator/core @stryker-mutator/vitest-runner
 
 Run `TC_PART=leaf TC_LEAF=add/mutation-testing/typescript bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/mutation-testing/typescript/template/` (listed in `<skill-dir>/mutation-testing/typescript/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-`stryker.config.mjs` at the project root (copied above):
-
-Copied verbatim from `<skill-dir>/mutation-testing/typescript/template/stryker.config.mjs` by the copy step; do not re-type it.
+`stryker.config.mjs` at the project root (copied above).
 
 Set `mutate` to match what your stack's test policy covers:
 

@@ -159,7 +159,7 @@ describe('My Feature (e2e)', () => {
 ### Test Organization
 
 ```
-vitest.config.e2e.ts           # E2E Vitest config (project root)
+vitest.config.e2e.mts          # E2E Vitest config (project root)
 test/
 ├── app.e2e-spec.ts            # Root app e2e tests
 ├── <feature>.e2e-spec.ts      # Feature-specific e2e tests
@@ -179,12 +179,5 @@ pnpm test:e2e    # e2e (vitest.config.e2e.mts)
 
 ### Rules
 
-- One behavior per `it()`
-- Descriptive names — `it('should throw NotFoundException for missing item')`; `it.each` for sibling inputs
-- Mock at boundaries — mock repositories in service tests, not internals
-- Use NestJS testing module — `Test.createTestingModule()` for proper DI
-- E2E tests use Fastify — `app.inject()` for HTTP assertions, not `supertest`
-- Tests do not share mutable state; each `beforeEach` creates a fresh module
-- Mock the service in controller tests only to exercise error paths
-- `afterAll(() => app.close())` in e2e tests
-- Tests pass in any order
+- Mock at boundaries: mock repositories in service tests; mock the service in controller tests only to exercise error paths
+- Tests share no state and pass in any order

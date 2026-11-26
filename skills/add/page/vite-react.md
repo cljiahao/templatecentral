@@ -13,7 +13,7 @@
 
 ### 1. Create the Page Component
 
-Pages live in `src/pages/` and should be thin — compose from features:
+Pages live in `src/pages/`:
 
 ```tsx
 // src/pages/analytics.tsx
@@ -30,8 +30,6 @@ export function AnalyticsPage() {
   );
 }
 ```
-
-Note: Use **named exports** — unlike Next.js, there is no `export default` requirement.
 
 ### 2. Add the Route to the Router
 
@@ -153,11 +151,4 @@ Confirm the build succeeds with no type errors and all tests pass.
 
 ## Rules
 
-- Always add to `src/pages/index.ts` barrel export
-- Always add to `src/lib/constants/routes.ts`
-- Always add the `<Route>` in `src/router.tsx` — the page won't be accessible otherwise
-- Nest protected pages inside `<Route element={<ProtectedRoute />}>` in `src/router.tsx`. This is UX gating only — the SPA bundle is public, so the backend must authorize every data request
-- Use layout routes for shared navigation/chrome
-- Always validate `useParams` / `useSearchParams` values with Zod before using them
-- Use `PAGE_ROUTES` constants for route paths, not hardcoded strings
-- Keep pages flat in `src/pages/`; nesting is in the router
+- `<ProtectedRoute />` is UX gating only — the SPA bundle is public, so the backend must authorize every data request
