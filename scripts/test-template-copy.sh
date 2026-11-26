@@ -1392,6 +1392,7 @@ for case_ in map tmp; do
   fin_copy "$T/fin-link-$case_"; printf 'victim\n' > "$T/fin-link-$case_.victim"; cp "$T/fin-link-$case_.victim" "$T/fin-link-$case_.before"
   out=$(bash -c 'ln -s "$1" "$2/.claude/harness.json.$4.$$"; exec env TC_STACK=nextjs TC_PART=finish bash "$3/tc-copy.sh" "$2"' _ "$T/fin-link-$case_.victim" "$T/fin-link-$case_" "$SHARED" "$case_" 2>&1); ec=$?
   check 1 "$([[ $ec -ne 0 && "$out" == *"the name is taken"* ]] && cmp -s "$T/fin-link-$case_.victim" "$T/fin-link-$case_.before" && echo 1 || echo 0)" "part_finish_planted_symlink_${case_}_stops_and_target_unchanged ($out)"
+  if [ "$case_" = tmp ]; then check 1 "$([ -z "$(find "$T/fin-link-$case_/.claude" -maxdepth 1 -name 'harness.json.map.*')" ] && echo 1 || echo 0)" "part_finish_tmp_name_taken_removes_the_map_file"; fi
 done
 fin_copy "$T/fin-link-ctl"; printf 'victim\n' > "$T/fin-link-ctl.victim"
 out=$(bash -c 'ln -s "$1" "$2/.claude/harness.json.map.0"; ln -s "$1" "$2/.claude/harness.json.tmp.0"; exec env TC_STACK=nextjs TC_PART=finish bash "$3/tc-copy.sh" "$2"' _ "$T/fin-link-ctl.victim" "$T/fin-link-ctl" "$SHARED" 2>&1); ec=$?
@@ -1401,6 +1402,13 @@ check 1 "$([ "$(cat "$T/fin-link-ctl.victim")" = victim ] && echo 1 || echo 0)" 
 fin_copy "$T/man-link"; rm -f "$T/man-link/.claude/harness.json"; printf 'victim\n' > "$T/man-link.victim"
 out=$(bash -c 'ln -s "$1" "$2/.claude/harness.json.tmp.$$"; exec env TC_STACK=nextjs TC_PART=manifest bash "$3/tc-copy.sh" "$2"' _ "$T/man-link.victim" "$T/man-link" "$SHARED" 2>&1); ec=$?
 check 1 "$([[ $ec -ne 0 && "$out" == *"the name is taken"* ]] && [ "$(cat "$T/man-link.victim")" = victim ] && [ ! -e "$T/man-link/.claude/harness.json" ] && echo 1 || echo 0)" "part_manifest_planted_symlink_stops_and_target_unchanged ($out)"
+# the manifest part stops on a tab in a listed path, as finish does; a clean tree writes the manifest
+fin_copy "$T/man-tab"; rm -f "$T/man-tab/.claude/harness.json"; printf 'x\n' > "$T/man-tab/.claude/hooks/a	b"
+out=$(TC_STACK=nextjs TC_PART=manifest bash "$SHARED/tc-copy.sh" "$T/man-tab" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"holds a tab"* && ! -e "$T/man-tab/.claude/harness.json" ]] && leftover "$T/man-tab" && echo 1 || echo 0)" "part_manifest_tab_in_path_stops ($out)"
+rm -f "$T/man-tab/.claude/hooks/a	b"
+out=$(TC_STACK=nextjs TC_PART=manifest bash "$SHARED/tc-copy.sh" "$T/man-tab" 2>&1); ec=$?
+check 0 "$ec" "part_manifest_tab_control: the same tree without the tab file writes the manifest ($out)"
 # a tab in a manifest path is a stop, not a silent skip
 fin_copy "$T/fin-tab"; cp "$T/fin-tab/.claude/harness.json" "$T/fin-tab.before"
 python3 -c 'import sys; p = sys.argv[1]; s = open(p).read(); open(p, "w").write(s.replace("\"path\": \"AGENTS.md\"", "\"path\": \"AGENTS.md\tx\"", 1))' "$T/fin-tab/.claude/harness.json"; cp "$T/fin-tab/.claude/harness.json" "$T/fin-tab.edited"
@@ -1416,6 +1424,18 @@ check 1 "$([[ $ec -eq 0 && "$out" != *"Skipped "* ]] && echo 1 || echo 0)" "part
 fin_copy "$T/fin-base-link"; mkdir -p "$T/fin-base-link.outside"; ln -s "$T/fin-base-link.outside" "$T/fin-base-link/.claude/.harness-base"
 out=$(fin_run "$T/fin-base-link"); ec=$?
 check 1 "$([[ $ec -ne 0 && "$out" == *".harness-base is a symlink"* && -z "$(find "$T/fin-base-link.outside" -type f)" ]] && echo 1 || echo 0)" "part_finish_base_snapshot_symlink_stops ($out)"
+# a symlink planted inside the snapshot folder (a file or a folder) is a stop before any write
+for kind in file dir; do
+  fin_copy "$T/fin-inl-$kind"; mkdir -p "$T/fin-inl-$kind/.claude/.harness-base" "$T/fin-inl-$kind.outside"
+  printf 'victim\n' > "$T/fin-inl-$kind.victim"
+  if [ "$kind" = file ]; then ln -s "$T/fin-inl-$kind.victim" "$T/fin-inl-$kind/.claude/.harness-base/AGENTS.md"; else ln -s "$T/fin-inl-$kind.outside" "$T/fin-inl-$kind/.claude/.harness-base/.claude"; fi
+  cp "$T/fin-inl-$kind/.claude/harness.json" "$T/fin-inl-$kind.before"
+  out=$(fin_run "$T/fin-inl-$kind"); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"a symlink sits inside"* && "$(cat "$T/fin-inl-$kind.victim")" = victim && -z "$(find "$T/fin-inl-$kind.outside" -type f)" ]] && cmp -s "$T/fin-inl-$kind.before" "$T/fin-inl-$kind/.claude/harness.json" && leftover "$T/fin-inl-$kind" && echo 1 || echo 0)" "part_finish_symlink_inside_snapshot_${kind}_stops ($out)"
+done
+fin_copy "$T/fin-inl-ctl"; mkdir -p "$T/fin-inl-ctl/.claude/.harness-base"; : > "$T/fin-inl-ctl/.claude/.harness-base/stale.txt"
+out=$(fin_run "$T/fin-inl-ctl"); ec=$?
+check 0 "$ec" "part_finish_snapshot_folder_without_links_control ($out)"
 # a doc path that is a directory is a stop (not a regular file); an unreadable doc is a stop through the grep status
 fin_copy "$T/fin-docdir"; rm -f "$T/fin-docdir/FUTURE.md"; mkdir "$T/fin-docdir/FUTURE.md"
 out=$(fin_run "$T/fin-docdir"); ec=$?
@@ -1424,6 +1444,8 @@ fin_copy "$T/fin-docperm"; chmod 000 "$T/fin-docperm/FUTURE.md"
 if [ ! -r "$T/fin-docperm/FUTURE.md" ]; then
   out=$(fin_run "$T/fin-docperm"); ec=$?
   check 1 "$([[ $ec -ne 0 && "$out" == *"cannot read FUTURE.md"* ]] && echo 1 || echo 0)" "part_finish_unreadable_doc_stops ($out)"
+else
+  echo "SKIP: part_finish_unreadable_doc_stops (chmod 000 leaves the file readable, running as root)"
 fi
 chmod 644 "$T/fin-docperm/FUTURE.md"
 # the line-count guard: an awk that prints nothing, or drops a line, must stop the run and leave harness.json byte-identical; a pass-through awk is the control

@@ -227,6 +227,7 @@ if [ "$PART" = manifest ]; then
     if [ -L "$TGT/$p" ]; then stop "$TGT/$p is a symlink"; fi
     [ -f "$TGT/$p" ] || continue
     case "$p" in *[\"\\]*) stop "the path $p holds a quote or backslash" ;; esac
+    case "$p" in *"$TAB"*) stop "the path $p holds a tab" ;; esac
     h=$(sha "$TGT/$p") || stop "cannot hash $p"
     body="$body,$NL    \"$p\": { \"origin_hash\": \"$h\", \"path\": \"$p\" }"
   done <<TC_LIST
@@ -234,7 +235,7 @@ $list
 TC_LIST
   [ -n "$body" ] || stop "no seeded file found in $TGT"
   tmp="$TGT/$mf.tmp.$$"
-  tmpnew "$tmp" || stop "cannot create $tmp: the name is taken"
+  tmpnew "$tmp" || stop "cannot create $tmp: the name is taken or the folder is not writable"
   {
     printf '{\n  "templatecentral_version": "%s",\n  "stack": "%s",\n  "seeded_at": "%s",\n' "$ver" "$STACK" "$(date -u +%Y-%m-%d)"
     printf '  "adoWiki": %s,\n' "${TC_ADO_WIKI:-false}"
@@ -250,6 +251,10 @@ if [ "$PART" = finish ]; then
   mf=.claude/harness.json
   if [ -L "$TGT/.claude" ] || [ -L "$TGT/$mf" ] || [ ! -f "$TGT/$mf" ]; then stop "$TGT/$mf is missing or a symlink: run kit Step E first"; fi
   if [ -L "$TGT/.claude/.harness-base" ]; then stop "$TGT/.claude/.harness-base is a symlink, so the snapshot would be written outside the project"; fi
+  if [ -d "$TGT/.claude/.harness-base" ]; then
+    links=$(find "$TGT/.claude/.harness-base" -type l 2>/dev/null) || stop "cannot scan $TGT/.claude/.harness-base for symlinks"
+    [ -z "$links" ] || stop "a symlink sits inside $TGT/.claude/.harness-base ($(printf '%s' "$links" | head -n 1)), so the snapshot would be written outside the project: remove it and rerun"
+  fi
   for d in docs/CONSTITUTION.md FUTURE.md docs/harness.md; do
     [ -e "$TGT/$d" ] || [ -L "$TGT/$d" ] || continue
     [ -f "$TGT/$d" ] || stop "cannot read $d: it is not a regular file"
@@ -268,7 +273,7 @@ if [ "$PART" = finish ]; then
   [ "$((want))" -eq "$((have))" ] || stop "$mf holds $((want)) \"path\" keys but $((have)) entries in the one-line shape: rewrite it with TC_PART=manifest"
   mapf="$TGT/$mf.map.$$"
   tmp="$TGT/$mf.tmp.$$"
-  tmpnew "$mapf" || stop "cannot create $mapf: the name is taken"
+  tmpnew "$mapf" || stop "cannot create $mapf: the name is taken or the folder is not writable"
   found=0
   while IFS= read -r p; do
     case "/$p/" in
@@ -284,7 +289,7 @@ if [ "$PART" = finish ]; then
 $paths
 TC_LIST
   [ "$found" -gt 0 ] || { rm -f -- "$mapf"; stop "none of the files $mf lists exists in $TGT"; }
-  tmpnew "$tmp" || { rm -f -- "$mapf"; stop "cannot create $tmp: the name is taken"; }
+  tmpnew "$tmp" || { rm -f -- "$mapf"; stop "cannot create $tmp: the name is taken or the folder is not writable"; }
   # The map file is named by ARGV[1], so an empty map could never be mistaken for the manifest.
   awk -F'\t' 'FILENAME == ARGV[1] { h[$1] = $2; next }
     match($0, /"origin_hash": "[0-9a-f]*", "path": "/) {
@@ -296,8 +301,8 @@ TC_LIST
   n=0
   while IFS= read -r p; do
     [ -f "$TGT/$p" ] || continue
-    mkdir -p -- "$TGT/.claude/.harness-base/$(dirname -- "$p")" || { rm -f -- "$tmp"; stop "cannot create the snapshot folder for $p"; }
-    cp -- "$TGT/$p" "$TGT/.claude/.harness-base/$p" || { rm -f -- "$tmp"; stop "cannot mirror $p into .claude/.harness-base/"; }
+    mkdir -p -- "$TGT/.claude/.harness-base/$(dirname -- "$p")" || { rm -f -- "$tmp"; stop "cannot create the snapshot folder for $p; the snapshot may be partly written, $mf is unchanged, and a rerun is safe"; }
+    cp -- "$TGT/$p" "$TGT/.claude/.harness-base/$p" || { rm -f -- "$tmp"; stop "cannot mirror $p into .claude/.harness-base/; the snapshot may be partly written, $mf is unchanged, and a rerun is safe"; }
     n=$((n + 1))
   done <<TC_LIST
 $paths
