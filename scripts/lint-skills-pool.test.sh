@@ -8,7 +8,11 @@
 # planted case through, so these tests would notice the guard going missing.
 # Cleanup is tested with ps on PATH, with ps absent and with a ps that always fails.
 # Nothing here reads a clock: probes and the driver meet through FIFOs (a read waits for the other side),
-# and a driver that dies early is reported by an "exited" line, so a broken pool cannot hang the test.
+# and a driver that dies early is reported by an "exited" line. A driver that does not exit is found by a
+# bounded count of one-second read retries (NEXT_TRIES); then its process group is killed and the case fails
+# with its own message ("hung"), so a broken pool cannot hang the test. The wait is a failure bound, never
+# an assertion about how long a pass takes.
+# A probe reads /dev/null as stdin: the driver's stdin holds a line, and a probe that reads it must see EOF.
 # The one strict-serial property (JOBS=1 finishes the last probe before the parent-side code) is tested
 # in two halves: the pool's own run (p_ok, the result file is there at the serial point) and a mutant run
 # with the serial point removed (a probe that the parent code releases, so the file is not there). A probe
@@ -54,6 +58,7 @@ p_private() { if mkdir "$T/w$NJOB"; then emit PASS; else emit "FAIL: probe $NJOB
 p_waits_for_go() { local x; read -r x <&7; emit "FAIL: first"; }
 p_opens_go() { echo go >&7; emit "FAIL: last"; }
 p_gated() { local x; read -r x <&7; emit PASS; }
+p_stdin() { local x; if read -r x; then emit "FAIL: probe $NJOB read stdin: $x"; else emit PASS; fi; }
 p_hang() { sleep 600 & echo "$!" > "$T/hang.pid"; echo started > "$NOTE"; wait; }
 PROBES
 
@@ -65,6 +70,7 @@ write_driver() {
   shift 2
   D="$W/run$((++RUN))"
   mkdir -p "$D"
+  printf 'data from the driver stdin\n' > "$D/in"
   {
     printf 'echo $$ > %q\nset -uo pipefail\nset -m\nT=%q\nJOBS=%q\nNOTE=%q\nPASS=0\nFAIL=0\nONLY=\n' "$D/dpid" "$D/t" "$jobs" "$D/note"
     cat <<'HEAD'
@@ -84,10 +90,62 @@ TAIL
   } > "$D/driver.sh"
 }
 
+# The driver runs in the background in a process group of its own and tells this script through the note
+# FIFO (fd 3) when it exits; the probes' own lines on that FIFO ("started") come through the same way.
+NEXT_TRIES=120
+# next_line — read one line of the note FIFO into LINE; false after NEXT_TRIES one-second read timeouts.
+next_line() {
+  local i
+  LINE=
+  for ((i = 0; i < NEXT_TRIES; i++)); do
+    if read -r -t 1 LINE <&3; then return 0; fi
+  done
+  return 1
+}
+
+# start_driver <path dir or -> — start the driver written by write_driver, with the path dir as PATH when given.
+start_driver() {
+  local pdir=$1
+  mkfifo "$D/note"
+  exec 3<>"$D/note"
+  LINE=
+  (
+    set -m
+    if [[ "$pdir" == - ]]; then "$BASH_BIN" "$D/driver.sh" > "$D/out" 2>&1 < "$D/in" & else PATH="$pdir" "$BASH_BIN" "$D/driver.sh" > "$D/out" 2>&1 < "$D/in" & fi
+    echo "$!" > "$D/spid"
+    wait $!
+    echo "exited $?" > "$D/note"
+  ) 2>/dev/null &
+}
+
+# await_exit — wait for the driver's "exited" line. Sets DRC (its exit status, or hung), HUNG (yes or no)
+# and OUT. A driver that is still running after the retry bound has its process group killed.
+await_exit() {
+  local spid
+  DRC=
+  HUNG=no
+  while :; do
+    case $LINE in exited*) DRC=${LINE#exited }; break ;; esac
+    next_line || break
+  done
+  if [[ -z "$DRC" ]]; then
+    HUNG=yes
+    DRC=hung
+    spid=$(cat "$D/spid" 2>/dev/null || true)
+    if [[ -n "$spid" ]]; then kill -KILL -- "-$spid" 2>/dev/null || true; fi
+    next_line || true
+  fi
+  exec 3<&-
+  OUT=$(cat "$D/out")
+}
+
 # drive <jobs> <override file or -> <probe>... — run the driver to the end; sets OUT and RC.
 drive() {
   write_driver "$@"
-  OUT=$("$BASH_BIN" "$D/driver.sh" 2>&1); RC=$?
+  start_driver -
+  await_exit
+  RC=$DRC
+  check no "$HUNG" "the driver exits within the retry bound (hung: its group was killed)"
 }
 
 for jobs in 1 3; do
@@ -135,6 +193,17 @@ check 0 "$RC" "guard removed (job status): the crashing job passes, so the test 
 drive 3 "$W/no-missing-guard.sh" p_exit_early
 check 0 "$RC" "guard removed (missing result): the early exit passes, so the test above would catch the removal"
 
+# Probe stdin. The driver's stdin holds a line (written by write_driver); a probe must see EOF.
+for jobs in 1 3; do
+  drive "$jobs" - p_stdin p_stdin
+  check 0 "$RC" "control, jobs=$jobs: a probe that reads stdin gets EOF, not the driver's stdin"
+done
+awk '/^pool_start\(\)/ { on = 1 } on { print } on && /^}/ { exit }' "$W/pool.sh" | sed 's|) </dev/null &|) \&|' > "$W/no-devnull.sh"
+check yes "$(yn grep -qF '( "$@" ) &' "$W/no-devnull.sh")" "the stdin mutant starts the probe without </dev/null"
+drive 3 "$W/no-devnull.sh" p_stdin
+check 1 "$RC" "guard removed (</dev/null): the probe reads the driver's stdin and fails, so the control above would catch the removal"
+check yes "$(has "$OUT" "read stdin: data from the driver stdin")" "guard removed (</dev/null): the failure names the stdin line the probe read"
+
 # Serial point. Control: one job, the result file is there when the serial point returns.
 EXTRA=$(cat <<'X'
 pool_serial_point
@@ -154,33 +223,21 @@ drive 1 "$W/no-serial-point.sh" p_gated
 check yes "$(has "$OUT" "at-serial-point r1=no")" "guard removed (serial point): the parent-side code runs before the last probe finished, which the jobs=1 control above would catch"
 EXTRA=
 
-# Interrupt cleanup. interrupt_run <path dir or -> <override file or -> <probe>... starts the driver in the
-# background, waits (on the FIFO) until the hanging probe says it started, sends TERM and waits for the
-# "exited" line. Sets D, HPID, DRC (driver exit status) and OUT.
+# Interrupt cleanup. interrupt_run <path dir or -> <override file or -> <probe>... starts the driver,
+# waits (on the FIFO) until the hanging probe says it started, sends TERM and waits for the driver's
+# "exited" line. Sets D, HPID, DRC (driver exit status), HUNG and OUT.
 interrupt_run() {
-  local pdir=$1 over=$2
+  local pdir=$1 over=$2 dpid
   shift 2
   write_driver 2 "$over" "$@"
-  mkfifo "$D/note"
-  exec 3<>"$D/note"
-  (
-    if [[ "$pdir" == - ]]; then "$BASH_BIN" "$D/driver.sh" > "$D/out" 2>&1 & else PATH="$pdir" "$BASH_BIN" "$D/driver.sh" > "$D/out" 2>&1 & fi
-    wait $!
-    echo "exited $?" > "$D/note"
-  ) &
-  local line dpid
-  read -r line <&3
+  start_driver "$pdir"
   HPID=
-  DRC=
-  if [[ "$line" == started ]]; then
+  if next_line && [[ "$LINE" == started ]]; then
     HPID=$(cat "$D/t/hang.pid")
     dpid=$(cat "$D/dpid")
     kill -TERM "$dpid" 2>/dev/null || true
-    read -r line <&3
   fi
-  DRC=${line#exited }
-  exec 3<&-
-  OUT=$(cat "$D/out")
+  await_exit
 }
 
 # tool_dir <dir> <ps behavior: none|fail> — a PATH dir with the tools the pool needs, and a ps or none.
@@ -202,6 +259,7 @@ check no "$(yn test -e "$W/nops/ps")" "the ps-less PATH has no ps"
 cleanup_cases() { # cleanup_cases <label> <path dir or ->
   interrupt_run "$2" - p_hang p_ok
   check yes "$(yn test -n "$HPID")" "$1: the hanging probe started"
+  check no "$HUNG" "$1: the driver exits after TERM within the retry bound (hung: its group was killed)"
   check 143 "$DRC" "$1: the driver exits 143 on TERM"
   check no "$(isdir "$D/t")" "$1: the temp root is removed"
   check no "$(has "$OUT" WARNING)" "$1: no warning is printed"
@@ -223,6 +281,18 @@ pool_cleanup() {
 M
 interrupt_run "$W/badps" "$W/ps-cleanup.sh" p_hang p_ok
 check yes "$(alive "$HPID")" "guard removed (process groups, ps-based cleanup under a failing ps): the child survives, which the control above would catch"
+kill -KILL "$HPID" 2>/dev/null || true
+
+# A driver that does not exit after TERM: the retry bound ends the wait and the driver's group is killed.
+cat > "$W/hang-cleanup.sh" <<'M'
+pool_cleanup() { trap '' INT TERM; while :; do sleep 1; done; }
+M
+NEXT_TRIES=3
+interrupt_run - "$W/hang-cleanup.sh" p_hang p_ok
+NEXT_TRIES=120
+check yes "$HUNG" "planted hung driver: reported as hung when the retry bound is reached"
+check hung "$DRC" "planted hung driver: the status is hung"
+check no "$(alive "$(cat "$D/dpid")")" "planted hung driver: its process group was killed"
 kill -KILL "$HPID" 2>/dev/null || true
 
 # A group that cannot be confirmed gone: warn and keep the temp root.

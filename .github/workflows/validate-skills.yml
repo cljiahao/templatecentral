@@ -183,6 +183,8 @@ jobs:
         run: bash scripts/check-tests-wired.sh
       - name: Wiring check tests
         run: bash scripts/check-tests-wired.test.sh
+      - name: Workflow job id reader tests
+        run: bash scripts/workflow-job-ids.test.sh
 
   seeded-gate-tests:
     name: Seeded gate tests
@@ -495,7 +497,7 @@ jobs:
             echo "$bad"
             exit 1
           fi
-          in_file=$(awk '/^jobs:/ { on = 1; next } on && /^  [a-z0-9-]+:[[:space:]]*$/ { sub(/:.*/, "", $1); print $1 }' .github/workflows/validate-skills.yml | grep -vx all-checks | sort)
+          in_file=$(bash scripts/workflow-job-ids.sh .github/workflows/validate-skills.yml | grep -vx all-checks | sort)
           in_needs=$(jq -r 'keys[]' <<<"$NEEDS" | sort)
           if [ "$in_file" != "$in_needs" ]; then
             echo "The jobs of this workflow and the needs of all-checks differ:"

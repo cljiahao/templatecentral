@@ -114,13 +114,15 @@ pool_serial_point() {
 }
 
 # pool_start <test name> <probe function> <args...> — run the probe in the background once a slot is free.
+# The probe reads /dev/null as stdin: under set -m a background job keeps the terminal, and a probe that
+# read stdin would stop on SIGTTIN and hang wait.
 pool_start() {
   if [[ -n "${ONLY:-}" && ! "$1" =~ $ONLY ]]; then return 0; fi
   while (( NJOB - REAPED >= JOBS )); do pool_reap_one; done
   NJOB=$((NJOB + 1))
   PNAME[NJOB]=$1
   shift
-  ( "$@" ) &
+  ( "$@" ) </dev/null &
   PIDS[NJOB]=$!
 }
 

@@ -6,21 +6,34 @@
 # adapters/*/*.test.mjs. Out of scope: the *.test.* files inside skills/**/template*/ (they are scaffold
 # output that runs in a scaffolded project, not in this repo) and the test fixtures under tests/.
 #
-# A workflow is read as YAML (python3 with PyYAML). It counts only when `on` holds pull_request. Only the `run:`
-# value of a step counts, and only a command line that starts with one of these exact forms, followed by plain
-# arguments (no pipe, list operator, `;`, `&`, or redirect):
-#   bash scripts/<name>              for the .sh tests
-#   node adapters/<dir>/<name>       for the .test.mjs tests
-# Comments are stripped by the shell tokenizer, so echo text, a `name:` text, a trailing comment, `: bash ...`
-# and `... || true` do not count. A step does not count when its run block has `set +e`, or when the step or
-# its job has continue-on-error set to anything but false. A step or job `if:` removes the step from the count
-# unless it is on this allow-list: a job `if: github.event_name == 'pull_request'`, which is true in every run
-# of a workflow that is counted.
+# A workflow is read as YAML (python3 with PyYAML, python3 first, then /usr/bin/python3; WIRED_PYTHONS can
+# name other interpreters, for the self-test). It counts only when its `on` holds pull_request and that
+# trigger carries no filter that can skip a pull request: no `branches`, no `branches-ignore`, no other key
+# but `paths` and `paths-ignore`, and `types` only when it is absent or equals the one value list the
+# workflows use today: opened, synchronize, ready_for_review.
 #
-# It fails closed: no test file, no workflow file, a workflow that cannot be parsed (even one that does not run
-# on pull requests), no workflow that runs on pull requests, or no python3 with PyYAML (python3 first, then /usr/bin/python3).
-# Will not catch: a command that is earlier masked by `exit 0` in the same run block, a test script that runs
-# but asserts nothing, or a workflow that this repo's `paths:` filters keep from starting.
+# A run block wires a test only when EVERY line of it is on this allow-list, matched whole:
+#   a blank line
+#   bash <path> [plain arguments]    for the .sh tests
+#   node <path> [plain arguments]    for the .test.mjs tests
+# where <path> is the repo-relative path (scripts/<name> or adapters/<dir>/<name>, no ./ and no quotes) and
+# a plain argument uses only letters, digits and _ . / = : @ % + , -. There is no setup form on the list, since
+# none of the real workflows needs one before a test. Any other line (a comment, an echo, a quote, a pipe, a
+# list operator, a redirect, a heredoc, a function, a loop, a branch, a continuation, an exit or trap or
+# `set`) makes the whole block wire nothing: all or nothing, never line by line. A fix for a workflow that
+# fails this rule is to split the step so the test command stands in its own block.
+# A step wires nothing when it has `if`, `shell`, `working-directory`, or `continue-on-error` other than
+# false. A job wires nothing when it has `shell`, `continue-on-error` other than false, an `if` other than
+# exactly `github.event_name == 'pull_request'`, or `defaults.run`. A workflow with `defaults.run` wires
+# nothing. A block folded with `>` is one line, so only its first command counts.
+#
+# It fails closed: no test file, no workflow file, a workflow that cannot be parsed (even one that does not
+# run on pull requests) or is not a mapping, no workflow that counts, or no python3 with PyYAML.
+# Will not catch: a test script that runs but asserts nothing or skips itself on its arguments; a step
+# `env` such as BASH_ENV that changes the shell; a job `needs` chain, a job `container`, a `matrix` or a
+# `timeout-minutes` that keeps the step from running or ends it early; a `uses` step that edits the tree
+# before the run; a workflow that this repo's `paths:` filters keep from starting; and a test that only a
+# `workflow_run`, schedule or manual trigger runs, which is not counted.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -37,14 +50,15 @@ shopt -u nullglob
 [[ ${#workflows[@]} -gt 0 ]] || { echo "FAIL: no workflow file in $WORKFLOWS"; exit 1; }
 
 PY=
-for cand in python3 /usr/bin/python3; do
+read -r -a cands <<<"${WIRED_PYTHONS-python3 /usr/bin/python3}"
+for cand in ${cands[@]+"${cands[@]}"}; do
   if "$cand" -c 'import yaml' >/dev/null 2>&1; then PY=$cand; break; fi
 done
 [[ -n "$PY" ]] || { echo "FAIL: no python3 with PyYAML (python3 or /usr/bin/python3); install python3-yaml"; exit 1; }
 
 "$PY" - "$REPO" "${#workflows[@]}" "${workflows[@]}" "${tests[@]}" <<'PY'
 import os
-import shlex
+import re
 import sys
 
 import yaml
@@ -54,18 +68,39 @@ workflow_files = sys.argv[3:3 + nwf]
 tests = sys.argv[3 + nwf:]
 
 ALLOWED_JOB_IF = "github.event_name == 'pull_request'"
-PUNCT = set(";&|<>()")
+ALLOWED_PR_KEYS = {"paths", "paths-ignore", "types"}
+ALLOWED_PR_TYPES = ["opened", "ready_for_review", "synchronize"]
+BLANK = re.compile(r" *")
+INVOKE = re.compile(r"(bash|node) ([A-Za-z0-9_][A-Za-z0-9_./-]*)((?: [A-Za-z0-9_./=:@%+,-]+)*) *")
 
 
 def triggers(doc):
     on = doc.get("on", doc.get(True))
     if isinstance(on, str):
-        return {on}
+        return {on: None}
     if isinstance(on, list):
-        return {str(x) for x in on}
+        return {str(x): None for x in on}
     if isinstance(on, dict):
-        return {str(k) for k in on}
-    return set()
+        return {str(k): v for k, v in on.items()}
+    return {}
+
+
+def pull_request_counts(doc):
+    trig = triggers(doc)
+    if "pull_request" not in trig:
+        return False
+    value = trig["pull_request"]
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    if not set(value) <= ALLOWED_PR_KEYS:
+        return False
+    if "types" in value:
+        types = value["types"]
+        if not isinstance(types, list) or sorted(str(t) for t in types) != ALLOWED_PR_TYPES:
+            return False
+    return True
 
 
 def continue_on_error(node):
@@ -73,41 +108,22 @@ def continue_on_error(node):
     return value not in (False, "false", "False")
 
 
-def command_lines(run):
-    lines = []
-    for raw in str(run).splitlines():
-        lex = shlex.shlex(raw, posix=True, punctuation_chars=True)
-        lex.whitespace_split = True
-        lex.commenters = "#"
-        try:
-            lines.append(list(lex))
-        except ValueError:
-            lines.append(None)
-    return lines
-
-
-def has_set_plus_e(lines):
-    for toks in lines:
-        if toks and toks[0] == "set":
-            for t in toks[1:]:
-                if t.startswith("+") and "e" in t:
-                    return True
-    return False
+def has_default_run(node):
+    if "defaults" not in node:
+        return False
+    defaults = node["defaults"]
+    return not isinstance(defaults, dict) or "run" in defaults
 
 
 def wired_commands(run):
-    lines = command_lines(run)
-    if has_set_plus_e(lines):
-        return set()
     found = set()
-    for toks in lines:
-        if not toks or len(toks) < 2:
+    for line in str(run).split("\n"):
+        if BLANK.fullmatch(line):
             continue
-        if toks[0] not in ("bash", "node"):
-            continue
-        if any(set(t) <= PUNCT for t in toks[2:]):
-            continue
-        found.add((toks[0], toks[1]))
+        m = INVOKE.fullmatch(line)
+        if m is None:
+            return set()
+        found.add((m.group(1), m.group(2)))
     return found
 
 
@@ -123,9 +139,11 @@ for path in workflow_files:
     if not isinstance(doc, dict):
         print("FAIL: workflow %s is not a YAML mapping" % path)
         sys.exit(1)
-    if "pull_request" not in triggers(doc):
+    if not pull_request_counts(doc):
         continue
     counted += 1
+    if has_default_run(doc):
+        continue
     jobs = doc.get("jobs")
     if not isinstance(jobs, dict):
         continue
@@ -134,7 +152,7 @@ for path in workflow_files:
             continue
         if "if" in job and str(job["if"]).strip() != ALLOWED_JOB_IF:
             continue
-        if continue_on_error(job):
+        if continue_on_error(job) or "shell" in job or has_default_run(job):
             continue
         steps = job.get("steps")
         if not isinstance(steps, list):
@@ -142,7 +160,7 @@ for path in workflow_files:
         for step in steps:
             if not isinstance(step, dict) or "run" not in step:
                 continue
-            if "if" in step or continue_on_error(step):
+            if "if" in step or "shell" in step or "working-directory" in step or continue_on_error(step):
                 continue
             wired |= wired_commands(step["run"])
 
