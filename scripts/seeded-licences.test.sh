@@ -805,9 +805,17 @@ if [ "$real_ok" -eq 1 ]; then
   check 0 "$EC" "a CRLF copy of the real lock passes ($OUT)"
   cp "$T/req-real.txt" "$D/requirements.txt"
   run "$D" LICENCES_SCOPE=all
+  check 0 "$EC" "control: scope all passes with the seeded exceptions (nodeenv is listed) ($OUT)"
+  cp "$D/.claude/licence-exceptions.txt" "$T/exc-real.txt"
+  grep -v '^nodeenv ' "$T/exc-real.txt" > "$D/.claude/licence-exceptions.txt"
+  check 0 "$(cmp -s "$T/exc-real.txt" "$D/.claude/licence-exceptions.txt"; echo $((1 - $?)))" "the probe exceptions file lost the nodeenv row"
+  run "$D" LICENCES_SCOPE=all
   check 1 "$EC" "real fastapi scaffold with scope all fails on a dev-only package"
   has "nodeenv@" "$OUT" "scope all names nodeenv"
   has "nodeenv@1" "$OUT" "scope all finding carries a version"
+  run "$D"
+  check 0 "$EC" "the same environment passes in prod scope without the nodeenv row ($OUT)"
+  cp "$T/exc-real.txt" "$D/.claude/licence-exceptions.txt"
   rm "$D/.claude/licence-exceptions.txt"
   run "$D"
   check 1 "$EC" "real fastapi scaffold without the exceptions file fails on certifi"
