@@ -10,3 +10,4 @@ No hook enforces these. Authenticate every route that reads or changes user data
 ## Git Workflow
 Branch from a fresh `main` (`git fetch -p`, `git pull --ff-only`).
 Fix a stale README or doc in the same change; `scripts/check-docs.sh` checks them.
+Before a push: `scripts/record-review.sh`.

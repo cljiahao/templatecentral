@@ -10,7 +10,7 @@
 #   A slice that moves fences into files edits moved.d/<slice>.tsv only. A deliberate snapshot change
 #   (a heading rename, a new fence, a reviewed content change) or a deleted fence is a human decision: set
 #   FENCE_SNAPSHOT_CHANGE_OK=1. CI sets it when the pull request carries the label
-#   `fence-snapshot-change`; add the label, then re-run the job (a label alone does not start a run).
+#   `fence-snapshot-change`; the workflow re-runs when the label is added or removed.
 # Exit 0 ok, 1 snapshot or deleted.d changed, 2 usage error.
 set -uo pipefail
 

@@ -49,6 +49,7 @@ case "$rel" in
   docs/CONSTITUTION.md|*/docs/CONSTITUTION.md) reason="binding invariants — changes affect every agent" ;;
   .claude/settings.json|*/.claude/settings.json|.claude/settings.local.json|*/.claude/settings.local.json) reason="harness config — an edit can silently disable hooks or add permissions" ;;
   .claude/hooks/*|*/.claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
+  .claude/agents/code-reviewer.md|*/.claude/agents/code-reviewer.md) reason="review gate reviewer definition — an edit can weaken the review the push gate relies on" ;;
   .claude/agents/*|*/.claude/agents/*) reason="agent definition — editing it can alter subagent tool access/behavior" ;;
   .mcp.json|*/.mcp.json) reason="MCP server config — editing it can register a malicious/exfiltrating server" ;;
   .claude/harness.json|*/.claude/harness.json|.claude/verify-harness.sh|*/.claude/verify-harness.sh|.claude/regen-harness.sh|*/.claude/regen-harness.sh|.claude/ci-gates.sh|*/.claude/ci-gates.sh|.claude/gates.txt|*/.claude/gates.txt) reason="harness integrity or CI gate script — an edit can defeat drift detection" ;;

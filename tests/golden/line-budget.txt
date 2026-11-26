@@ -1,18 +1,17 @@
 # path	max_lines	max_prose (- for non-leaf). Rows only shrink and none is added after the initial capture: a new file fits its class cap and takes no row. See check_file_line_budget in scripts/lint-skills.sh.
-add/ai-security/implementation.md	399	84
 add/auth/fastapi.md	408	69
 add/auth/nestjs.md	282	71
 add/auth/nextjs.md	363	79
 add/auth/vite-react.md	302	68
-add/database/python/beanie.md	360	64
-add/database/python/pymongo-async.md	238	58
-add/database/python/sqlalchemy-iam.md	266	50
-add/database/python/sqlalchemy.md	357	56
-add/database/typescript/nestjs-drizzle.md	288	58
-add/database/typescript/nestjs-kysely.md	207	68
-add/database/typescript/nestjs-mongoose.md	186	36
-add/database/typescript/nextjs-drizzle.md	186	54
-add/database/typescript/nextjs-kysely.md	208	47
+add/database/python/beanie.md	345	53
+add/database/python/pymongo-async.md	217	50
+add/database/python/sqlalchemy-iam.md	205	50
+add/database/python/sqlalchemy.md	341	50
+add/database/typescript/nestjs-drizzle.md	276	50
+add/database/typescript/nestjs-kysely.md	193	59
+add/database/typescript/nestjs-mongoose.md	180	36
+add/database/typescript/nextjs-drizzle.md	174	50
+add/database/typescript/nextjs-kysely.md	194	47
 add/endpoint/fastapi.md	165	35
 add/endpoint/nestjs.md	299	60
 add/endpoint/nextjs.md	180	39
