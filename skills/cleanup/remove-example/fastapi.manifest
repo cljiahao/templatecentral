@@ -1,0 +1,9 @@
+# Example code of a fastapi project. Rows: see remove-example.sh.
+delete	src/api/routers/example.py
+delete	src/api/schemas/request/example.py
+delete	src/api/schemas/response/example.py
+delete	src/api/services/example.py
+delete	test/test_api/test_example.py
+rmline	src/api/routes.py	from api.routers import example	-
+rmline	src/api/routes.py	router.include_router(example.router, tags=[APITags.EXAMPLE])	before
+rmline	src/api/tags.py	    EXAMPLE = "example"	-
