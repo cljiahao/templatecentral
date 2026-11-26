@@ -244,10 +244,11 @@ map_command() {
   return 1
 }
 
-# Print the children's CPU seconds (user + system) so far.
+# Set CPU_NOW to the children's CPU seconds (user + system) so far. `times` must run in this shell, not
+# in a $(...) subshell, which has no children of its own.
 child_cpu() {
   times >"$WORK/times"
-  awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub(/s/, "", a[2]); t += a[1] * 60 + a[2] } printf "%.3f", t }' "$WORK/times"
+  CPU_NOW=$(awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub(/s/, "", a[2]); t += a[1] * 60 + a[2] } printf "%.3f", t }' "$WORK/times")
 }
 
 # Run gate command $1 (stripped form), with base ref $2; return its exit status.
@@ -261,10 +262,12 @@ run_gate() {
     words[i]=${w//\{BASE\}/$2}
     i=$((i + 1))
   done
-  start=$(child_cpu)
+  child_cpu
+  start=$CPU_NOW
   (cd "$ROOT" && env "${words[@]}") </dev/null >"$WORK/gate.log" 2>&1
   status=$?
-  end=$(child_cpu)
+  child_cpu
+  end=$CPU_NOW
   cpu=$(awk -v a="$start" -v b="$end" 'BEGIN { printf "%.1f", b - a }')
   if [ "$status" -eq 0 ]; then
     printf 'PASS  %-60s %ss cpu\n' "$1" "$cpu"

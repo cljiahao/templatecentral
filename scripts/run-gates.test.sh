@@ -144,6 +144,19 @@ mk; put skills/a/x.md
 check 0 "$(rg --changed main)" "control_exit"
 check "a,b," "$(ran)" "control_selects_exactly_its_gates"
 has "$(out)" "summary: 2 gates run, 2 passed, 0 failed" "control_summary"
+# the CPU column counts the gate's own CPU seconds: a gate that burns CPU does not show 0.0s
+mk
+stub burn.sh <<'EOF'
+awk 'BEGIN { for (i = 0; i < 30000000; i++) x += i }'
+EOF
+printf '      - name: burn\n        run: bash scripts/burn.sh\n' >> "$R/.github/workflows/validate-skills.yml"
+{ printf 'skills/b/*\tbash scripts/burn.sh\n'; cat "$R/scripts/run-gates.map"; } > "$T/burn.map" && cp "$T/burn.map" "$R/scripts/run-gates.map"
+(cd "$R" && git add -A && git commit -q -m burn) || exit 2
+put skills/b/x.md
+check 0 "$(rg --changed main)" "burn_gate_exit"
+if [[ "$(out)" =~ PASS\ \ bash\ scripts/burn.sh\ +([0-9]+\.[0-9])s\ cpu ]]; then
+  if [[ "${BASH_REMATCH[1]}" != "0.0" ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: cpu_column_counts_gate_cpu — shows 0.0s"; fi
+else FAIL=$((FAIL + 1)); echo "FAIL: cpu_column_counts_gate_cpu — no PASS line for burn.sh"; fi
 # a gate never reads the caller's stdin: with a pipe full of input on the script, the gate still sees EOF
 rm -f "$RAN_LOG.stdin"; mk; put skills/a/x.md
 check 0 "$(yes | rg --changed main)" "stdin_piped_exit"
