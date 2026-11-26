@@ -33,7 +33,9 @@ cl_content_ok() {
   local LC_ALL=C
   local f=$1 line n=0 seen=0 rest t rule
   local re_blank='^[[:space:]]*$' re_first='^([A-Za-z0-9`[("'"'"']|#[0-9])'
-  local re_ord='^[0-9]+[.)]([[:space:]]|$)' re_span='^([^`]*)`[^`]*`(.*)$'
+  local bt re_ord='^[0-9]+[.)]([[:space:]]|$)' re_span
+  bt=$(printf '\x60')
+  re_span="^([^${bt}]*)${bt}[^${bt}]*${bt}(.*)\$"
   local re_alnum='[A-Za-z0-9]' re_html='<[A-Za-z/]'
   if [[ -L $f || ! -f $f ]]; then
     echo "fragment is not a regular file"; return 1

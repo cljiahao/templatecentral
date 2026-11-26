@@ -11,7 +11,8 @@
 #   may only be modified or added: deleted or type-changed fails. Each copy needs exactly one
 #   version line; minified JSON or a repeated key fails closed.
 #   Migration PR (the only CHANGELOG.md change empties "## [Unreleased]"): the same as a normal
-#   PR, and every entry removed from CHANGELOG.md is a line of an added fragment.
+#   PR, and every entry removed from CHANGELOG.md is a line of an added fragment (backticks are
+#   ignored in that comparison, so a fragment may wrap a stray < in them).
 #   Release PR (any other CHANGELOG.md change): the diff must be exactly what
 #   changelog-assemble.sh makes, plus the version bump. Rules, each reported by number when it
 #   fails:
@@ -123,7 +124,7 @@ while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
       bad "$label: $why"
       continue
     fi
-    cat "$work/frag" >> "$work/fragtext"
+    tr -d '`' < "$work/frag" >> "$work/fragtext"
     n_added=$((n_added + 1))
     continue
   fi
@@ -152,7 +153,7 @@ if [[ $cl_seen -eq 0 ]]; then
 fi
 
 # Migration PR: the only CHANGELOG.md change empties [Unreleased] into the added fragments.
-migration=0
+migration=0 bt=$(printf '\x60')
 if [[ $cl_seen -eq 1 && $cl_status == M && ! -s $work/entries && $n_added -ge 1 && $n_bad -eq 0 ]] \
   && git cat-file blob "$mb:CHANGELOG.md" > "$work/base" 2>/dev/null; then
   cl_unreleased_emptied "$work/base" > "$work/base.emptied"
@@ -162,7 +163,7 @@ if [[ $cl_seen -eq 1 && $cl_status == M && ! -s $work/entries && $n_added -ge 1 
     while IFS= read -r line; do
       t=${line#"${line%%[![:space:]]*}"}
       if [[ $t == '### '* ]]; then continue; fi
-      if ! grep -qxF -- "$line" "$work/fragtext"; then
+      if ! grep -qxF -- "${line//"$bt"/}" "$work/fragtext"; then
         bad "an entry removed from [Unreleased] is in no added fragment:"
         bad "  $(printable "${line:0:80}")"
       fi
