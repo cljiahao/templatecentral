@@ -29,6 +29,8 @@ NL='
 '
 TAB=$(printf '\t')
 stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
+# tmpnew <file>: creates a new empty file; fails when the name already exists, even as a dangling symlink, so a planted link is never written through.
+tmpnew() { [ ! -e "$1" ] && [ ! -L "$1" ] && ( set -C; : > "$1" ) 2>/dev/null; }
 src=${BASH_SOURCE[0]:-$0}
 hops=0
 while [ -L "$src" ] && [ "$hops" -lt 40 ]; do
@@ -232,6 +234,7 @@ $list
 TC_LIST
   [ -n "$body" ] || stop "no seeded file found in $TGT"
   tmp="$TGT/$mf.tmp.$$"
+  tmpnew "$tmp" || stop "cannot create $tmp: the name is taken"
   {
     printf '{\n  "templatecentral_version": "%s",\n  "stack": "%s",\n  "seeded_at": "%s",\n' "$ver" "$STACK" "$(date -u +%Y-%m-%d)"
     printf '  "adoWiki": %s,\n' "${TC_ADO_WIKI:-false}"
@@ -246,8 +249,10 @@ if [ "$PART" = finish ]; then
   WHAT="finish seeding"
   mf=.claude/harness.json
   if [ -L "$TGT/.claude" ] || [ -L "$TGT/$mf" ] || [ ! -f "$TGT/$mf" ]; then stop "$TGT/$mf is missing or a symlink: run kit Step E first"; fi
+  if [ -L "$TGT/.claude/.harness-base" ]; then stop "$TGT/.claude/.harness-base is a symlink, so the snapshot would be written outside the project"; fi
   for d in docs/CONSTITUTION.md FUTURE.md docs/harness.md; do
-    [ -f "$TGT/$d" ] || continue
+    [ -e "$TGT/$d" ] || [ -L "$TGT/$d" ] || continue
+    [ -f "$TGT/$d" ] || stop "cannot read $d: it is not a regular file"
     grep -nE '__TC_|\[Fill in' "$TGT/$d" >&2
     case $? in
       0) stop "$d still holds a placeholder (lines above): fill it in or delete it where it says so" ;;
@@ -263,14 +268,15 @@ if [ "$PART" = finish ]; then
   [ "$((want))" -eq "$((have))" ] || stop "$mf holds $((want)) \"path\" keys but $((have)) entries in the one-line shape: rewrite it with TC_PART=manifest"
   mapf="$TGT/$mf.map.$$"
   tmp="$TGT/$mf.tmp.$$"
-  : > "$mapf" || stop "cannot write $mapf"
+  tmpnew "$mapf" || stop "cannot create $mapf: the name is taken"
   found=0
   while IFS= read -r p; do
     case "/$p/" in
       //* | */../*) rm -f -- "$mapf"; stop "the path $p in $mf is absolute or holds a .. segment" ;;
     esac
-    [ -f "$TGT/$p" ] || continue
+    case "$p" in *"$TAB"*) rm -f -- "$mapf"; stop "the path $p in $mf holds a tab" ;; esac
     if [ -L "$TGT/$p" ]; then rm -f -- "$mapf"; stop "$TGT/$p is a symlink"; fi
+    if [ ! -f "$TGT/$p" ]; then echo "Skipped $p: not present in $TGT, so its entry keeps the old hash."; continue; fi
     h=$(sha "$TGT/$p") || { rm -f -- "$mapf"; stop "cannot hash $p"; }
     printf '%s\t%s\n' "$p" "$h" >> "$mapf" || { rm -f -- "$mapf"; stop "cannot write $mapf"; }
     found=$((found + 1))
@@ -278,6 +284,7 @@ if [ "$PART" = finish ]; then
 $paths
 TC_LIST
   [ "$found" -gt 0 ] || { rm -f -- "$mapf"; stop "none of the files $mf lists exists in $TGT"; }
+  tmpnew "$tmp" || { rm -f -- "$mapf"; stop "cannot create $tmp: the name is taken"; }
   # The map file is named by ARGV[1], so an empty map could never be mistaken for the manifest.
   awk -F'\t' 'FILENAME == ARGV[1] { h[$1] = $2; next }
     match($0, /"origin_hash": "[0-9a-f]*", "path": "/) {

@@ -1347,7 +1347,7 @@ check 1 "$([ ! -e "$T/fin-gone/.claude/.harness-base" ] && [ -z "$(find "$T/fin-
 # an entry in another shape is a stop, never a silent skip
 fin_copy "$T/fin-shape"; python3 -c 'import json, sys; j = json.load(open(sys.argv[1])); open(sys.argv[1], "w").write(json.dumps(j, indent=2) + "\n")' "$T/fin-shape/.claude/harness.json"
 out=$(fin_run "$T/fin-shape"); ec=$?
-check 1 "$([[ $ec -ne 0 && "$out" == *"one-line entry shape"* && ! -e "$T/fin-shape/.claude/.harness-base" ]] && echo 1 || echo 0)" "part_finish_pretty_printed_manifest_stops ($out)"
+check 1 "$([[ $ec -ne 0 && "$out" == *"one-line entry shape"* && ! -e "$T/fin-shape/.claude/.harness-base" ]] && [ -z "$(find "$T/fin-shape/.claude" -maxdepth 1 -name 'harness.json.*')" ] && echo 1 || echo 0)" "part_finish_pretty_printed_manifest_stops ($out)"
 fin_copy "$T/fin-mixed"; python3 -c '
 import sys
 p = sys.argv[1]; out = []
@@ -1359,14 +1359,14 @@ for l in open(p).read().split("\n"):
         out.append(l)
 open(p, "w").write("\n".join(out))' "$T/fin-mixed/.claude/harness.json"
 out=$(fin_run "$T/fin-mixed"); ec=$?
-check 1 "$([[ $ec -ne 0 && "$out" == *"\"path\" keys but"* && ! -e "$T/fin-mixed/.claude/.harness-base" ]] && echo 1 || echo 0)" "part_finish_mixed_shapes_stop ($out)"
+check 1 "$([[ $ec -ne 0 && "$out" == *"\"path\" keys but"* && ! -e "$T/fin-mixed/.claude/.harness-base" ]] && [ -z "$(find "$T/fin-mixed/.claude" -maxdepth 1 -name 'harness.json.*')" ] && echo 1 || echo 0)" "part_finish_mixed_shapes_stop ($out)"
 # a path that leaves the project is a stop before any copy
-for bad in '../escape-finish.txt' '/tmp/escape-finish.txt' 'a/../../escape-finish.txt'; do
+for bad in '../escape-finish.txt' '/tmp/escape-finish.txt' 'a/../../escape-finish.txt' 'a/..'; do
   fin_copy "$T/fin-esc"; rm -f "$T/escape-finish.txt"
   sed -i.bak "s|\"path\": \"AGENTS.md\"|\"path\": \"$bad\"|" "$T/fin-esc/.claude/harness.json"; rm -f "$T/fin-esc/.claude/harness.json.bak"
   : > "$T/escape-finish.txt"
   out=$(fin_run "$T/fin-esc"); ec=$?
-  check 1 "$([[ $ec -ne 0 && "$out" == *"absolute or holds a .. segment"* && ! -e "$T/fin-esc/.claude/.harness-base" ]] && echo 1 || echo 0)" "part_finish_escaping_path_stops[$bad] ($out)"
+  check 1 "$([[ $ec -ne 0 && "$out" == *"absolute or holds a .. segment"* && ! -e "$T/fin-esc/.claude/.harness-base" ]] && [ -z "$(find "$T/fin-esc/.claude" -maxdepth 1 -name 'harness.json.*')" ] && echo 1 || echo 0)" "part_finish_escaping_path_stops[$bad] ($out)"
   rm -f "$T/escape-finish.txt"
 done
 # no commit: the verifier is not run and the output says so; a parent repository's commit does not count
@@ -1386,6 +1386,46 @@ check 1 "$([[ $ec -ne 0 && "$out" == *"verify-harness.sh failed"* && "$out" == *
 fin_copy "$T/fin-control"; commit_fixture "$T/fin-control"
 out=$(fin_run "$T/fin-control"); ec=$?
 check 0 "$ec" "part_finish_verify_control: the same fixture without the edit passes ($out)"
+# temp files: a planted symlink at either name stops the run and is never written through; other names are the control
+leftover() { [ -z "$(find "$1/.claude" -maxdepth 1 -name 'harness.json.*')" ]; }
+for case_ in map tmp; do
+  fin_copy "$T/fin-link-$case_"; printf 'victim\n' > "$T/fin-link-$case_.victim"; cp "$T/fin-link-$case_.victim" "$T/fin-link-$case_.before"
+  out=$(bash -c 'ln -s "$1" "$2/.claude/harness.json.$4.$$"; exec env TC_STACK=nextjs TC_PART=finish bash "$3/tc-copy.sh" "$2"' _ "$T/fin-link-$case_.victim" "$T/fin-link-$case_" "$SHARED" "$case_" 2>&1); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"the name is taken"* ]] && cmp -s "$T/fin-link-$case_.victim" "$T/fin-link-$case_.before" && echo 1 || echo 0)" "part_finish_planted_symlink_${case_}_stops_and_target_unchanged ($out)"
+done
+fin_copy "$T/fin-link-ctl"; printf 'victim\n' > "$T/fin-link-ctl.victim"
+out=$(bash -c 'ln -s "$1" "$2/.claude/harness.json.map.0"; ln -s "$1" "$2/.claude/harness.json.tmp.0"; exec env TC_STACK=nextjs TC_PART=finish bash "$3/tc-copy.sh" "$2"' _ "$T/fin-link-ctl.victim" "$T/fin-link-ctl" "$SHARED" 2>&1); ec=$?
+check 0 "$ec" "part_finish_planted_symlink_control: links at other names do not matter ($out)"
+check 1 "$([ "$(cat "$T/fin-link-ctl.victim")" = victim ] && echo 1 || echo 0)" "part_finish_planted_symlink_control: the target is unchanged"
+# the manifest part refuses a taken temp name the same way
+fin_copy "$T/man-link"; rm -f "$T/man-link/.claude/harness.json"; printf 'victim\n' > "$T/man-link.victim"
+out=$(bash -c 'ln -s "$1" "$2/.claude/harness.json.tmp.$$"; exec env TC_STACK=nextjs TC_PART=manifest bash "$3/tc-copy.sh" "$2"' _ "$T/man-link.victim" "$T/man-link" "$SHARED" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"the name is taken"* ]] && [ "$(cat "$T/man-link.victim")" = victim ] && [ ! -e "$T/man-link/.claude/harness.json" ] && echo 1 || echo 0)" "part_manifest_planted_symlink_stops_and_target_unchanged ($out)"
+# a tab in a manifest path is a stop, not a silent skip
+fin_copy "$T/fin-tab"; cp "$T/fin-tab/.claude/harness.json" "$T/fin-tab.before"
+python3 -c 'import sys; p = sys.argv[1]; s = open(p).read(); open(p, "w").write(s.replace("\"path\": \"AGENTS.md\"", "\"path\": \"AGENTS.md\tx\"", 1))' "$T/fin-tab/.claude/harness.json"; cp "$T/fin-tab/.claude/harness.json" "$T/fin-tab.edited"
+out=$(fin_run "$T/fin-tab"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"holds a tab"* ]] && cmp -s "$T/fin-tab.edited" "$T/fin-tab/.claude/harness.json" && leftover "$T/fin-tab" && [ ! -e "$T/fin-tab/.claude/.harness-base" ] && echo 1 || echo 0)" "part_finish_tab_in_path_stops ($out)"
+# a listed file that is missing is named on one line and keeps its old hash
+fin_copy "$T/fin-skip"; rm -f "$T/fin-skip/lefthook.yml"
+out=$(fin_run "$T/fin-skip"); ec=$?
+check 1 "$([[ $ec -eq 0 && "$out" == *"Skipped lefthook.yml: not present"* ]] && echo 1 || echo 0)" "part_finish_missing_listed_file_is_named ($out)"
+fin_copy "$T/fin-noskip"; out=$(fin_run "$T/fin-noskip"); ec=$?
+check 1 "$([[ $ec -eq 0 && "$out" != *"Skipped "* ]] && echo 1 || echo 0)" "part_finish_no_skip_line_when_all_present ($out)"
+# a symlinked base-snapshot folder is a stop: cp would write through it
+fin_copy "$T/fin-base-link"; mkdir -p "$T/fin-base-link.outside"; ln -s "$T/fin-base-link.outside" "$T/fin-base-link/.claude/.harness-base"
+out=$(fin_run "$T/fin-base-link"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *".harness-base is a symlink"* && -z "$(find "$T/fin-base-link.outside" -type f)" ]] && echo 1 || echo 0)" "part_finish_base_snapshot_symlink_stops ($out)"
+# a doc path that is a directory is a stop (not a regular file); an unreadable doc is a stop through the grep status
+fin_copy "$T/fin-docdir"; rm -f "$T/fin-docdir/FUTURE.md"; mkdir "$T/fin-docdir/FUTURE.md"
+out=$(fin_run "$T/fin-docdir"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"not a regular file"* ]] && echo 1 || echo 0)" "part_finish_doc_directory_stops ($out)"
+fin_copy "$T/fin-docperm"; chmod 000 "$T/fin-docperm/FUTURE.md"
+if [ ! -r "$T/fin-docperm/FUTURE.md" ]; then
+  out=$(fin_run "$T/fin-docperm"); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"cannot read FUTURE.md"* ]] && echo 1 || echo 0)" "part_finish_unreadable_doc_stops ($out)"
+fi
+chmod 644 "$T/fin-docperm/FUTURE.md"
 # the line-count guard: an awk that prints nothing, or drops a line, must stop the run and leave harness.json byte-identical; a pass-through awk is the control
 realawk=$(command -v awk); mkdir -p "$T/stubawk"
 for mode in empty dropline passthrough; do
@@ -1400,7 +1440,7 @@ for mode in empty dropline passthrough; do
   if [ "$mode" = passthrough ]; then
     check 0 "$ec" "part_finish_awk_control: a pass-through awk finishes ($out)"
   else
-    check 1 "$([[ $ec -ne 0 && "$out" == *"does not have the lines of the original"* && "$out" == *"$STOPLINE"* ]] && cmp -s "$T/fin-awk-$mode.before" "$T/fin-awk-$mode/.claude/harness.json" && echo 1 || echo 0)" "part_finish_awk_${mode}_stops_and_keeps_the_manifest ($out)"
+    check 1 "$([[ $ec -ne 0 && "$out" == *"does not have the lines of the original"* && "$out" == *"$STOPLINE"* ]] && cmp -s "$T/fin-awk-$mode.before" "$T/fin-awk-$mode/.claude/harness.json" && [ -z "$(find "$T/fin-awk-$mode/.claude" -maxdepth 1 -name 'harness.json.*')" ] && echo 1 || echo 0)" "part_finish_awk_${mode}_stops_and_keeps_the_manifest ($out)"
   fi
 done
 # END finish_extra

@@ -41,7 +41,7 @@ TC_STACK=<stack> TC_PART=manifest TC_ADO_WIKI=<true|false> bash "<skill-dir>/sha
 
 ## Step E2. Base snapshot
 
-`TC_PART=finish` (Step G) mirrors every seeded file into `.claude/.harness-base/`, the as-seeded merge base `templatecentral:migrate` Phase 5 uses to 3-way-merge harness updates. Keep it tracked: it goes in with the first commit. A migration that needs the snapshot before Step G runs the same command.
+`TC_PART=finish` (Step G) mirrors every seeded file into `.claude/.harness-base/`, the as-seeded merge base `templatecentral:migrate` Phase 5 uses to 3-way-merge harness updates. Keep it tracked: it goes in with the first commit. A migration takes the snapshot at its own finish step (Phase 4 Step 4f-3), not earlier.
 
 ---
 

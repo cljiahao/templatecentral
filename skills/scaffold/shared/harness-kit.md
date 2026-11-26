@@ -64,7 +64,7 @@ TC_STACK=<stack> TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 
 A template file named `<name>.tmpl` is copied to `<name>` (the manifest lists the `.tmpl` source). Skill files ship that way (`SKILL.md.tmpl`), so no skill loader that scans the plugin registers a template skill.
 
-Substitute `<skill-dir>` and `<target>` as plain text inside the double quotes. A path holding `"`, `$`, a backtick or a backslash needs that character escaped (or single quotes around the whole path); the script never expands a path. Only a newline in a path is refused (`stop`): ask the user for another directory.
+Substitute `<skill-dir>` and `<target>` as plain text inside the double quotes. A path holding `"`, `$`, a backtick or a backslash needs that character escaped (or single quotes around the whole path); the script never expands a path. The only character the script refuses in a path is a newline (`stop`): ask the user for another directory.
 
 The script checks everything before the first write and writes nothing when a check fails. Every refusal and every failed copy ends with a `STOP:` line: do not `rm` or overwrite anything, report it to the user. A `No such file or directory` error for `tc-copy.sh` (a wrong `<skill-dir>`) also means stop: do not look for the script elsewhere.
 
