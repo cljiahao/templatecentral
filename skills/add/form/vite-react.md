@@ -4,8 +4,6 @@
 
 # Add a Form to Vite + React
 
-Validated form with React Hook Form, Zod and the `CustomFormField` widget.
-
 ## What the Template Provides
 
 | Dependency / Component | Location |
@@ -147,10 +145,5 @@ export function ContactPage() {
 
 ## Rules
 
-- Zod schemas live in `schemas/`, never inline.
-- Use `CustomFormField` for every field (label, errors, Controller wiring).
-- Wrap in `Form` from `@/components/ui/form` (re-exports `FormProvider`; `CustomFormField` uses `useFormContext()`).
-- Set `defaultValues` for all fields.
-- Use `toast.success()` / `toast.error()` from Sonner for feedback.
 - **Client-side validation is UX, not security** — the backend endpoint has to re-validate the same payload.
 - Complex validation (files, passwords, OWASP/CWE): `templatecentral:standards` (validation-patterns).
