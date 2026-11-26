@@ -60,11 +60,11 @@ TC_STACK=<stack> TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 | `finish` | Step G, after `tail` and the TS format pass | refuses while `docs/CONSTITUTION.md`, `FUTURE.md` or `docs/harness.md` holds a placeholder; re-hashes every `harness.json` entry, mirrors each seeded file into `.claude/.harness-base/` (the merge base for migrate Phase 5), and runs `verify-harness.sh` once the project has a commit |
 | `tail` | Step G, after the stack's `AGENTS.md` step | appends `template-tail/AGENTS-tail.md` to the project's `AGENTS.md` with the stack's typecheck command filled in; it writes nothing else |
 
-`settings`, `late` and `ci` with `TC_CI=github` or `TC_CI=azure` refuse unless the project's `lefthook.yml` is the one `base` copied for this `TC_STACK`, so run `base` first . `settings`, `late` and `tail` also refuse until `AGENTS.md` exists, which keeps them behind the verification gate and the format pass in every stack.
+`settings`, `late` and `ci` with `TC_CI=github` or `TC_CI=azure` refuse unless the project's `lefthook.yml` is the one `base` copied for this `TC_STACK`, so run `base` first. `settings`, `late` and `tail` also refuse until `AGENTS.md` exists, which keeps them behind the verification gate and the format pass in every stack.
 
 A template file named `<name>.tmpl` is copied to `<name>` (the manifest lists the `.tmpl` source). Skill files ship that way (`SKILL.md.tmpl`), so no skill loader that scans the plugin registers a template skill.
 
-Substitute `<skill-dir>` and `<target>` as plain text inside the double quotes; a path holding `"`, `$`, a backtick, a backslash or a newline needs another directory.
+Substitute `<skill-dir>` and `<target>` as plain text inside the double quotes. A path holding `"`, `$`, a backtick or a backslash needs that character escaped (or single quotes around the whole path); the script never expands a path. Only a newline in a path is refused (`stop`): ask the user for another directory.
 
 The script checks everything before the first write and writes nothing when a check fails. Every refusal and every failed copy ends with a `STOP:` line: do not `rm` or overwrite anything, report it to the user. A `No such file or directory` error for `tc-copy.sh` (a wrong `<skill-dir>`) also means stop: do not look for the script elsewhere.
 

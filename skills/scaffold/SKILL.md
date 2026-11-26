@@ -23,7 +23,7 @@ Full-stack → scaffold frontend and backend as two separate runs.
 
 Then settle the user's choices the later steps act on: `cat "<skill-dir>/shared/user-choices.md"` (`<skill-dir>` as in Step 2) lists them with their defaults.
 
-**Step 2** — Load the guide. `<skill-dir>` is this skill's own directory.
+**Step 2** — Load the guide. `<skill-dir>` is this skill's own directory as an absolute path, substituted as plain text; it is not a shell variable.
 
 ```bash
 cat "<skill-dir>/<stack>/source-files.md"

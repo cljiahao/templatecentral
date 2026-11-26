@@ -248,41 +248,60 @@ if [ "$PART" = finish ]; then
   if [ -L "$TGT/.claude" ] || [ -L "$TGT/$mf" ] || [ ! -f "$TGT/$mf" ]; then stop "$TGT/$mf is missing or a symlink: run kit Step E first"; fi
   for d in docs/CONSTITUTION.md FUTURE.md docs/harness.md; do
     [ -f "$TGT/$d" ] || continue
-    if grep -nE '__TC_|\[Fill in' "$TGT/$d" >&2; then stop "$d still holds a placeholder (lines above): fill it in or delete it where it says so"; fi
+    grep -nE '__TC_|\[Fill in' "$TGT/$d" >&2
+    case $? in
+      0) stop "$d still holds a placeholder (lines above): fill it in or delete it where it says so" ;;
+      1) ;;
+      *) stop "cannot read $d" ;;
+    esac
   done
   sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 -- "$1"; else sha256sum -- "$1"; fi | cut -d' ' -f1; }
   paths=$(sed -n 's/^ *"[^"]*": { "origin_hash": "[0-9a-f]*", "path": "\([^"]*\)" },\{0,1\}$/\1/p' "$TGT/$mf")
-  [ -n "$paths" ] || stop "$TGT/$mf lists no seeded file"
-  map=""
+  [ -n "$paths" ] || stop "$TGT/$mf lists no seeded file in the one-line entry shape"
+  want=$(grep -o '"path":' "$TGT/$mf" | wc -l)
+  have=$(printf '%s\n' "$paths" | wc -l)
+  [ "$((want))" -eq "$((have))" ] || stop "$mf holds $((want)) \"path\" keys but $((have)) entries in the one-line shape: rewrite it with TC_PART=manifest"
+  mapf="$TGT/$mf.map.$$"
+  tmp="$TGT/$mf.tmp.$$"
+  : > "$mapf" || stop "cannot write $mapf"
+  found=0
   while IFS= read -r p; do
+    case "/$p/" in
+      //* | */../*) rm -f -- "$mapf"; stop "the path $p in $mf is absolute or holds a .. segment" ;;
+    esac
     [ -f "$TGT/$p" ] || continue
-    if [ -L "$TGT/$p" ]; then stop "$TGT/$p is a symlink"; fi
-    h=$(sha "$TGT/$p") || stop "cannot hash $p"
-    map="$map$p$TAB$h$NL"
+    if [ -L "$TGT/$p" ]; then rm -f -- "$mapf"; stop "$TGT/$p is a symlink"; fi
+    h=$(sha "$TGT/$p") || { rm -f -- "$mapf"; stop "cannot hash $p"; }
+    printf '%s\t%s\n' "$p" "$h" >> "$mapf" || { rm -f -- "$mapf"; stop "cannot write $mapf"; }
+    found=$((found + 1))
   done <<TC_LIST
 $paths
 TC_LIST
-  tmp="$TGT/$mf.tmp.$$"
-  printf '%s' "$map" | awk -F'\t' 'NR == FNR { h[$1] = $2; next }
+  [ "$found" -gt 0 ] || { rm -f -- "$mapf"; stop "none of the files $mf lists exists in $TGT"; }
+  # The map file is named by ARGV[1], so an empty map could never be mistaken for the manifest.
+  awk -F'\t' 'FILENAME == ARGV[1] { h[$1] = $2; next }
     match($0, /"origin_hash": "[0-9a-f]*", "path": "/) {
       rest = substr($0, RSTART + RLENGTH); p = substr(rest, 1, index(rest, "\"") - 1)
       if (p in h) $0 = substr($0, 1, RSTART - 1) "\"origin_hash\": \"" h[p] "\", \"path\": \"" p substr(rest, length(p) + 1)
-    } { print }' - "$TGT/$mf" > "$tmp" || { rm -f -- "$tmp"; stop "re-hashing $mf failed"; }
-  mv -- "$tmp" "$TGT/$mf" || { rm -f -- "$tmp"; stop "writing $TGT/$mf failed"; }
+    } { print }' "$mapf" "$TGT/$mf" > "$tmp" || { rm -f -- "$mapf" "$tmp"; stop "re-hashing $mf failed"; }
+  rm -f -- "$mapf"
+  if [ "$(wc -l < "$tmp")" -ne "$(wc -l < "$TGT/$mf")" ] || [ ! -s "$tmp" ]; then rm -f -- "$tmp"; stop "the re-hashed $mf does not have the lines of the original: $mf is unchanged"; fi
   n=0
   while IFS= read -r p; do
     [ -f "$TGT/$p" ] || continue
-    mkdir -p -- "$TGT/.claude/.harness-base/$(dirname -- "$p")" || stop "cannot create the snapshot folder for $p"
-    cp -- "$TGT/$p" "$TGT/.claude/.harness-base/$p" || stop "cannot mirror $p into .claude/.harness-base/"
+    mkdir -p -- "$TGT/.claude/.harness-base/$(dirname -- "$p")" || { rm -f -- "$tmp"; stop "cannot create the snapshot folder for $p"; }
+    cp -- "$TGT/$p" "$TGT/.claude/.harness-base/$p" || { rm -f -- "$tmp"; stop "cannot mirror $p into .claude/.harness-base/"; }
     n=$((n + 1))
   done <<TC_LIST
 $paths
 TC_LIST
+  mv -- "$tmp" "$TGT/$mf" || { rm -f -- "$tmp"; stop "writing $TGT/$mf failed"; }
   echo "Re-hashed $mf and mirrored $n files into .claude/.harness-base/."
-  if (cd "$TGT" && git rev-parse --verify -q HEAD >/dev/null 2>&1); then
-    (cd "$TGT" && bash .claude/verify-harness.sh) || stop "verify-harness.sh failed (output above)"
+  top=$(cd "$TGT" && git rev-parse --show-toplevel 2>/dev/null)
+  if [ "$top" = "$real" ] && (cd "$TGT" && git rev-parse --verify -q HEAD >/dev/null 2>&1); then
+    (cd "$TGT" && bash .claude/verify-harness.sh) || stop "verify-harness.sh failed (output above); $mf and .claude/.harness-base are already rewritten, so fix the cause and rerun this part, which is safe"
   else
-    echo "verify-harness.sh not run: the project has no commit yet (run it after the first commit)."
+    echo "verify-harness.sh not run: the project has no commit of its own yet (run it after the first commit)."
   fi
   exit 0
 fi
