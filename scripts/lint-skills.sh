@@ -247,12 +247,12 @@ check_skillmd_description_length() {
   # utility SKILL.md files without name: are loading stubs, not displayed. TIMELESS.
   header "SKILL.md description length (<=150 chars)"
   # Measured in bash, not awk: ${#desc} counts characters, while BSD awk length() counts bytes.
-  local bad="" f desc
-  for f in "$SKILLS_DIR"/*/SKILL.md; do
-    grep -q '^name:' "$f" || continue
+  local bad="" f rel desc
+  while IFS= read -r rel; do
+    f="$SKILLS_DIR/$rel"
     desc=$(grep -m1 '^description:' "$f" | sed 's/^description:[[:space:]]*//')
-    [[ ${#desc} -gt 150 ]] && bad+="$f (${#desc} chars)"$'\n'
-  done
+    if [[ ${#desc} -gt 150 ]]; then bad+="$f (${#desc} chars)"$'\n'; fi
+  done < <(registered_skillmds)
   report "${bad%$'\n'}" \
     "SKILL.md description exceeds 150 chars — shorten it so it displays fully in the skill picker" \
     "All registered SKILL.md descriptions <=150 chars"
@@ -275,8 +275,51 @@ check_ref_file_headers() {
   done < <(ref_md_files)
   [[ "$n" -gt 0 ]] || bad+="$SKILLS_DIR: no reference .md file found — the header check scanned nothing"$'\n'
   report "${bad%$'\n'}" \
-    "Ref file missing <!-- ref: --> on line 1 — add a ref header following CONVENTIONS.md §2" \
+    "Ref file missing <!-- ref: --> on line 1 — add a ref header following CONVENTIONS.md §4" \
     "All ref files have <!-- ref: --> headers"
+}
+
+# skillmd_states — the one reader of a depth-1 SKILL.md's frontmatter (line 1 `---` to the next `---`,
+# trailing spaces, tabs and CR ignored so a CRLF file still registers and then fails the CR rule). One line
+# per file, "<state><TAB><path>": reg (closed, has name:), bigfm:<N> (registered, N lines over the cap of 7:
+# 2 required fields plus the 5 optional ones in CONVENTIONS §3; the largest real one has 2),
+# unclosed-reg / unclosed-none (opened, never closed: an error either way), none (not registered).
+skillmd_states() {
+  local f st
+  for f in "$SKILLS_DIR"/*/SKILL.md; do
+    [[ -f "$f" ]] || continue
+    st=$(awk -v max=7 '
+      { sub(/[ \t\r]+$/, "") }
+      NR == 1 { if ($0 != "---") { s = "none"; exit } next }
+      /^---$/ { closed = 1; exit }
+      /^name:/ { named = 1 }
+      { n++ }
+      END {
+        if (NR == 0) print "none"
+        else if (s != "") print s
+        else if (!closed) print (named ? "unclosed-reg" : "unclosed-none")
+        else if (!named) print "none"
+        else if (n > max) print "bigfm:" n
+        else print "reg"
+      }' "$f")
+    printf '%s\t%s\n' "$st" "${f#"$SKILLS_DIR"/}"
+  done
+}
+
+# registered_skillmds — the one predicate for a registered skill (CONVENTIONS §1), read by the description
+# check, the body check and the line budget. An unclosed frontmatter with name: counts as registered so
+# no check gets weaker; the line budget fails it on its own.
+registered_skillmds() {
+  skillmd_states | awk -F'\t' '$1 == "reg" || $1 == "unclosed-reg" || $1 ~ /^bigfm:/ { print $2 }'
+}
+
+# line_budget_roots — the template roots the line budget skips: a real directory named template or
+# template-*, with a template.manifest beside it (CONVENTIONS §1). Any other directory of that name is scanned.
+line_budget_roots() {
+  local d
+  (cd "$SKILLS_DIR" 2>/dev/null && find . -type d \( -name template -o -name 'template-*' \) -prune -print) | while IFS= read -r d; do
+    if [[ -f "$SKILLS_DIR/${d%/*}/template.manifest" ]]; then printf '%s\n' "$d"; fi
+  done
 }
 
 check_skillmd_body_length() {
@@ -284,17 +327,167 @@ check_skillmd_body_length() {
   # A long body bloats the skill picker tooltip and forces agents to read unnecessary prose
   # before they can delegate to the appropriate ref file.
   header "SKILL.md body length (<=30 lines)"
-  local bad
-  bad=$(awk '
-    function flush() { if (f != "" && registered && NR_f - fm_end > 30) print f " (" NR_f - fm_end " lines)" }
-    FNR == 1 { flush(); f = FILENAME; registered = 0; dashes = 0; fm_end = 0 }
-    { NR_f = FNR }
-    /^name:/ { registered = 1 }
-    /^---$/ && ++dashes == 2 { fm_end = FNR }
-    END { flush() }' "$SKILLS_DIR"/*/SKILL.md)
+  local bad="" f files=()
+  while IFS= read -r f; do
+    if [[ -n "$f" ]]; then files+=("$SKILLS_DIR/$f"); fi
+  done < <(registered_skillmds)
+  if [[ ${#files[@]} -gt 0 ]]; then
+    bad=$(awk '
+      function flush() { if (f != "" && NR_f - fm_end > 30) print f " (" NR_f - fm_end " lines)" }
+      FNR == 1 { flush(); f = FILENAME; dashes = 0; fm_end = 0 }
+      { NR_f = FNR }
+      /^---$/ && ++dashes == 2 { fm_end = FNR }
+      END { flush() }' "${files[@]}")
+  fi
   report "$bad" \
     "SKILL.md body exceeds 30 lines — move prose into an implementation.md ref file" \
     "All registered SKILL.md bodies <=30 lines"
+}
+
+check_file_line_budget() {
+  # Everything under skills/ is scanned; only a template root (line_budget_roots) is skipped. Every
+  # markdown file (.md, .markdown, .mdx) has a line cap by class (classify below is the one place the
+  # class comes from the path); a name that is not lowercase .md fails. A file over its cap passes only
+  # through its own exact-path row in tests/golden/line-budget.txt (path<TAB>max_lines<TAB>max_prose, `-`
+  # for max_prose on a non-leaf); every file under add/ and migrate/ except a stack router and a registered
+  # SKILL.md also has 50 prose lines outside fences. A SKILL.md that registered_skillmds lists stays with
+  # check_skillmd_body_length (its frontmatter is capped here: 7 lines, closed); every other SKILL.md is
+  # capped at 12. Any symlink, hidden directory or skill.md in another letter case outside a template root, or a carriage return, fails. A row may only shrink
+  # and none is born after the initial capture: scripts/check-line-budget-frozen.sh compares it with the
+  # base ref. TIMELESS.
+  # Not caught: text quality; growth that stays under a file's own limit; any file in a template root
+  # (a real template directory beside a template.manifest; the template checks list its files); files with
+  # another extension.
+  header "file line budget"
+  local ratchet files links roots input out
+  case "$SKILLS_DIR" in */*) ratchet=${SKILLS_DIR%/*} ;; *) ratchet=. ;; esac
+  ratchet="$ratchet/tests/golden/line-budget.txt"
+  files=$( (cd "$SKILLS_DIR" 2>/dev/null && find . -type f) || true)
+  files=$(LC_ALL=C sort <<<"$files")
+  links=$( (cd "$SKILLS_DIR" 2>/dev/null && find . -type l) || true)
+  roots=$(line_budget_roots)
+  input=$(registered_skillmds | sed 's/^/@reg:/'; skillmd_states | awk -F'\t' '$1 ~ /^(bigfm|unclosed)/ { print "@fm:" $1 "\t" $2 }'
+    sed '/^$/d; s/^/@root:/' <<<"$roots"; sed '/^$/d; s/^/@link:/' <<<"$links"; cat <<<"$files")
+  if ! out=$(awk -v root="$SKILLS_DIR" -v ratchet="$ratchet" '
+    function bad(m) { print m }
+    function row_error(s, f,   n, k, a, i) {
+      n = split(s, f, "\t")
+      if (n != 3) return "needs exactly 3 tab-separated columns"
+      if (f[1] !~ "^[A-Za-z0-9._/-]+[.]md$") return "path must be A-Za-z0-9._/- ending in .md, no spaces"
+      k = split(f[1], a, "/")
+      for (i = 1; i <= k; i++) if (a[i] == "" || a[i] == "." || a[i] == "..") return "path has an empty, . or .. segment"
+      if (f[2] !~ "^[1-9][0-9]*$") return "max_lines must be a positive integer"
+      if (f[3] !~ "^([1-9][0-9]*|-)$") return "max_prose must be a positive integer or -"
+      return ""
+    }
+    function load_row(s,   e, f) {
+      nrows++
+      if (s ~ /^#/) return
+      e = row_error(s, f)
+      if (e != "") { bad(ratchet ":" nrows ": malformed row [" s "]: " e " — fix or delete the row"); return }
+      if (f[1] in lim) { bad(ratchet ":" nrows ": duplicate row for " f[1] " — delete one"); return }
+      lim[f[1]] = f[2] + 0; prs[f[1]] = f[3]; rowno[f[1]] = nrows
+    }
+    function fence_line(s,   sp, ch, len) {
+      sp = match(s, /[^ ]/) - 1
+      if (sp < 0 || sp > 3) return 0
+      ch = substr(s, sp + 1, 1)
+      if (ch != "`" && ch != "~") return 0
+      len = 0
+      while (substr(s, sp + 1 + len, 1) == ch) len++
+      if (len < 3) return 0
+      FCH = ch; FRUN = len; FREST = substr(s, sp + len + 1)
+      return 1
+    }
+    function in_root(p,   r) {
+      for (r in roots) if (index(p, r "/") == 1) return 1
+      return 0
+    }
+    function classify(p,   n, a, base, top) {
+      n = split(p, a, "/"); base = a[n]; top = a[1]; LEAF = 0
+      if (p == "CONVENTIONS.md") return 150
+      if (base == "SKILL.md") return ((p in regd) ? 0 : 12)
+      if (p == "add/database/python.md" || p == "add/database/typescript.md" || p == "migrate/nextjs-backend-extraction.md") return 40
+      if (p == "standards/validation-patterns/patterns.md" || p == "standards/code-standards/comments.md") return 60
+      if (top == "add" || top == "migrate") { LEAF = 1; return 150 }
+      if (top == "scaffold" && ((a[2] == "shared" && n == 3) || base == "source-files.md")) return 120
+      if (top == "standards" && (a[2] == "code-standards" || a[2] == "validation-patterns" || a[2] == "drift-check" || a[2] == "full-stack-pairing")) return 120
+      return 150
+    }
+    BEGIN {
+      r = (getline s < ratchet)
+      if (r < 0) bad(ratchet ": missing — the line budget has no allowance file")
+      else if (r == 0) bad(ratchet ": empty — restore it from git")
+      else { load_row(s); while ((getline s < ratchet) > 0) load_row(s) }
+      close(ratchet)
+    }
+    /^@reg:/ { regd[substr($0, 6)] = 1; next }
+    /^@root:/ { p = substr($0, 7); sub(/^\.\//, "", p); roots[p] = 1; next }
+    /^@fm:/ {
+      split(substr($0, 5), a, "\t")
+      if (a[1] ~ /^bigfm:/) bad(a[2] ": frontmatter is " substr(a[1], 7) " lines, limit 7 — keep name, description and the optional fields of CONVENTIONS.md §3")
+      else bad(a[2] ": frontmatter has no closing --- line — close it, or remove the opening ---")
+      next
+    }
+    /^@link:/ {
+      p = substr($0, 7); sub(/^\.\//, "", p)
+      if (!in_root(p)) bad(p ": is a symbolic link — nothing under skills/ may be a symlink outside a template root; replace it with a real file or directory")
+      next
+    }
+    $0 != "" {
+      p = $0; sub(/^\.\//, "", p)
+      if (in_root(p)) next
+      n = split(p, seg, "/")
+      for (i = 1; i < n; i++) if (seg[i] ~ /^[.]/) {
+        hd = seg[1]; for (j = 2; j <= i; j++) hd = hd "/" seg[j]
+        if (!(hd in hidden)) { hidden[hd] = 1; bad(hd ": hidden directory under skills/ — nothing outside a template root may live in one; remove it or move its files") }
+        break
+      }
+      if (tolower(seg[n]) == "skill.md" && seg[n] != "SKILL.md") { bad(p ": must be named SKILL.md — rename the file"); next }
+      if (tolower(p) !~ /[.](md|markdown|mdx)$/) next
+      if (p !~ /[.]md$/) { bad(p ": markdown files under skills/ must be named *.md in lowercase — rename the file"); next }
+      nfiles++; seen[p] = 1
+      path = root "/" p
+      nl = 0; prose = 0; infence = 0; fcnt = 0; hascr = 0
+      while ((r = (getline s < path)) > 0) {
+        nl++
+        if (index(s, "\r") > 0) hascr = 1
+        if (infence) {
+          if (fence_line(s) && FCH == och && FRUN >= olen && FREST ~ /^[ \t]*$/) infence = 0
+          else if (s !~ /^[ \t]*$/) fcnt++
+        } else if (fence_line(s) && !(FCH == "`" && index(FREST, "`") > 0)) {
+          infence = 1; och = FCH; olen = FRUN; fcnt = 0
+        } else if (s !~ /^[ \t]*$/) prose++
+      }
+      close(path)
+      if (r < 0) { bad(p ": cannot read the file — fix its permissions"); next }
+      if (infence) prose += fcnt
+      if (hascr) bad(p ": contains a carriage return — convert it to LF line endings")
+      cap = classify(p)
+      if (cap == 0) {
+        if (p in lim) bad(ratchet ":" rowno[p] ": row for registered " p " — delete it; its body is capped by the SKILL.md body check")
+        next
+      }
+      limit = cap; plimit = 50
+      if (p in lim) {
+        used[p] = 1; limit = lim[p]
+        if (LEAF && prs[p] == "-") bad(ratchet ":" rowno[p] ": " p " is an add/migrate leaf — max_prose must be a number")
+        else if (!LEAF && prs[p] != "-") bad(ratchet ":" rowno[p] ": " p " is not a leaf — max_prose must be -")
+        else if (LEAF) plimit = prs[p] + 0
+      }
+      if (nl > limit) bad(p ": " nl " lines, limit " limit " — cut the file; never raise its row in tests/golden/line-budget.txt")
+      if (LEAF && prose > plimit) bad(p ": " prose " prose lines outside fences, limit " plimit " — cut the file; never raise its row in tests/golden/line-budget.txt")
+    }
+    END {
+      for (p in lim) if (!(p in seen)) bad(ratchet ":" rowno[p] ": row for " p ", which is no file under skills/ or sits in a template tree — delete the row")
+      if (nfiles == 0) bad(root ": no .md file found — the line budget scanned nothing")
+    }' <<<"$input" 2>&1); then
+    out="line budget scanner failed: $out"
+  fi
+  out=$(LC_ALL=C sort <<<"$out")
+  report "$out" \
+    "A skill file is over its line budget — cut the file; the allowance in tests/golden/line-budget.txt only shrinks" \
+    "Every skill file is within its line budget"
 }
 
 check_nesting_depth() {
@@ -2275,6 +2468,7 @@ check_owasp_llm_sections_complete
 check_skillmd_description_length
 check_ref_file_headers
 check_skillmd_body_length
+check_file_line_budget
 check_nesting_depth
 check_seeded_skills_scope_tools
 check_no_unscoped_bash_grant

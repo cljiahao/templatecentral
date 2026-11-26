@@ -302,6 +302,24 @@ jobs:
           FENCE_SNAPSHOT_CHANGE_OK: ${{ contains(github.event.pull_request.labels.*.name, 'fence-snapshot-change') && '1' || '' }}
         run: bash scripts/check-fences-frozen.sh "origin/$BASE_REF"
 
+  line-budget-frozen:
+    name: Line-budget allowance unchanged
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Fail when a line-budget allowance grew
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          bash scripts/check-line-budget-frozen.test.sh
+          bash scripts/check-line-budget-frozen.sh "origin/$BASE_REF"
+
   token-count:
     name: Scaffold load size
     runs-on: ubuntu-24.04
