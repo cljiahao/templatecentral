@@ -6,10 +6,10 @@
 # code fed to an interpreter on stdin or from a heredoc (python3 <<EOF, node - <<EOF), argument shapes where the word after git is not the
 # subcommand (os.execvp('git', [...]), ['git'] + [...], Deno {args: [...]}, sh.git.commit(...)), file-by-file removal (os.remove loops,
 # Path.rmdir, os.removedirs), a secret name with no leading dot or slash inside inline code when the file does not exist, a shell reached
-# through a program not known as a wrapper (busybox sh, $SHELL, ssh host sh, docker exec -i c sh, kubectl exec), a command built at run time from a file or
+# through a program not known as a wrapper ($SHELL, ssh host sh, docker exec -i c sh, kubectl exec), a command built at run time from a file or
 # variable (sh ./x.sh, sh -c "$CMD"), an alias or shell function defined earlier, a binary that calls git itself, edits made outside the agent, runners other than the listed interpreters (npx tsx -e), and a removal target built by a call (path.join(root, 'src')) or an aliased import (from shutil import rmtree as r).
 # Everything else on the list below is judged. An unreadable shape (xargs handing a placeholder to sh -c) with a forbidden token anywhere in the command is blocked.
-# Wrappers judged: sudo doas env nice ionice nohup setsid time timeout stdbuf xargs command exec builtin, alone or stacked; quoted and backslash-escaped tokens count as written.
+# Shells judged: sh bash zsh dash ksh ash busybox sh. Wrappers judged: sudo doas env nice ionice nohup setsid time timeout stdbuf xargs command exec builtin, alone or stacked; quoted and backslash-escaped tokens count as written.
 # A shell in command position that the guard sees fed from a pipe, here-string, heredoc, `-s` or process substitution is blocked outright
 # (even `echo hi | sh`), also behind the wrappers sudo, command, exec, nohup, time, nice, builtin, env, timeout, stdbuf, xargs and uv/poetry/pipenv/pdm run,
 # a leading FOO=1, ( ) or { }, and with a trailing redirect or comment. xargs sh script passes (the shell gets arguments); xargs sh -c with no readable string is blocked.
@@ -32,6 +32,8 @@ case $cmd in *'<<'*) cmd=$(printf '%s\n' "$cmd" | awk '
     if (match(l, /<<-?[[:space:]]*["\047]?[A-Za-z_][A-Za-z0-9_]*/)) {
       w = substr(l, RSTART, RLENGTH); tabs = (w ~ /^<<-/); sub(/^<<-?[[:space:]]*["\047]?/, "", w); inh = 1 } }') ;;
 esac
+# A backslash-newline continues the command line, so a flag on the next line is part of it.
+cmd=${cmd//\\$'\n'/}
 # cut200 <text>: at most 200 bytes, never inside a UTF-8 sequence, in any locale and with any awk (same ucut as every other hook cap).
 cut200() { S=$1 LC_ALL=C awk 'function ucut(s, n) { if (length(s) <= n) return s; s = substr(s, 1, n); sub(/[\300-\337]$/, "", s); sub(/[\340-\357][\200-\277]?$/, "", s); sub(/[\360-\367]([\200-\277]([\200-\277])?)?$/, "", s); return s } BEGIN { printf "%s", ucut(ENVIRON["S"], 200) }' || printf 'BLOCKED'; }
 # block <message>: message capped at 200 bytes.
@@ -141,12 +143,13 @@ protected_branch() {
   [[ "$b" =~ ^($protected)$ ]] && echo "$b"
 }
 
-# Unwrap bash -c/eval, unquote single words, mask other quoted text as Q; double quotes first so an apostrophe cannot swallow flags.
+# Empty quote pairs glued to a word vanish in the shell (--no-ver""ify, -""n), so they go first; a lone empty argument stays; then bash -c/eval is unwrapped for every POSIX-style shell on the allow-list, single words are unquoted, mask other quoted text as Q; double quotes first so an apostrophe cannot swallow flags.
 # A quoted word holding a shell operator stays masked: its pipe, semicolon or redirect is text, not syntax ('x|sh', "a|bash").
 sq="'"
 scan=$(printf '%s' "$cmd" | sed -E \
-  -e "s/(^|[[:space:];&|(])(bash|sh|zsh|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+\"([^\"]*)\"/\1 \4 /g" \
-  -e "s/(^|[[:space:];&|(])(bash|sh|zsh|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+${sq}([^${sq}]*)${sq}/\1 \4 /g" \
+  -e "s/([^[:space:]])\"\"/\1/g" -e "s/\"\"([^[:space:]])/\1/g" -e "s/([^[:space:]])${sq}${sq}/\1/g" -e "s/${sq}${sq}([^[:space:]])/\1/g" \
+  -e "s/(^|[[:space:];&|(])(bash|sh|zsh|dash|ksh|ash|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+\"([^\"]*)\"/\1 \4 /g" \
+  -e "s/(^|[[:space:];&|(])(bash|sh|zsh|dash|ksh|ash|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+${sq}([^${sq}]*)${sq}/\1 \4 /g" \
   -e "s/\"([^\"${sq}[:space:]|;\&<>()]+)\"/\1/g" -e "s/\"[^\"]*\"/ Q /g" \
   -e "s/${sq}([^${sq}[:space:]|;\&<>()]+)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g" \
   -e 's/\\([A-Za-z0-9_.-])/\1/g')
@@ -162,7 +165,7 @@ wrap="(${asg}[[:space:]]+)*((/[^[:space:]]*/)?(${wnames}|xargs)${wargs}[[:space:
 # Shells fed from a pipe, stdin, here-string, heredoc or process substitution hide their commands from this guard; the shell must be the command word, not an argument (grep sh < f).
 # Runs on the scan, where quoted text cannot contribute operators; a trailing backslash or pipe joins the next line. Behind a pipe the shell may be followed by flags, redirects or a comment; xargs hands the shell its arguments, not stdin, so only xargs sh -c with no readable string is judged.
 blind_shell() {
-  local w='\\?(/[^[:space:]]*/)?(bash|sh|zsh|dash|ksh)' f='([[:space:]]+-[^[:space:]]+)*' joined tl xa
+  local w='\\?(/[^[:space:]]*/)?(bash|sh|zsh|dash|ksh|ash|busybox[[:space:]]+sh)' f='([[:space:]]+-[^[:space:]]+)*' joined tl xa
   tl='([[:space:]]+#.*|[[:space:]]*([0-9]*>>?[[:space:]]*[^[:space:]]*|[0-9]*>&[0-9-]*|&>[^[:space:]]*))*[[:space:]]*($|[;&|)}])'
   xa="(/[^[:space:]]*/)?xargs${wargs}[[:space:]]+"
   # Only a newline or a trailing backslash changes the text; the awk is skipped for a plain single line.
@@ -182,7 +185,7 @@ fi
 # A shell or interpreter reached through xargs runs text this guard cannot see (xargs -I{} sh -c '{}'); with a forbidden token anywhere in the command that shape is blocked.
 norm=$(printf '%s' "$cmd" | tr -d "\\\\\"'" | tr '[:upper:]' '[:lower:]')
 if [[ "$norm" =~ (^|[^a-z0-9_-])xargs([[:space:]]|$) ]] \
-  && [[ "$norm" =~ (^|[^a-z0-9_-])(bash|sh|zsh|dash|ksh|eval|python[0-9.]*|node|perl|ruby)[[:space:]]+-[a-z]*[cep]([[:space:]]|$) ]] \
+  && [[ "$norm" =~ (^|[^a-z0-9_-])(bash|sh|zsh|dash|ksh|ash|eval|python[0-9.]*|node|perl|ruby)[[:space:]]+-[a-z]*[cep]([[:space:]]|$) ]] \
   && rx 'no-veri|hookspath|lefthook(_exclude)?=|git[[:space:]]+([^;&|]*[[:space:]])?(commit|push)[^;&|]*[[:space:]]-[a-z]*n' "$norm"; then
   block "xargs hands text to a shell or interpreter this guard cannot read, and the command names a hook bypass (--no-verify, -n, core.hooksPath, LEFTHOOK). Run the git command directly."
 fi

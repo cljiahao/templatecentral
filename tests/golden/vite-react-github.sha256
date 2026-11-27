@@ -11,7 +11,8 @@ eb8cf70089062a9c297309be2b2e20f0240223feff1fe1eb5e188b371539f1b6  .claude/change
 7f468ec04debaa70989ed1c65771d06d89a5ab7a61b9becb6fbc3b77e4f6f0d0  .claude/gate-budget.conf
 5f01d143115a3a5bc1d6e6d122709d9db50566dcc37f6bbdc4000d8445573548  .claude/gate-budget.sh
 2af8fd1d186e4cc9e4046dc6236365be1625ee89b96513610d4a427a0be7b999  .claude/gates.txt
-8cbde5c8f859458cfb9cc5b58056f7909e7fb9bc747da603e0648233f175b464  .claude/hooks/block-no-verify.sh
+1d9faff0aba57e9d1224737e01e5570912bc46f892619dc74334a8d4938b5f63  .claude/hooks/block-no-verify.sh
+df9f0dc77d7e984976416c81507f0642ca29371636671851d579aa020e0befe5  .claude/hooks/block-no-verify.sh.full
 23c76185d22e65b7667096ed17d2982d96d7b9a36fec8408a2896547c8ca5465  .claude/hooks/post-edit-comment-check.sh
 8de078a5759a301c6a8929305356bdc592213269f87898a4892206ab4ec6721f  .claude/hooks/post-edit-typecheck.sh
 87c8d1d09eab10038f1c8393cf4665bf0436717d0ec8b8bdc76e5b4866ec13c4  .claude/hooks/protect-files.sh

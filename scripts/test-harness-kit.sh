@@ -409,6 +409,17 @@ echo hi | exec sh
 echo hi | builtin sh
 xargs sh < f
 xargs bash -s
+git commit --no-ver""ify -m x
+git commit --no-ver''ify -m x
+git commit -""n -m x
+dash -c 'git commit -n -m x'
+ksh -c 'git commit -n -m x'
+ash -c 'git commit --no-verify -m x'
+busybox sh -c 'git commit -n -m x'
+echo hi | dash
+echo hi | ksh
+echo hi | ash
+echo hi | busybox sh
 CASES
 
 while IFS= read -r c; do
@@ -457,12 +468,24 @@ echo hi | command ls
 echo hi | exec ls
 echo hi | builtin ls
 echo hi | xargs sh script.sh
+git commit -m "fix --no-verify docs"
+echo --no-verify
+git push -n
+git commit -m ""
+git commit -m ''
+ls | xargs -I{} sh -c 'echo {}'
+echo hi | dash script.sh
+dash -c 'git status'
 git merge feat
 git rebase main
 grep -rn "no-verify" docs
 git commit -m "Q"
 node -e "console.log(1)"
 CASES
+
+expect_bash 2 $'git commit -m x \\\n--no-verify'
+expect_bash 2 $'git commit -m x \\\n  -n'
+expect_bash 0 $'git commit -m x \\\n  -m y'
 
 # The verdict must not depend on the machine: a missing JSON reader blocks, an unwritable TMPDIR does not open the gate, and a 70 KB command is judged whole.
 # The TMPDIR cases are regression guards, not a mutant check: on bash 3.2 a here-string ignores TMPDIR and falls back to /tmp, so no environment variable breaks it; the here-string lint is the mutant check.

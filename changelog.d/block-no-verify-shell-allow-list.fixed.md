@@ -1,0 +1,1 @@
+- `block-no-verify.sh` now sees `git commit --no-ver""ify`, `-""n`, a flag on a backslash-newline continuation line, and `dash -c`, `ksh -c`, `ash -c` and `busybox sh` shells. Empty quote pairs are dropped, continuations are joined, and the shells come from one allow-list.
