@@ -2007,7 +2007,7 @@ check_seeded_pipefail_readers() {
   fi
   local py out hits anchors a missing="" scan_list expected scanned
   read -r -d '' py <<'PY' || true
-import os, re, sys
+import json, os, re, sys
 
 
 WHY = "the reader can exit before the writer finishes, so under pipefail a real match reads as no match; use a here-string, a temp file, a case match or a reader that reads to the end"
@@ -2365,32 +2365,133 @@ def sets_pipefail(text):
     return False
 
 
+KEY_ALT = "|".join(KEYS)
+KEY_RE = re.compile(r"^( *)(?:-\s+)*([\"']?)(?:" + KEY_ALT + r")\2\s*:(?:\s+(.*))?$")
+LOOSE_RE = re.compile(r"(?:^|[{,\[]|^\s*[-?]\s)\s*[\"']?(?:" + KEY_ALT + r")[\"']?\s*:|^\s*(?:-\s+)*\?\s+[\"']?(?:" + KEY_ALT + r")")
+HEADER_RE = re.compile(r"^(?:[&!][^\s]*\s+)*[|>](?:[1-9][-+]?|[-+][1-9]?)?\s*(?:#.*)?$")
+COMMENT_RE = re.compile(r"^\s*(?:#.*)?$")
+
+
+def indent_of(row):
+    return len(row) - len(row.lstrip(" "))
+
+
+def scalar_text(val):
+    if val.startswith('"'):
+        end = 1
+        while end < len(val):
+            if val[end] == "\\":
+                end += 2
+                continue
+            if val[end] == '"':
+                break
+            end += 1
+        else:
+            return None
+        rest = val[end + 1:].strip()
+        if rest and not rest.startswith("#"):
+            return None
+        try:
+            return json.loads(val[: end + 1])
+        except ValueError:
+            return None
+    if val.startswith("'"):
+        end = 1
+        while end < len(val):
+            if val[end] == "'":
+                if val[end + 1:end + 2] == "'":
+                    end += 2
+                    continue
+                break
+            end += 1
+        else:
+            return None
+        rest = val[end + 1:].strip()
+        if rest and not rest.startswith("#"):
+            return None
+        return val[1:end].replace("''", "'")
+    if val[:1] in "[{*&!@`%" or val.startswith(("? ", "- ")):
+        return None
+    cut = val.find(" #")
+    return val if cut < 0 else val[:cut].rstrip()
+
+
 def yaml_blocks(text):
-    rows = text.split("\n")
-    out, numbers = [], []
+    rows = [r.rstrip("\r") for r in text.split("\n")]
+    out, numbers, problems = [], [], []
+
+    def refuse(k, why):
+        problems.append((k + 1, "yaml form not understood (%s); scripts in it were not checked" % why))
+
     k = 0
-    key_re = re.compile(r"^(\s*)(?:-\s+)?(" + "|".join(KEYS) + r"):\s*(.*)$")
     while k < len(rows):
-        m = key_re.match(rows[k])
-        if not m:
+        row = rows[k]
+        m = KEY_RE.match(row)
+        if re.match(r"^ *\t", row):
+            refuse(k, "a tab in the indentation")
             k += 1
             continue
-        indent, val = len(m.group(1)), m.group(3).strip()
-        if re.match(r"^[|>][-+]?\s*(#.*)?$", val):
+        if not m:
+            if LOOSE_RE.search(row):
+                refuse(k, "a script key in flow, complex or inline form")
             k += 1
-            while k < len(rows) and (rows[k].strip() == "" or len(rows[k]) - len(rows[k].lstrip()) > indent):
+            continue
+        indent = indent_of(row)
+        val = (m.group(3) or "").strip()
+        body_start = k + 1
+        if val == "" or val.startswith("#"):
+            j = body_start
+            while j < len(rows) and COMMENT_RE.match(rows[j]):
+                j += 1
+            if j < len(rows) and indent_of(rows[j]) > indent and re.match(r"^\s*[|>]", rows[j]) and HEADER_RE.match(rows[j].strip()):
+                k = j
+                val = rows[j].strip()
+            else:
+                lines = []
+                while j < len(rows) and (rows[j].strip() == "" or indent_of(rows[j]) > indent):
+                    lines.append((j, rows[j]))
+                    j += 1
+                if not any(t.strip() for _, t in lines):
+                    refuse(k, "a script key with no value")
+                    k += 1
+                    continue
+                for n, t in lines:
+                    out.append(t.strip())
+                    numbers.append(n + 1)
+                out.append("")
+                numbers.append(j)
+                k = j
+                continue
+        if HEADER_RE.match(val):
+            k += 1
+            while k < len(rows) and (rows[k].strip() == "" or indent_of(rows[k]) > indent):
                 out.append(rows[k])
                 numbers.append(k + 1)
                 k += 1
             out.append("")
             numbers.append(k)
-        else:
-            out.append(val)
-            numbers.append(k + 1)
-            out.append("")
-            numbers.append(k + 1)
+            continue
+        txt = scalar_text(val)
+        if txt is None:
+            refuse(k, "a quoted, flow or alias value that does not end on its line")
             k += 1
-    return out, numbers
+            continue
+        k += 1
+        cont = []
+        while k < len(rows) and rows[k].strip() != "" and indent_of(rows[k]) > indent and not COMMENT_RE.match(rows[k]):
+            cont.append(k)
+            k += 1
+        if cont:
+            if val[:1] in "\"'":
+                refuse(cont[0] - 1, "a quoted value that continues on the next line")
+            for n in cont:
+                out.append(rows[n].strip())
+                numbers.append(n + 1)
+        out.insert(len(out) - len(cont), txt)
+        numbers.insert(len(numbers) - len(cont), cont[0] if cont else k)
+        out.append("")
+        numbers.append(k)
+    return out, numbers, problems
 
 
 def scan(path):
@@ -2398,8 +2499,11 @@ def scan(path):
         text = fh.read()
     if not sets_pipefail(text):
         return [], [], False
+    yaml_problems = []
     if path.endswith((".yml", ".yaml")):
-        rows, numbers = yaml_blocks(text)
+        rows, numbers, yaml_problems = yaml_blocks(text)
+        if not rows:
+            return [], yaml_problems, True
         body = "\n".join(rows) + "\n"
         per_char = []
         for r, no in zip(rows, numbers):
@@ -2413,7 +2517,7 @@ def scan(path):
                 no += 1
     p = Parser(body, per_char)
     p.run()
-    return p.hits, p.problems, True
+    return p.hits, yaml_problems + p.problems, True
 
 
 def main():

@@ -1483,6 +1483,28 @@ pf_unclosed_quote() { pf_script 'set -uo pipefail' "echo 'never closed"; }
 pf_yaml_run() { printf 'steps:\n  - run: |\n      set -o pipefail\n      printf x | grep -q x\n' > "$S/$PF_YAML"; }
 pf_yaml_clean() { printf 'steps:\n  - run: |\n      set -o pipefail\n      grep -q x <<< "%s"\n' "\$v" > "$S/$PF_YAML"; }
 pf_yaml_other_key() { printf 'steps:\n  - name: printf x | grep -q x\n    run: |\n      set -o pipefail\n      echo ok\n' > "$S/$PF_YAML"; }
+pf_yaml_plain_cont() { printf 'steps:\n  - run:\n      set -o pipefail; printf x | grep -q x\n' > "$S/$PF_YAML"; }
+pf_yaml_plain_cont_clean() { printf 'steps:\n  - run:\n      set -o pipefail; grep -q x file\n' > "$S/$PF_YAML"; }
+pf_yaml_quoted_key() { printf 'steps:\n  - "run": |\n      set -o pipefail\n      printf x | grep -q x\n' > "$S/$PF_YAML"; }
+pf_yaml_quoted_key_clean() { printf 'steps:\n  - "run": |\n      set -o pipefail\n      grep -q x file\n' > "$S/$PF_YAML"; }
+pf_yaml_indent_ind() { printf 'steps:\n  - run: |2\n      set -o pipefail\n      printf x | grep -q x\n' > "$S/$PF_YAML"; }
+pf_yaml_tagged() { printf 'steps:\n  - run: !!str |\n      set -o pipefail\n      printf x | grep -q x\n' > "$S/$PF_YAML"; }
+pf_yaml_anchored() { printf 'steps:\n  - run: &r |\n      set -o pipefail\n      printf x | grep -q x\n' > "$S/$PF_YAML"; }
+pf_yaml_comment_after_key() { printf 'steps:\n  - run: # note\n      set -o pipefail; printf x | grep -q x\n' > "$S/$PF_YAML"; }
+pf_yaml_header_next_line() { printf 'steps:\n  - run:\n      # note\n      |\n      set -o pipefail\n      printf x | grep -q x\n' > "$S/$PF_YAML"; }
+pf_yaml_sibling_between() { printf 'steps:\n  - run: |\n      set -o pipefail\n      echo ok\n    env:\n      A: x\n  - run: |\n      printf x | grep -q x\n' > "$S/$PF_YAML"; }
+pf_yaml_sibling_before() { printf 'steps:\n  - name: build\n    env:\n      A: x\n    run: |\n      set -o pipefail\n      printf x | grep -q x\n' > "$S/$PF_YAML"; }
+pf_yaml_dq_scalar() { printf 'steps:\n  - run: "set -o pipefail; printf x | grep -q x"\n' > "$S/$PF_YAML"; }
+pf_yaml_dq_scalar_clean() { printf 'steps:\n  - run: "set -o pipefail; grep -q x file"\n' > "$S/$PF_YAML"; }
+pf_yaml_sq_scalar() { printf "steps:\n  - run: 'set -o pipefail; printf x | grep -q x'\n" > "$S/$PF_YAML"; }
+pf_yaml_crlf() { printf 'steps:\r\n  - run: |\r\n      set -o pipefail\r\n      printf x | grep -q x\r\n' > "$S/$PF_YAML"; }
+pf_yaml_crlf_clean() { printf 'steps:\r\n  - run: |\r\n      set -o pipefail\r\n      grep -q x file\r\n' > "$S/$PF_YAML"; }
+pf_yaml_flow() { printf 'steps:\n  - {name: a, run: "set -o pipefail; printf x | grep -q x"}\n' > "$S/$PF_YAML"; }
+pf_yaml_tab() { printf 'steps:\n\t- run: |\n\t\t\tset -o pipefail\n' > "$S/$PF_YAML"; }
+pf_yaml_alias() { printf 'steps:\n  - run: *cmd\n  - name: set -o pipefail\n' > "$S/$PF_YAML"; }
+pf_yaml_dq_multiline() { printf 'steps:\n  - run: "set -o pipefail;\n      printf x | grep -q x"\n' > "$S/$PF_YAML"; }
+pf_yaml_empty_key() { printf 'steps:\n  - run:\n  - name: set -o pipefail\n' > "$S/$PF_YAML"; }
+pf_yaml_complex_key() { printf 'steps:\n  - ? run\n    : |\n      set -o pipefail\n      printf x | grep -q x\n' > "$S/$PF_YAML"; }
 pf_drop_anchor_pipefail() { sed -i.bak 's/pipefail//' "$SH/template/.lefthook/commit-msg.sh"; }
 pf_delete_anchor() { rm -f "$SH/template/.lefthook/commit-msg.sh"; }
 fails pipefail_reader_grep_q "$H_PF" pf_grep_q "zz-pipefail-fixture.sh:3: pipe into grep"
@@ -1564,6 +1586,28 @@ pfd pipefail_reader_pipe_inside_heredoc_body pf_heredoc_body clean
 pfd pipefail_reader_pipe_inside_comment pf_comment clean
 pfd pipefail_reader_yaml_clean_block pf_yaml_clean clean
 pfd pipefail_reader_yaml_non_script_key pf_yaml_other_key clean
+pfd pipefail_reader_yaml_plain_continuation pf_yaml_plain_cont "3: pipe into grep"
+pfd pipefail_reader_yaml_plain_continuation_clean pf_yaml_plain_cont_clean clean
+pfd pipefail_reader_yaml_quoted_key pf_yaml_quoted_key "4: pipe into grep"
+pfd pipefail_reader_yaml_quoted_key_clean pf_yaml_quoted_key_clean clean
+pfd pipefail_reader_yaml_indent_indicator pf_yaml_indent_ind "4: pipe into grep"
+pfd pipefail_reader_yaml_tag_before_header pf_yaml_tagged "4: pipe into grep"
+pfd pipefail_reader_yaml_anchor_before_header pf_yaml_anchored "4: pipe into grep"
+pfd pipefail_reader_yaml_comment_after_key pf_yaml_comment_after_key "3: pipe into grep"
+pfd pipefail_reader_yaml_header_on_next_line pf_yaml_header_next_line "6: pipe into grep"
+pfd pipefail_reader_yaml_sibling_between_blocks pf_yaml_sibling_between "8: pipe into grep"
+pfd pipefail_reader_yaml_sibling_before_key pf_yaml_sibling_before "7: pipe into grep"
+pfd pipefail_reader_yaml_double_quoted_scalar pf_yaml_dq_scalar "2: pipe into grep"
+pfd pipefail_reader_yaml_double_quoted_scalar_clean pf_yaml_dq_scalar_clean clean
+pfd pipefail_reader_yaml_single_quoted_scalar pf_yaml_sq_scalar "2: pipe into grep"
+pfd pipefail_reader_yaml_crlf_block pf_yaml_crlf "4: pipe into grep"
+pfd pipefail_reader_yaml_crlf_block_clean pf_yaml_crlf_clean clean
+pfd pipefail_reader_yaml_flow_mapping_fails pf_yaml_flow "2: yaml form not understood"
+pfd pipefail_reader_yaml_tab_indent_fails pf_yaml_tab "2: yaml form not understood"
+pfd pipefail_reader_yaml_alias_fails pf_yaml_alias "2: yaml form not understood"
+pfd pipefail_reader_yaml_multiline_quoted_fails pf_yaml_dq_multiline "2: yaml form not understood"
+pfd pipefail_reader_yaml_key_without_value_fails pf_yaml_empty_key "2: yaml form not understood"
+pfd pipefail_reader_yaml_complex_key_fails pf_yaml_complex_key "2: yaml form not understood"
 pfd pipefail_reader_behind_xargs pf_xargs "3: pipe into grep"
 pfd pipefail_reader_behind_timeout pf_timeout "3: pipe into grep"
 pfd pipefail_reader_behind_stdbuf pf_stdbuf "3: pipe into grep"

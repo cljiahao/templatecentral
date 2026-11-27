@@ -1,0 +1,1 @@
+- The seeded pipefail lint reads YAML script keys in every plain, quoted, anchored, tagged and CRLF form, and fails on a form it does not understand (flow mapping, alias, tab indent, multi-line quote, key with no value) instead of skipping the script.
