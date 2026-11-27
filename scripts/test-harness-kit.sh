@@ -394,6 +394,21 @@ setsid git commit --no-verify -m x
 sudo env nice git commit --no-verify -m x
 sudo doas nice ionice setsid nohup git commit -n -m x
 bash -c 'doas setsid git commit -n -m x'
+echo hi | sudo sh
+echo hi | doas sh
+echo hi | env sh
+echo hi | nice sh
+echo hi | ionice sh
+echo hi | nohup sh
+echo hi | setsid sh
+echo hi | time sh
+echo hi | timeout sh
+echo hi | stdbuf sh
+echo hi | command sh
+echo hi | exec sh
+echo hi | builtin sh
+xargs sh < f
+xargs bash -s
 CASES
 
 while IFS= read -r c; do
@@ -428,6 +443,20 @@ echo "LEFTHOOK is cool"
 echo 'git status' | xargs -I{} sh -c '{}'
 doas git status
 sudo env nice git log -n 3
+echo hi | sudo ls
+echo hi | doas ls
+echo hi | env ls
+echo hi | nice ls
+echo hi | ionice ls
+echo hi | nohup ls
+echo hi | setsid ls
+echo hi | time ls
+echo hi | timeout ls
+echo hi | stdbuf ls
+echo hi | command ls
+echo hi | exec ls
+echo hi | builtin ls
+echo hi | xargs sh script.sh
 git merge feat
 git rebase main
 grep -rn "no-verify" docs

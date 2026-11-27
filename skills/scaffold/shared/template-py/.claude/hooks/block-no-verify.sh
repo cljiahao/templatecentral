@@ -31,16 +31,19 @@ in_cwd=${parsed%%$'\n'*}
 cmd=${parsed#*$'\n'}
 [ -n "$in_cwd" ] && orig_dir=$in_cwd
 [ -z "$cmd" ] && exit 0
-# Drop heredoc bodies so commit-message text is not scanned as a command; the opening line is still scanned.
-cmd=$(printf '%s\n' "$cmd" | awk '
+# Drop heredoc bodies so commit-message text is not scanned as a command; the opening line is still scanned. Text without << has none, so awk is skipped.
+case $cmd in *'<<'*) cmd=$(printf '%s\n' "$cmd" | awk '
   inh { t = $0; if (tabs) sub(/^\t+/, "", t); if (t == w) inh = 0; next }
   { print; l = $0; gsub(/<<</, "", l)
     if (match(l, /<<-?[[:space:]]*["\047]?[A-Za-z_][A-Za-z0-9_]*/)) {
-      w = substr(l, RSTART, RLENGTH); tabs = (w ~ /^<<-/); sub(/^<<-?[[:space:]]*["\047]?/, "", w); inh = 1 } }')
+      w = substr(l, RSTART, RLENGTH); tabs = (w ~ /^<<-/); sub(/^<<-?[[:space:]]*["\047]?/, "", w); inh = 1 } }') ;;
+esac
 # cut200 <text>: at most 200 bytes, never inside a UTF-8 sequence, in any locale and with any awk (same ucut as every other hook cap).
 cut200() { S=$1 LC_ALL=C awk 'function ucut(s, n) { if (length(s) <= n) return s; s = substr(s, 1, n); sub(/[\300-\337]$/, "", s); sub(/[\340-\357][\200-\277]?$/, "", s); sub(/[\360-\367]([\200-\277]([\200-\277])?)?$/, "", s); return s } BEGIN { printf "%s", ucut(ENVIRON["S"], 200) }' || printf 'BLOCKED'; }
 # block <message>: message capped at 200 bytes.
 block() { echo "$(cut200 "BLOCKED: $1")" >&2; exit 2; }
+# rx <ere> <text>: grep -qE on one line without a fork; text with a newline still goes through grep, which matches per line.
+rx() { case $2 in *$'\n'*) printf '%s\n' "$2" | grep -qE -- "$1" ;; *) [[ $2 =~ $1 ]] ;; esac; }
 # words <text>: splits on blanks into the array tw through a pipe, not a here-string, whose temp file can fail to open and read as empty.
 words() { read -ra tw < <(printf '%s\n' "$1"); }
 protected='main|uat|develop'
@@ -168,12 +171,16 @@ blind_shell() {
   local w='\\?(/[^[:space:]]*/)?(bash|sh|zsh|dash|ksh)' f='([[:space:]]+-[^[:space:]]+)*' joined tl xa
   tl='([[:space:]]+#.*|[[:space:]]*([0-9]*>>?[[:space:]]*[^[:space:]]*|[0-9]*>&[0-9-]*|&>[^[:space:]]*))*[[:space:]]*($|[;&|)}])'
   xa="(/[^[:space:]]*/)?xargs${wargs}[[:space:]]+"
-  joined=$(printf '%s\n' "$scan" | awk '{ if (buf != "") $0 = buf " " $0; if ($0 ~ /\\$/) { sub(/\\$/, ""); buf = $0; next } if ($0 ~ /\|[ \t]*$/) { buf = $0; next } print; buf = "" } END { if (buf != "") print buf }')
-  printf '%s\n' "$joined" | grep -qE "\\|[[:space:]]*([({][[:space:]]*)?${wrap_nx}${w}${f}${tl}" ||
-    printf '%s\n' "$joined" | grep -qE "\\|[[:space:]]*([({][[:space:]]*)?${wrap_nx}${xa}${w}${f}[[:space:]]+-[A-Za-z]*c${tl}" ||
-    printf '%s\n' "$joined" | grep -qE "${cpos}${wrap}${w}${f}[[:space:]]*<" ||
-    printf '%s\n' "$joined" | grep -qE "${cpos}${wrap}${w}${f}[[:space:]]+(-[A-Za-z]*s[A-Za-z]*|-)([[:space:]]|\$)" ||
-    printf '%s\n' "$joined" | grep -qE "${cpos}(source|\\.)[[:space:]]+<\\("
+  # Only a newline or a trailing backslash changes the text; the awk is skipped for a plain single line.
+  case $scan in
+    *$'\n'*|*\\) joined=$(printf '%s\n' "$scan" | awk '{ if (buf != "") $0 = buf " " $0; if ($0 ~ /\\$/) { sub(/\\$/, ""); buf = $0; next } if ($0 ~ /\|[ \t]*$/) { buf = $0; next } print; buf = "" } END { if (buf != "") print buf }') ;;
+    *) joined=$scan ;;
+  esac
+  rx "\\|[[:space:]]*([({][[:space:]]*)?${wrap_nx}${w}${f}${tl}" "$joined" ||
+    rx "\\|[[:space:]]*([({][[:space:]]*)?${wrap_nx}${xa}${w}${f}[[:space:]]+-[A-Za-z]*c${tl}" "$joined" ||
+    rx "${cpos}${wrap}${w}${f}[[:space:]]*<" "$joined" ||
+    rx "${cpos}${wrap}${w}${f}[[:space:]]+(-[A-Za-z]*s[A-Za-z]*|-)([[:space:]]|\$)" "$joined" ||
+    rx "${cpos}(source|\\.)[[:space:]]+<\\(" "$joined"
 }
 if blind_shell; then
   block "a shell fed from a pipe, stdin, here-string, heredoc or process substitution hides its commands from this guard. Run the commands directly."
@@ -182,7 +189,7 @@ fi
 norm=$(printf '%s' "$cmd" | tr -d "\\\\\"'" | tr '[:upper:]' '[:lower:]')
 if [[ "$norm" =~ (^|[^a-z0-9_-])xargs([[:space:]]|$) ]] \
   && [[ "$norm" =~ (^|[^a-z0-9_-])(bash|sh|zsh|dash|ksh|eval|python[0-9.]*|node|perl|ruby)[[:space:]]+-[a-z]*[cep]([[:space:]]|$) ]] \
-  && printf '%s\n' "$norm" | grep -qE 'no-veri|hookspath|lefthook(_exclude)?=|git[[:space:]]+([^;&|]*[[:space:]])?(commit|push)[^;&|]*[[:space:]]-[a-z]*n'; then
+  && rx 'no-veri|hookspath|lefthook(_exclude)?=|git[[:space:]]+([^;&|]*[[:space:]])?(commit|push)[^;&|]*[[:space:]]-[a-z]*n' "$norm"; then
   block "xargs hands text to a shell or interpreter this guard cannot read, and the command names a hook bypass (--no-verify, -n, core.hooksPath, LEFTHOOK). Run the git command directly."
 fi
 # Inline interpreter code is judged as text: the interpreter must be in command position, so a commit message or grep pattern naming python -c is not code; then quotes and brackets become spaces and the checks below treat it as a command line.
@@ -211,13 +218,13 @@ interp_secret() {
 # Hook-layer bypass via environment or a persisted alias/config (whole-command checks).
 lower_cmd=$(printf '%s' "$cmd" | tr '[:upper:]' '[:lower:]')
 lh='(^|[^A-Za-z0-9_])LEFTHOOK(_EXCLUDE)?'
-if { printf '%s' "$scan" | grep -qE "${lh}=" || printf '%s' "$interp" | grep -qE "$lh"; } && printf '%s' "$scan" | grep -qE '(^|[^A-Za-z0-9_-])git([[:space:]]|$)'; then
+if { rx "${lh}=" "$scan" || rx "$lh" "$interp"; } && rx '(^|[^A-Za-z0-9_-])git([[:space:]]|$)' "$scan"; then
   block "LEFTHOOK=0 / LEFTHOOK_EXCLUDE disables the pre-commit hook layer — the same bypass as --no-verify. Fix the failure instead."
 fi
-if printf '%s' "$lower_cmd" | grep -qE 'git_config_(parameters|key_[0-9]+)' && printf '%s' "$lower_cmd" | grep -q 'hookspath'; then
+if rx 'git_config_(parameters|key_[0-9]+)' "$lower_cmd" && rx 'hookspath' "$lower_cmd"; then
   block "GIT_CONFIG_* overriding core.hooksPath disables the git-hook layer. Fix the failure instead."
 fi
-if printf '%s' "$lower_cmd" | grep -q 'alias\.' && printf '%s' "$lower_cmd" | grep -q 'no-verify'; then
+if rx 'alias\.' "$lower_cmd" && rx 'no-verify' "$lower_cmd"; then
   block "a git alias wrapping --no-verify is the same bypass as --no-verify. Fix the failure instead."
 fi
 
@@ -258,7 +265,7 @@ collect_dirs() {
   done < <(printf '%s\n' "$segments")
 }
 # `name() { … }` defines a function whose body may cd where this check cannot follow.
-printf '%s' "$scan" | grep -qE '(^|[^A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*\(\)' && redir=1
+rx '(^|[^A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*\(\)' "$scan" && redir=1
 settled=0
 for _ in 1 2 3 4; do
   before=${#cand[@]}
@@ -363,7 +370,7 @@ while IFS= read -r seg; do
       done
       branch=$(protected_branch)
       if [ -n "$branch" ]; then
-        if printf '%s' "$scan" | grep -qE 'git[[:space:]]+(checkout[[:space:]]+(-[bB]|--orphan)|switch[[:space:]]+(-[cC]|--create))'; then
+        if rx 'git[[:space:]]+(checkout[[:space:]]+(-[bB]|--orphan)|switch[[:space:]]+(-[cC]|--create))' "$scan"; then
           block "commit chained after a branch switch while '$branch' is checked out. Run 'git checkout -b <name>' alone first, then run 'git commit' as a separate command."
         fi
         block "direct commit to protected branch '$branch'. Run 'git checkout -b <feature-branch>' first, then commit again."
@@ -408,14 +415,14 @@ srcnames='src|app|lib|test|\.claude|\.lefthook|\.git|node_modules'
 srcdirs="(^|[[:space:]/\"])(${srcnames})([[:space:]/\"]|\$)"
 # rm_src <text>: rm -rf on a guarded directory in one text; run on the raw command, on the unwrapped scan (sh -c "rm -rf src") and on each segment of inline code.
 rm_src() {
-  printf '%s\n' "$1" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && printf '%s\n' "$1" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && printf '%s\n' "$1" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && printf '%s\n' "$1" | grep -qE "$srcdirs"
+  rx '(^|[[:space:]])rm([[:space:]]|$)' "$1" && rx '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' "$1" && rx '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' "$1" && rx "$srcdirs" "$1"
 }
 # interp_removes: inline code calls a recursive remover (shutil.rmtree, fs.rmSync with recursive, FileUtils.rm_rf) whose target is a guarded directory.
 interp_removes() {
   local tgt="[[:space:]]+(\\./)?(${srcnames})(/|[[:space:]]|\$)"
-  printf '%s\n' "$interp_norm" | grep -qE "(rmtree|rimraf|rm_rf|rm_r|remove_entry|remove_dir|removeSync|emptyDirSync)${tgt}" && return 0
-  printf '%s\n' "$interp_norm" | grep -q 'recursive' || return 1
-  printf '%s\n' "$interp_norm" | grep -qE "(rmSync|rmdirSync|fs\\.rm|rmdir)${tgt}"
+  rx "(rmtree|rimraf|rm_rf|rm_r|remove_entry|remove_dir|removeSync|emptyDirSync)${tgt}" "$interp_norm" && return 0
+  rx 'recursive' "$interp_norm" || return 1
+  rx "(rmSync|rmdirSync|fs\\.rm|rmdir)${tgt}" "$interp_norm"
 }
 if rm_src "$cmd" || rm_src "$scan_shell"; then
   block "recursive rm on a source directory. Confirm with a human first."

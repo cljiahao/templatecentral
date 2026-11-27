@@ -1481,7 +1481,7 @@ pf_heredoc_body() { printf '#!/usr/bin/env bash\nset -uo pipefail\ncat <<EOF\npr
 pf_comment() { pf_script 'set -uo pipefail' '# printf x | grep -q x'; }
 pf_unclosed_quote() { pf_script 'set -uo pipefail' "echo 'never closed"; }
 pf_yaml_run() { printf 'steps:\n  - run: |\n      set -o pipefail\n      printf x | grep -q x\n' > "$S/$PF_YAML"; }
-pf_yaml_clean() { printf 'steps:\n  - run: |\n      set -o pipefail\n      printf "%%s\\n" "$v" | grep x >/dev/null\n' > "$S/$PF_YAML"; }
+pf_yaml_clean() { printf '%s\n' 'steps:' '  - run: |' '      set -o pipefail' $'      printf "%s\\n" "$v" | grep x >/dev/null' > "$S/$PF_YAML"; }
 pf_yaml_other_key() { printf 'steps:\n  - name: printf x | grep -q x\n    run: |\n      set -o pipefail\n      echo ok\n' > "$S/$PF_YAML"; }
 pf_yaml_plain_cont() { printf 'steps:\n  - run:\n      set -o pipefail; printf x | grep -q x\n' > "$S/$PF_YAML"; }
 pf_yaml_plain_cont_clean() { printf 'steps:\n  - run:\n      set -o pipefail; grep -q x file\n' > "$S/$PF_YAML"; }
@@ -1686,14 +1686,14 @@ HSD_FILES=()
 HSD_WANT=()
 hsd() { HSD_NAMES+=("$1"); HSD_FILES+=("$2"); HSD_WANT+=("$3"); }
 HS_PF=$'#!/usr/bin/env bash\nset -uo pipefail\n'
-hsd here_string_match_test "${HS_PF}"'if grep -q x <<< "$v"; then :; fi'$'\n' "3"
-hsd here_string_read_array "${HS_PF}"'read -ra t <<< "$seg"'$'\n' "3"
+hsd here_string_match_test "${HS_PF}"$'if grep -q x <<< "$v"; then :; fi\n' "3"
+hsd here_string_read_array "${HS_PF}"$'read -ra t <<< "$seg"\n' "3"
 hsd here_string_loop_feed "${HS_PF}"$'while read -r l; do :; done <<< "$x"\n' "3"
-hsd here_string_no_space "${HS_PF}"'grep -q x <<<"$v"'$'\n' "3"
-hsd here_string_inside_command_substitution "${HS_PF}"'v=$(grep x <<< "$y")'$'\n' "3"
-hsd here_string_inside_quoted_substitution "${HS_PF}"'v="$(grep x <<< "$y")"'$'\n' "3"
-hsd here_string_after_quoted_text "${HS_PF}"'echo "a" '"'b'"' && grep -q x <<< "$v"'$'\n' "3"
-hsd here_string_fed_to_command_stdin "${HS_PF}"'out=$(bash h.sh <<<"$2")'$'\n' "3"
+hsd here_string_no_space "${HS_PF}"$'grep -q x <<<"$v"\n' "3"
+hsd here_string_inside_command_substitution "${HS_PF}"$'v=$(grep x <<< "$y")\n' "3"
+hsd here_string_inside_quoted_substitution "${HS_PF}"$'v="$(grep x <<< "$y")"\n' "3"
+hsd here_string_after_quoted_text "${HS_PF}"$'echo "a" \'b\' && grep -q x <<< "$v"\n' "3"
+hsd here_string_fed_to_command_stdin "${HS_PF}"$'out=$(bash h.sh <<<"$2")\n' "3"
 hsd here_string_in_hook_without_pipefail $'#!/usr/bin/env bash\ngrep -q x <<< "$v"\n' "2"
 hsd printf_pipe_is_clean "${HS_PF}"$'printf \'%s\\n\' "$v" | grep x >/dev/null\n' clean
 hsd process_substitution_is_clean "${HS_PF}"$'while read -r l; do :; done < <(printf \'%s\\n\' "$x")\n' clean
@@ -1727,9 +1727,9 @@ run_hsd() {
     fi
   done
 }
-hs_pipefail_fixture() { pf_script 'set -uo pipefail' 'grep -q x <<< "$v"'; }
+hs_pipefail_fixture() { pf_script 'set -uo pipefail' $'grep -q x <<< "$v"'; }
 fails here_string_in_seeded_pipefail_script_fails_the_lint "$H_HS" hs_pipefail_fixture "zz-pipefail-fixture.sh:3: here-string"
-hs_hook_fixture() { printf '#!/usr/bin/env bash\ngrep -q x <<< "$v"\n' > "$S/scaffold/shared/template-ts/.claude/hooks/zz-fixture.sh"; }
+hs_hook_fixture() { printf '%s\n' '#!/usr/bin/env bash' $'grep -q x <<< "$v"' > "$S/scaffold/shared/template-ts/.claude/hooks/zz-fixture.sh"; }
 fails here_string_in_a_hook_fails_the_lint "$H_HS" hs_hook_fixture "hooks/zz-fixture.sh:2: here-string"
 
 # ── file line budget: the check alone, on a scratch tree (a full lint per probe is too slow) ──
