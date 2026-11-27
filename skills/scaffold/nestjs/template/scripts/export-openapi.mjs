@@ -1,6 +1,4 @@
-// Prints the app's OpenAPI document to stdout, sorted by the gate, for the contract gate.
-// Run from the project root after `pnpm build`: node scripts/export-openapi.mjs > openapi.json
-// It builds the document from the compiled app. No server starts, nothing listens on a port and nothing touches the network.
+// Prints the OpenAPI document from the compiled app, with no server, no port, no network.
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';

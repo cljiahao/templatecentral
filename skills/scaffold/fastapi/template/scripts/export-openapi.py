@@ -1,8 +1,4 @@
-"""Prints the app's OpenAPI document to stdout, sorted and indented, for the contract gate.
-
-Run from the project root: python3 -I scripts/export-openapi.py > openapi.json
-It builds the document from the app object. No server starts, nothing listens on a port and nothing touches the network.
-"""
+"""Prints the app's OpenAPI document from the app object; no server, no port, no network."""
 
 import contextlib
 import json
