@@ -101,6 +101,18 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: bash .claude/ci-gates.sh commentshape "$BASE_REF"
+      - name: Build for the contract gate (NestJS only; it reads dist/)
+        run: |
+          set -euo pipefail
+          if [ -f nest-cli.json ]; then pnpm run build; fi
+      - name: API contract (the code's OpenAPI document equals the committed openapi.json)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash .claude/ci-gates.sh contract "$BASE_REF"
+      - name: Mutation score on changed lines (Stryker from devDependencies)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash .claude/ci-gates.sh mutation "$BASE_REF"
       - name: Bundle size (gzip JS and CSS within .claude/bundle-budget.txt)
         run: bash .claude/ci-gates.sh bundle
       # Prints the gate-time note for the gates this job ran. Exits 0 when over budget and 2 when the budget file, gate list or timing record is broken. Skipped when an earlier step fails.

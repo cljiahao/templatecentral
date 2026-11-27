@@ -31,6 +31,8 @@ jobs:
       # format:check + lint + typecheck
       - bash: pnpm run check
         displayName: Format, lint and typecheck
+      - bash: bash .claude/ci-gates.sh mutation "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
+        displayName: Mutation score on changed lines (Stryker from devDependencies)
       - bash: pnpm exec jscpd
         displayName: Duplication (production source <= 3%, per .jscpd.json)
   - job: plan

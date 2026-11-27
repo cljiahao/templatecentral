@@ -18,7 +18,7 @@ Add to `package.json` devDependencies:
 - `@stryker-mutator/vitest-runner` — Vitest integration
 
 ```bash
-pnpm add -D @stryker-mutator/core @stryker-mutator/vitest-runner
+pnpm add -D @stryker-mutator/core@10.1.1 @stryker-mutator/vitest-runner@10.1.1
 ```
 
 ### Steps

@@ -26,6 +26,7 @@ template/eslint.config.mjs 644 - -
 template/nest-cli.json 644 - -
 template/package.json 644 __TC_PROJECT_NAME__ -
 template/pnpm-workspace.yaml 644 - -
+template/scripts/export-openapi.mjs 644 - -
 template/src/app.factory.ts 644 - -
 template/src/bootstrap.ts 644 - -
 template/src/app.module.ts 644 - -

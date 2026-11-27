@@ -69,6 +69,8 @@ npm @nestjs/platform-fastify      ^11.2.10
 npm @nestjs/schematics            ^11.1.0
 npm @nestjs/swagger               ^11.4.8
 npm @nestjs/testing               ^11.2.10
+npm @stryker-mutator/core          10.1.1
+npm @stryker-mutator/vitest-runner 10.1.1
 npm @tailwindcss/postcss          ^4.3.5
 npm @tailwindcss/typography       ^0.5.20
 npm @tanstack/react-query         ^5.107.1
@@ -130,7 +132,7 @@ pip certifi             >=2026.10.23
 pip fastapi             >=0.162.5
 pip httpx2              >=2.16.0
 pip lefthook            >=2.2.2
-pip mutmut              >=3.8.1
+pip mutmut              ==3.8.1
 pip pydantic            >=2.14.3
 pip pymongo             >=4.19.0
 pip pyright             >=1.1.414

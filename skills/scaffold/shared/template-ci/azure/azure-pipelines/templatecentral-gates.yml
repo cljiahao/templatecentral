@@ -55,6 +55,12 @@ steps:
     displayName: Exclude reasons (every coverage, Sonar and mutation exclude has a reason)
   - bash: bash .claude/ci-gates.sh commentshape "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Comment shape (added comments are short, above a statement, never a bare disable)
+  - bash: |
+      set -euo pipefail
+      if [ -f nest-cli.json ]; then pnpm run build; fi
+    displayName: Build for the contract gate (NestJS only; it reads dist/)
+  - bash: bash .claude/ci-gates.sh contract "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
+    displayName: API contract (the code's OpenAPI document equals the committed openapi.json)
   - bash: bash .claude/ci-gates.sh bundle
     displayName: Bundle size (gzip JS and CSS within .claude/bundle-budget.txt)
   # Prints the gate-time note for the gates this job ran. Exits 0 when over budget and 2 when the budget file, gate list or timing record is broken. Skipped when an earlier step fails.

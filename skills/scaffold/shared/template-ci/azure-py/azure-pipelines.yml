@@ -58,3 +58,5 @@ jobs:
         displayName: Changed-line coverage (>= 80%)
       - bash: bash .claude/ci-gates.sh diffcover "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
         displayName: Changed source has covered lines (fails closed on an empty report)
+      - bash: bash .claude/ci-gates.sh mutation "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
+        displayName: Mutation score on changed lines (mutmut from requirements-dev.txt)
