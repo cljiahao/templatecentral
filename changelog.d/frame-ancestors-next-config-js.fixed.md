@@ -1,0 +1,1 @@
+- The `frame-ancestors` migrate check reads `next.config.js` and `next.config.mjs` as well as `next.config.ts`.

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Sourced by defect-report.sh. The stacks send the framing headers from the portal origin, not as fixed values.
-# Limits: a wrapped value is seen only when the line with frame-ancestors ends in an opening bracket, paren, brace, colon or equals sign and 'none' is on the next line. Only the four files named in names are read, each by its template name. Another file that sets framing headers (a proxy, a gateway, a renamed file, nginx.conf) is not seen.
+# Limits: a wrapped value is seen only when the line with frame-ancestors ends in an opening bracket, paren, brace, colon or equals sign and 'none' is on the next line. Only the files named in names are read: next.config.ts, next.config.js and next.config.mjs, and the three other template names. Another file that sets framing headers (a proxy, a gateway, a renamed file, nginx.conf) is not seen.
 # A file that names a portal-origin marker anywhere outside comments counts as current, even if it still sends a fixed value. A project that must not be framed matches too: verify before changing.
 # An unreadable candidate makes the run exit 2, never a clean result.
 export id=frame-ancestors
 export level=check
-export names="next.config.ts security_headers.py security.setup.ts nginx.conf.template"
+export names="next.config.ts next.config.js next.config.mjs security_headers.py security.setup.ts nginx.conf.template"
 export content="X-Frame-Options x-frame-options frame-ancestors"
 export template=skills/scaffold/nestjs/template/src/config/setups/security.setup.ts
 export desc="the framing headers are fixed (X-Frame-Options or frame-ancestors 'none') and no portal origin is read, so an app that must be framed by its portal cannot be; this is a false match if the app must never be framed"

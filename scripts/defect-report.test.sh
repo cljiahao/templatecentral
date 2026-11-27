@@ -332,6 +332,10 @@ fa p2 nginx.conf.template '    add_header X-Frame-Options "DENY" always;'
 has "nginx.conf.template:1  frame-ancestors  check" "$OUT" "frame-ancestors: a fixed X-Frame-Options is flagged"
 fa p3 next.config.ts "const h = [{ key: 'X-Frame-Options', value: 'DENY' }];"
 has "next.config.ts:1  frame-ancestors  check" "$OUT" "frame-ancestors: a fixed X-Frame-Options in next.config.ts is flagged"
+fa p3js next.config.js "module.exports = { headers: [{ key: 'X-Frame-Options', value: 'DENY' }] };"
+has "next.config.js:1  frame-ancestors  check" "$OUT" "frame-ancestors: a fixed X-Frame-Options in next.config.js is flagged"
+fa p3mjs next.config.mjs "export default { headers: [{ key: 'X-Frame-Options', value: 'DENY' }] };"
+has "next.config.mjs:1  frame-ancestors  check" "$OUT" "frame-ancestors: a fixed X-Frame-Options in next.config.mjs is flagged"
 fa p4 src/config/setups/security.setup.ts "const f = { 'frame-ancestors': [\"'none'\"] };"
 has "security.setup.ts:1  frame-ancestors  check" "$OUT" "frame-ancestors: the older NestJS form is flagged"
 fa p6 src/config/setups/security.setup.ts "const f = { 'frame-ancestors': [
