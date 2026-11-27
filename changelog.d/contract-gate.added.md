@@ -1,0 +1,1 @@
+- Seeded gate `check-contract.sh` (phase 1, not yet registered): generates the OpenAPI document offline for fastapi and nestjs and fails when it differs from the committed `openapi.json`, ignoring key order and whitespace. Fails on an empty, invalid, symlink or oversize contract, and on a generator and contract changed in one diff. Offline, no key.
