@@ -35,8 +35,8 @@ cmd=$(printf '%s\n' "$cmd" | awk '
 cut200() { S=$1 LC_ALL=C awk 'function ucut(s, n) { if (length(s) <= n) return s; s = substr(s, 1, n); sub(/[\300-\337]$/, "", s); sub(/[\340-\357][\200-\277]?$/, "", s); sub(/[\360-\367]([\200-\277]([\200-\277])?)?$/, "", s); return s } BEGIN { printf "%s", ucut(ENVIRON["S"], 200) }' || printf 'BLOCKED'; }
 # block <message>: message capped at 200 bytes.
 block() { echo "$(cut200 "BLOCKED: $1")" >&2; exit 2; }
-# words <text>: splits on blanks into the array t without a here-string, whose temp file can fail to open and read as empty.
-words() { set -f; t=($1); set +f; }
+# words <text>: splits on blanks into the array tw through a pipe, not a here-string, whose temp file can fail to open and read as empty.
+words() { read -ra tw < <(printf '%s\n' "$1"); }
 protected='main|uat|develop'
 root=$PWD
 # Shell access to secret files: Read deny rules gate the Read tool, not cat. A read is blocked when the named file exists; a write or copy that would create one is blocked outright. Env templates stay usable.
@@ -223,28 +223,28 @@ collect_dirs() {
   local -a t
   while IFS= read -r seg; do
     words "$seg"
-    n=${#t[@]}; i=0
+    n=${#tw[@]}; i=0
     while [ "$i" -lt "$n" ]; do
-      w="${t[$i]#\\}"
+      w="${tw[$i]#\\}"
       [[ "$w" == git || "$w" == */git ]] && break
       i=$((i + 1))
     done
     for ((p = 0; p < i; p++)); do
-      w="${t[$p]#\\}"
+      w="${tw[$p]#\\}"
       case "$w" in
         cd|pushd)
           d=""
-          for ((q = p + 1; q < i; q++)); do [[ "${t[$q]}" == -?* ]] && continue; d=${t[$q]}; break; done
+          for ((q = p + 1; q < i; q++)); do [[ "${tw[$q]}" == -?* ]] && continue; d=${tw[$q]}; break; done
           add_target "$d" ;;
         popd|eval|source|function|CDPATH=*|GIT_DIR=*|GIT_WORK_TREE=*) redir=1 ;;
         # `.` sources a script only in command position; elsewhere it is an ordinary argument (`ls .`).
-        .) [[ "$p" -eq 0 || "${t[$((p - 1))]}" =~ ^(then|do|else|if|while|until|!|[{]|time|command|builtin|exec)$ ]] && redir=1 ;;
+        .) [[ "$p" -eq 0 || "${tw[$((p - 1))]}" =~ ^(then|do|else|if|while|until|!|[{]|time|command|builtin|exec)$ ]] && redir=1 ;;
         env|sudo)
           for ((q = p + 1; q < i; q++)); do
-            case "${t[$q]}" in
-              -C|-D|--chdir) add_target "${t[$((q + 1))]:-}" ;;
-              --chdir=*) add_target "${t[$q]#--chdir=}" ;;
-              -C?*|-D?*) add_target "${t[$q]:2}" ;;
+            case "${tw[$q]}" in
+              -C|-D|--chdir) add_target "${tw[$((q + 1))]:-}" ;;
+              --chdir=*) add_target "${tw[$q]#--chdir=}" ;;
+              -C?*|-D?*) add_target "${tw[$q]:2}" ;;
             esac
           done ;;
       esac
@@ -270,24 +270,24 @@ chain_dirs() {
   cur=$orig_dir
   while IFS= read -r seg; do
     words "$seg"
-    [ "${#t[@]}" -eq 0 ] && continue
-    first="${t[0]#\\}"
+    [ "${#tw[@]}" -eq 0 ] && continue
+    first="${tw[0]#\\}"
     if [[ "$first" == cd || "$first" == pushd ]]; then
       d=""
-      for w in "${t[@]:1}"; do [[ "$w" == -?* ]] && continue; d=$w; break; done
+      for w in "${tw[@]:1}"; do [[ "$w" == -?* ]] && continue; d=$w; break; done
       unresolved "$d" && return 1
       [[ "$d" == /* ]] || d="$cur/$d"
       cur=$(cd "$d" 2>/dev/null && pwd -P) || return 1
       continue
     fi
-    for w in "${t[@]}"; do
+    for w in "${tw[@]}"; do
       case "${w#\\}" in cd|pushd|popd|env|sudo|command|builtin|exec) return 1 ;; esac
     done
     if [[ "$first" == git || "$first" == */git ]]; then
       sawgit=1
       [[ " ${out[*]} " == *" $cur "* ]] || out+=("$cur")
     else
-      for w in "${t[@]}"; do [[ "${w#\\}" == git || "${w#\\}" == */git ]] && return 1; done
+      for w in "${tw[@]}"; do [[ "${w#\\}" == git || "${w#\\}" == */git ]] && return 1; done
     fi
   done < <(printf '%s\n' "${scan//&&/$'\n'}")
   [ "$sawgit" -eq 1 ] || return 1
@@ -299,24 +299,24 @@ if [ "$redir" -eq 0 ] && chain_out=$(chain_dirs); then
 fi
 while IFS= read -r seg; do
   words "$seg"
-  n=${#t[@]}; i=0
+  n=${#tw[@]}; i=0
   while [ "$i" -lt "$n" ]; do
-    w="${t[$i]#\\}"
+    w="${tw[$i]#\\}"
     [[ "$w" == git || "$w" == */git ]] && break
     i=$((i + 1))
   done
   [ "$i" -ge "$n" ] && continue
   i=$((i + 1)); cdir=""
-  while [ "$i" -lt "$n" ] && [[ "${t[$i]}" == -* ]]; do
-    o="${t[$i]}"
+  while [ "$i" -lt "$n" ] && [[ "${tw[$i]}" == -* ]]; do
+    o="${tw[$i]}"
     case "$o" in
       -C)
         # git applies every -C in turn, each relative to the one before.
-        x="${t[$((i + 1))]:-}"
+        x="${tw[$((i + 1))]:-}"
         if [ -z "$cdir" ] || [[ "$x" == /* ]]; then cdir=$x; else cdir="$cdir/$x"; fi
         i=$((i + 2)); continue ;;
       -c|--config-env)
-        printf '%s' "${t[$((i + 1))]:-}" | grep -qi 'core\.hookspath' && block "'git -c core.hooksPath=…' disables the git-hook layer, the same bypass as --no-verify. Fix the failure instead."
+        printf '%s' "${tw[$((i + 1))]:-}" | grep -qi 'core\.hookspath' && block "'git -c core.hooksPath=…' disables the git-hook layer, the same bypass as --no-verify. Fix the failure instead."
         i=$((i + 2)); continue ;;
       --git-dir|--work-tree) redir=1; i=$((i + 2)); continue ;;
       --git-dir=*|--work-tree=*) redir=1 ;;
@@ -325,8 +325,8 @@ while IFS= read -r seg; do
     printf '%s' "$o" | grep -qi 'core\.hookspath' && block "overriding core.hooksPath disables the git-hook layer. Fix the failure instead."
     i=$((i + 1))
   done
-  sub="${t[$i]:-}"; i=$((i + 1))
-  args=("${t[@]:$i}")
+  sub="${tw[$i]:-}"; i=$((i + 1))
+  args=("${tw[@]:$i}")
 
   case "$sub" in
     commit|push|merge|am|rebase|cherry-pick|revert|pull)
