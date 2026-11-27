@@ -64,6 +64,21 @@ ruff_gate() {
   done
 }
 
+# gate_outputs_ignored: every path a seeded gate writes is ignored, read from the gate scripts' own defaults, and the tree is still clean after the gates above ran.
+gate_outputs_ignored() {
+  local sbom dc paths p dirty
+  sbom=$(sed -n 's/^out=\${SBOM_OUT:-\(.*\)}$/\1/p' "$P/scripts/generate-sbom.sh")
+  dc=$(sed -n 's/.*out=\${DIFF_COVER_OUTPUT:-\([^}]*\)}.*/\1/p' "$P/.claude/ci-gates.sh" | head -n 1)
+  if [ -z "$sbom" ] || [ -z "$dc" ]; then bad "$ST/$HOST cannot read the SBOM or diff-cover output path from the gates"; return; fi
+  paths="$sbom $dc dist/x .claude/gate-times.tsv .claude/review/x"
+  for p in $paths; do
+    if ! git -C "$P" check-ignore -q "$p"; then bad "$ST/$HOST a seeded gate writes $p but .gitignore does not ignore it"; fi
+  done
+  mkdir -p "$P/$(dirname "$sbom")" && : > "$P/$sbom" && : > "$P/$dc"
+  dirty=$(git -C "$P" status --porcelain)
+  if [ -z "$dirty" ]; then ok; else bad "$ST/$HOST tree is dirty after the gates: $dirty"; fi
+}
+
 # ts_helpers_skipped: every hash-guarded seeded scripts/*.mjs is named in the eslint ignores and in .prettierignore, so the first commit's format-lint cannot parse-fail or rewrite it.
 ts_helpers_skipped() {
   local list f stem
@@ -102,6 +117,7 @@ for ST in nestjs nextjs vite-react fastapi; do
     gate workflows bash scripts/check-workflows.sh
     gate supplychain bash scripts/check-supply-chain.sh
     gate dockerfile bash scripts/check-dockerfile.sh
+    gate_outputs_ignored
     case $ST in
       fastapi)
         gate ignores bash -c 'git check-ignore -q coverage.xml && git check-ignore -q .coverage'
