@@ -1,10 +1,56 @@
 import eslintComments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import coreWebVitals from 'eslint-config-next/core-web-vitals';
 import typescript from 'eslint-config-next/typescript';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
 import noUnsanitized from 'eslint-plugin-no-unsanitized';
 import sonarjs from 'eslint-plugin-sonarjs';
 
 const sonarjsPlugin = sonarjs.configs.recommended.plugins.sonarjs;
+
+// Layer allow-list for docs/architecture.md: one entry per layer, naming every `@/` layer it may import.
+const MAX_DEPTH = 5;
+const SLASH = String.raw`\x2f`;
+const LAYERS = [
+  { name: 'app', unit: 'src/app', allow: 'app|components|integrations|lib', features: true },
+  { name: 'feature', unit: 'src/features/*', allow: 'components|integrations|lib', features: true },
+  { name: 'components', unit: 'src/components', allow: 'components|lib' },
+  { name: 'integrations', unit: 'src/integrations', allow: 'integrations|lib' },
+  { name: 'lib', unit: 'src/lib', allow: 'lib|integrations/error' },
+  { name: 'hooks', unit: 'src/hooks', allow: 'hooks|lib' },
+  { name: 'src root', unit: 'src', allow: 'lib', depth: 0 },
+];
+
+// One block per file depth, so a relative import may climb only as far as its own layer folder.
+// no-restricted-imports skips import(), so the same two regexes also feed a no-restricted-syntax selector (`\x2f` is `/`, which esquery cannot hold).
+const layerBlocks = ({ name, unit, allow, features, depth = MAX_DEPTH }) =>
+  Array.from({ length: depth + 1 }, (_, d) => {
+    const index = features ? '|features/[^/]+$' : '';
+    const viaIndex = features ? ' and a feature through its index (@/features/<name>)' : '';
+    const named = allow.split('|').join(', @/');
+    const rules = [
+      {
+        regex: `^@/(?!(?:${allow})(?:/|$)${index})`,
+        message: `Layer rule (docs/architecture.md): ${name} may import only @/${named}${viaIndex}.`,
+      },
+      {
+        regex: `^(?:\\.\\./){${d + 1}}`,
+        message: `Layer rule (docs/architecture.md): a relative import may not leave its ${name} folder; reach another layer through the @/ alias.`,
+      },
+    ];
+    return {
+      files: [`${unit}/${'*/'.repeat(d)}${d === MAX_DEPTH ? '**/' : ''}*.{ts,tsx}`],
+      rules: {
+        'no-restricted-imports': ['error', { patterns: rules }],
+        'no-restricted-syntax': [
+          'error',
+          ...rules.map(({ regex, message }) => ({
+            selector: `ImportExpression[source.value=/${regex.replaceAll('/', SLASH)}/]`,
+            message,
+          })),
+        ],
+      },
+    };
+  });
 
 const config = [
   ...coreWebVitals,
@@ -16,6 +62,9 @@ const config = [
     },
   },
   eslintComments.recommended,
+  // The full jsx-a11y recommended set at error level; eslint-config-next registers the plugin and warns on a subset.
+  { files: ['**/*.{jsx,tsx}'], rules: jsxA11y.flatConfigs.recommended.rules },
+  ...LAYERS.flatMap(layerBlocks),
   // innerHTML, outerHTML, insertAdjacentHTML and document.write take only DOMPurify or Trusted Types sanitized input.
   noUnsanitized.configs.recommended,
   {
@@ -46,10 +95,7 @@ const config = [
         'error',
         { ignore: ['eslint-enable'] },
       ],
-      '@eslint-community/eslint-comments/disable-enable-pair': [
-        'error',
-        { allowWholeFile: true },
-      ],
+      '@eslint-community/eslint-comments/disable-enable-pair': ['error', { allowWholeFile: true }],
     },
   },
   {

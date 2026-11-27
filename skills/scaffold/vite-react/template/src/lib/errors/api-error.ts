@@ -37,7 +37,7 @@ export interface ApiErrorResponse {
 }
 
 export class APIError extends Error {
-  public readonly name = 'APIError' as const;
+  public override readonly name = 'APIError' as const;
   public readonly statusCode: number;
   public readonly data: unknown;
 

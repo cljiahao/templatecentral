@@ -90,6 +90,7 @@ npm dotenv                        ^18.0.10
 npm eslint                        ^10.14.0
 npm eslint-config-next            ^16.4.6
 npm eslint-config-prettier        ^10.1.8
+npm eslint-plugin-jsx-a11y        6.10.2
 npm eslint-plugin-no-unsanitized  4.1.5
 npm eslint-plugin-prettier        ^5.5.7
 npm eslint-plugin-react-hooks     ^7.1.1
@@ -131,6 +132,7 @@ pip beanie              >=2.2,<3
 pip certifi             >=2026.10.23
 pip fastapi             >=0.162.5
 pip httpx2              >=2.16.0
+pip import-linter       ==2.17
 pip lefthook            >=2.2.2
 pip mutmut              ==3.8.1
 pip pydantic            >=2.14.3

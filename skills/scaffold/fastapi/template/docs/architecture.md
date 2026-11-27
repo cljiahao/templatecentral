@@ -16,7 +16,7 @@ Codemap. Update it in the same change that moves a layer or a shared module.
 
 ## Dependency direction
 
-`routers` → `services` → `logic` → `models`. Never reversed. `core`, `constants` and `utils` import from no other layer.
+`routers` → `services` → `logic` → `models`. Never reversed. `core`, `utils` and `constants` import from no layer above them (`core` → `utils` → `constants`). Imports are absolute; `import-linter` (contract in `pyproject.toml`) names the broken layer rule.
 
 ## Reuse
 

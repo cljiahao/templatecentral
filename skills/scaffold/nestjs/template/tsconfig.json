@@ -17,6 +17,9 @@
     "incremental": true,
     "skipLibCheck": true,
     "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
     "strictPropertyInitialization": false,
     "forceConsistentCasingInFileNames": true,
     "typeRoots": [
