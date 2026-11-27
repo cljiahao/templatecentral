@@ -347,6 +347,7 @@ def scan_toml(file, text):
         emit("X", file, err.line, "toml cannot be read: %s" % err)
         return
     tomllib = load_toml_module()
+    reference = None
     if tomllib is not None:
         try:
             reference = tomllib.loads(text)

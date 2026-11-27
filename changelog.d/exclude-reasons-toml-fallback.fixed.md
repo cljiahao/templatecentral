@@ -1,0 +1,1 @@
+The seeded `check-exclude-reasons.py` again fails closed with one clear line when neither `tomllib` nor `tomli` loads (a missing initialisation made it crash with a different error); a test now covers the `tomli` fallback path too.
