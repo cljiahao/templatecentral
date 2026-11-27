@@ -131,6 +131,7 @@ for ST in nestjs nextjs vite-react fastapi; do
       nestjs)
         gate ignores bash -c 'git check-ignore -q coverage/x && git check-ignore -q blob/x'
         ts_helpers_skipped
+        gate test-budget-headroom env TEST_BUDGET_MAX_RATIO=32 bash scripts/test-budget.sh
         gate coverage-floor grep -Eq 'thresholds: [{] lines: 80' vitest.config.mts
         ;;
       nextjs)
