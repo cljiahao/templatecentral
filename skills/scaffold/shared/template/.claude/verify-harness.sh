@@ -15,15 +15,6 @@ if ! listing=$(bash scripts/gate-ratchet.sh --list-guarded HEAD 2>/dev/null) || 
 fi
 guarded=$(printf '%s\n' "$listing" | awk -F'\t' '$3 == 1 { print $2 }')
 
-# Runs awk over a variable: 0 true, 1 false, an awk failure stops the run. No here-string (it needs a writable TMPDIR) and no grep -q in a pipe (SIGPIPE under pipefail).
-vawk() {
-  local text=$1 vrc=0
-  shift
-  printf '%s\n' "$text" | awk "$@" || vrc=$?
-  [ "$vrc" -le 1 ] || { echo "verify-harness: awk failed while matching a value (exit $vrc)" >&2; exit 2; }
-  return "$vrc"
-}
-sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1; else sha256sum "$1" | cut -d' ' -f1; fi; }
 read_manifest() {
   if command -v jq >/dev/null 2>&1; then
     jq -er '.seeded_files | to_entries[] | "\(.value.path)\t\(.value.origin_hash)"' "$manifest"
@@ -38,30 +29,50 @@ read_manifest() {
 entries=$(read_manifest) || { echo "verify-harness: cannot parse $manifest" >&2; exit 2; }
 
 drift=0; checked=0; unfilled=0
+# Exact line match over a newline-delimited list, in the shell: no fork, no here-string, no pipe.
+nl=$'\n'
+guarded_nl="$nl$guarded$nl"
+entries_paths_nl="$nl$(printf '%s\n' "$entries" | awk -F'\t' '{ print $1 }')$nl" || { echo "verify-harness: awk failed listing the manifest paths" >&2; exit 2; }
+in_list() { case "$1" in *"$nl$2$nl"*) return 0 ;; esac; return 1; }
+hash_paths=(); hash_origins=()
 while IFS=$'\t' read -r path origin; do
   [ -n "$path" ] || continue
   case "$origin" in ""|null|undefined|None|"<"*) echo "UNFILLED: $path (origin_hash is a placeholder)" >&2; unfilled=1; continue ;; esac
-  P="$path" vawk "$guarded" '$0 == ENVIRON["P"] { f = 1 } END { exit !f }' || continue
+  in_list "$guarded_nl" "$path" || continue
   checked=$((checked + 1))
   if [ ! -f "$path" ]; then echo "MISSING:  $path" >&2; drift=1; continue; fi
-  [ "$(sha "$path")" = "$origin" ] || { echo "MODIFIED: $path" >&2; drift=1; }
+  hash_paths+=("./$path"); hash_origins+=("$origin")
 done < <(printf '%s\n' "$entries")
+# One hash call for every file: the hasher is a script, so a start per file is the cost.
+if [ "${#hash_paths[@]}" -gt 0 ]; then
+  if command -v shasum >/dev/null 2>&1; then hashes=$(shasum -a 256 -- "${hash_paths[@]}") || { echo "verify-harness: cannot hash the enforcement files" >&2; exit 2; }
+  else hashes=$(sha256sum -- "${hash_paths[@]}") || { echo "verify-harness: cannot hash the enforcement files" >&2; exit 2; }; fi
+  hi=0
+  while IFS= read -r hline; do
+    if [ "$hi" -ge "${#hash_paths[@]}" ] || [ "${hline%% *}" != "${hash_origins[$hi]}" ]; then echo "MODIFIED: ${hash_paths[$hi]#./}" >&2; drift=1; fi
+    hi=$((hi + 1))
+  done < <(printf '%s\n' "$hashes")
+  [ "$hi" -eq "${#hash_paths[@]}" ] || { echo "verify-harness: the hasher returned $hi lines for ${#hash_paths[@]} files" >&2; exit 2; }
+fi
 
 # Gate manifest: every gate in .claude/gates.txt must be run by lefthook (when it names a command) and by each CI host's files.
 gates=".claude/gates.txt"
 [ -f "$gates" ] || { echo "verify-harness: $gates missing" >&2; exit 2; }
 code_of() { for f in "$@"; do if [ -f "$f" ]; then grep -vE '^[[:space:]]*#' "$f" || true; fi; done; }
-has() { N="$2" vawk "$1" 'index($0, ENVIRON["N"]) { f = 1 } END { exit !f }'; }
+has() { case "$1" in *"$2"*) return 0 ;; esac; return 1; }
 # Every gate id this harness ships. A deleted gates.txt row cannot drop a gate, and test-harness-kit pins this list to the seeded gates.txt.
 required_gates="harness docs testbudget nosonar secrets deps changelog comments commentshape duptests exclusions ratchet supplychain workflows envexample dockerfile workarounds review licences sbom changesize bundle diffcover"
 # A gate script a hook or CI step runs must be a regular file, not a link, and hold content: an empty script exits 0 and passes.
 gate_file_ok() {
-  local gf=$1 gid=$2 grc=0
+  local gf=$1 gid=$2 grc=0 gl
   if [ -L "$gf" ]; then echo "GATE FILE SYMLINK: $gid reads $gf, which is a symlink; replace it with the file itself (git checkout <merge-base> -- $gf)" >&2; return 1; fi
   if [ ! -f "$gf" ]; then echo "GATE FILE MISSING: $gid reads $gf, which is not a file; restore it from git (git checkout <merge-base> -- $gf)" >&2; return 1; fi
   case "$gf" in *.sh|*.mjs|*.py|*.awk) ;; *) return 0 ;; esac
-  grep '[^[:space:]]' "$gf" >/dev/null || grc=$?
-  [ "$grc" -le 1 ] || { echo "verify-harness: cannot read $gf (grep exit $grc)" >&2; exit 2; }
+  [ -r "$gf" ] || { echo "verify-harness: cannot read $gf" >&2; exit 2; }
+  grc=1
+  while IFS= read -r gl || [ -n "$gl" ]; do
+    case "$gl" in *[![:space:]]*) grc=0; break ;; esac
+  done < "$gf"
   if [ "$grc" -eq 1 ]; then echo "GATE FILE BLANK: $gid reads $gf, which holds no content; restore it from git (git checkout <merge-base> -- $gf)" >&2; return 1; fi
 }
 hook_text=$(code_of lefthook.yml)
@@ -91,7 +102,7 @@ while IFS='|' read -r gid lh ci || [ -n "$gid" ]; do
     changesize) need="$need .claude/change-size-exclude.txt" ;;
   esac
   for nf in $need; do
-    if ! P="$nf" vawk "$entries" -F'\t' '$1 == ENVIRON["P"] { f = 1 } END { exit !f }'; then echo "GATE FILE UNREGISTERED: $gid reads $nf, which $manifest does not list as a seeded file; restore the entry with regen-harness.sh" >&2; drift=1; fi
+    if ! in_list "$entries_paths_nl" "$nf"; then echo "GATE FILE UNREGISTERED: $gid reads $nf, which $manifest does not list as a seeded file; restore the entry with regen-harness.sh" >&2; drift=1; fi
     gate_file_ok "$nf" "$gid" || drift=1
   done
   if [ "$lh" != "-" ] && [ -n "$hook_text" ] && ! has "$hook_text" "$lh"; then echo "GATE MISSING: $gid is not run by lefthook.yml (expects '$lh')" >&2; drift=1; fi

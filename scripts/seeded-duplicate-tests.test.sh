@@ -949,9 +949,13 @@ verdict 0 "clean control: some test files ignored, one still read"
 newp
 py_case "$P/test_a.py" "" 2
 mkdir -p "$T/oldpy"
-printf '#!/bin/sh\n[ "$1" = -I ] && shift\nexec "%s" -I -c '"'"'import runpy, sys; sys.version_info = (3, 7, 0, "final", 0); sys.argv = sys.argv[1:]; runpy.run_path(sys.argv[0], run_name="__main__")'"'"' "$@"\n' "$(command -v python3)" > "$T/oldpy/python3"
+cat > "$T/oldpy/python3" <<'STUB'
+#!/bin/sh
+if [ "$1" = -I ]; then shift; fi
+exec "$TC_REAL_PY" -I -c 'import runpy, sys; sys.version_info = (3, 7, 0, "final", 0); sys.argv = sys.argv[1:]; runpy.run_path(sys.argv[0], run_name="__main__")' "$@"
+STUB
 chmod +x "$T/oldpy/python3"
-OUT=$(PATH="$T/oldpy:$PATH" bash "$CHECK" "$P" 2>&1)
+OUT=$(TC_REAL_PY="$(command -v python3)" PATH="$T/oldpy:$PATH" bash "$CHECK" "$P" 2>&1)
 check 2 "$?" "old python interpreter: exit"
 has "is too old: this check needs python 3.8 or newer; install a newer Python 3 on the path" "$OUT" "old python interpreter: message says what to do"
 

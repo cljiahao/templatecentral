@@ -54,7 +54,8 @@ if ! TS=$(find_typescript); then
 fi
 
 # Hash a tree by file name and size only. No file is opened, so a secret-named file in a fixture is never read.
-fsize() { stat -f %z "$1" 2> /dev/null || stat -c %s "$1"; }
+# GNU stat first: its -f means filesystem status, which prints free-block counts that change while the run writes elsewhere.
+fsize() { stat -c %s "$1" 2> /dev/null || stat -f %z "$1"; }
 tree_hash() {
   (cd "$1" && find . -path ./node_modules -prune -o \( -type f -o -type l -o -type d \) -print | LC_ALL=C sort | while IFS= read -r f; do
     if [ -f "$f" ]; then printf '%s %s\n' "$f" "$(fsize "$f")"; else printf '%s\n' "$f"; fi
