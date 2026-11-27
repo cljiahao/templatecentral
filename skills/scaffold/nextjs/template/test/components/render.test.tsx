@@ -49,44 +49,44 @@ describe('components', () => {
   ];
   // Each row renders alone: [name, element, strings it must contain, strings it must not].
   const cases: [string, ReactElement, string[], string[]?][] = [
-    ['BrandLogo', <BrandLogo />, ['alt="Logo"']],
-    ['FloatingShape', <FloatingShape />, ['aria-hidden="true"']],
-    ['Pill solid', <Pill variant="solid">Tag</Pill>, ['Tag', 'text-background'], ['bg-card']],
-    ['Pill outline', <Pill>Tag</Pill>, ['bg-card'], ['text-background']],
+    ['BrandLogo', h(BrandLogo), ['alt="Logo"']],
+    ['FloatingShape', h(FloatingShape), ['aria-hidden="true"']],
     [
-      'Card',
-      h(CustomCard, { header: 'Head', description: 'Desc' }, 'Body'),
-      ['Head', 'Desc', 'Body'],
+      'Solid',
+      h(Pill, { variant: 'solid', children: 'Tag' }),
+      ['Tag', 'text-background'],
+      ['bg-card'],
     ],
-    ['ThemeToggleButton', <ThemeToggleButton />, ['aria-label="Toggle dark mode"']],
-    ['Dialog', h(CustomDialog, { title: 'T', trigger: <b>Open</b> }, 'x'), ['Open']],
+    ['Outline', h(Pill, { children: 'Tag' }), ['bg-card'], ['text-background']],
+    ['Card', h(CustomCard, { header: 'Hd', description: 'Ds' }, 'Bd'), ['Hd', 'Ds', 'Bd']],
+    ['ThemeToggleButton', h(ThemeToggleButton), ['aria-label="Toggle dark mode"']],
+    [
+      'Dialog',
+      h(CustomDialog, {
+        title: 'T',
+        description: 'Why',
+        trigger: h('b', null, 'Open'),
+        children: 'x',
+      }),
+      ['Open'],
+    ],
     ['Media', h(MediaCard, { title: 'T', mediaPosition: 'left' }, 'media'), ['media', 'flex-row']],
-    ['Media bare', <MediaCard title="Only" description="D" />, ['Only', '>D<'], ['media']],
-    [
-      'LinkExt',
-      <LinkList links={links} />,
-      ['href="/docs"', 'target="_blank" rel="noopener noreferrer"'],
-    ],
-    ['LinkList int', <LinkList links={links.slice(0, 1)} />, ['href="/docs"'], ['rel=']],
+    ['Media bare', h(MediaCard, { title: 'Only', description: 'D' }), ['Only', '>D<'], ['media']],
+    ['Link', h(LinkList, { links }), ['href="/docs"', 'target="_blank" rel="noopener noreferrer"']],
+    ['Link int', h(LinkList, { links: links.slice(0, 1) }), ['href="/docs"'], ['rel=']],
     [
       'Field',
-      <FieldHarness />,
+      h(FieldHarness),
       ['aria-describedby="name-description"', 'id="name-description"', 'for="name"', 'id="name"'],
     ],
-    ['SiteFooter default', <SiteFooter />, ['Built with templateCentral'], ['<nav']],
+    ['SiteFooter default', h(SiteFooter), ['Built with templateCentral'], ['<nav']],
     [
       'SiteFooter custom',
-      <SiteFooter creditText="Credit" links={[{ label: 'L', href: '/l' }]} />,
+      h(SiteFooter, { creditText: 'Credit', links: [{ label: 'L', href: '/l' }] }),
       ['Credit', 'href="/l"', 'aria-label="Footer"'],
       ['Built with templateCentral'],
     ],
-    [
-      'Providers',
-      <Providers>
-        <p>child</p>
-      </Providers>,
-      ['<p>child</p>'],
-    ],
+    ['Providers', h(Providers, null, h('p', null, 'child')), ['<p>child</p>']],
   ];
 
   it.each(cases)('%s renders its own content and attributes', (_name, element, has, lacks = []) => {
