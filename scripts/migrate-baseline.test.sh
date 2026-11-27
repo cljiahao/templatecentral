@@ -573,6 +573,28 @@ contains "stderr: the crash text is shown" "eslint crashed" "$out"
 ERRF=; LRC=2
 out=$(rune check); check "stderr: a non-zero exit with no output fails" 1 $?
 ERRF=; LRC=
+# wiring round 3: exit 2 or more is a crash, so its stderr counts even when stdout holds only baselined findings
+printf '%s\n' "$OLD" >"$T/lint7.txt"; printf 'Error: Cannot read config file: eslint.config.mjs\n' >"$T/err9.txt"; ERRF="$T/err9.txt"; LRC=1
+out=$(rune check); check "stderr: control, baselined stdout and stderr text at exit 1 pass" 0 $?
+LRC=2
+out=$(rune check); check "stderr: baselined stdout and crash text at exit 2 fail" 1 $?
+contains "stderr: the exit 2 crash text is shown" "Cannot read config file" "$out"
+ERRF=; LRC=2
+out=$(rune check); check "stderr: baselined stdout at exit 2 with no stderr text passes" 0 $?
+# wiring round 3: a finding that only stderr carries at exit 1 is read when stdout holds none
+: >"$T/lint7.txt"; printf 'a.ts:1:1: New [Error/n]\n' >"$T/err10.txt"; ERRF="$T/err10.txt"; LRC=1
+out=$(rune check); check "stderr: a finding on stderr only, at exit 1, fails" 1 $?
+contains "stderr: the stderr finding is named" "NEW lint" "$out"
+ERRF=; LRC=
+# wiring round 3: a pyright version notice is not a finding, whatever the exit code
+PYN='  app/m.py:3:1 - error: Old type problem (reportGeneralTypeIssues)
+1 error, 0 warnings, 0 informations'
+PYW='WARNING: there is a new pyright version available (v1.1.400 -> v1.1.410).
+Please install the new version or set PYRIGHT_PYTHON_FORCE_VERSION to `latest`'
+PY=$(newproj pynotice)
+printf '%s\n' "$PYN" | gb "$PY" record types pyright --tool pyright >/dev/null
+out=$(printf '%s\n%s\n' "$PYN" "$PYW" | gb "$PY" check types pyright --tool pyright --rc 1); check "pyright: a version notice at exit 1 passes" 0 $?
+out=$(printf '%s\n%s\n' "$PYN" "WARNING: something else is wrong" | gb "$PY" check types pyright --tool pyright --rc 1); check "pyright: control, another unreadable line at exit 1 fails" 1 $?
 
 # round 3: pyright configured but missing is a failure, not a skip
 RPM=$(newproj pyrmissing)

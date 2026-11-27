@@ -13,10 +13,11 @@
 #   tsc = "path(line,col): error TSnnnn: message" (tsc --pretty false); pyright = "  path:line:col - error: message (rule)".
 # --rc N is the tool's exit code (default 1). A line is a finding first; only a line that is not a finding and matches one known full-line summary is a summary.
 # At rc 0 a line that is neither is tool noise and is ignored; at a non-zero rc it fails. A script gate (workflows, dockerfile) needs a finding or a summary line even at rc 0.
-# run reads stdout only; stderr counts only when the tool exits non-zero and stdout has no finding line. record replaces a v1 file with a NOTE. Colour, cursor and hyperlink escape sequences and carriage returns are stripped first.
+# run reads stdout for lint and types; their stderr counts when the tool exits 2 or more, or exits non-zero with no finding on stdout. A script gate's stderr is part of its output. record replaces a v1 file with a NOTE. Colour, cursor and hyperlink escape sequences and carriage returns are stripped first.
 # File format (version 2): line 1 is "# templatecentral gate baseline v2"; then one gate line per recorded gate, "# gate" TAB gate TAB tool, sorted by gate; then one line per entry: gate TAB file TAB count TAB fingerprint, sorted bytewise by gate, file, fingerprint.
 # The fingerprint is the message with spaces collapsed, never the line number, so moved code matches and a second copy (count + 1) is new. A renamed file is new. validate, check, prune and growth fail on a version 1 file; record replaces it.
 # Exit 0 ok, 1 a finding or growth, 2 a usage error or an unusable file. Nothing is read from .env files; no network. Needs bash 3.2+, POSIX awk, sort; git for growth.
+# Not caught: a developer editing outside git or hooks on their own machine and never opening a pull request; git commit --no-verify locally; a hand-made push to a host with no CI; a tool the baseline has no adapter for.
 set -u
 
 TAB=$(printf '\t')
@@ -77,6 +78,7 @@ norm() {
       if (l ~ /^check-dockerfile: no Dockerfile found, nothing to check$/) return 1
       if (l ~ /^WARNING check-dockerfile: .+$/) return 1
       if (l ~ /^check-dockerfile: hadolint reported findings for .+ \(above\)\. Fix them\. .+$/) return 1
+      if (ad == "pyright" && (l ~ /^WARNING: there is a new pyright version available/ || l ~ /^Please install the new version or set PYRIGHT_PYTHON_FORCE_VERSION to/)) return 1
       if (ad == "pyright" && (l ~ /^[0-9]+ errors?, [0-9]+ warnings?, [0-9]+ informations?[ ]*$/ || l ~ /^([\/]|[A-Za-z]:[\\\/]).*$/)) return 1
       return 0
     }
@@ -433,10 +435,12 @@ gate_run() {
 # gate_recorded <gate>: the baseline file has a gate line for the gate.
 gate_recorded() { [ -f "$BPATH" ] && [ -n "$(gate_tool "$1")" ]; }
 
-# merge_stderr: when the tool exited non-zero and its stdout holds no finding line, its stderr is the evidence and is appended to the output. Otherwise stderr is dropped.
+# merge_stderr: stderr is appended to the output when the tool exited 2 or more, which is a crash for eslint, ruff and pyright, or when it exited
+# non-zero and its stdout holds no finding line. Otherwise stderr is dropped.
 merge_stderr() {
   [ "$RCV" -ne 0 ] || return 0
   [ -s "$W/err.txt" ] || return 0
+  if [ "$RCV" -ge 2 ]; then cat "$W/err.txt" >>"$W/out.txt"; return 0; fi
   if [ "$(norm "$ADAPTER" <"$W/out.txt" | awk -F'\t' '$1 != "!" && $1 != "=" { n++ } END { print n + 0 }')" -eq 0 ]; then cat "$W/err.txt" >>"$W/out.txt"; fi
 }
 

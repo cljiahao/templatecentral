@@ -169,6 +169,7 @@ expect() {
   for frag in "$@"; do has "$frag" "$OUT" "$label: reports $frag"; done
 }
 
+TAB=$(printf '\t')
 NEWSHA=$(printf 'a%.0s' {1..40})
 seed ts
 ratchet
@@ -1613,6 +1614,68 @@ git_ add -A
 git_ commit -q -m "touch"
 expect 0 "a gitlink in the tree: passes"
 weakens eslint.config.mjs "['error', 15]" "['error', 25]" "a gitlink in the tree: a weakened gate is still caught" "was 15" "now 25"
+
+# The adopted-project baseline: growth is refused with the merge-base copy of gate-baseline.sh, shrinking passes, the helper is content-frozen.
+GBS="$SH/../../migrate/general/gate-baseline.sh"
+gb_seed() { # gb_seed <with-script: 1|0> <with-file: 1|0>
+  seed ts
+  if [[ "$1" == 1 ]]; then cp "$GBS" "$R/scripts/gate-baseline.sh"; fi
+  if [[ "$2" == 1 ]]; then
+    printf '# templatecentral gate baseline v2\n# gate\tlint\tcolon\n# gate\ttypes\ttsc\nlint\tsrc/a.ts\t1\tmsg one\nlint\tsrc/b.ts\t2\tmsg two\n' > "$R/.claude/gate-baseline.txt"
+  fi
+  git_ add -A
+  git_ commit -q -m baseline
+}
+gb_seed 1 1
+expect 0 "baseline: unchanged control"
+edit .claude/gate-baseline.txt "src/a.ts${TAB}1${TAB}msg one" "src/a.ts${TAB}2${TAB}msg one"
+expect 1 "baseline: a count raised" ".claude/gate-baseline.txt" "the baseline grew"
+edit .claude/gate-baseline.txt "msg two
+" "msg two
+lint${TAB}src/c.ts${TAB}1${TAB}msg new
+"
+expect 1 "baseline: a new entry" "the baseline grew"
+edit .claude/gate-baseline.txt "# gate${TAB}types${TAB}tsc
+" ""
+expect 1 "baseline: a gate line removed" "was removed"
+edit .claude/gate-baseline.txt "# gate${TAB}types${TAB}tsc" "# gate${TAB}types${TAB}pyright"
+expect 1 "baseline: a gate tool changed" "tool of gate types changed"
+edit .claude/gate-baseline.txt "lint${TAB}src/a.ts${TAB}1${TAB}msg one
+" ""
+expect 0 "baseline: an entry removed"
+edit .claude/gate-baseline.txt "src/b.ts${TAB}2${TAB}msg two" "src/b.ts${TAB}1${TAB}msg two"
+expect 0 "baseline: a count lowered"
+drop .claude/gate-baseline.txt
+expect 0 "baseline: the file deleted"
+edit scripts/gate-baseline.sh "set -u" "set -u
+exit 0"
+expect 1 "baseline: helper edited" "scripts/gate-baseline.sh" "content differs"
+drop scripts/gate-baseline.sh
+expect 1 "baseline: helper deleted" "scripts/gate-baseline.sh" "now removed"
+gb_seed 0 1
+edit .claude/gate-baseline.txt "src/a.ts${TAB}1${TAB}msg one" "src/a.ts${TAB}9${TAB}msg one"
+expect 1 "baseline: no helper at the merge base" "fail closed"
+gb_seed 1 0
+add_file .claude/gate-baseline.txt "# templatecentral gate baseline v2"
+expect 1 "baseline: a new file" "a new baseline file"
+gb_seed 1 1
+git_ checkout -q main
+mkdir -p "$R/sub/.claude" "$R/sub/scripts"
+cp "$GBS" "$R/sub/scripts/gate-baseline.sh"
+cp "$R/.claude/gate-baseline.txt" "$R/sub/.claude/gate-baseline.txt"
+git_ add -A
+git_ commit -q -m sub
+edit sub/.claude/gate-baseline.txt "src/a.ts${TAB}1${TAB}msg one" "src/a.ts${TAB}2${TAB}msg one"
+expect 1 "baseline: an app folder grows" "sub/.claude/gate-baseline.txt" "the baseline grew"
+# Revert proof: with the growth check skipped, the raised count passes.
+sed 's|bash "\$wd/gb.sh" -C . growth "\$mb" HEAD|true|' "$RATCHET" > "$T/ratchet-nogrowth.sh"
+cmp -s "$RATCHET" "$T/ratchet-nogrowth.sh" && check 0 1 "baseline revert proof: the mutation applied"
+RATCHET_REAL=$RATCHET
+RATCHET="$T/ratchet-nogrowth.sh"
+gb_seed 1 1
+edit .claude/gate-baseline.txt "src/a.ts${TAB}1${TAB}msg one" "src/a.ts${TAB}2${TAB}msg one"
+expect 0 "baseline revert proof: growth passes with the check skipped"
+RATCHET=$RATCHET_REAL
 
 echo "gate-ratchet.test: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

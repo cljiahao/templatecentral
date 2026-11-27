@@ -440,7 +440,7 @@ if [ "$GB" -eq 1 ]; then
   if [ "$PRUNE" -eq 1 ]; then GBMODE=prune; else GBMODE=record; fi
   echo "gate baseline ($GBMODE): the project's own lint and type tools run now"
   bash "$GEN/gate-baseline.sh" -C "$P" run "$GBMODE" || GBRC=1
-  echo "Put .claude/gate-baseline.txt under review: it may only shrink after this change (wire it into the gate ratchet; see harness-refresh.md)."
+  echo "Put .claude/gate-baseline.txt under review: it may only shrink after this change (the gate ratchet refuses growth once the merge base carries scripts/gate-baseline.sh; see harness-refresh.md)."
 fi
 
 CMP=0

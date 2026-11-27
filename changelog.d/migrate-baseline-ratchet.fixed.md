@@ -1,0 +1,1 @@
+- `gate-baseline.sh` shows the tool's stderr for a tool that exits with code 2 or more and drops the pyright version notice from the findings, and the gate ratchet refuses growth of `.claude/gate-baseline.txt` (judged with the merge-base copy of `scripts/gate-baseline.sh`, which is itself content-frozen and protected from agent edits).

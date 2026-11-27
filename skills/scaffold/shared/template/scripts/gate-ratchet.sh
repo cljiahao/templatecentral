@@ -72,6 +72,8 @@ kind_of() {
     .claude/dep-audit-allow.txt | */.claude/dep-audit-allow.txt) KIND=allow ;;
     .claude/comment-hygiene-patterns.txt | */.claude/comment-hygiene-patterns.txt) KIND=patterns ;;
     .claude/gate-budget.conf | */.claude/gate-budget.conf) KIND=gatetime ;;
+    .claude/gate-baseline.txt | */.claude/gate-baseline.txt) KIND=baseline ;;
+    scripts/gate-baseline.sh | */scripts/gate-baseline.sh) KIND=guard ;;
     .claude/allowed-licences.txt | */.claude/allowed-licences.txt | .claude/licence-exceptions.txt | */.claude/licence-exceptions.txt | .claude/change-size-exclude.txt | */.claude/change-size-exclude.txt | scripts/check-comments.licences.txt | */scripts/check-comments.licences.txt) KIND=lines ;;
     .claude/bundle-budget.txt | */.claude/bundle-budget.txt) KIND=bundle ;;
     tsconfig.json | tsconfig.*.json | */tsconfig.json | */tsconfig.*.json) KIND=tsconfig ;;
@@ -251,6 +253,21 @@ content_ok() {
       local n
       n=$(awk 'END { print NR }' "$wd/base")
       head -n "$n" "$wd/head" | cmp -s - "$wd/base"
+      ;;
+    baseline)
+      local pre
+      pre=${path%.claude/gate-baseline.txt}
+      baseline_msg=""
+      if ! base_has "${pre}scripts/gate-baseline.sh"; then
+        baseline_msg="the merge base has no ${pre}scripts/gate-baseline.sh to judge growth with (fail closed)"
+        return 1
+      fi
+      git show "$mb:${pre}scripts/gate-baseline.sh" > "$wd/gb.sh" 2>/dev/null || die "cannot read ${pre}scripts/gate-baseline.sh at the merge base $mb"
+      if ! (cd "${pre:-.}" && bash "$wd/gb.sh" -C . growth "$mb" HEAD > "$wd/gb.out" 2>&1); then
+        baseline_msg="the baseline grew or cannot be read: $(tr '\n' ' ' < "$wd/gb.out" | cut -c1-300)"
+        return 1
+      fi
+      return 0
       ;;
     gates)
       local l
@@ -1369,7 +1386,7 @@ while IFS=$'\t' read -r kind path _; do
     have_head=1
   fi
   if [ "$have_head" -eq 0 ]; then
-    if [ "$kind" = conftest ]; then continue; fi
+    if [ "$kind" = conftest ] || [ "$kind" = baseline ]; then continue; fi
     moved=$(awk -F'\t' -v p="$path" '$2 == p { print $3; exit }' "$wd/renames.txt") || die "cannot read the renames since the merge base"
     if [ -n "$moved" ]; then
       printf 'WEAKENED %s: file was present at the merge base, now removed (renamed to %s; tools read the original name, so a rename counts as a removal)\n' "$path" "$moved"
@@ -1382,7 +1399,7 @@ while IFS=$'\t' read -r kind path _; do
   file_bad=0
   newfile=""
   seeded=0
-  if [ "$kind" != guard ] && [ "$kind" != allow ] && [ "$kind" != patterns ]; then
+  if [ "$kind" != guard ] && [ "$kind" != allow ] && [ "$kind" != patterns ] && [ "$kind" != baseline ]; then
     if ! msg=$(awk -v K="$kind" -v B="$have_base" -f "$wd/facts.awk" "$wd/head" 2>&1 > "$wd/head.f"); then
       printf 'UNREADABLE %s: %s (fail closed)\n' "$path" "$msg"
       unreadable=1
@@ -1399,12 +1416,17 @@ while IFS=$'\t' read -r kind path _; do
     fi
   fi
   if [ "$have_base" -eq 0 ]; then
+    if [ "$kind" = baseline ]; then
+      printf 'WEAKENED %s: a new baseline file lets known findings pass; the merge base had none\n' "$path"
+      file_bad=1
+    fi
     if [ "$file_bad" -eq 1 ]; then weakened=1; fi
     continue
   fi
   if [ "$file_bad" -eq 0 ] && ! content_ok "$kind"; then
     case "$kind" in
       allow) printf 'WEAKENED %s: the advisory allow-list gained a line the merge base did not have\n' "$path" ;;
+      baseline) printf 'WEAKENED %s: %s\n' "$path" "$baseline_msg" ;;
       patterns) printf 'WEAKENED %s: comment-hygiene patterns were removed, edited or reordered (lines may only be added at the end)\n' "$path" ;;
       *) printf 'WEAKENED %s: gate script, runner or manifest changed (content differs from the merge base)\n' "$path" ;;
     esac
