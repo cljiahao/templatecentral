@@ -1,0 +1,1 @@
+- Seeded offline OpenAPI export entry points `scripts/export-openapi.py` (fastapi) and `scripts/export-openapi.mjs` (nestjs), the generators `check-contract.sh` runs: they build the document from the app object, with no server and no network. The nestjs `swagger.setup.ts` now exports `buildOpenApiDocument`, which `setupSwagger` and the script share.
