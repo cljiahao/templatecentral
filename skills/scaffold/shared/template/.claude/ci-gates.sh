@@ -458,7 +458,11 @@ JS
     src=${code%$'\n'}
     if [ -z "$src" ]; then echo "diffcover: no source file changed that needs coverage (deleted, excluded from coverage, or only comments and blank lines) — skipped"; exit 0; fi
     out=${DIFF_COVER_OUTPUT:-diff-cover.txt}
-    [ -f "$out" ] || fail "$out is missing although source changed. The diff-cover step must run first and keep its output there."
+    if [ ! -f "$out" ]; then
+      report=coverage/cobertura-coverage.xml
+      if [ -f pyproject.toml ]; then report=coverage.xml; fi
+      fail "$out is missing although source changed. The diff-cover step must run first and keep its output there: pipx run diff-cover $report --compare-branch=$base --fail-under=80 | tee $out"
+    fi
     if grep -q "No lines with coverage information" "$out"; then
       fail "source changed but the coverage report has no lines for it ($(printf '%s' "$src" | tr '\n' ' ')). The tests did not run with coverage, or the report is stale; regenerate it. Do not exclude the files."
     fi

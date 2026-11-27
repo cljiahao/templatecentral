@@ -323,6 +323,14 @@ dc_repo dc-missing src/more.ts
 dc
 check 1 "$RC" "diffcover fails when the diff-cover output is missing"
 has "must run first" "$OUT" "diffcover missing-output message says how to fix"
+has "pipx run diff-cover coverage/cobertura-coverage.xml --compare-branch=" "$OUT" "diffcover missing-output message names the command that writes it"
+FIRST=$OUT
+dc
+check 1 "$RC" "diffcover fails the same way on the second run"
+check "$FIRST" "$OUT" "diffcover prints the same single message on every run"
+printf '[project]\nname = "x"\n' > "$R/pyproject.toml"
+dc
+has "pipx run diff-cover coverage.xml --compare-branch=" "$OUT" "diffcover missing-output message names the Python report"
 
 # A change with no measured line is skipped; the same report for measured code still fails.
 VCFG="export default defineConfig({ test: { coverage: { provider: 'v8', exclude: ['**/*.{test,spec}.{ts,tsx}', '**/*.d.ts', 'src/components/ui/**'], thresholds: { lines: 80 } } } });"
