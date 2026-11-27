@@ -2,5 +2,6 @@
   "venvPath": ".",
   "venv": ".venv",
   "pythonVersion": "3.14",
-  "pythonPlatform": "Linux"
+  "pythonPlatform": "Linux",
+  "typeCheckingMode": "strict"
 }

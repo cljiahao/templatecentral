@@ -125,6 +125,9 @@ pre-push:
     mutation:
       # Runs the seeded mutation tool on the source lines this branch changes and fails on a surviving mutant; prints a not-set-up line when templatecentral:add mutation-testing has not run.
       run: bash scripts/check-mutation-diff.sh
+    importlinter:
+      # Fails when a fastapi layer imports a layer it must not (import-linter, docs/architecture.md); the TypeScript stacks pass with a nothing-checked line.
+      run: bash scripts/check-import-layers.sh
     contract:
       # Fails when the OpenAPI document the code produces differs from the committed openapi.json; a nestjs app needs pnpm build first.
       run: bash scripts/check-contract.sh

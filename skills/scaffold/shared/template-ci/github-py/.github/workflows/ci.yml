@@ -93,6 +93,8 @@ jobs:
           fi
       - run: ruff check src/ test/ && ruff format --check src/ test/
       - run: python -I -m pyright src/
+      - name: Import layers (import-linter enforces docs/architecture.md)
+        run: bash .claude/ci-gates.sh importlinter
       # Serial on purpose: xdist measured slower at this suite size.
       - name: Tests (serial; pytest-cov writes coverage.xml)
         run: python -m pytest test/ --cov=src --cov-report=xml -q

@@ -61,7 +61,7 @@ gates=".claude/gates.txt"
 code_of() { for f in "$@"; do if [ -f "$f" ]; then grep -vE '^[[:space:]]*#' "$f" || true; fi; done; }
 has() { case "$1" in *"$2"*) return 0 ;; esac; return 1; }
 # Every gate id this harness ships. A deleted gates.txt row cannot drop a gate, and test-harness-kit pins this list to the seeded gates.txt.
-required_gates="harness docs testbudget nosonar secrets deps changelog comments commentshape duptests exclusions mutation contract ratchet supplychain workflows envexample dockerfile workarounds review licences sbom changesize bundle diffcover"
+required_gates="harness docs testbudget nosonar secrets deps changelog comments commentshape duptests exclusions mutation contract importlinter ratchet supplychain workflows envexample dockerfile workarounds review licences sbom changesize bundle diffcover"
 # A gate script a hook or CI step runs must be a regular file, not a link, and hold content: an empty script exits 0 and passes.
 gate_file_ok() {
   local gf=$1 gid=$2 grc=0 gl

@@ -214,6 +214,12 @@ scripts/seeded-comments.test.sh	bash scripts/seeded-comments.test.sh
 scripts/seeded-duplicate-tests.test.sh	bash scripts/seeded-duplicate-tests.test.sh
 scripts/seeded-exclude-reasons.test.sh	bash scripts/seeded-exclude-reasons.test.sh
 scripts/exclusion-audit.test.sh	bash scripts/exclusion-audit.test.sh
+scripts/seeded-mutation-diff.test.sh	bash scripts/seeded-mutation-diff.test.sh
+scripts/seeded-contract.test.sh	bash scripts/seeded-contract.test.sh
+scripts/seeded-boundaries.test.sh	bash scripts/seeded-boundaries.test.sh
+scripts/seeded-import-layers.test.sh	bash scripts/seeded-import-layers.test.sh
+tests/fixtures/mutation-diff/*	bash scripts/seeded-mutation-diff.test.sh
+tests/fixtures/contract/*	bash scripts/seeded-contract.test.sh
 tests/fixtures/seeded-comments/*	bash scripts/seeded-comments.test.sh
 tests/fixtures/seeded-duplicate-tests/*	bash scripts/seeded-duplicate-tests.test.sh
 tests/fixtures/exclusions/*	bash scripts/seeded-exclude-reasons.test.sh
@@ -271,6 +277,9 @@ scripts/changelog-assemble.test.sh	bash scripts/changelog-check.sh {BASE}
 @noread	bash scripts/gate-ratchet.test.sh	README.md
 @noread	bash scripts/seeded-gates.test.sh	README.md
 @noread	bash scripts/seeded-change-size.test.sh	README.md
+@noread	bash scripts/seeded-mutation-diff.test.sh	README.md
+@noread	bash scripts/seeded-boundaries.test.sh	scripts/day-one.test.sh
+@noread	bash scripts/seeded-import-layers.test.sh	README.md
 @noread	bash scripts/seeded-review-gate.test.sh	README.md
 @noread	bash scripts/test-budget.test.sh	README.md
 @noread	bash scripts/measure-seeded-load.sh	README.md

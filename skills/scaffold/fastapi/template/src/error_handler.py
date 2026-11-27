@@ -13,11 +13,13 @@ from core.security_headers import SECURITY_HEADERS
 INTERNAL_SERVER_ERROR_DETAIL = "Internal server error"
 
 
-def _sanitize_errors(errors: Sequence[Any]) -> list[dict]:
+def _sanitize_errors(errors: Sequence[Any]) -> list[dict[str, Any]]:
     """Makes validation errors JSON-safe and drops the submitted input, which can echo passwords."""
-    safe = []
+    safe: list[dict[str, Any]] = []
     for err in errors:
-        clean = {k: v for k, v in err.items() if k not in ("input", "url")}
+        clean: dict[str, Any] = {
+            k: v for k, v in err.items() if k not in ("input", "url")
+        }
         if "ctx" in clean:
             clean["ctx"] = {
                 k: (

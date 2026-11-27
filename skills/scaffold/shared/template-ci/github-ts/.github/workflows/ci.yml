@@ -109,6 +109,8 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: bash .claude/ci-gates.sh contract "$BASE_REF"
+      - name: Import layers (nothing to run in a TypeScript project)
+        run: bash .claude/ci-gates.sh importlinter
       - name: Mutation score on changed lines (Stryker from devDependencies)
         env:
           BASE_REF: ${{ github.base_ref }}

@@ -753,6 +753,21 @@ weakens pyproject.toml "fail_under = 80" "fail_under = 70" "python coverage thre
 weakens .jscpd.json '"threshold": 3' '"threshold": 9' "python duplication limit raised" "was 3" "now 9"
 passes pyproject.toml "max-complexity = 15" "max-complexity = 12" "ruff complexity lowered"
 passes pyproject.toml "fail_under = 80" "fail_under = 85" "python coverage raised"
+weakens pyproject.toml '"core", "utils", "constants"]
+' '"core", "utils"]
+' "import-linter root package dropped" "importlinter"
+weakens pyproject.toml 'layers = ["api", "logic", "models", "core", "utils", "constants"]' 'layers = ["api", "logic", "models", "core", "constants", "utils"]' "import-linter layer order changed" "importlinter"
+weakens pyproject.toml 'type = "layers"
+' 'type = "layers"
+ignore_imports = ["api.* -> models.*"]
+' "import-linter ignore_imports added" "importlinter"
+weakens pyproject.toml "[tool.importlinter]
+" "[tool.importlinter]
+include_external_packages = true
+" "import-linter setting added" "importlinter"
+add_file .importlinter "[importlinter]
+root_package = api"
+expect 1 "new .importlinter beside pyproject settings" ".importlinter" "may read it instead"
 passes pyproject.toml "line-length = 88" "line-length = 100" "line length edit"
 weakens pyproject.toml "line-length = 88" "line-length = 88
 lint.ignore = [\"E501\"]" "dotted lint.ignore" "E501"

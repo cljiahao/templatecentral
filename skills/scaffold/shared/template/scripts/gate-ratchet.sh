@@ -5,6 +5,7 @@
 # Guarded set, derived from the tracked tree, never listed by hand: each file under .claude/hooks/, each .claude/*.sh, .claude/settings.json, every scripts/ or .claude/ path named in a hook, .claude/*.sh, gates.txt, scripts/, lefthook, a Node hook-manager folder, CI file, Makefile or package.json gate script, and every protect-files.sh pattern except instruction, invariant, agent, MCP, image and merge-snapshot entries. Skill, agent, rule and markdown files are never read. Parsed configs keep their parsed comparison; the rest are compared by content.
 # Test scripts: every package.json script whose name has a test, coverage, lint, typecheck, build, check, verify, ci, format or audit word keeps its word list. Any change is a finding except these known-safe words: --reporter, --coverage.reporter, --outputFile (with or without a value), --coverage.reportsDirectory=, --silent, --color, --no-color. A script that is gone is a finding; a new script is covered by the flag checks and the CI and lefthook comparison.
 # pytest: any change to a [tool.pytest.ini_options] key or a new key is a finding, except raising --cov-fail-under and the markers, pythonpath and asyncio_default_fixture_loop_scope keys.
+# import-linter: every key of [tool.importlinter] and its contracts must stay as it was (layers, root_packages, ignore_imports); a new .importlinter or setup.cfg competes with it.
 # Type checkers: tsconfig and pyright strictness may tighten, never loosen; a new tsconfig or pyright config may not switch strictness off.
 # Gate-time budget: .claude/gate-budget.conf may not be deleted, and its three limits may not rise; a conf with no merge-base copy is held to the seeded defaults (600, 180, 25) and may not set a higher limit or leave one out. The kind is not enforced, so a human applying the allow-gate-change label can waive a raise or a deletion, by design.
 # Allow-lists: dep-audit-allow.txt may only lose lines; comment-hygiene-patterns.txt may only gain lines at the end.
@@ -191,14 +192,14 @@ base_has() { gs_test grep -Fxq -- "$1" "$wd/base.paths"; }
 # True when HEAD tracks this exact path.
 head_has() { gs_test grep -Fxq -- "$1" "$wd/head.paths"; }
 
-# True when any pyproject.toml the merge base tracked, at any depth, sets pytest or coverage options.
+# True when any pyproject.toml the merge base tracked, at any depth, sets pytest, coverage or import-linter options.
 py_settings() {
   local f
   gs_grep -E '(^|/)pyproject[.]toml$' "$wd/base.paths" > "$wd/pyproject.lst" || die "cannot list the pyproject.toml files of the merge base"
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     git show "$mb:$f" > "$wd/py.txt" || die "cannot read $f at the merge base $mb"
-    if gs_test grep -Eq '^[[:space:]]*[[]tool[.](pytest|coverage)' "$wd/py.txt"; then return 0; fi
+    if gs_test grep -Eq '^[[:space:]]*[[]tool[.](pytest|coverage|importlinter)' "$wd/py.txt"; then return 0; fi
   done < "$wd/pyproject.lst"
   return 1
 }
@@ -211,7 +212,7 @@ shadow_reason() {
   case "$1" in */*) dir=${1%/*}/ ;; esac
   case "$name" in
     ruff.toml | .ruff.toml) if base_has "${dir}pyproject.toml"; then echo "ruff reads it instead of pyproject.toml"; return 0; fi ;;
-    .coveragerc | pytest.ini | tox.ini | setup.cfg) if py_settings; then echo "pytest and coverage may read it instead of the pyproject.toml settings"; return 0; fi ;;
+    .coveragerc | .importlinter | pytest.ini | tox.ini | setup.cfg) if py_settings; then echo "pytest, coverage and import-linter may read it instead of the pyproject.toml settings"; return 0; fi ;;
     .gitleaksignore) if base_has "${dir}.gitleaks.toml"; then echo "gitleaks reads it besides .gitleaks.toml"; return 0; fi ;;
     .eslintignore) if gs_test grep -Eq "^${dir}eslint[.]config[.][^/]*$" "$wd/base.paths"; then echo "it adds ignores besides eslint.config"; return 0; fi ;;
     jscpd.json | .jscpdrc | .jscpdrc.json | .jscpd.yml | .jscpd.yaml | .jscpd.js) if base_has "${dir}.jscpd.json"; then echo "jscpd may read it instead of .jscpd.json"; return 0; fi ;;
@@ -743,7 +744,7 @@ function toml_lines(   i, line, raw, rest, p, sect, csect, pos, kind, s2, k2, n,
       if (s2 ~ /^tool[.]pytest/) vtxt = mask_cov(vtxt)
       if (!cov_only(vtxt)) emit("cfg", csect "|" raw, vtxt)
     }
-    else if (!known && ((s2 == "" && k2 == "tool") || (s2 == "tool" && k2 ~ /^(ruff|coverage|pytest|pyright|mypy)$/))) emit("cfg", csect "|" raw, vtxt)
+    else if (!known && ((s2 == "" && k2 == "tool") || (s2 == "tool" && k2 ~ /^(ruff|coverage|pytest|pyright|mypy|importlinter)$/))) emit("cfg", csect "|" raw, vtxt)
     if (k2 == "useDefault" && rest ~ /true/) emit("req", "extend", "useDefault")
   }
 }
@@ -765,7 +766,7 @@ function cov_only(v) {
 # Tables whose every key must be known: all of .gitleaks.toml, and the ruff, coverage, pytest, pyright and mypy tables of pyproject.toml.
 function cfg_scope(s) {
   if (MODE == "gitleaks") return 1
-  return (s ~ /^tool[.](ruff|coverage|pytest|pyright|mypy)([.]|$)/)
+  return (s ~ /^tool[.](ruff|coverage|pytest|pyright|mypy|importlinter)([.]|$)/)
 }
 # Keys that change nothing about what a gate catches.
 function cfg_neutral(s, k) {

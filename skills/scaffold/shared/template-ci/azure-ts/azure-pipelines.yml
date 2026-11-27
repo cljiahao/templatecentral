@@ -31,6 +31,8 @@ jobs:
       # format:check + lint + typecheck
       - bash: pnpm run check
         displayName: Format, lint and typecheck
+      - bash: bash .claude/ci-gates.sh importlinter
+        displayName: Import layers (nothing to run in a TypeScript project)
       - bash: bash .claude/ci-gates.sh mutation "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
         displayName: Mutation score on changed lines (Stryker from devDependencies)
       - bash: pnpm exec jscpd

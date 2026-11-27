@@ -18,8 +18,10 @@ Add to `package.json` devDependencies:
 - `@stryker-mutator/vitest-runner` — Vitest integration
 
 ```bash
-pnpm add -D @stryker-mutator/core@10.1.1 @stryker-mutator/vitest-runner@10.1.1
+pnpm add -D --save-exact @stryker-mutator/core @stryker-mutator/vitest-runner
 ```
+
+Both packages stay on one version: the one in `<skill-dir>/../scaffold/shared/versions.txt`, which the seeded mutation gate runs.
 
 ### Steps
 

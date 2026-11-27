@@ -1,9 +1,10 @@
 import logging
 import logging.handlers
 import sys
+from collections.abc import Sequence
 from datetime import datetime as dt
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -29,17 +30,18 @@ def _redact_sensitive(
 ) -> dict[str, Any]:
     """Redact sensitive values by key, recursing into nested dicts and sequences."""
 
-    def scrub(value: Any) -> Any:
+    def scrub(value: object) -> object:
         if isinstance(value, dict):
+            items = cast("dict[str, object]", value).items()
             return {
                 k: ("***" if k.lower() in _SENSITIVE_KEYS else scrub(v))
-                for k, v in value.items()
+                for k, v in items
             }
         if isinstance(value, (list, tuple)):
-            return [scrub(v) for v in value]
+            return [scrub(v) for v in cast("Sequence[object]", value)]
         return value
 
-    return scrub(event_dict)
+    return cast("dict[str, Any]", scrub(event_dict))
 
 
 class MyTimedRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
