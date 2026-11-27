@@ -736,14 +736,85 @@ has "cannot waive an unreadable config" "$OUT" "ratchet gate: says the unreadabl
 stub_ratchet cg-ratchet-weakened "WEAKENED some.cfg: was 1, now 2"
 check 0 "$RC" "ratchet gate: label still waives a big weakened-only finding ($(printf '%s' "$OUT" | tail -c 300))"
 
-# ---- every seeded shell script parses under the oldest bash a macOS runner has (/bin/bash 3.2).
+# ---- every seeded shell script is syntactically valid for /bin/bash (bash -n proves syntax only, not the 3.2 rule below).
 parsed=0
+seeded_shell() {
+  find "$REPO_ROOT/skills/scaffold" -type f -not -name '*.md' -not -path '*/node_modules/*' | while IFS= read -r f; do
+    case "$f" in *.sh | *.envsh) printf '%s\n' "$f" ;; *) if head -n 1 "$f" | grep -qE '^#!.*(bash|/sh)'; then printf '%s\n' "$f"; fi ;; esac
+  done
+}
 while IFS= read -r f; do
-  case "$f" in *.sh | *.envsh) ;; *) head -n 1 "$f" | grep -qE '^#!.*(bash|/sh)' || continue ;; esac
   parsed=$((parsed + 1))
-  if err=$(/bin/bash -n "$f" 2>&1); then ok; else bad "bash 3.2 cannot parse ${f#"$REPO_ROOT"/}: $err"; fi
-done < <(find "$REPO_ROOT/skills/scaffold" -type f -not -name '*.md' -not -path '*/node_modules/*')
+  if err=$(/bin/bash -n "$f" 2>&1); then ok; else bad "/bin/bash cannot parse ${f#"$REPO_ROOT"/}: $err"; fi
+done < <(seeded_shell)
 if [ "$parsed" -ge 40 ]; then ok; else bad "bash parse check found only $parsed seeded shell scripts"; fi
+
+# ---- bash 3.2 (macOS /bin/bash) cannot parse a case statement opened inside $( ... ) unless its patterns start with "(";
+# bash -n on a newer bash accepts it, so this static guard is what fails on Linux. Line numbers of offenders are printed.
+cat > "$T/case-in-subst.awk" <<'AWKEOF'
+# A substitution open at the end of a line is kept only when the line ends with its "$(".
+# Prints the line of every `case ... in` opened inside $( ... ) whose first pattern has no leading "(": bash 3.2 cannot parse that.
+function judge(rest) {
+  if (rest ~ /^[ \t]*\(/) return
+  if (rest ~ /^[ \t]*$/) { pending = NR; return }
+  print NR
+}
+{
+  if (pending && $0 !~ /^[ \t]*$/) { if ($0 !~ /^[ \t]*\(/) print pending; pending = 0 }
+  line = $0
+  if (line ~ /^[ \t]*#/) next
+  n = length(line); sq = 0; dq = 0
+  for (i = 1; i <= n; i++) {
+    c = substr(line, i, 1)
+    if (c == "\\" && !sq) { i++; continue }
+    if (sq) { if (c == "'") sq = 0; continue }
+    if (c == "'" && !dq) { sq = 1; continue }
+    if (c == "\"") { dq = !dq; continue }
+    if (c == "$" && substr(line, i + 1, 1) == "(" && substr(line, i + 2, 1) != "(") { depth++; saved[depth] = dq; dq = 0; kind[depth] = 1; i++; continue }
+    if (dq) continue
+    if (depth > 0 && c == "(") { depth++; kind[depth] = 0; saved[depth] = 0; continue }
+    if (depth > 0 && c == ")") { dq = saved[depth]; depth--; continue }
+    if (depth > 0 && c == "c" && (i == 1 || substr(line, i - 1, 1) !~ /[A-Za-z0-9_-]/)) {
+      rest = substr(line, i)
+      if (match(rest, /^case +[^ ]+ +in( |$)/)) { judge(substr(rest, RLENGTH + 1)); break }
+    }
+  }
+  if (depth > 0 && line !~ /\$\([ \t]*$/) depth = 0
+}
+AWKEOF
+case_in_subst() { awk -f "$T/case-in-subst.awk" "$1"; }
+cat > "$T/plant-bad.sh" <<'PLANT'
+v=$(case "$f" in *.py) echo 1 ;; *) echo 0 ;; esac)
+PLANT
+cat > "$T/plant-ok.sh" <<'PLANT'
+v=$(case "$f" in (*.py) echo 1 ;; (*) echo 0 ;; esac)
+case "$f" in *.py) echo 1 ;; esac
+w=$(
+  case "$f" in
+    (*.py) echo 1 ;;
+  esac
+)
+PLANT
+cat > "$T/plant-bad-multiline.sh" <<'PLANT'
+v=$(
+  case "$f" in
+    *.py) echo 1 ;;
+  esac
+)
+PLANT
+cat > "$T/plant-main.sh" <<'PLANT'
+if git diff -U0 "$base"...HEAD -- "$f" | awk -v py="$(case "$f" in *.py) echo 1 ;; *) echo 0 ;; esac)" '{ print }'; then :; fi
+PLANT
+check "1" "$(case_in_subst "$T/plant-bad.sh")" "case-in-substitution guard flags a case opened inside \$( ... )"
+check "2" "$(case_in_subst "$T/plant-bad-multiline.sh")" "case-in-substitution guard flags a case with unparenthesised patterns on the next line"
+check "" "$(case_in_subst "$T/plant-ok.sh")" "case-in-substitution guard passes parenthesised patterns and a top-level case"
+offenders=
+while IFS= read -r f; do
+  lines=$(case_in_subst "$f" | tr '\n' ' ')
+  if [ -n "$lines" ]; then offenders="$offenders ${f#"$REPO_ROOT"/}:${lines% }"; fi
+done < <(seeded_shell)
+check "" "$offenders" "no seeded shell script opens a case inside \$( ... ) (bash 3.2 cannot parse it)"
+check "1" "$(case_in_subst "$T/plant-main.sh")" "case-in-substitution guard flags the construct the broken origin/main ci-gates.sh held (a case inside a command substitution in an awk -v argument)"
 
 echo "seeded-gates: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]
