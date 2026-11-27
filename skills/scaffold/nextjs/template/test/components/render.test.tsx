@@ -1,4 +1,4 @@
-import { createElement, type ReactElement } from 'react';
+import { createElement as h, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FormProvider, useForm } from 'react-hook-form';
 import { describe, expect, it, vi } from 'vitest';
@@ -54,35 +54,22 @@ describe('components', () => {
     ['Pill solid', <Pill variant="solid">Tag</Pill>, ['Tag', 'text-background'], ['bg-card']],
     ['Pill outline', <Pill>Tag</Pill>, ['bg-card'], ['text-background']],
     [
-      'CustomCard',
-      createElement(CustomCard, { header: 'Head', description: 'Desc' }, 'Body'),
+      'Card',
+      h(CustomCard, { header: 'Head', description: 'Desc' }, 'Body'),
       ['Head', 'Desc', 'Body'],
     ],
     ['ThemeToggleButton', <ThemeToggleButton />, ['aria-label="Toggle dark mode"']],
+    ['Dialog', h(CustomDialog, { title: 'T', trigger: <b>Open</b> }, 'x'), ['Open']],
+    ['Media', h(MediaCard, { title: 'T', mediaPosition: 'left' }, 'media'), ['media', 'flex-row']],
+    ['Media bare', <MediaCard title="Only" description="D" />, ['Only', '>D<'], ['media']],
     [
-      'CustomDialog',
-      createElement(CustomDialog, { title: 'T', trigger: <b>Open</b> }, 'x'),
-      ['Open'],
-    ],
-    [
-      'MediaCard left',
-      createElement(MediaCard, { title: 'T', mediaPosition: 'left' }, 'media'),
-      ['media', 'flex-row'],
-    ],
-    [
-      'MediaCard bare',
-      <MediaCard title="Only title" description="D" />,
-      ['Only title', '>D<'],
-      ['media'],
-    ],
-    [
-      'LinkList external',
+      'LinkExt',
       <LinkList links={links} />,
       ['href="/docs"', 'target="_blank" rel="noopener noreferrer"'],
     ],
-    ['LinkList internal', <LinkList links={links.slice(0, 1)} />, ['href="/docs"'], ['rel=']],
+    ['LinkList int', <LinkList links={links.slice(0, 1)} />, ['href="/docs"'], ['rel=']],
     [
-      'CustomFormField',
+      'Field',
       <FieldHarness />,
       ['aria-describedby="name-description"', 'id="name-description"', 'for="name"', 'id="name"'],
     ],
