@@ -457,6 +457,24 @@ mkdir -p "$R3/links2/src"
 mk links2/package.json $'{\n  "name": "demo"\n}\n'
 ln -s no-such-folder "$R3/links2/src/gone"
 SAVED_AUD=$ALLAUD
+mk w3sr1/package.json $'{\n  "name": "demo"\n}\n'
+mk w3sr1/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk w3sr1/src/a.ts $'// Stryker disable Arith -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore String\n'
+mk w3sr2/package.json $'{\n  "name": "demo"\n}\n'
+mk w3sr2/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk w3sr2/src/a.ts $'// Stryker disable Arith -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore Arith\n'
+mk w3sr3/package.json $'{\n  "name": "demo"\n}\n'
+mk w3sr3/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk w3sr3/src/a.ts $'// Stryker disable Arith -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore Arith,Arith\n'
+mk w3sr4/package.json $'{\n  "name": "demo"\n}\n'
+mk w3sr4/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk w3sr4/src/a.ts $'// Stryker disable Arith -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore Arith -- done with it\n'
+mk w3sr5/package.json $'{\n  "name": "demo"\n}\n'
+mk w3sr5/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk w3sr5/src/a.ts $'// Stryker disable Arith -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore Arith Foo\n'
+mk w3sr6/package.json $'{\n  "name": "demo"\n}\n'
+mk w3sr6/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk w3sr6/src/a.ts $'// Stryker disable Arith -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore all\n'
 R3ALL=$(bash "$root/$REPORT" "$R3" 2>&1)
 ALLAUD=$(printf '%s\n' "$R3ALL" | grep '  exclusion-audit  check  ' | sed 's/  exclusion-audit  check  .*//')
 H='hides hand-written source'
@@ -477,6 +495,12 @@ want r5son "round 5 item 1: NOSONAR after a directive" "^src/a\.ts:1 inline cove
 want r5tox "round 5 item 2: tox commands with --omit" "^tox\.ini:3 passes an exclude or include on the command line"
 want r5uni "round 5 item 3: Sonar exclusions and coverage exclusions are one group" "together hide"
 want venv3 "a lone pyvenv.cfg does not hide its folder" "^env/lib/site\.py:2 inline coverage marker '# pragma: no cover': no reason$"
+want w3sr1 "wiring 3: a restore of another mutator closes nothing" "^src/a\.ts:3 inline coverage marker 'stryker restore': closes no open Stryker disable"
+unwanted w3sr2 "wiring 3 control: a restore that matches its disable" "closes no open Stryker disable"
+unwanted w3sr3 "wiring 3 control: a duplicate mutator in a restore is one mutator" "closes no open Stryker disable"
+unwanted w3sr4 "wiring 3 control: a trailing comment after a restore" "closes no open Stryker disable"
+want w3sr5 "wiring 3: free text in a restore is no mutator list" "^src/a\.ts:3 inline coverage marker 'stryker restore': closes no open Stryker disable"
+unwanted w3sr6 "wiring 3 control: restore all closes a named disable" "closes no open Stryker disable"
 unwanted cmd1 "other tools' command lines are not findings" "passes an exclude"
 want cmd2 "a tool segment after && is a finding" "passes an exclude"
 want cmd3 "a CI workflow is scanned" "ci\.yml:4 passes an exclude"
@@ -516,6 +540,7 @@ AR=defects/exclusion-audit/rules.sh
 audit_mutant3 gain venv1 "pragma" "$AR" 'if (l[i] ~ /\/pyvenv\.cfg$/)' 'if (l[i] ~ /\/zzz\.cfg$/)'
 audit_mutant3 gain cmd1 "passes an exclude" "$AR" $'(generic || cmd == "nyc" || cmd == "c8" || cmd == "coverage" || cmd == "mutmut") && ' ''
 audit_mutant3 lose cmd2 "passes an exclude" "$AR" $'gsub(/&&/, "\\001", line)' $'gsub(/&&/, " ", line)'
+audit_mutant3 lose w3sr1 "closes no open Stryker disable" defects/exclusion-audit/scan.awk 'if (!hit) {' 'if (0) {'
 audit_mutant3 gain mark1 "inline coverage marker" defects/exclusion-audit/scan.awk $'match(low, /^(istanbul|c8|v8)[ \\t]+ignore' $'match(low, /(istanbul|c8|v8)[ \\t]+ignore'
 audit_mutant3 gain sonar1 "allow-list" defects/exclusion-audit/scan.awk $'if (key ~ /(^|\\.)sonar\\.([A-Za-z0-9_-]+\\.)*test\\.inclusions$/) return' ''
 audit_mutant3 lose broad1 "$H" "$AR" $'rules_eval excl "$p" "$dir"' 'return 1'

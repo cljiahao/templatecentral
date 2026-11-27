@@ -112,6 +112,7 @@ EOT
         case "$status" in
           reason) lines_reason="$lines_reason${text}has reason$NL" ;;
           file) lines_hides="$lines_hides${text}hides hand-written source (a whole-file marker leaves the file out of coverage, and no reason can cover that), no reason accepted$NL" ;;
+          unmatched) lines_none="$lines_none${text}closes no open Stryker disable$NL" ;;
           *) lines_none="$lines_none${text}no reason$NL" ;;
         esac
         ;;
@@ -415,6 +416,7 @@ EOF
     words=$(cat "$DEFECTS/exclusion-audit/placeholders.txt") || return 0
     mout=$(printf '%s\0' "${a_mark[@]}" | TC_EXCLUDE_DEFAULTS=$tools TC_REASON_PLACEHOLDERS=$words xargs -0 awk -v mode=marks -f "$DEFECTS/exclusion-audit/scan.awk" 2>&1)
     mrc=$?
+    # Any text on stderr, even an awk warning that would not change the records, makes the scan unreadable and gives one X record.
     mclean=$(printf '%s\n' "$mout" | grep "^M$tab")
     if [ "$mrc" -ne 0 ] || [ "$(printf '%s\n' "$mout" | grep -v "^M$tab" | grep -c .)" -gt 0 ]; then
       mclean="$mclean${mclean:+$NL}X${tab}${a_mark[0]}${tab}1${tab}the inline marker scanner failed, so no source file was audited for markers${tab}${tab}"

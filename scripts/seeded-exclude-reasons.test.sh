@@ -1048,7 +1048,7 @@ mutant_dir "$d" "$AW" 'low = tolower(body)' 'low = tolower(body) (1 +)' '|| bad 
 if [ "$MRC" -eq 0 ]; then ok "revert proof: item 6 marker scanner passes silently with the check undone"; else nok "revert proof: item 6 marker scanner should pass silently with the check undone (exit $MRC)" "$MOUT"; fi
 
 # ---- Round 6 -----------------------------------------------------------------------------------------------------------------------
-SKM=' || sameset(ml, smut[k])'
+SKM=' || ml == smut[k]'
 
 # 1 A Stryker restore closes only the disable whose mutator list it names; "restore all" closes every open disable.
 d=$(r4dir sk6)
@@ -1065,7 +1065,25 @@ mk "$d" src/a.ts $'// Stryker disable all -- reason: legacy code kept until the 
 r3_ok "item 1 control: disable all and restore all" "$d"
 mk "$d" src/a.ts $'// Stryker disable Arith: reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore all\n'
 r3_ok "item 1 control: restore all closes a named disable" "$d"
-r3_flip "item 1 restore all" "$d" "$AW" 'ml == "all" || sameset' 'ml == "zzz" || sameset'
+r3_flip "item 1 restore all" "$d" "$AW" 'ml == "all" || ml == smut[k]' 'ml == "zzz" || ml == smut[k]'
+# Wiring round 3: a mutator listed twice is one mutator, free text is no mutator name, and a restore that closes nothing is a finding.
+mk "$d" src/a.ts $'// Stryker disable Arith,Arith -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore Arith\n'
+r3_ok "wiring 3 control: a mutator listed twice in a disable" "$d"
+r3_flip "wiring 3 duplicate mutator" "$d" "$AW" 'if (i == 1 || p[i] != p[i - 1])' 'if (1)'
+mk "$d" src/a.ts $'// Stryker disable Arith -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore Arith,Arith\n'
+r3_ok "wiring 3 control: a mutator listed twice in a restore" "$d"
+mk "$d" src/a.ts $'// Stryker disable Arith legacy copy: reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore Arith legacy copy\n'
+r3_fail "wiring 3: free text after the mutator is not a mutator list" "$d" "src/a\.ts:3 .*closes no open Stryker disable"
+r3_lost "wiring 3 free text" "$d" "src/a\.ts:3 .*closes no open Stryker disable" "$AW" 'p[i] ~ /[ \t]/ || p[i] == ""' '0'
+mk "$d" src/a.ts $'// Stryker disable Arith legacy copy: reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore all\n'
+r3_ok "wiring 3 control: restore all closes a disable with free text" "$d"
+mk "$d" src/a.ts $'export const a = 1;\n// Stryker restore Arith\n'
+r3_fail "wiring 3: a restore with no disable before it" "$d" "src/a\.ts:2 .*closes no open Stryker disable"
+r3_lost "wiring 3 unmatched restore" "$d" "src/a\.ts:2 .*closes no open Stryker disable" "$AW" 'if (!hit) {' 'if (0) {'
+mk "$d" src/a.ts $'// Stryker disable Arith -- reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore Arith\n// Stryker restore Arith\n'
+r3_fail "wiring 3: a second restore of the same mutator" "$d" "src/a\.ts:4 .*closes no open Stryker disable"
+mk "$d" src/a.ts $'export const a = 1;\n// Stryker restore all\n'
+r3_fail "wiring 3: restore all with nothing open" "$d" "src/a\.ts:2 .*closes no open Stryker disable"
 
 # 4 A reason in a later comment on the line of the marker counts.
 mk "$d" src/a.ts $'/* Stryker disable all */ // reason: legacy code kept until the rewrite\nexport const a = 1;\n// Stryker restore all\n'

@@ -48,6 +48,7 @@
 # check-exclude-rules.sh (which entries hide source). Each scanner prints tab separated records: E file line kind entry status (status
 # reason, none, shared or default), I file line kind entries status for an allow-list, T file line key value for a coverage threshold,
 # X file line message for a config that cannot be read, M file line marker text status for an inline marker.
+# Not caught: a developer editing outside git or hooks on their own machine and never opening a pull request; git commit --no-verify locally; a hand-made push to a host with no CI; tools the plugin does not seed (c8 command-line flags, mvn, Sonar scan action args); an exclude one tool reads from the union of several configs; configs in other folders reached through root or workspaces.
 set -uo pipefail
 export LC_ALL=C
 
@@ -467,6 +468,7 @@ while IFS="$tab" read -r tag file line kind entry status; do
     M)
       case "$status" in
         reason) checked=$((checked + 1)) ;;
+        unmatched) bad "$file:$line '$kind' closes no open Stryker disable, so the mutators it names were never disabled or were already restored. Fix: remove the restore, or make its mutator list match the disable it closes." ;;
         file) bad "$file:$line '$kind' marks a whole file as not covered, which hides hand-written code and no reason can cover it. Fix: remove the marker and test the file, or mark only the lines that cannot run, each with a reason." ;;
         *) bad "$file:$line '$kind' has no reason. Fix: add \"reason: <why this line cannot be tested>\" (at least 3 different words) on the same line or the line above." ;;
       esac

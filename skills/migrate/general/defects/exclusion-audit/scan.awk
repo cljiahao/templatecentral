@@ -151,31 +151,33 @@ function reasontext(t,   i) {
   sub(/[ \t]*\*\/.*$/, "", t)
   return trim(t)
 }
-# The mutator list of a Stryker disable or restore: the words after the keyword, up to a reason, lower case, "all" when none is named.
-function mlist(s) {
+# The mutator list of a Stryker disable or restore: a sorted set of lower case names, "all" when none is named or "all" is one of them.
+# A name with a space in it, or an empty name, is free text, not a mutator: the list reads "?", which a disable keeps open until restore all.
+function mlist(s,   n, p, i, j, t, out) {
   sub(/^stryker[ \t]+(disable|restore)/, "", s)
   sub(/[ \t]+--.*$/, "", s)
   sub(/[ \t]*reason[ \t]*:.*$/, "", s)
   sub(/:.*$/, "", s)
   gsub(/[ \t]*,[ \t]*/, ",", s)
   s = trim(s)
-  return (s == "" ? "all" : s)
-}
-function sameset(a, b,   na, nb, x, y, i, j, f) {
-  na = split(a, x, ","); nb = split(b, y, ",")
-  if (na != nb) return 0
-  for (i = 1; i <= na; i++) {
-    f = 0
-    for (j = 1; j <= nb; j++) if (x[i] == y[j]) f = 1
-    if (!f) return 0
+  if (s == "") return "all"
+  n = split(s, p, ",")
+  for (i = 1; i <= n; i++) if (p[i] ~ /[ \t]/ || p[i] == "") return "?"
+  for (i = 1; i <= n; i++) if (p[i] == "all") return "all"
+  for (i = 2; i <= n; i++) {
+    t = p[i]
+    for (j = i - 1; j >= 1 && p[j] > t; j--) p[j + 1] = p[j]
+    p[j + 1] = t
   }
-  return 1
+  out = ""
+  for (i = 1; i <= n; i++) if (i == 1 || p[i] != p[i - 1]) out = out (out == "" ? "" : ",") p[i]
+  return out
 }
 function popat(k,   j) {
   for (j = k; j < nstack; j++) { stack[j] = stack[j + 1]; smut[j] = smut[j + 1] }
   nstack--
 }
-function cm(body, nr, raw, own,   low, kind, st, prevt, at, rest, big, nn, k, ml) {
+function cm(body, nr, raw, own,   low, kind, st, prevt, at, rest, big, nn, k, ml, hit) {
   # A reason in a later comment on the line of a marker still counts, as in /* Stryker disable all */ // reason: why.
   if (nrec > 0 && rline[nrec] == nr && rst[nrec] == "none" && valid(reasontext(body))) rst[nrec] = "reason"
   low = tolower(body)
@@ -197,7 +199,16 @@ function cm(body, nr, raw, own,   low, kind, st, prevt, at, rest, big, nn, k, ml
   # A restore closes only the disable whose mutator list it names; "restore all" closes every open disable.
   if (kind == "stryker restore") {
     ml = mlist(low)
-    for (k = nstack; k >= 1; k--) if (smut[k] != "" && (ml == "all" || sameset(ml, smut[k]))) { popat(k); if (ml != "all") break }
+    hit = 0
+    for (k = nstack; k >= 1; k--) if (smut[k] != "" && (ml == "all" || ml == smut[k])) { popat(k); hit = 1; if (ml != "all") break }
+    # A restore that closes no open disable is a finding: the mutators it names were never disabled, or were already restored.
+    if (!hit) {
+      at = trim(raw)
+      sub(/\r$/, "", at)
+      if (length(at) > 100) at = substr(at, 1, 100)
+      nrec++
+      rline[nrec] = nr; rkind[nrec] = kind; rtext[nrec] = at; rst[nrec] = "unmatched"
+    }
     return
   }
   # ignore next N with N above 20 covers a block, not a line: it reads like an ignore start with no stop.
@@ -220,7 +231,7 @@ function cm(body, nr, raw, own,   low, kind, st, prevt, at, rest, big, nn, k, ml
   if (length(at) > 100) at = substr(at, 1, 100)
   nrec++
   rline[nrec] = nr; rkind[nrec] = kind; rtext[nrec] = at; rst[nrec] = st
-  if (kind ~ /ignore[ \t]+start$/ || kind == "stryker disable") { stack[++nstack] = nrec; smut[nstack] = (kind == "stryker disable" ? mlist(low) : "") }
+  if (kind ~ /ignore[ \t]+start$/ || kind == "stryker disable") { stack[++nstack] = nrec; smut[nstack] = (kind == "stryker disable" ? mlist(low) : ""); if (smut[nstack] == "?") smut[nstack] = "all" }
 }
 function flush(   k, f) {
   if (fname == "") return

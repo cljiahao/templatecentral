@@ -28,6 +28,7 @@
 #   typescript, unparsable file, a file name with a tab or newline, test files that hold no test case, a declared test
 #   script or config with no test file found, test cases that were read but none compared).
 # There is no inline ignore and no environment switch; the only way to stop the check is to not run it.
+# Not caught: a developer editing outside git or hooks on their own machine and never opening a pull request; git commit --no-verify locally; a hand-made push to a host with no CI; tests that differ only in a way the row check cannot see; test files in a language this gate does not read.
 set -uo pipefail
 export LC_ALL=C
 

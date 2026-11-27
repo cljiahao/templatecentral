@@ -3,8 +3,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
-// Reduce an entry to a plain pattern, as norm_pat in check-exclude-rules.sh does:
-// no !, ^, trailing $, no ./ or // or /./, regex spellings as globs.
+// Reduce an entry to a plain pattern as norm_pat in check-exclude-rules.sh does: no !, ^, $, ./ or //, globs for regex.
 function normPat(x) {
   let p = String(x).replace(/^!/, '').replace(/^\^/, '').replace(/\$$/, '');
   p = p.split('\\.').join('.').split('.*').join('*');
@@ -17,8 +16,7 @@ const defaults = new Set((process.env.TC_EXCLUDE_DEFAULTS || '').split('\n').fil
 defaults.delete('');
 const REASON = /^reason:\s+\S+(\s+\S+){2,}\s*$/;
 const PLACEHOLDERS = new Set((process.env.TC_REASON_PLACEHOLDERS || '').split('\n').filter(Boolean));
-// A reason: at least 3 different words of 3+ letters; not a repeated single letter,
-// not a path segment of the entries, no placeholder.
+// A reason: 3+ different words of 3+ letters, not a repeated letter, not a path segment of the entries, no placeholder.
 function validReason(text, entries = []) {
   if (!REASON.test(text)) return false;
   const words = text.slice('reason:'.length).split(/[\s,;"`()]+/).map((w) => w.replace(/[.:!?]+$/, '').toLowerCase()).filter(Boolean);
@@ -37,8 +35,7 @@ const emit = (...fields) => console.log(fields.map(clean).join('\t'));
 const args = process.argv.slice(2);
 let root = process.cwd();
 const files = [];
-// --as=MODE, with MODE one of jest, vitest, stryker or nyc, sets the scan mode of the files after it,
-// whatever their names; --as= clears it.
+// --as=MODE, one of jest, vitest, stryker or nyc, sets the scan mode of later files; --as= clears it.
 let asMode = null;
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--root') root = path.resolve(args[++i] || '.');
