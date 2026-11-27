@@ -1,0 +1,5 @@
+    a.x_is_positive__mutmut_1: killed
+    a.x_is_positive__mutmut_2: killed
+    c.x_untested__mutmut_1: no tests
+    c.x_untested__mutmut_2: no tests
+    b.x_clamp__mutmut_1: survived
