@@ -18,7 +18,9 @@
 # A case that passes a named handler the same file does not define (it('a', handler)) is counted and gets a NOTE.
 # Known limits, accepted: a no-op statement or a reordered body defeats rule 1, and the same shape split across files
 #   defeats rule 2. The check finds copy-paste, not every semantic duplicate.
-# Known limit: test files inside a nested git repository or submodule are not checked; a NOTE names each such folder.
+# Known limit: test files inside a nested git repository or submodule are not checked; a NOTE names each outermost such folder.
+# A table that is read only by it.each, a loop, len() or a read-only array method is checked for repeated rows; any other
+#   use (a push, a sort, passing it on) leaves its rows unchecked.
 # Files: in a git work tree, what git tracks plus what it does not ignore; elsewhere everything but node_modules and virtual
 #   environments, with a NOTE that build output was not filtered.
 # Helpers print one record per case: kind, file, line, token count, exact key, shape key (tab-separated).
@@ -176,10 +178,24 @@ if command -v git > /dev/null 2>&1; then
   if [ "$gitrc" -ne 0 ] && { [ -n "${GIT_DIR:-}" ] || ! grep -q 'not a git repository' "$wd/git.err"; }; then
     die "git could not tell whether $root is a work tree ($(head -n 1 "$wd/git.err")): fix the git setup or unset GIT_DIR, then run again"
   fi
+  # A .git entry that git cannot open (a corrupt HEAD) reads as "not a git repository", so look for one on the way up.
+  if [ "$gitrc" -ne 0 ]; then
+    up=$root
+    while :; do
+      if [ -e "$up/.git" ]; then
+        die "$up/.git exists but git cannot open it ($(head -n 1 "$wd/git.err")): repair the repository, then run again"
+      fi
+      [ "$up" != / ] || break
+      up=${up%/*}
+      [ -n "$up" ] || up=/
+    done
+  fi
 fi
 if [ "$gitrc" -eq 0 ] && [ "$gitout" = true ]; then
   in_git=1
-  find "$root" -mindepth 2 -name node_modules -prune -o -name .git -print 2> /dev/null | sort > "$wd/nested.dirs" || die "cannot walk $root"
+  # Only the outermost nested repository counts: one inside another is already under it.
+  find "$root" -mindepth 2 -name node_modules -prune -o -name .git -print 2> /dev/null | sort \
+    | awk '{ d[NR] = $0 } END { for (i = 1; i <= NR; i++) { keep = 1; for (j = 1; j <= NR; j++) if (j != i) { p = substr(d[j], 1, length(d[j]) - 4); if (substr(d[i], 1, length(p)) == p) keep = 0 } if (keep) print d[i] } }' > "$wd/nested.dirs" || die "cannot walk $root"
   git -C "$root" ls-files -z -co --exclude-standard 2> /dev/null | tr '\0' '\n' > "$wd/gitlist" || die "cannot list the files of the git work tree $root"
 else
   printf 'NOTE build output was not filtered because the project is not a git repository: compiled copies of tests are read too.\n' >> "$wd/notes"

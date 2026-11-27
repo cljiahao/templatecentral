@@ -116,7 +116,7 @@ ci_gate() {
   EC=$?
 }
 
-# run_step <gh|az> <base branch>: sets OUT and EC from the seeded CI ratchet step script, run in the current repo.
+# run_step <gh|ghpy|az> <base branch>: sets OUT and EC from the seeded CI ratchet step script, run in the current repo.
 run_step() {
   mkdir -p "$T/rt"
   rm -f "$T/rt"/*
@@ -549,6 +549,11 @@ block_scalar() {
   fi
 }
 block_scalar "$SH/template-ci/github-ts/.github/workflows/ci.yml" "  gate-ratchet:" '^ +run: [|]$' "$T/step-gh.sh"
+block_scalar "$SH/template-ci/github-py/.github/workflows/ci.yml" "  gate-ratchet:" '^ +run: [|]$' "$T/step-ghpy.sh"
+NOSTEP="$T/ci-no-ratchet.yml"
+awk '/^  gate-ratchet:/ { skip = 1; next } /^  [a-z]/ { skip = 0 } !skip' "$SH/template-ci/github-py/.github/workflows/ci.yml" > "$NOSTEP"
+( block_scalar "$NOSTEP" "  gate-ratchet:" '^ +run: [|]$' "$T/step-none.sh" ) >/dev/null 2>&1
+check 2 "$?" "ci step ghpy: a template without the ratchet step is refused"
 block_scalar "$SH/template-ci/azure/azure-pipelines/templatecentral-gates.yml" "# The merge-base copy of ci-gates.sh runs" '^ +- bash: [|]$' "$T/step-az.sh"
 git_ checkout -q -B main main
 printf '#!/usr/bin/env bash\necho BASE-ENTRY\nexit 9\n' > "$R/.claude/ci-gates.sh"
@@ -556,14 +561,14 @@ git_ commit -q -am "base entry"
 git_ checkout -q -B work main
 cp "$SH/template/.claude/ci-gates.sh" "$R/.claude/ci-gates.sh"
 git_ commit -q -am "head entry"
-for kind in gh az; do
+for kind in gh ghpy az; do
   run_step "$kind" main
   check 9 "$EC" "ci step $kind: the merge-base entry point runs ($OUT)"
   has "BASE-ENTRY" "$OUT" "ci step $kind: output from the base entry point"
   check 0 "$LEFT" "ci step $kind: temporary copy removed"
   git_ checkout -q -f work
 done
-for kind in gh az; do
+for kind in gh ghpy az; do
   run_step "$kind" no-such-branch
   check 1 "$EC" "ci step $kind: missing base ref exits 1 ($OUT)"
   has "fetch" "$OUT" "ci step $kind: says how to fix a missing base ref"
@@ -573,7 +578,7 @@ for kind in gh az; do
 done
 git_ checkout -q --orphan lone
 git_ commit -q -m lone
-for kind in gh az; do
+for kind in gh ghpy az; do
   run_step "$kind" main
   check 1 "$EC" "ci step $kind: no merge base exits 1 ($OUT)"
   has "no merge base" "$OUT" "ci step $kind: names the missing merge base"
@@ -585,7 +590,7 @@ git_ commit -q -m "base without the harness entry"
 git_ checkout -q -B work main
 git_ checkout main~1 -- .claude/ci-gates.sh .claude/gates.txt
 git_ commit -q -m "adopt"
-for kind in gh az; do
+for kind in gh ghpy az; do
   run_step "$kind" main
   check 0 "$EC" "ci step $kind: first adoption falls back to the head entry point ($OUT)"
   has "first adoption" "$OUT" "ci step $kind: first adoption reported"

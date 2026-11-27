@@ -79,7 +79,7 @@ jobs:
       - name: Duplication (production source <= 3%, per .jscpd.json)
         # Pinned by JSCPD_VERSION; bump it deliberately.
         run: npx --yes jscpd@${JSCPD_VERSION}
-      # Dev tools install last, after every gate that does not need them.
+      # Dev tools install after every gate that does not need them; only the budget note, which reports last, runs after the tests.
       - name: Install dev tools and check their licences (after the licence and SBOM gates)
         run: |
           set -euo pipefail

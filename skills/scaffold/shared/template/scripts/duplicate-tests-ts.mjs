@@ -4,6 +4,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
+// Array methods that read a table and never change it; any other use of a table name leaves its rows unchecked.
+const READ_ONLY_METHODS = new Set(['map', 'forEach', 'filter', 'some', 'every', 'find', 'flatMap', 'includes', 'indexOf', 'slice', 'join', 'at']);
 const [rootArg, listFile] = process.argv.slice(2);
 const die = (message) => {
   process.stderr.write(`check-duplicate-tests: ${message}\n`);
@@ -356,7 +358,9 @@ const analyse = (file, text, ts) => {
           const up = top.parent;
           const isEachArg = up && ts.isCallExpression(up) && up.arguments.includes(top) && ts.isPropertyAccessExpression(up.expression) && (up.expression.name.text === 'each' || up.expression.name.text === 'for');
           const isLength = up && ts.isPropertyAccessExpression(up) && up.expression === top && up.name.text === 'length' && !(up.parent && ts.isBinaryExpression(up.parent) && up.parent.left === up && up.parent.operatorToken.kind >= K.FirstAssignment && up.parent.operatorToken.kind <= K.LastAssignment) && !(up.parent && (ts.isPrefixUnaryExpression(up.parent) || ts.isPostfixUnaryExpression(up.parent) || ts.isDeleteExpression(up.parent)));
-          if (!isEachArg && !isLength) ok = false;
+          const isLoop = up && ts.isForOfStatement(up) && up.expression === top;
+          const isReadCall = up && ts.isPropertyAccessExpression(up) && up.expression === top && READ_ONLY_METHODS.has(up.name.text) && up.parent && ts.isCallExpression(up.parent) && up.parent.expression === up;
+          if (!isEachArg && !isLength && !isLoop && !isReadCall) ok = false;
         }
       }
       ts.forEachChild(n, walk);

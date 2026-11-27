@@ -165,7 +165,7 @@ def binds_locally(scope, name):
 
 
 def only_plain_reads(tree, name, target):
-    """True when every reference to the module-level name is its one assignment target or the table argument of a parametrize decorator."""
+    """True when every reference to the module-level name is its one assignment target, a parametrize table argument, len(name) or a loop or comprehension source."""
     allowed = {id(target)}
     for n in ast.walk(tree):
         if isinstance(n, FUNCS + (ast.ClassDef,)):
@@ -174,6 +174,14 @@ def only_plain_reads(tree, name, target):
                 fname = f.attr if isinstance(f, ast.Attribute) else f.id if isinstance(f, ast.Name) else ""
                 if fname == "parametrize" and len(deco.args) >= 2 and isinstance(deco.args[1], ast.Name) and deco.args[1].id == name:
                     allowed.add(id(deco.args[1]))
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "len" and len(n.args) == 1 and not n.keywords:
+            if isinstance(n.args[0], ast.Name) and n.args[0].id == name:
+                allowed.add(id(n.args[0]))
+        iters = [n.iter] if isinstance(n, (ast.For, ast.AsyncFor, ast.comprehension)) else []
+        for it in iters:
+            if isinstance(it, ast.Name) and it.id == name:
+                allowed.add(id(it))
     ok = [True]
 
     def visit(n):

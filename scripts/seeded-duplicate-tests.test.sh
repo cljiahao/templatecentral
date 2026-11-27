@@ -814,6 +814,14 @@ tsdecl "const T = [[1, 1], [1, 1]]; function g() { T.push([2, 2]); }"
 verdict 0 "ts a write in another function counts"
 tsdecl "const T = [[1, 1], [1, 1]]; const n = (T as const).length;"
 verdict 1 "ts a wrapped plain read is still a plain read"
+for form in "const n = T.map((r) => r[0]);" "let n = 0; for (const r of T) { n += r[0]; }" "const n = T.slice(1).length;"; do
+  tsdecl "const T = [[1, 1], [1, 1]]; $form"
+  verdict 1 "ts table with a read-only use keeps the row check: $form"
+done
+for form in "T.sort();" "T.reverse();" "T.splice(1, 1);" "for (const r of T) { T.push(r); }"; do
+  tsdecl "const T = [[1, 1], [1, 1]]; $form"
+  verdict 0 "ts clean control: a changing use still switches the row check off: $form"
+done
 
 # Round 6, major 1, Python: the same inverted rule for a module-level table.
 pyref() { # pyref <extra text after the constant> — one parametrize over ROWS
@@ -841,6 +849,16 @@ pyref "def g():
     ROWS = []
     ROWS.append(2)"
 verdict 1 "py a local named like the table does not switch the row check off"
+pyref "n = len(ROWS)"
+verdict 1 "py table read by len keeps the row check"
+pyref "for r in ROWS:
+    n = r"
+verdict 1 "py table read by a loop keeps the row check"
+pyref "n = [r for r in ROWS]"
+verdict 1 "py table read by a comprehension keeps the row check"
+pyref "for r in ROWS:
+    ROWS.append(r)"
+verdict 0 "py clean control: a loop that also appends switches the row check off"
 
 # Round 6, minor 2: test files inside a nested git repository are not checked, and the run says so.
 newp
@@ -859,6 +877,39 @@ ts_case "$P/vendor/lib/b.test.ts" "" 2
 git init -q "$P/vendor/lib"
 verdict 0 "every test file in a nested repository"
 has "nested git repository, 1 test files under it" "$OUT" "every test file in a nested repository: NOTE, not an ignore-rule failure"
+
+# Nested repositories are counted once each, the outermost only.
+newp
+ts_case "$P/vendor/lib/b.test.ts" "" 2
+ts_case "$P/vendor/lib/inner/c.test.ts" "" 2
+git init -q "$P/vendor/lib"
+git init -q "$P/vendor/lib/inner"
+verdict 0 "repository inside a nested repository"
+has "NOTE vendor/lib: nested git repository, 2 test files under it were not checked" "$OUT" "nested in nested: counted once, under the outer one"
+lacks "vendor/lib/inner:" "$OUT" "nested in nested: the inner repository has no NOTE of its own"
+
+# A .git entry git cannot open stops the run; a plain folder is still read.
+newp
+ts_case "$P/a.test.ts" "" 2
+ts_case "$P/b.test.ts" "" 2
+printf 'garbage\n' > "$P/.git/HEAD"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 2 "$?" "corrupt .git/HEAD: exit"
+has "git cannot open it" "$OUT" "corrupt .git/HEAD: names the cause"
+printf 'ref: refs/heads/main\n' > "$P/.git/HEAD"
+verdict 1 "clean control: a repaired HEAD reads the files again"
+
+# A corrupt index stops the run instead of reading nothing.
+newp
+ts_case "$P/a.test.ts" "" 2
+ts_case "$P/b.test.ts" "" 2
+git -C "$P" add -A
+printf 'junk' > "$P/.git/index"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 2 "$?" "corrupt .git/index: exit"
+has "cannot list the files of the git work tree" "$OUT" "corrupt .git/index: names the cause"
+rm -f "$P/.git/index"
+verdict 1 "clean control: without the index the files are listed and the duplicates found"
 
 # Round 6, minor 3: git failing for another reason than "not a git repository" stops the run.
 newp
