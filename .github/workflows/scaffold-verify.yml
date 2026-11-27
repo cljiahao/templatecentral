@@ -79,7 +79,6 @@ jobs:
             scaffold Step 1 answers; use them as given and do not report them as deviations:
             - project name scaffold-e2e, project title "Scaffold E2E", description "Scaffold verification project."
             - CI host: GitHub Actions
-            - extra project skills: none
             - CLAUDE.md: yes
             - task management: no
             - remove example code: no
