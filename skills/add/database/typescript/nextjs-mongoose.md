@@ -27,17 +27,19 @@ For AWS IAM auth (DocumentDB, Atlas), also install:
 pnpm add @aws-sdk/credential-providers
 ```
 
-In `mongoose-client.ts`, replace the `MONGODB_URL` guard with the one below and the `mongoose.connect(...)` assignment inside `connectDB()` with the IAM connect (the cache and retry logic stay unchanged):
+In `mongoose-client.ts`, replace `readMongoUrl()` and the `MONGODB_URL` constant with the code below and the `mongoose.connect(...)` assignment inside `connectDB()` with the IAM connect (the cache and retry logic stay unchanged):
 
 ```ts
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 
-const MONGODB_HOST = process.env.MONGODB_HOST;
-const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME;
-
-if (!MONGODB_HOST || !MONGODB_DB_NAME) {
-  throw new Error('MONGODB_HOST and MONGODB_DB_NAME environment variables are required');
+function readEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} environment variable is required`);
+  return value;
 }
+
+const MONGODB_HOST = readEnv('MONGODB_HOST');
+const MONGODB_DB_NAME = readEnv('MONGODB_DB_NAME');
 
 // Inside connectDB():
 cached.promise = mongoose.connect(

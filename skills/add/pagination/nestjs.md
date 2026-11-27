@@ -86,7 +86,9 @@ The `projects` table must exist. Pick the variant matching `src/database/`.
 
 ```ts
 export const projects = pgTable('projects', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),
   description: text('description'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -120,7 +122,7 @@ const SORT_FIELDS = Object.keys(SORT_COLUMNS) as (keyof typeof SORT_COLUMNS)[];
 export class ProjectsService {
   constructor(
     private readonly drizzle: DrizzleService,
-    private readonly pagination: PaginationService,
+    private readonly pagination: PaginationService
   ) {}
 
   async listProjects(query: PaginationParams): Promise<PaginatedResponse<ProjectDto>> {

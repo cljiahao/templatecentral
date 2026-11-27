@@ -168,11 +168,11 @@ Vitest does not load `.env`, and `env.config.ts` now throws without `DATABASE_UR
 ```typescript
 import { KyselyService } from '../src/database/kysely.service';
 
-    const moduleFixture = await Test.createTestingModule({ imports: [AppModule] })
-      // No database in this suite: skip KyselyService's connection probe.
-      .overrideProvider(KyselyService)
-      .useValue({})
-      .compile();
+const moduleFixture = await Test.createTestingModule({ imports: [AppModule] })
+  // No database in this suite: skip KyselyService's connection probe.
+  .overrideProvider(KyselyService)
+  .useValue({})
+  .compile();
 ```
 
 Suites with real queries use a disposable Postgres (CI service container); the job's `DATABASE_URL` wins over `test.env`.

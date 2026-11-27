@@ -61,9 +61,7 @@ import type { FastifyRequest } from 'fastify';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
-  constructor(
-    @InjectPinoLogger(JwtAuthGuard.name) private readonly logger: PinoLogger,
-  ) {
+  constructor(@InjectPinoLogger(JwtAuthGuard.name) private readonly logger: PinoLogger) {
     super();
   }
 
@@ -71,14 +69,11 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     err: unknown,
     user: TUser | false,
     _info: unknown,
-    context: ExecutionContext,
+    context: ExecutionContext
   ): TUser {
     const req = context.switchToHttp().getRequest<FastifyRequest>();
     if (err || !user) {
-      this.logger.warn(
-        { path: req.url, required_role: 'authenticated' },
-        'Access denied'
-      );
+      this.logger.warn({ path: req.url, required_role: 'authenticated' }, 'Access denied');
       if (err instanceof Error) throw err;
       throw new UnauthorizedException();
     }

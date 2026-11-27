@@ -135,7 +135,16 @@ Create `src/modules/<name>/<name>.controller.ts`:
 
 ```typescript
 import {
-  Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiBody } from '@nestjs/swagger';
 import { TaskService } from './<name>.service';
@@ -149,18 +158,24 @@ export class TaskController {
 
   @Get()
   @ApiOperation({ summary: 'List all tasks' })
-  findAll(): Task[] { return this.taskService.findAll(); }
+  findAll(): Task[] {
+    return this.taskService.findAll();
+  }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get task by ID' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
-  findOne(@Param('id', ParseUUIDPipe) id: string): Task { return this.taskService.findOne(id); }
+  findOne(@Param('id', ParseUUIDPipe) id: string): Task {
+    return this.taskService.findOne(id);
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create task' })
   @ApiBody({ type: CreateTaskDto })
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() dto: CreateTaskDto): Task { return this.taskService.create(dto); }
+  create(@Body() dto: CreateTaskDto): Task {
+    return this.taskService.create(dto);
+  }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update task' })
@@ -174,7 +189,9 @@ export class TaskController {
   @ApiOperation({ summary: 'Delete task' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseUUIDPipe) id: string): void { this.taskService.remove(id); }
+  remove(@Param('id', ParseUUIDPipe) id: string): void {
+    this.taskService.remove(id);
+  }
 }
 ```
 

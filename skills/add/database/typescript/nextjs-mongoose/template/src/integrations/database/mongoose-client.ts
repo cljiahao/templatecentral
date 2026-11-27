@@ -1,10 +1,12 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URL = process.env.MONGODB_URL;
-
-if (!MONGODB_URL) {
-  throw new Error('MONGODB_URL environment variable is not defined');
+function readMongoUrl(): string {
+  const url = process.env.MONGODB_URL;
+  if (!url) throw new Error('MONGODB_URL environment variable is not defined');
+  return url;
 }
+
+const MONGODB_URL = readMongoUrl();
 
 interface MongooseCache {
   conn: typeof mongoose | null;
