@@ -880,8 +880,8 @@ def flag(lint, top, key):
 
 
 def seeded_py_only(value):
-    """True when a top-level extend-exclude lists only the exact seeded Python gate helpers (guarded files nobody edits)."""
-    return isinstance(value, list) and all(isinstance(v, str) and v in SEEDED_PY_HELPERS for v in value)
+    """True when a top-level extend-exclude is a non-empty list of distinct entries, all exact seeded Python gate helpers (guarded files nobody edits)."""
+    return isinstance(value, list) and bool(value) and len(set(value)) == len(value) and all(isinstance(v, str) and v in SEEDED_PY_HELPERS for v in value)
 
 
 def ruff_state(path):
@@ -912,6 +912,8 @@ def ruff_state(path):
         for key in ("exclude", "extend-exclude"):
             if key in body and not (body is top and key == "extend-exclude" and seeded_py_only(body[key])):
                 raise Unresolved("%s is not read" % key)
+    if "extend-exclude" in top and top.get("force-exclude") is not True:
+        raise Unresolved("extend-exclude needs force-exclude = true, or a file passed by name is still linted")
     st = types.SimpleNamespace()
     st.select = str_items(lint.get("select", []), "select") + str_items(lint.get("extend-select", []), "extend-select")
     st.ignore = str_items(lint.get("ignore", []), "ignore") + str_items(lint.get("extend-ignore", []), "extend-ignore")
