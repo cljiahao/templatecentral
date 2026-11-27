@@ -1,0 +1,1 @@
+- The here-string lint no longer takes a shift in `$(( 1 << n ))` for a heredoc opener, which hid every later here-string in the file. A heredoc that never ends now fails the lint with the file and line instead of passing as clean.

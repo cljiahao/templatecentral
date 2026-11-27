@@ -2533,7 +2533,7 @@ HERE = re.compile(r"<<(-?)[ \t]*([\"']?)([A-Za-z_][A-Za-z0-9_]*)\2")
 
 def scan(t):
     n = len(t)
-    hits, pend = [], []
+    hits, pend, bad = [], [], []
 
     def skip_quote(i, q):
         j = t.find(q, i)
@@ -2558,17 +2558,38 @@ def scan(t):
         return n
 
     def heredocs(i):
-        while pend and i < n:
-            dash, word = pend.pop(0)
+        while pend:
+            dash, word, line = pend.pop(0)
+            found = False
             while i < n:
                 j = t.find("\n", i)
                 j = n if j < 0 else j
                 row = t[i:j]
                 i = min(j + 1, n)
                 if (row.lstrip("\t") if dash else row) == word:
+                    found = True
                     break
-        pend.clear()
+            if not found:
+                bad.append((line, word))
         return i
+
+    def arith(i):
+        depth = 2
+        while i < n:
+            c = t[i]
+            if c == "\\":
+                i += 2
+                continue
+            if c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+                if depth == 1 and t[i + 1:i + 2] != ")":
+                    return -1
+                if depth == 0:
+                    return i + 1
+            i += 1
+        return -1
 
     def code(i, sub):
         depth = 0
@@ -2585,8 +2606,12 @@ def scan(t):
                 i = n if j < 0 else j
             elif c == "$" and t[i + 1:i + 2] == "'":
                 i = skip_quote(i + 2, "'")
+            elif t.startswith("$((", i) and arith(i + 3) > 0:
+                i = arith(i + 3)
             elif c == "$" and t[i + 1:i + 2] == "(":
                 i = code(i + 2, True)
+            elif t.startswith("((", i) and (i == 0 or t[i - 1] in " \t\n;&|(") and arith(i + 2) > 0:
+                i = arith(i + 2)
             elif sub and c == "(":
                 depth += 1
                 i += 1
@@ -2601,7 +2626,7 @@ def scan(t):
             elif t.startswith("<<", i):
                 m = HERE.match(t, i)
                 if m:
-                    pend.append((m.group(1) == "-", m.group(3)))
+                    pend.append((m.group(1) == "-", m.group(3), t.count("\n", 0, i) + 1))
                     i = m.end()
                 else:
                     i += 2
@@ -2612,7 +2637,8 @@ def scan(t):
         return n
 
     code(0, False)
-    return hits
+    heredocs(n)
+    return hits, bad
 
 
 def sets_pipefail(text):
@@ -2623,8 +2649,11 @@ for path in sys.argv[1:]:
     with open(path, encoding="utf-8", errors="replace") as fh:
         text = fh.read()
     if sets_pipefail(text) or "/hooks/" in path:
-        for line in scan(text):
+        found, bad = scan(text)
+        for line in found:
             print("HIT %s:%d: here-string" % (path, line))
+        for line, word in bad:
+            print("HIT %s:%d: heredoc <<%s never ends, so the scanner cannot tell code from text after it" % (path, line, word))
 print("DONE %d" % len(sys.argv[1:]))
 PY
   scan_list=$({

@@ -1696,6 +1696,15 @@ hsd here_string_in_double_quotes_is_clean "${HS_PF}"$'echo "use <<< never"\n' cl
 hsd here_string_in_heredoc_body_is_clean "${HS_PF}"$'cat <<EOF\ngrep -q x <<< "$v"\nEOF\n' clean
 hsd arithmetic_shift_is_clean "${HS_PF}"$'(( x = 1 << 2 ))\n' clean
 hsd script_without_pipefail_is_clean $'#!/usr/bin/env bash\nset -u\ngrep -q x <<< "$v"\n' clean
+hsd shift_by_variable_keeps_scanning "${HS_PF}"$'x=$((1 << n))\nif grep -q a <<< "$y"; then :; fi\n' "4"
+hsd shift_by_digit_keeps_scanning "${HS_PF}"$'x=$((1 << 3))\ngrep -q a <<< "$y"\n' "4"
+hsd shift_assignment_keeps_scanning "${HS_PF}"$'(( x <<= n ))\ngrep -q a <<< "$y"\n' "4"
+hsd shift_in_double_parens_keeps_scanning "${HS_PF}"$'(( y = 1 << n ))\ngrep -q a <<< "$y"\n' "4"
+hsd shift_in_nested_arithmetic_keeps_scanning "${HS_PF}"$'x=$(( (1 << n) + 2 ))\ngrep -q a <<< "$y"\n' "4"
+hsd real_heredoc_then_here_string "${HS_PF}"$'cat <<EOF\nbody\nEOF\ngrep -q a <<< "$y"\n' "6"
+hsd unterminated_heredoc_fails_closed "${HS_PF}"$'cat <<EOF\nbody\n' "3h"
+hsd unterminated_heredoc_without_newline_fails_closed "${HS_PF}"$'cat <<EOF' "3h"
+hsd shift_with_no_here_string_is_clean "${HS_PF}"$'x=$((1 << n))\necho "$x"\n' clean
 run_hsd() {
   local d="$T/hsd" py i f out want
   py=$(awk '/^check_seeded_here_strings\(\)/ { f = 1 } f && /read -r -d .. py <<.PY. \|\| true/ { on = 1; next } on && /^PY$/ { exit } on { print }' "$LINT")
@@ -1714,6 +1723,8 @@ run_hsd() {
     want=${HSD_WANT[$i]}
     if [[ "$want" == clean ]]; then
       check "" "$(grep -F "$f:" <<<"$out" || true)" "${HSD_NAMES[$i]} reports nothing"
+    elif [[ "$want" == *h ]]; then
+      check yes "$(grep -qE "^HIT $f:${want%h}: heredoc " <<<"$out" && echo yes || echo no)" "${HSD_NAMES[$i]} reports line ${want%h}"
     else
       check yes "$(grep -qE "^HIT $f:$want: here-string" <<<"$out" && echo yes || echo no)" "${HSD_NAMES[$i]} reports line $want"
     fi
