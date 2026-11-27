@@ -61,6 +61,10 @@ for v in "$MAX_CHANGED_LINES" "$MAX_CHANGED_FILES"; do
   esac
 done
 git rev-parse --git-dir > /dev/null 2>&1 || die "not a git repository"
+# Every path below is relative to the top of the repository, so work from there whatever folder the run started in; an exclude-file override is made absolute first.
+case "${CHANGE_SIZE_EXCLUDE_FILE:-}" in '' | /*) ;; *) CHANGE_SIZE_EXCLUDE_FILE=$PWD/$CHANGE_SIZE_EXCLUDE_FILE ;; esac
+top=$(git rev-parse --show-toplevel 2> /dev/null) || die "cannot find the top of the repository (a bare repository has none)"
+cd "$top" || die "cannot enter the top of the repository $top"
 git rev-parse --verify --quiet "${base}^{commit}" > /dev/null || die "base ref '$base' not found, so the change size cannot be measured. Fetch it (git fetch origin main), or pass another base ref as the first argument."
 mb=$(git merge-base "$base" HEAD 2> /dev/null) || die "no merge base between '$base' and HEAD (shallow clone?). Fetch full history (git fetch --unshallow), or pass another base ref."
 

@@ -658,6 +658,25 @@ run "$D" BASE_REF=main PATH="$T/nohunk-shim:$PATH"
 check 2 "$EC" "a per-file diff with no hunk fails closed ($OUT)"
 has "has no hunk" "$OUT" "the no-hunk message says why"
 
+# Run from a subfolder: paths resolve against the top of the repository, so the weight equals the top-level run.
+repo subdir
+mkdir -p "$D/pkg/inner"
+echo one > "$D/pkg/inner/f.txt"
+echo root > "$D/rootfile.txt"
+base_commit
+lines 30 "$D/pkg/inner/f.txt"
+lines 20 "$D/rootfile.txt"
+commit_all
+run "$D" BASE_REF=main
+top_out=$OUT
+check 0 "$EC" "subfolder control: top-level run passes ($OUT)"
+run "$D/pkg/inner" BASE_REF=main
+check 0 "$EC" "a run from a subfolder passes ($OUT)"
+check "$top_out" "$OUT" "a run from a subfolder weighs the same as the top-level run"
+has "ok (52 lines in 2 files" "$OUT" "subfolder run counts the root and the subfolder change"
+run "$D/pkg" BASE_REF=main CHANGE_SIZE_MAX_LINES=10
+check 1 "$EC" "a subfolder run honours a budget override ($OUT)"
+
 # Real run: a freshly scaffolded nextjs project, committed as the base, then one real edit.
 D="$T/real"
 mkdir -p "$D"
