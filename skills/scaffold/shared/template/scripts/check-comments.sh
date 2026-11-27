@@ -268,7 +268,7 @@ if [ "$total" -gt 0 ]; then
   if [ "$full" = 1 ]; then
     sort -t: -k1,1 -k2,2n "$wd/out"
   else
-    sort -t: -k1,1 -k2,2n "$wd/out" | head -n "$MAX_REPORT_LINES"
+    sort -t: -k1,1 -k2,2n "$wd/out" | awk -v n="$MAX_REPORT_LINES" 'NR <= n'
     [ "$total" -le "$MAX_REPORT_LINES" ] || printf '... and %d more (run with --full to list all)\n' $((total - MAX_REPORT_LINES))
   fi
   printf 'check-comments: FAIL (%d finding(s) in %d file(s) checked)\n' "$total" "$nfiles"

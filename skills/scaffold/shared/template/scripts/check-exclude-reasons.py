@@ -337,9 +337,9 @@ def scan_toml(file, text):
         return
     try:
         try:
-            import tomllib  # type: ignore[import-not-found]
+            import tomllib  # type: ignore[import-not-found]  # absent before Python 3.11, tomli covers it
         except ImportError:
-            import tomli as tomllib  # type: ignore[import-not-found,no-redef]
+            import tomli as tomllib  # type: ignore[import-not-found,no-redef]  # fallback name for the same module
     except ImportError:
         tomllib = None
     reference = None

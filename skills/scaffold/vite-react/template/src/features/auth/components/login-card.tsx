@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../hooks/use-auth';
 import { DEV_USER } from './auth-provider';
 
+// The SSO and OAuth sign-in button slot is filled by templatecentral:add auth.
 export function LoginCard() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -23,7 +24,6 @@ export function LoginCard() {
       className="w-full max-w-md shadow-lg"
     >
       <div className="flex flex-col gap-4">
-        {/* SSO / OAuth sign-in button slot, filled by templatecentral:add auth. */}
         {ENV.IS_DEV && (
           <Button type="button" variant="outline" onClick={handleDevLogin}>
             Sign in as dev user

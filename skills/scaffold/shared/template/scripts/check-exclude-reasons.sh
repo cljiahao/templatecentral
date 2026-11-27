@@ -369,7 +369,7 @@ if [ "${#js_files[@]}" -gt 0 ]; then
       jargs+=("--as=${js_modes[$ji]}" "$f")
       ji=$((ji + 1))
     done
-    out=$(node "$here/check-exclude-reasons.mjs" "${jargs[@]}" 2>&1) || bad "the JS config scanner failed: $(printf '%s' "$out" | head -n 1). $SUPPORTED"
+    out=$(node "$here/check-exclude-reasons.mjs" "${jargs[@]}" 2>&1) || bad "the JS config scanner failed: ${out%%$'\n'*}. $SUPPORTED"
     records="$records
 $out"
   else
@@ -379,7 +379,7 @@ fi
 if [ "${#py_files[@]}" -gt 0 ]; then
   if [ -z "$PY" ] && command -v python3 > /dev/null 2>&1; then PY=python3; fi
   if [ -n "$PY" ]; then
-    out=$("$PY" -I "$here/check-exclude-reasons.py" "${py_files[@]}" 2>&1) || bad "the TOML and INI scanner failed: $(printf '%s' "$out" | head -n 1). It needs Python (3.11 or newer) or the tomli package. Interpreters tried: $RULES_PY_TRIED. $SUPPORTED"
+    out=$("$PY" -I "$here/check-exclude-reasons.py" "${py_files[@]}" 2>&1) || bad "the TOML and INI scanner failed: ${out%%$'\n'*}. It needs Python (3.11 or newer) or the tomli package. Interpreters tried: $RULES_PY_TRIED. $SUPPORTED"
     records="$records
 $out"
   else
@@ -394,7 +394,7 @@ fi
 
 # Inline coverage markers in source files need "reason:" on the same or the previous line.
 if [ "${#mark_files[@]}" -gt 0 ]; then
-  marks=$(printf '%s\0' "${mark_files[@]}" | xargs -0 awk -v mode=marks -f "$here/check-exclude-reasons.awk" 2>&1) || bad "the inline marker scanner failed, so no source file was checked for markers: $(printf '%s' "$marks" | head -n 1)"
+  marks=$(printf '%s\0' "${mark_files[@]}" | xargs -0 awk -v mode=marks -f "$here/check-exclude-reasons.awk" 2>&1) || bad "the inline marker scanner failed, so no source file was checked for markers: ${marks%%$'\n'*}"
   records="$records
 $marks"
 fi
@@ -411,6 +411,7 @@ note() {
   case "$1" in
     *sonar-project*.properties) printf '%s' "$PROPS_NOTE" ;;
     *package.json) printf '%s' ' A package.json cannot hold a comment: move the Jest config to jest.config.js.' ;;
+    *.jscpd.json) printf '%s' ' A .jscpd.json cannot hold a comment, and jscpd then ignores the whole file: remove the entry, or keep only the default folders.' ;;
   esac
 }
 
@@ -502,7 +503,7 @@ if [ "${#js_files[@]}" -gt 0 ]; then
   done
 fi
 if [ "$nconf" -eq 0 ]; then
-  src=$(printf '%s\n' "$FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|cjs|py)$' | head -n 1)
+  src=$(printf '%s\n' "$FILES" | awk '/\.(ts|tsx|js|jsx|mjs|cjs|py)$/ && !seen { print; seen = 1 }')
   if [ -n "$src" ]; then
     bad "no coverage, Sonar or mutation config found, but the project has source files (for example $src), so nothing proves what it excludes. Fix: add a coverage config (vitest.config.ts, jest.config.js, pyproject.toml or sonar-project.properties)."
   elif [ "$fail_count" -eq 0 ]; then

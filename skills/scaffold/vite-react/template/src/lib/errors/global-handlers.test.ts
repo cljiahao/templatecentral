@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { registerGlobalErrorHandlers } from './global-handlers';
 
+// jsdom does not emit unhandledrejection; dispatch a shaped event.
 describe('registerGlobalErrorHandlers', () => {
   afterEach(() => vi.restoreAllMocks());
 
@@ -20,7 +21,6 @@ describe('registerGlobalErrorHandlers', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     registerGlobalErrorHandlers();
 
-    // jsdom does not emit unhandledrejection; dispatch a shaped event.
     const event = new Event('unhandledrejection');
     Object.assign(event, { reason: new Error('nope') });
     window.dispatchEvent(event);

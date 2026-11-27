@@ -11,12 +11,13 @@ export function portalFrameAncestor(origin: string | undefined): string | null {
   return origin && PORTAL_ORIGIN_RE.test(origin) ? origin : null;
 }
 
+// Frame protection is skipped in dev so Swagger UI renders in IDE preview panes; only the portal origin may frame.
+// null omits a helmet directive; an empty array does not. X-Frame-Options goes out only when framing is denied.
+// Per-user data must not reach shared caches.
 export async function setupSecurity(app: INestApplication): Promise<void> {
   const fastify = app.getHttpAdapter().getInstance() as FastifyInstance;
 
-  // Frame protection is skipped in dev so Swagger UI renders in IDE preview panes.
   const isDev = appConfig.ENVIRONMENT === 'dev';
-  // Only the portal origin may frame the app.
   const portal = portalFrameAncestor(appConfig.EMBED_PARENT_ORIGIN);
 
   await fastify.register(fastifyHelmet, {
@@ -29,18 +30,15 @@ export async function setupSecurity(app: INestApplication): Promise<void> {
         'img-src': ["'self'", 'data:', 'https:'],
         'object-src': ["'none'"],
         'base-uri': ["'none'"],
-        // null omits the directive; an empty array does not.
         'frame-ancestors': isDev ? null : [portal ?? "'none'"],
       },
     },
     strictTransportSecurity: { maxAge: 31536000, includeSubDomains: true },
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-    // X-Frame-Options is sent only when framing is denied; the action must be lowercase.
     frameguard: isDev || portal ? false : { action: 'deny' },
   });
 
   fastify.addHook('onSend', async (_request, reply, payload) => {
-    // Per-user data must not reach shared caches.
     void reply.header('Cache-Control', 'no-cache, no-store, must-revalidate, private');
     void reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     return payload;

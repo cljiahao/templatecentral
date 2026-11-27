@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
-// Reduce an entry to a plain pattern, as norm_pat in check-exclude-rules.sh does: no !, ^, trailing $, no ./ or // or /./, regex spellings as globs.
+// Reduce an entry to a plain pattern, as norm_pat in check-exclude-rules.sh does:
+// no !, ^, trailing $, no ./ or // or /./, regex spellings as globs.
 function normPat(x) {
   let p = String(x).replace(/^!/, '').replace(/^\^/, '').replace(/\$$/, '');
   p = p.split('\\.').join('.').split('.*').join('*');
@@ -16,7 +17,8 @@ const defaults = new Set((process.env.TC_EXCLUDE_DEFAULTS || '').split('\n').fil
 defaults.delete('');
 const REASON = /^reason:\s+\S+(\s+\S+){2,}\s*$/;
 const PLACEHOLDERS = new Set((process.env.TC_REASON_PLACEHOLDERS || '').split('\n').filter(Boolean));
-// A reason: at least 3 different words of 3+ letters; not a repeated single letter, not a path segment of the entries, no placeholder.
+// A reason: at least 3 different words of 3+ letters; not a repeated single letter,
+// not a path segment of the entries, no placeholder.
 function validReason(text, entries = []) {
   if (!REASON.test(text)) return false;
   const words = text.slice('reason:'.length).split(/[\s,;"`()]+/).map((w) => w.replace(/[.:!?]+$/, '').toLowerCase()).filter(Boolean);
@@ -35,7 +37,8 @@ const emit = (...fields) => console.log(fields.map(clean).join('\t'));
 const args = process.argv.slice(2);
 let root = process.cwd();
 const files = [];
-// --as=MODE, with MODE one of jest, vitest, stryker or nyc, sets the scan mode of the files after it, whatever their names; --as= clears it.
+// --as=MODE, with MODE one of jest, vitest, stryker or nyc, sets the scan mode of the files after it,
+// whatever their names; --as= clears it.
 let asMode = null;
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--root') root = path.resolve(args[++i] || '.');
@@ -73,7 +76,6 @@ function scan(file, depth = 0, inherited = null) {
       emit('X', file, 1, `package.json is not valid JSON, so it cannot be read: ${err && err.message ? err.message : err}`);
       return;
     }
-    // A package.json with none of the tool keys has nothing to read, so it needs no typescript.
     if (!pkg || typeof pkg !== 'object' || !['jest', 'nyc', 'c8', 'stryker', 'jscpd'].some((k) => Object.prototype.hasOwnProperty.call(pkg, k))) return;
   }
   const ts = loadTs(path.dirname(abs));
@@ -127,7 +129,6 @@ function scan(file, depth = 0, inherited = null) {
     return null;
   };
 
-  // Returns the literal entries of a list property, or null after reporting a dynamic list.
   const literalList = (member, label) => {
     if (!ts.isPropertyAssignment(member)) {
       emit('X', file, lineOf(member.getStart(sf)), `${label} ${DYNAMIC}`);
@@ -153,7 +154,6 @@ function scan(file, depth = 0, inherited = null) {
 
   const isDefault = (t) => defaults.has(normPat(t));
 
-  // One E record per entry: a reason is the comment line directly above it, or above the key when the list has one non-default entry.
   const emitExcludes = (kind, member, items) => {
     const keyLine = lineOf(member.getStart(sf));
     const own = items.filter((it) => !isDefault(it.text));
@@ -257,7 +257,6 @@ function scan(file, depth = 0, inherited = null) {
     const items = literalList(member, 'the mutate list');
     if (!items) return;
     const negated = items.filter((it) => it.text.startsWith('!'));
-    // A mutate list with no ! entry is an allow-list: it mutates only what it names.
     if (negated.length === 0) emitInclude('mutation-include', member, items);
     emitExcludes('mutation-exclude', member, negated);
   };

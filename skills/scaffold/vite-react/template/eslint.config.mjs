@@ -17,7 +17,8 @@ export default tseslint.config(
     },
   },
   eslintComments.recommended,
-  // innerHTML, outerHTML, insertAdjacentHTML and document.write take sanitized input only: use DOMPurify or a Trusted Types policy.
+  // innerHTML, outerHTML, insertAdjacentHTML and document.write take sanitized input only:
+  // use DOMPurify or a Trusted Types policy.
   noUnsanitized.configs.recommended,
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

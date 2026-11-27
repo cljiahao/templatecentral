@@ -374,8 +374,7 @@ else
   nok "no python3 on the path, so the no-tomllib case cannot run"
 fi
 
-# The four real stack templates, as they are today. Three fail because their excludes carry no "reason:" line; the wiring round adds the
-# reasons and turns each expected failure below into expect_template_ok.
+# The four real stack templates carry a "reason:" line on every exclude, so each passes.
 tpl_stage() {
   local d=$WORK/tpl-$1
   rm -rf "$d"
@@ -385,19 +384,15 @@ tpl_stage() {
   ln -s "$TS" "$d/node_modules/typescript"
   printf '%s' "$d"
 }
-expect_template_fail() {
-  local d stack=$1 pat
-  shift
-  d=$(tpl_stage "$stack")
+expect_template_ok() {
+  local d
+  d=$(tpl_stage "$1")
   run_gate "$d"
-  for pat in "$@"; do
-    if [ "$RC" -eq 1 ] && printf '%s' "$OUT" | grep -Eq -- "$pat"; then ok "template $stack fails as expected: $pat"; else nok "template $stack should fail with '$pat' (exit $RC)" "$OUT"; fi
-  done
+  if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q 'OK\.'; then ok "template $1 passes"; else nok "template $1 should pass (exit $RC)" "$OUT"; fi
 }
-expect_template_fail nextjs "vitest\.config\.ts:24 coverage-include list 'src/\*\*/\*\.ts, src/\*\*/\*\.tsx' is an allow-list that leaves out source files, so it excludes every file it does not list, and it has no reason"
-expect_template_fail nestjs "vitest\.config\.ts:15 coverage-include list 'src/\*\*/\*\.ts' is an allow-list that leaves out source files, so it excludes every file it does not list, and it has no reason"
-# vite-react: its include covers every source file, so it narrows nothing and is no finding; only the test folder exclude remains.
-expect_template_fail vite-react "vite\.config\.ts:45 coverage-exclude entry 'src/test/\*\*' has no reason"
+expect_template_ok nextjs
+expect_template_ok nestjs
+expect_template_ok vite-react
 d=$(tpl_stage fastapi)
 run_gate "$d"
 if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q 'OK\.'; then ok "template fastapi passes"; else nok "template fastapi should pass (exit $RC)" "$OUT"; fi
@@ -941,14 +936,14 @@ rm -f "$d"/src/*.ts
 mk "$d" src/app.ts $'export const app = 1;\n'
 mk "$d" vitest.config.ts $'export default { test: { coverage: { exclude: [\n  // reason: the seeded gate scripts are harness code\n  \'scripts/**\'] } } };\n'
 mkdir -p "$d/scripts"
-cp "$root/$SCRIPTS"/check-exclude-reasons.mjs "$root/$SCRIPTS"/check-exclude-reasons.py "$d/scripts/"
-r3_ok "item 17: seeded check-exclude-reasons.mjs and .py are not project source" "$d"
-r3_flip "item 17" "$d" "$RL" 'p ~ /^scripts\/check-exclude-reasons\.(mjs|py)$/ ||' ''
+cp "$root/$SCRIPTS"/*.mjs "$root/$SCRIPTS"/*.py "$d/scripts/"
+r3_ok "item 17: seeded helper .mjs and .py scripts are not project source" "$d"
+r3_flip "item 17" "$d" "$RL" 'p ~ /^scripts\/(check-exclude-reasons\.(mjs|py)|check-comments\.(mjs|py)|duplicate-tests-ts\.mjs|duplicate_tests_py\.py|py-env\.py)$/ ||' ''
 # Drift: every source-type file the manifest seeds from the shared scripts or the hooks is named by the embedded list.
 drift=
 for f in "$root/$SCRIPTS"/*.mjs "$root/$SCRIPTS"/*.py; do
   b=${f##*/}
-  case "$b" in check-exclude-reasons.mjs | check-exclude-reasons.py) ;; *) drift="$drift $b" ;; esac
+  case "$b" in check-exclude-reasons.mjs | check-exclude-reasons.py | check-comments.mjs | check-comments.py | duplicate-tests-ts.mjs | duplicate_tests_py.py | py-env.py) ;; *) drift="$drift $b" ;; esac
 done
 if [ -z "$drift" ]; then ok "item 17: no other shared script is source-typed"; else nok "item 17: shared scripts not named in the seeded-file list:$drift"; fi
 for h in user-prompt-guard.py user-prompt-guard.cjs; do

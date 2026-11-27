@@ -12,18 +12,18 @@ def load_environment() -> None:
         print("General .env file not found.")
 
 
+# Local launcher only; containers start uvicorn from docker-entrypoint.sh and bind there.
+# log_config=None stops uvicorn bypassing the structlog root handler.
 def run_api() -> None:
     """Runs the FastAPI server using Uvicorn."""
     from core.config import api_settings, common_settings
     from core.logging import logger
 
-    # Local launcher only; containers start uvicorn from docker-entrypoint.sh and bind there.
     host = "127.0.0.1"
     port = api_settings.API_PORT
     reload = common_settings.ENVIRONMENT not in ["prod", "uat"]
 
     logger.info(f"Starting server at http://{host}:{port} with reload={reload}")
-    # log_config=None stops uvicorn bypassing the structlog root handler.
     uvicorn.run(
         "app:app",
         host=host,

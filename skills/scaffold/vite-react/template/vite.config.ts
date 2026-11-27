@@ -16,7 +16,6 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true,
-    // templatecentral:standards full-stack-pairing adds the same-origin /api server.proxy that cookie auth needs.
   },
   preview: {
     port: 3000,

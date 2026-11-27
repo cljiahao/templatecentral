@@ -31,6 +31,7 @@ def _sanitize_errors(errors: Sequence[Any]) -> list[dict]:
     return safe
 
 
+# HTTPException has no handler: FastAPI's built-in one already returns this envelope.
 def configure_exceptions(app: FastAPI) -> None:
     """Register exception handlers so all errors are handled in one place."""
 
@@ -52,7 +53,6 @@ def configure_exceptions(app: FastAPI) -> None:
             content={"detail": str(exc)},
         )
 
-    # HTTPException has no handler: FastAPI's built-in one already returns this envelope.
 
     @app.exception_handler(RequestValidationError)
     async def validation_handler(

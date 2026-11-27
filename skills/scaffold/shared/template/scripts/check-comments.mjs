@@ -1,4 +1,5 @@
-// TypeScript and JavaScript reader for check-comments.sh: path and ranges on stdin, one finding per line, exit 0 clean, 1 findings, 2 cannot run.
+// TypeScript and JavaScript reader for check-comments.sh: path and ranges on stdin, one finding per line.
+// Exit 0 clean, 1 findings, 2 cannot run.
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';

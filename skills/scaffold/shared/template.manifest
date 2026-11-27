@@ -90,7 +90,7 @@ template/scripts/check-exclude-reasons.awk 644 - -
 template/scripts/check-exclude-reasons.mjs 644 - -
 template/scripts/check-exclude-reasons.py 644 - -
 template/scripts/check-exclude-reasons.sh 755 - -
-template/scripts/check-exclude-rules.sh 644 - -
+template/scripts/check-exclude-rules.sh 755 - -
 template/scripts/duplicate-tests-ts.mjs 644 - -
 template/scripts/duplicate_tests_py.py 644 - -
 template/scripts/check-change-size.sh 755 - -

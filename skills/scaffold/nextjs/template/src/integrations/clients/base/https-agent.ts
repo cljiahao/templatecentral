@@ -21,6 +21,7 @@ export function createHttpsAgent(options?: HttpsAgentOptions): https.Agent {
   return new https.Agent({ ...DEFAULT_AGENT_OPTIONS, ...options });
 }
 
+// fall through to string normalization
 export function normalizePem(pem: string): string {
   if (pem.trim().startsWith('{')) {
     try {
@@ -29,7 +30,6 @@ export function normalizePem(pem: string): string {
         return parsed.replace(/\\n/g, '\n').trim();
       if (parsed.cert) return String(parsed.cert).replace(/\\n/g, '\n').trim();
     } catch {
-      // fall through to string normalization
     }
   }
 

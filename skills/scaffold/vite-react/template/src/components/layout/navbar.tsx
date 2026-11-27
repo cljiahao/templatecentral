@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { label: 'Dashboard', href: PAGE_ROUTES.DASHBOARD },
 ] as const;
 
+// aria-current conveys the active link beyond colour.
 export function Navbar() {
   const { pathname } = useLocation();
   const { isAuthenticated, logout } = useAuth();
@@ -33,7 +34,6 @@ export function Navbar() {
               <Link
                 key={link.href}
                 to={link.href}
-                // aria-current conveys the active link beyond colour.
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   'hover:text-primary text-sm font-medium transition-colors',

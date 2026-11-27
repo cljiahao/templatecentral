@@ -11,6 +11,7 @@ export function resolveTrustProxy(value: string | undefined): boolean | string |
 }
 
 // Builds and initializes the app without listening, so tests can drive it with `app.inject()`.
+// Fastify assigns req.id before pino-http runs, so genReqId must live here.
 export async function createApp(): Promise<{
   app: NestFastifyApplication;
   logger: Logger;
@@ -19,7 +20,6 @@ export async function createApp(): Promise<{
   const trustProxy = resolveTrustProxy(appConfig.TRUST_PROXY);
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    // Fastify assigns req.id before pino-http runs, so genReqId must live here.
     new FastifyAdapter({
       genReqId: () => crypto.randomUUID(),
       ...(trustProxy ? { trustProxy } : {}),

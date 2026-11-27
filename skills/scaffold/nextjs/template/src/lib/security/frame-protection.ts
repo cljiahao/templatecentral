@@ -16,16 +16,16 @@ function portalOrigin(): string | null {
   return origin && PORTAL_ORIGIN_RE.test(origin) ? origin : null;
 }
 
+// Frame protection is omitted in dev so IDE preview panes can render.
+// frame-ancestors supersedes X-Frame-Options, so the latter is not sent.
 export function applyFrameProtection<T extends Response>(pathname: string, res: T): T {
   if (isBackendProxyPath(pathname)) return res;
-  // Frame protection is omitted in dev so IDE preview panes can render.
   if (process.env.NODE_ENV === 'development') {
     res.headers.set('Content-Security-Policy', CSP_BASE);
     return res;
   }
   const origin = portalOrigin();
   if (origin) {
-    // frame-ancestors supersedes X-Frame-Options, so the latter is not sent.
     res.headers.set('Content-Security-Policy', `frame-ancestors ${origin}; ${CSP_BASE}`);
     res.headers.delete('X-Frame-Options');
   } else {

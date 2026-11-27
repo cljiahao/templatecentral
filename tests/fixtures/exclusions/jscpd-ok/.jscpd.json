@@ -1,6 +1,5 @@
 {
   "ignore": [
-    // reason: generated client code is not hand written
-    "src/gen/**"
+    "dist/**"
   ]
 }

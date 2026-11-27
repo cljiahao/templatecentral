@@ -85,13 +85,11 @@ class Source:
         return self.tokens[bisect.bisect_left(self.starts, start) : bisect.bisect_right(self.ends, end)]
 
     def text_of(self, node):
-        # Nodes with no position are read through their children.
         if hasattr(node, "lineno") and hasattr(node, "end_lineno") and node.end_lineno is not None:
             return " ".join(t.string for t in self.span(node, node))
         return " ".join(filter(None, (self.text_of(c) for c in ast.iter_child_nodes(node))))
 
     def text_ids(self, node):
-        # Like text_of, but the id= keyword of a pytest.param call is left out: it only names the case.
         if not (hasattr(node, "lineno") and node.end_lineno is not None):
             return self.text_of(node)
         lo = bisect.bisect_left(self.starts, (node.lineno, self.char_col(node.lineno, node.col_offset)))
@@ -436,7 +434,6 @@ def main():
         other_memo = {}
 
         def other_context(node):
-            # Parts of a node that are not statements of its body: decorators, bases, headers, loop data, conditions.
             if node in other_memo:
                 return other_memo[node]
             parts = []

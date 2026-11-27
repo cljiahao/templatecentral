@@ -93,7 +93,6 @@ const analyse = (file, text, ts) => {
   ]);
   const isFunctionLike = (n) => ts.isArrowFunction(n) || ts.isFunctionExpression(n);
 
-  // Names the test globals are imported under: `import { it as t }`, `import * as v`, `import test from 'node:test'`.
   const aliases = new Map();
   const namespaces = new Set();
   for (const statement of sf.statements) {
@@ -113,7 +112,6 @@ const analyse = (file, text, ts) => {
     }
   }
 
-  // Same-file functions a case can name: `function handler() {}` and `const handler = () => {}`.
   const functions = new Map();
   const collectFunctions = (node) => {
     if (ts.isFunctionDeclaration(node) && node.name && node.body && !functions.has(node.name.text)) functions.set(node.name.text, node);
@@ -123,14 +121,12 @@ const analyse = (file, text, ts) => {
     ts.forEachChild(node, collectFunctions);
   };
   collectFunctions(sf);
-  // Drops `as const`, `satisfies T`, parentheses and type assertions around an expression.
   const unwrap = (node) => {
     let n = node;
     while (n && (ts.isAsExpression(n) || ts.isParenthesizedExpression(n) || ts.isTypeAssertionExpression(n) || (ts.isSatisfiesExpression && ts.isSatisfiesExpression(n)) || ts.isNonNullExpression(n))) n = n.expression;
     return n;
   };
 
-  // { base, mods } for `it`, `it.only`, `it.skipIf(x)`, `it.each(t)`, `v.it`, an aliased name, or null.
   const describeCallee = (expr) => {
     const mods = [];
     let node = expr;
@@ -203,7 +199,6 @@ const analyse = (file, text, ts) => {
     return node.getText(sf);
   };
 
-  // Leaf nodes in source order: the token sequence, comments and whitespace already gone.
   const leaves = (node, out) => {
     const { kind } = node;
     if (kind >= K.FirstJSDocNode && kind <= K.LastJSDocNode) return;
@@ -226,7 +221,6 @@ const analyse = (file, text, ts) => {
     return out;
   };
 
-  // Context of a node: its non-case parts, without titles, bare punctuation or the plain describe/it callee.
   const punctuation = new Set([K.OpenParenToken, K.CloseParenToken, K.OpenBraceToken, K.CloseBraceToken, K.CommaToken, K.SemicolonToken, K.EqualsGreaterThanToken]);
   const hasCall = (node) => {
     let found = false;
@@ -316,7 +310,6 @@ const analyse = (file, text, ts) => {
     }
     return holderRefs.get(holder);
   };
-  // Statements of a file or block that are not cases, with the names they bind and the names they use.
   const scopeMemo = new Map();
   const scopeItems = (node) => {
     if (scopeMemo.has(node)) return scopeMemo.get(node);
@@ -338,7 +331,6 @@ const analyse = (file, text, ts) => {
   };
   const isHolder = (node) => ts.isSourceFile(node) || ts.isBlock(node) || ts.isModuleBlock(node);
 
-  // A table resolves only when every reference in its scope is a plain read: the declaration, each(T) or for(T), T.length.
   const wrapperKinds = (n) => ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isNonNullExpression(n) || ts.isTypeAssertionExpression(n);
   const bindsLexically = (st, name) => boundNames(st).has(name) && !(ts.isVariableStatement(st) && !(st.declarationList.flags & ts.NodeFlags.BlockScoped));
   const rebindsName = (n, name) => {
@@ -358,7 +350,6 @@ const analyse = (file, text, ts) => {
       if (ts.isIdentifier(n) && n.text === name && n !== decl.name) {
         const par = n.parent;
         if ((ts.isPropertyAccessExpression(par) && par.name === n) || (ts.isPropertyAssignment(par) && par.name === n)) {
-          // a property name, not a reference
         } else {
           let top = n;
           while (top.parent && wrapperKinds(top.parent) && top.parent.expression === top) top = top.parent;
@@ -374,7 +365,6 @@ const analyse = (file, text, ts) => {
     return ok;
   };
 
-  // The array literal an identifier names in the nearest enclosing scope, or null unless one same-file array literal that is only read.
   const resolveTable = (id, from) => {
     for (let p = from.parent; p; p = p.parent) {
       if ((isFunctionLike(p) || ts.isFunctionDeclaration(p)) && p.parameters.some((param) => boundIn(param.name).has(id.text))) return null;
@@ -396,7 +386,6 @@ const analyse = (file, text, ts) => {
     return null;
   };
 
-  // Context of one case: ancestor parts, statements it names, and every other statement that runs.
   const caseContext = (chain, refs) => {
     const scopes = chain.filter(isHolder).map((n) => scopeItems(n));
     for (const items of scopes) {

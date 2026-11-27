@@ -153,7 +153,7 @@ rules_init() {
       if (b ~ /^test_.*\.py$/ || b ~ /_test\.py$/ || b == "conftest.py") return 0
       if (p ~ /(^|\/)(test|tests|__tests__)\//) return 0
       # Files the scaffold seeds (the source-type entries of skills/scaffold/shared/template.manifest) are harness, not project source.
-      if (p ~ /^scripts\/check-exclude-reasons\.(mjs|py)$/ || p ~ /^\.claude\/hooks\/user-prompt-guard\.(py|cjs)$/) return 0
+      if (p ~ /^scripts\/(check-exclude-reasons\.(mjs|py)|check-comments\.(mjs|py)|duplicate-tests-ts\.mjs|duplicate_tests_py\.py|py-env\.py)$/ || p ~ /^\.claude\/hooks\/user-prompt-guard\.(py|cjs)$/) return 0
       return 1
     }
     issrc($0) { print }')
