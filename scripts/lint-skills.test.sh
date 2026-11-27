@@ -1732,6 +1732,11 @@ run_hsd() {
 }
 hs_pipefail_fixture() { pf_script 'set -uo pipefail' $'grep -q x <<< "$v"'; }
 fails here_string_in_seeded_pipefail_script_fails_the_lint "$H_HS" hs_pipefail_fixture "zz-pipefail-fixture.sh:3: here-string"
+hs_mutant_ts() { printf '%s\n' $'grep -q x <<< "$v"' >> "$S/scaffold/shared/template-ts/.claude/hooks/block-no-verify.sh"; }
+hs_mutant_py() { printf '%s\n' $'grep -q x <<< "$v"' >> "$S/scaffold/shared/template-py/.claude/hooks/block-no-verify.sh"; }
+fails here_string_planted_in_the_ts_block_no_verify_hook_fails_the_lint "$H_HS" hs_mutant_ts "template-ts/.claude/hooks/block-no-verify.sh:"
+fails here_string_planted_in_the_py_block_no_verify_hook_fails_the_lint "$H_HS" hs_mutant_py "template-py/.claude/hooks/block-no-verify.sh:"
+passes unchanged_block_no_verify_hooks_pass_the_here_string_lint "$H_HS" true
 hs_hook_fixture() { printf '%s\n' '#!/usr/bin/env bash' $'grep -q x <<< "$v"' > "$S/scaffold/shared/template-ts/.claude/hooks/zz-fixture.sh"; }
 fails here_string_in_a_hook_fails_the_lint "$H_HS" hs_hook_fixture "hooks/zz-fixture.sh:2: here-string"
 

@@ -465,9 +465,11 @@ node -e "console.log(1)"
 CASES
 
 # The verdict must not depend on the machine: a missing JSON reader blocks, an unwritable TMPDIR does not open the gate, and a 70 KB command is judged whole.
+# The TMPDIR cases are regression guards, not a mutant check: on bash 3.2 a here-string ignores TMPDIR and falls back to /tmp, so no environment variable breaks it; the here-string lint is the mutant check.
 NVB=$(mktemp -d "$T/nvbin.XXXXXX")
-NVRO=$(mktemp -d "$T/nvro.XXXXXX")
-chmod 555 "$NVRO"
+# TMPDIR under a regular file cannot be written even by root.
+: > "$T/nv-not-a-dir"
+NVRO="$T/nv-not-a-dir/sub"
 for tool in cat awk sed grep tr git cut head bash; do ln -s "$(command -v "$tool")" "$NVB/$tool"; done
 BASH_BIN=$(command -v bash)
 # nv_env <hook> <dir> <json> [VAR=value ...]: runs the hook with extra environment, as run_hook does.
@@ -489,12 +491,12 @@ for v in ts py; do
   rm -f "$NVB/$interp"
   json=$(tool_json Bash command 'git commit --no-verify -m x')
   nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json" TMPDIR="$NVRO"
-  check 2 "$EC" "block-no-verify.$v still blocks --no-verify with TMPDIR read-only"
+  check 2 "$EC" "block-no-verify.$v regression guard: still blocks --no-verify with TMPDIR under a regular file"
   nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json" TMPDIR="$T"
   check 2 "$EC" "block-no-verify.$v blocks --no-verify with TMPDIR writable (control)"
   json=$(tool_json Bash command 'git status && git log -n 3')
   nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json" TMPDIR="$NVRO"
-  check 0 "$EC" "block-no-verify.$v passes an ordinary command with TMPDIR read-only"
+  check 0 "$EC" "block-no-verify.$v regression guard: passes an ordinary command with TMPDIR under a regular file"
   big=$(head -c 70000 /dev/zero | tr '\0' x)
   json=$(tool_json Bash command "git commit --no-verify -m $big")
   nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json"
