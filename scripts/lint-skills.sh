@@ -2528,16 +2528,29 @@ check_seeded_here_strings() {
   read -r -d '' py <<'PY' || true
 import re, sys
 
-HERE = re.compile(r"<<(-?)[ \t]*([\"']?)([A-Za-z_][A-Za-z0-9_]*)\2")
+HEREDOC = re.compile(r"<<(-?)[ \t]*")
 
 
 def scan(t):
     n = len(t)
     hits, pend, bad = [], [], []
 
+    def line(i):
+        return t.count("\n", 0, i) + 1
+
     def skip_quote(i, q):
         j = t.find(q, i)
         return n if j < 0 else j + 1
+
+    def backtick(i):
+        j = i
+        while j < n and t[j] != "`":
+            j += 2 if t[j] == "\\" else 1
+        k = t.find("<<<", i, j)
+        while k >= 0:
+            hits.append(line(k))
+            k = t.find("<<<", k + 3, j)
+        return j + 1
 
     def skip_dq(i):
         while i < n:
@@ -2546,55 +2559,138 @@ def scan(t):
                 i += 2
             elif c == '"':
                 return i + 1
-            elif c == "$" and t[i + 1:i + 2] == "(":
-                i = code(i + 2, True)
+            elif c == "$" and t[i + 1:i + 2] in ("(", "["):
+                i = dollar(i)
             elif c == "`":
-                j = i + 1
-                while j < n and t[j] != "`":
-                    j += 2 if t[j] == "\\" else 1
-                i = j + 1
+                i = backtick(i + 1)
             else:
                 i += 1
         return n
 
+    def word(i):
+        out, j = [], i
+        while j < n:
+            c = t[j]
+            if c == "\\" and j + 1 < n and t[j + 1] != "\n":
+                out.append(t[j + 1])
+                j += 2
+            elif c in "'\"":
+                k = t.find(c, j + 1)
+                if k < 0 or "\n" in t[j + 1:k]:
+                    return None
+                out.append(t[j + 1:k])
+                j = k + 1
+            elif c in " \t\n;&|<>()`":
+                break
+            else:
+                out.append(c)
+                j += 1
+        return ("".join(out), j) if j > i else None
+
     def heredocs(i):
         while pend:
-            dash, word, line = pend.pop(0)
+            dash, w, ln = pend.pop(0)
             found = False
             while i < n:
                 j = t.find("\n", i)
                 j = n if j < 0 else j
                 row = t[i:j]
                 i = min(j + 1, n)
-                if (row.lstrip("\t") if dash else row) == word:
+                if (row.lstrip("\t") if dash else row) == w:
                     found = True
                     break
             if not found:
-                bad.append((line, word))
+                bad.append((ln, "heredoc <<%s never ends" % w))
         return i
 
-    def arith(i):
+    def pre(i):
         depth = 2
         while i < n:
             c = t[i]
             if c == "\\":
                 i += 2
                 continue
+            if c == "'":
+                k = t.find("'", i + 1)
+                i = n if k < 0 else k + 1
+                continue
+            if c == '"':
+                k = i + 1
+                while k < n and t[k] != '"':
+                    k += 2 if t[k] == "\\" else 1
+                i = k + 1
+                continue
             if c == "(":
                 depth += 1
             elif c == ")":
                 depth -= 1
                 if depth == 1 and t[i + 1:i + 2] != ")":
-                    return -1
+                    return "sub"
                 if depth == 0:
-                    return i + 1
+                    return "arith"
             i += 1
-        return -1
+        return "eof"
 
-    def code(i, sub):
-        depth = 0
+    def arith(i, closer):
+        start, depth = i, 0
         while i < n:
             c = t[i]
+            if c == "\\":
+                i += 2
+            elif c == "'":
+                i = skip_quote(i + 1, "'")
+            elif c == '"':
+                i = skip_dq(i + 1)
+            elif c == "$" and t[i + 1:i + 2] in ("(", "["):
+                i = dollar(i)
+            elif c == "`":
+                i = backtick(i + 1)
+            elif t.startswith("<<<", i):
+                hits.append(line(i))
+                i += 3
+            elif t.startswith("<<", i):
+                i += 2
+            elif closer == "]":
+                if c == "[":
+                    depth += 1
+                elif c == "]":
+                    if depth == 0:
+                        return i + 1
+                    depth -= 1
+                i += 1
+            else:
+                if c == "(":
+                    depth += 1
+                elif c == ")":
+                    if depth > 0:
+                        depth -= 1
+                    elif t[i + 1:i + 2] == ")":
+                        return i + 2
+                    else:
+                        return i + 1
+                i += 1
+        bad.append((line(start), "arithmetic span never ends"))
+        return n
+
+    def dollar(i):
+        if t.startswith("$((", i):
+            kind = pre(i + 3)
+            if kind == "arith":
+                return arith(i + 3, "))")
+            if kind == "eof":
+                bad.append((line(i), "arithmetic span never ends"))
+                return n
+            return code(i + 2, True)
+        if t.startswith("$[", i):
+            return arith(i + 2, "]")
+        return code(i + 2, True)
+
+    def code(i, sub):
+        depth, let = 0, False
+        while i < n:
+            c = t[i]
+            if let and (c in "\n;&|" or (sub and c == ")")):
+                let = False
             if c == "\\":
                 i += 2
             elif c == "'":
@@ -2606,12 +2702,13 @@ def scan(t):
                 i = n if j < 0 else j
             elif c == "$" and t[i + 1:i + 2] == "'":
                 i = skip_quote(i + 2, "'")
-            elif t.startswith("$((", i) and arith(i + 3) > 0:
-                i = arith(i + 3)
-            elif c == "$" and t[i + 1:i + 2] == "(":
-                i = code(i + 2, True)
-            elif t.startswith("((", i) and (i == 0 or t[i - 1] in " \t\n;&|(") and arith(i + 2) > 0:
-                i = arith(i + 2)
+            elif c == "$" and t[i + 1:i + 2] in ("(", "["):
+                i = dollar(i)
+            elif t.startswith("((", i) and pre(i + 2) == "arith":
+                i = arith(i + 2, "))")
+            elif c == "l" and t.startswith("let", i) and (i == 0 or t[i - 1] in " \t\n;&|(") and t[i + 3:i + 4] in (" ", "\t"):
+                let = True
+                i += 3
             elif sub and c == "(":
                 depth += 1
                 i += 1
@@ -2621,15 +2718,16 @@ def scan(t):
                 depth -= 1
                 i += 1
             elif t.startswith("<<<", i):
-                hits.append(t.count("\n", 0, i) + 1)
+                hits.append(line(i))
                 i += 3
             elif t.startswith("<<", i):
-                m = HERE.match(t, i)
-                if m:
-                    pend.append((m.group(1) == "-", m.group(3), t.count("\n", 0, i) + 1))
-                    i = m.end()
+                m = HEREDOC.match(t, i)
+                w = None if let else word(m.end())
+                if w:
+                    pend.append((m.group(1) == "-", w[0], line(i)))
+                    i = w[1]
                 else:
-                    i += 2
+                    i = m.end() if let else i + 2
             elif c == "\n" and pend:
                 i = heredocs(i + 1)
             else:
@@ -2650,10 +2748,10 @@ for path in sys.argv[1:]:
         text = fh.read()
     if sets_pipefail(text) or "/hooks/" in path:
         found, bad = scan(text)
-        for line in found:
-            print("HIT %s:%d: here-string" % (path, line))
-        for line, word in bad:
-            print("HIT %s:%d: heredoc <<%s never ends, so the scanner cannot tell code from text after it" % (path, line, word))
+        for ln in found:
+            print("HIT %s:%d: here-string" % (path, ln))
+        for ln, msg in bad:
+            print("HIT %s:%d: %s, so the scanner cannot tell code from text after it" % (path, ln, msg))
 print("DONE %d" % len(sys.argv[1:]))
 PY
   scan_list=$({

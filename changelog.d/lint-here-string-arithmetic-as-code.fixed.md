@@ -1,0 +1,1 @@
+- The here-string lint now reads arithmetic as code: a here-string inside a command substitution nested in `$(( … ))` or `(( … ))` is reported, `<<\EOF` and `<<E\OF` open a heredoc like bash does, `"$(( 1 << n ))"`, `let x=1<<n` and `$[ 1 << n ]` are shifts, and an arithmetic span that never ends fails the lint with its own message.

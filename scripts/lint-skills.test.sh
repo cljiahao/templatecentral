@@ -1705,8 +1705,22 @@ hsd real_heredoc_then_here_string "${HS_PF}"$'cat <<EOF\nbody\nEOF\ngrep -q a <<
 hsd unterminated_heredoc_fails_closed "${HS_PF}"$'cat <<EOF\nbody\n' "3h"
 hsd unterminated_heredoc_without_newline_fails_closed "${HS_PF}"$'cat <<EOF' "3h"
 hsd shift_with_no_here_string_is_clean "${HS_PF}"$'x=$((1 << n))\necho "$x"\n' clean
+hsd here_string_in_substitution_in_arithmetic "${HS_PF}"$'x=$(( $(grep -c a <<< "$v") + 1 ))\n' "3"
+hsd here_string_in_substitution_in_command_arithmetic "${HS_PF}"$'(( n = $(wc -l <<< "$x") ))\n' "3"
+hsd here_string_in_doubly_nested_arithmetic "${HS_PF}"$'echo $(( $(( $(grep a <<< b) )) ))\n' "3"
+hsd here_string_in_quoted_substitution_in_arithmetic "${HS_PF}"$'x=$(( "$(grep a <<< b)" ))\n' "3"
+hsd backslash_quoted_heredoc_word_ends_at_its_terminator "${HS_PF}"$'cat <<\\EOF\nit\'s\nEOF\ngrep a <<< "$y"\n' "6"
+hsd heredoc_word_with_escaped_character_ends_at_its_terminator "${HS_PF}"$'cat <<E\\OF\nit\'s\nEOF\ngrep a <<< "$y"\n' "6"
+hsd double_quoted_heredoc_word_then_here_string "${HS_PF}"$'cat <<"EOF"\nit\'s\nEOF\ngrep a <<< "$y"\n' "6"
+hsd shift_inside_double_quotes_is_clean "${HS_PF}"$'echo "$(( 1 << n ))"\n' clean
+hsd shift_inside_double_quotes_keeps_scanning "${HS_PF}"$'echo "$(( 1 << n ))"\ngrep a <<< "$y"\n' "4"
+hsd let_shift_keeps_scanning "${HS_PF}"$'let x=1<<n\ngrep a <<< "$y"\n' "4"
+hsd bracket_arithmetic_shift_keeps_scanning "${HS_PF}"$'x=$[1<<n]\ngrep a <<< "$y"\n' "4"
+hsd double_paren_after_word_shift_keeps_scanning "${HS_PF}"$'echo foo((1<<n))\ngrep a <<< "$y"\n' "4"
+hsd unterminated_arithmetic_fails_closed_naming_arithmetic "${HS_PF}"$'x=$(( 1 << n\n' "3a"
+hsd arithmetic_forms_are_clean "${HS_PF}"$'x=$((1 << n))\nlet y=2<<3\nz=$[1<<2]\ncat <<\\E\nit\'s\nE\n' clean
 run_hsd() {
-  local d="$T/hsd" py i f out want
+  local d="$T/hsd" py i f out want kind line got
   py=$(awk '/^check_seeded_here_strings\(\)/ { f = 1 } f && /read -r -d .. py <<.PY. \|\| true/ { on = 1; next } on && /^PY$/ { exit } on { print }' "$LINT")
   [[ -n "$py" ]] || { FAIL=$((FAIL + 1)); echo "FAIL: hsd — could not extract the scanner from $LINT"; return 0; }
   rm -rf "$d"; mkdir -p "$d/hooks"
@@ -1723,10 +1737,14 @@ run_hsd() {
     want=${HSD_WANT[$i]}
     if [[ "$want" == clean ]]; then
       check "" "$(grep -F "$f:" <<<"$out" || true)" "${HSD_NAMES[$i]} reports nothing"
-    elif [[ "$want" == *h ]]; then
-      check yes "$(grep -qE "^HIT $f:${want%h}: heredoc " <<<"$out" && echo yes || echo no)" "${HSD_NAMES[$i]} reports line ${want%h}"
     else
-      check yes "$(grep -qE "^HIT $f:$want: here-string" <<<"$out" && echo yes || echo no)" "${HSD_NAMES[$i]} reports line $want"
+      kind="here-string"
+      [[ "$want" == *h ]] && kind="heredoc "
+      [[ "$want" == *a ]] && kind="arithmetic span "
+      line=${want%[ha]}
+      got=no
+      if grep -qE "^HIT $f:$line: $kind" <<<"$out"; then got=yes; fi
+      check yes "$got" "${HSD_NAMES[$i]} reports line $line"
     fi
   done
 }
