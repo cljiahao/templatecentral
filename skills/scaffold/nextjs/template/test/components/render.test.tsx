@@ -27,9 +27,7 @@ import { useExampleItems } from '@/features/example/hooks/use-example-items.quer
 
 const pathname = vi.hoisted(() => ({ value: '/' }));
 vi.mock('next/navigation', () => ({ usePathname: () => pathname.value }));
-vi.mock('@/features/example/hooks/use-example-items.query', () => ({
-  useExampleItems: vi.fn(),
-}));
+vi.mock('@/features/example/hooks/use-example-items.query', () => ({ useExampleItems: vi.fn() }));
 
 const html = (node: ReactElement) => renderToStaticMarkup(node);
 
