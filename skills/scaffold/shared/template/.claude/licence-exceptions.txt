@@ -28,3 +28,6 @@ lightningcss-win32-arm64-msvc MPL-2.0
 lightningcss-win32-x64-msvc MPL-2.0
 # nodeenv (a pyright dependency) declares the bare licence "BSD"; its text is the 3-clause BSD licence. Dev tooling, used unmodified.
 nodeenv BSD
+# import-linter and its dependency grimp declare their licence by the long name "BSD 2-Clause License"; their text is the 2-clause BSD licence. Dev tooling, used unmodified.
+import-linter BSD 2-Clause License
+grimp BSD 2-Clause License

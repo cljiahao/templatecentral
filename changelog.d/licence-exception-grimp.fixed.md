@@ -1,0 +1,1 @@
+- The seeded licence exceptions list names import-linter and grimp (which report "BSD 2-Clause License") as per-package rows.
