@@ -156,8 +156,7 @@ drop_links() {
       case "$target" in
         "$root_real"/*) ;;
         *)
-          printf 'NOTE %s: symlink to a file outside the project or to nothing; not read.\n' "${f#"$root"/}" >> "$wd/notes"
-          continue
+          die "${f#"$root"/} is a symlink to a file outside the project or to nothing, so its tests cannot be read. Fix: replace it with the file itself or remove it."
           ;;
       esac
       if grep -Fxq -- "$target" "$wd/real"; then continue; fi
@@ -214,7 +213,8 @@ if [ "$gitrc" -eq 0 ] && [ "$gitout" = true ]; then
   # Only the outermost nested repository counts: one inside another is already under it.
   find "$root" -mindepth 2 -name node_modules -prune -o -name .git -print 2> /dev/null | sort \
     | awk '{ d[NR] = $0 } END { for (i = 1; i <= NR; i++) { keep = 1; for (j = 1; j <= NR; j++) if (j != i) { p = substr(d[j], 1, length(d[j]) - 4); if (substr(d[i], 1, length(p)) == p) keep = 0 } if (keep) print d[i] } }' > "$wd/nested.dirs" || die "cannot walk $root"
-  git -C "$root" ls-files -z -co --exclude-standard 2> /dev/null | tr '\0' '\n' > "$wd/gitlist" || die "cannot list the files of the git work tree $root"
+  git -C "$root" ls-files -z -co --exclude-standard > "$wd/gitlist.z" || die "cannot list the files of the git work tree $root (git ls-files failed, see the message above)"
+  tr '\0' '\n' < "$wd/gitlist.z" > "$wd/gitlist" || die "cannot read the file list of the git work tree $root"
 else
   printf 'NOTE build output was not filtered because the project is not a git repository: compiled copies of tests are read too.\n' >> "$wd/notes"
 fi
@@ -252,7 +252,6 @@ if [ -s "$wd/ts.list" ]; then
 fi
 if [ -s "$wd/py.list" ]; then
   py=python3
-  [ ! -x "$root/.venv/bin/python3" ] || py="$root/.venv/bin/python3"
   command -v "$py" > /dev/null 2>&1 || die "python3 is missing but the project has Python test files: install Python 3 and run again"
   "$py" -I "$HERE/duplicate_tests_py.py" "$root" "$wd/py.list" >> "$wd/records" || die "the Python scan failed (see above); fix that first"
 fi

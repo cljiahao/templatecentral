@@ -362,7 +362,7 @@ def main():
     if len(sys.argv) != 3:
         die("usage: duplicate_tests_py.py <project-root> <file-list>")
     if sys.version_info < (3, 8):
-        die("Python %s is too old: this check needs python 3.8 or newer; use the project's .venv/bin/python3 or install a newer Python" % VERSION)
+        die("Python %s is too old: this check needs python 3.8 or newer; install a newer Python 3 on the path" % VERSION)
     root, list_file = sys.argv[1], sys.argv[2]
     with open(list_file, "rb") as handle:
         rels = [r for r in handle.read().decode("utf-8", "surrogateescape").split("\0") if r]

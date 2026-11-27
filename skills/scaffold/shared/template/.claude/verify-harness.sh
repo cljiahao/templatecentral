@@ -86,7 +86,7 @@ while IFS='|' read -r gid lh ci || [ -n "$gid" ]; do
     sbom) need="$need scripts/py-env.py" ;;
     bundle) need="$need .claude/bundle-budget.txt" ;;
     duptests) need="$need scripts/duplicate-tests-ts.mjs scripts/duplicate_tests_py.py" ;;
-    exclusions) need="$need scripts/check-exclude-rules.sh scripts/check-exclude-reasons.awk scripts/check-exclude-reasons.mjs scripts/check-exclude-reasons.py" ;;
+    exclusions) need="$need $(printf '%s\n' "$guarded" | awk -v self="${lh%% *}" 'index($0, "scripts/check-exclude-") == 1 && $0 != self')" ;;
     commentshape) need="$need scripts/check-comments.mjs scripts/check-comments.py scripts/check-comments.licences.txt" ;;
     changesize) need="$need .claude/change-size-exclude.txt" ;;
   esac

@@ -544,6 +544,7 @@ jobs:
       - plugin-validate
       - shell-lint
       - seeded-gate-tests
+      - seeded-gate-helper-tests
       - keyless-gate-tests
       - golden-tests
       - template-copy-tests

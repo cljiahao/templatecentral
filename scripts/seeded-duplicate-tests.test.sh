@@ -337,15 +337,15 @@ check 0 "$?" "pinned typescript works from a project node_modules"
 OUT=$(CI=true GITHUB_ACTIONS=true bash "$CHECK" "$P" 2>&1)
 check 0 "$?" "check ignores CI markers: exit"
 
-# Python interpreter: the project's .venv/bin/python3 first, and the version named in parse errors.
+# Python interpreter: a planted project .venv/bin/python3 is never run, and the version is named in parse errors.
 project py-clean
 mkdir -p "$P/.venv/bin"
-printf '#!/bin/sh\ntouch "%s/used-venv-python"\nexec python3 "$@"\n' "$T" > "$P/.venv/bin/python3"
+printf '#!/bin/sh\ntouch "%s/used-venv-python"\nprintf "FAKE\\n"\nexit 0\n' "$T" > "$P/.venv/bin/python3"
 chmod +x "$P/.venv/bin/python3"
 OUT=$(bash "$CHECK" "$P" 2>&1)
-check 0 "$?" "project .venv python: exit"
+check 0 "$?" "planted .venv python: exit"
 if [ -f "$T/used-venv-python" ]; then used=yes; else used=no; fi
-check yes "$used" "project .venv/bin/python3 is preferred"
+check no "$used" "planted .venv/bin/python3 is never run"
 has "under Python 3" "$(bash "$CHECK" "$(project py-clean; printf 'def test_x(:\n' > "$P/test_broken.py"; echo "$P")" 2>&1)" "py parse error names the interpreter version"
 
 # Odd file names, symlinks, unreadable files, NUL bytes.
@@ -377,9 +377,8 @@ cp "$FIX/ts-exact-dup/a.test.ts" "$T/outside/o.ts"
 ln -sf "$T/outside/o.ts" "$P/out.test.ts"
 ln -s missing.ts "$P/dangling.test.ts"
 OUT=$(bash "$CHECK" "$P" 2>&1)
-check 0 "$?" "symlinks to outside the project or to nothing: exit"
-has "NOTE out.test.ts: symlink to a file outside the project or to nothing; not read." "$OUT" "symlink outside the project: NOTE"
-has "NOTE dangling.test.ts: symlink" "$OUT" "dangling symlink: NOTE"
+check 2 "$?" "symlinks to outside the project or to nothing: the gate fails"
+has "is a symlink to a file outside the project or to nothing, so its tests cannot be read" "$OUT" "symlink outside the project or dangling: names the file and the fix"
 if [ "$(id -u)" -ne 0 ]; then
   project ts-clean
   chmod 000 "$P/a.test.ts"
@@ -949,11 +948,38 @@ verdict 0 "clean control: some test files ignored, one still read"
 # Round 5, item 5: the Python version message, through an interpreter that reports an old version.
 newp
 py_case "$P/test_a.py" "" 2
-mkdir -p "$P/.venv/bin"
-printf '#!/bin/sh\nexec python3 -I -c '"'"'import runpy, sys; sys.version_info = (3, 7, 0, "final", 0); sys.argv = sys.argv[1:]; runpy.run_path(sys.argv[0], run_name="__main__")'"'"' "$@"\n' > "$P/.venv/bin/python3"
-chmod +x "$P/.venv/bin/python3"
-verdict 2 "old python interpreter"
-has "is too old: this check needs python 3.8 or newer; use the project's .venv/bin/python3 or install a newer Python" "$OUT" "old python interpreter: message says what to do"
+mkdir -p "$T/oldpy"
+printf '#!/bin/sh\n[ "$1" = -I ] && shift\nexec "%s" -I -c '"'"'import runpy, sys; sys.version_info = (3, 7, 0, "final", 0); sys.argv = sys.argv[1:]; runpy.run_path(sys.argv[0], run_name="__main__")'"'"' "$@"\n' "$(command -v python3)" > "$T/oldpy/python3"
+chmod +x "$T/oldpy/python3"
+OUT=$(PATH="$T/oldpy:$PATH" bash "$CHECK" "$P" 2>&1)
+check 2 "$?" "old python interpreter: exit"
+has "is too old: this check needs python 3.8 or newer; install a newer Python 3 on the path" "$OUT" "old python interpreter: message says what to do"
+
+# Review round: a PYTHONPATH module or sitecustomize must not change the result (clean control: same run without them).
+newp
+py_case "$P/test_a.py" "" 2
+py_case "$P/test_b.py" "" 2
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 1 "$?" "python env control: duplicates found"
+mkdir -p "$T/pp"
+printf 'import sys\nsys.exit(0)\n' > "$T/pp/sitecustomize.py"
+printf 'import sys\nsys.exit(0)\n' > "$T/pp/ast.py"
+OUT=$(PYTHONPATH="$T/pp" bash "$CHECK" "$P" 2>&1)
+check 1 "$?" "planted PYTHONPATH sitecustomize and ast module do not change the verdict"
+printf 'import sys\nsys.exit(0)\n' > "$T/pp/startup.py"
+OUT=$(PYTHONSTARTUP="$T/pp/startup.py" bash "$CHECK" "$P" 2>&1)
+check 1 "$?" "planted PYTHONSTARTUP does not change the verdict"
+
+# Review round: a failing git ls-files fails the gate, never an empty list.
+newp
+ts_case "$P/a.test.ts" "" 2
+ts_case "$P/b.test.ts" "" 2
+git -C "$P" add -A
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 1 "$?" "git ls-files control: duplicates found"
+printf 'garbage' > "$P/.git/index"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 2 "$?" "corrupted git index: the gate fails closed"
 
 # Timing: CPU time (user + system), not wall time. 2000 cases over 40 files, then 5000 cases in one file per language.
 cpu() { # cpu <dir> — prints "user sys", output of the check in $T/time.out

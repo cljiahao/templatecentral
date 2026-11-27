@@ -1,6 +1,6 @@
 # Example code of a nestjs project. Rows: see remove-example.sh.
 delete	src/modules/example
-rmblock	test/app.e2e-spec.ts	31	  // nestjs-zod hooks into Nest's pipes and Swagger's document; these three tests prove that.	  });	before
+rmblock	test/app.e2e-spec.ts	30	  it('POST /examples rejects an invalid body with 400 in the project error shape (ZodValidationPipe)', async () => {	  });	before
 rmline	test/app.e2e-spec.ts	import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';	-
 rmline	test/app.e2e-spec.ts	import { cleanupOpenApiDoc } from 'nestjs-zod';	-
 rmline	src/modules/index.ts	export * from './example/example.module';	-

@@ -180,6 +180,13 @@ else
   mb=$(git merge-base "$ref" HEAD 2> /dev/null) || die "no merge base between $ref and HEAD. Fix: fetch full history (CI needs fetch-depth: 0)."
   head_sha=$(git rev-parse HEAD 2> /dev/null) || die "cannot read HEAD"
   git -c core.quotePath=false diff --relative --src-prefix=a/ --dst-prefix=b/ --no-color --no-ext-diff --no-textconv --text -U0 -M --diff-filter=AMR "$mb" -- . > "$wd/diff" 2> "$wd/diff.err" || die "git diff failed: $(head -n 1 "$wd/diff.err")"
+  bin_rc=0
+  grep -aE '^Binary files .* differ$' "$wd/diff" > /dev/null || bin_rc=$?
+  case "$bin_rc" in
+    0) die "git reported a changed file as binary, so its comments cannot be read from the diff. Fix: remove the -diff or binary attribute for it in .gitattributes, or run with --all." ;;
+    1) ;;
+    *) die "cannot read the git diff" ;;
+  esac
   awk '
     /^diff --git / { hdr = 1; f = ""; next }
     hdr && /^\+\+\+ / {
@@ -203,9 +210,10 @@ else
     [ "$r" != '!quoted' ] || die "a changed path needs quoting, rename it: $f"
     add_spec "$f" "$r"
   done < "$wd/ranges"
+  git ls-files -o --exclude-standard -z > "$wd/untracked.z" || die "cannot list the untracked files (git ls-files failed, see the message above)"
   while IFS= read -r -d '' f; do
     add_spec "$f" all
-  done < <(git ls-files -o --exclude-standard -z)
+  done < "$wd/untracked.z"
   if [ "$in_ci" = 1 ] && [ "$mb" = "$head_sha" ] && [ ! -s "$specs" ]; then
     printf 'check-comments: diff base: %s\n' "$decision"
     printf 'check-comments: nothing to compare: HEAD is the base (%s), as on a push to the target branch. The gate judges pull requests, so no comment was checked.\n' "$ref"
@@ -241,7 +249,6 @@ if [ -s "$wd/spec.ts" ]; then
 fi
 if [ -s "$wd/spec.py" ]; then
   py=python3
-  if [ -x "$root/.venv/bin/python3" ]; then py=$root/.venv/bin/python3; fi
   command -v "$py" > /dev/null 2>&1 || die "python3 is missing, so Python comments cannot be read. Fix: install Python 3 and re-run."
   set -- --max "$MAX_COMMENT_LINES" --max-line "$MAX_LINE_CHARS" --max-reason "$MAX_REASON_CHARS"
   [ -z "$adr" ] || set -- "$@" "$adr"

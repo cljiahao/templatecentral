@@ -514,6 +514,25 @@ for lang in ts py; do
   has "untracked.$lang:1: comments/trailing" "$OUT" "diff[$lang]: untracked finding named"
 done
 
+# .gitattributes tricks must not hide a changed file from the diff scope (clean control: the loop above, same files without attributes)
+for attr in '*.py -diff' '*.ts -diff' '* -diff' '* binary' '* linguist-generated=true' '* diff=nothing'; do
+  for lang in ts py; do
+    d=$T/attr-$lang
+    rm -rf "$d"
+    repo "$d"
+    mkdir -p "$d/src"
+    cp "$FIX/diff/base.$lang" "$d/src/mod.$lang"
+    (cd "$d" && "${GIT[@]}" init -q . && "${GIT[@]}" checkout -q -b main)
+    commit_all "$d" base
+    (cd "$d" && "${GIT[@]}" checkout -q -b topic)
+    printf '%s\n' "$attr" > "$d/.gitattributes"
+    cp "$FIX/diff/new.$lang" "$d/src/mod.$lang"
+    gate_diff "$d" main
+    check 1 "$EC" "gitattributes [$attr] $lang: the changed file is still judged ($OUT)"
+    check 2 "$(printf '%s\n' "$OUT" | grep -c ': comments/')" "gitattributes [$attr] $lang: both new findings reported"
+  done
+done
+
 # editing an old comment line makes it a changed line
 d=$T/edit
 repo "$d"
@@ -547,7 +566,7 @@ has "Cite the ADR by number" "$OUT" "adr: docs/decisions counts as well"
 # missing runtime or package fails closed with the fix named
 d=$T/norun
 mkdir -p "$d/bin"
-for tool in bash git awk sort mktemp rm find dirname wc tr head tail cat sed; do
+for tool in bash git awk sort mktemp rm find dirname wc tr head tail cat sed grep; do
   ln -s "$(command -v "$tool")" "$d/bin/$tool"
 done
 mkdir -p "$d/tsproj" "$d/pyproj"
@@ -601,7 +620,7 @@ check 1 "$?" "typescript with the scanner API: the control run judges the file"
 d=$T/ci
 repo "$d"
 mkdir -p "$d/src" "$T/origin.git"
-git init -q --bare "$T/origin.git"
+git -c init.defaultBranch=main init -q --bare "$T/origin.git"
 (cd "$d" && "${GIT[@]}" init -q . && "${GIT[@]}" checkout -q -b main)
 printf 'export const a = 1;\n' > "$d/src/a.ts"
 commit_all "$d" base
@@ -646,7 +665,7 @@ has "base ref not found" "$OUT" "ci: missing base message"
 
 # CI push to the target branch: nothing to compare, said out loud
 rm -rf "$T/push"
-git clone -q "$T/origin.git" "$T/push" 2> /dev/null
+git clone -q --branch main "$T/origin.git" "$T/push" 2> /dev/null
 run_push() { # run_push <env assignments...> — the gate over a clean clone whose HEAD is the base.
   OUT=$(env -u CI -u GITHUB_ACTIONS -u TF_BUILD -u BASE_REF -u GITHUB_BASE_REF -u SYSTEM_PULLREQUEST_TARGETBRANCH -u SYSTEM_PULLREQUEST_TARGETBRANCHNAME "$@" bash "$GATE" --root "$T/push" 2>&1)
   EC=$?
@@ -880,8 +899,8 @@ for variant in missing empty noids noexc; do
   cp "$SHARED/template/scripts/"check-comments.* "$d/gate/"
   data=$d/gate/check-comments.licences.txt
   case "$variant" in
-    missing) rm -f "$data"; want="cannot read the bundled licence texts" ;;
-    empty) : > "$data"; want="hold no licence." ;;
+    missing) rm -f "$data"; want="check-comments.licences.txt is missing" ;;
+    empty) : > "$data"; want="holds no content or cannot be read" ;;
     noids) grep -v '^licence-ids:' "$SHARED/template/scripts/check-comments.licences.txt" > "$data"; want="no licence ids or no exception ids" ;;
     noexc) grep -v '^exception-ids:' "$SHARED/template/scripts/check-comments.licences.txt" > "$data"; want="no licence ids or no exception ids" ;;
   esac
@@ -975,7 +994,7 @@ printf 'export const m = 1;\n' > "$d/m.ts"
 commit_all "$d" four
 printf 'export const n = 1;\n' > "$d/n.ts"
 commit_all "$d" five
-git init -q --bare "$T/hist-origin.git"
+git -c init.defaultBranch=main init -q --bare "$T/hist-origin.git"
 (cd "$d" && "${GIT[@]}" push -q "$T/hist-origin.git" main topic 2> /dev/null)
 git clone -q --depth 1 --branch topic "file://$T/hist-origin.git" "$T/shallow" 2> /dev/null
 git -C "$T/shallow" fetch -q --depth 1 origin main:refs/remotes/origin/main 2> /dev/null
@@ -1007,20 +1026,15 @@ has "BASE_REF from the environment (not CI)" "$OUT" "BASE_REF=develop: report st
 gate_diff "$d"
 has "src/dev.ts:1" "$OUT" "default base (main): the develop change is judged too"
 
-# the project's own .venv interpreter is preferred for Python
+# a planted project .venv interpreter is never run
 d=$T/venv
 mkdir -p "$d/.venv/bin"
-printf '#!/bin/sh\ntouch "%s/venv-used"\nexec "%s" "$@"\n' "$d" "$(command -v python3)" > "$d/.venv/bin/python3"
+printf '#!/bin/sh\ntouch "%s/venv-used"\nexit 0\n' "$d" > "$d/.venv/bin/python3"
 chmod +x "$d/.venv/bin/python3"
 printf 'A = 1  # bad\n' > "$d/a.py"
 gate_all "$d"
 check 1 "$EC" "venv: the gate still judges ($OUT)"
-check yes "$(if [[ -f "$d/venv-used" ]]; then echo yes; else echo no; fi)" "venv: the project interpreter ran"
-d=$T/novenv
-mkdir -p "$d"
-printf 'A = 1  # bad\n' > "$d/a.py"
-gate_all "$d"
-check no "$(if [[ -f "$d/venv-used" ]]; then echo yes; else echo no; fi)" "no venv: the system interpreter runs"
+check no "$(if [[ -f "$d/venv-used" ]]; then echo yes; else echo no; fi)" "venv: the planted project interpreter never runs"
 
 # real scaffolds parse: every stack reads through both tokenizers with no parse failure or crash
 scaffold() { # scaffold <stack> <dir>

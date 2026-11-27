@@ -38,7 +38,7 @@
 # gate did not read, and a Sonar file with a NUL byte. A project with source files and no coverage config fails.
 # Supported forms: JS, TS and JSON configs are read as syntax trees with the project's own typescript (never run) and the
 # lists must be literal arrays of strings, with no spread, variable or call. TOML and INI lists must be literal strings. TOML needs
-# Python (3.11 or newer) or the tomli package (the gate picks .venv/bin/python3, then the highest python3.N, then python3), to cross-check the reader; without one a config with coverage or mutation settings fails.
+# Python (3.11 or newer) or the tomli package (the gate picks the highest python3.N, then python3, never a project .venv), to cross-check the reader; without one a config with coverage or mutation settings fails.
 # A config that cannot be read in these forms fails the gate. Nothing switches the gate off: no inline marker, no variable.
 # Reads every project file once: inside a git work tree the files git tracks or sees untracked and does not ignore, outside one every file
 # except node_modules, .git and virtualenv folders. Config discovery, command lines and the marker scan all use that one list.
@@ -213,7 +213,7 @@ tab=$(printf '\t')
 
 # One file list for config discovery, the command-line scan and the marker scan. Inside a git work tree it is every tracked and untracked file
 # a .gitignore does not hide; outside one it is every file except node_modules, .git and virtualenv folders. No folder is skipped by name.
-FILES=$(rules_files .)
+FILES=$(rules_files .) || die "cannot list the project files (git ls-files or find failed, see the message above): fix the repository, then run again"
 if ! rules_in_git .; then printf 'check-exclude-reasons: NOTE %s\n' "$RULES_NOTE" >&2; fi
 rules_init "$FILES"
 
@@ -304,8 +304,8 @@ done <<EOT
 $FILES
 EOT
 
-# Interpreter for TOML and INI files: .venv/bin/python3, then the highest python3.N, then python3; the first that can read TOML.
-PY=$(resolve_python .) || PY=
+# Interpreter for TOML and INI files: the highest python3.N, then python3, never a project .venv; the first that can read TOML.
+PY=$(resolve_python) || PY=
 
 # A command line may pass an exclude to a coverage, mutation or Sonar tool (a finding) or point the tool at a config file (read it).
 pending_pointers=
@@ -369,8 +369,9 @@ if [ "${#prop_files[@]}" -gt 0 ]; then
     elif is_binary "$f"; then
       bad "$f holds a NUL byte, so it is not a text file and its excludes cannot be read. Fix: save it as plain UTF-8 text."
     else
+      props_out=$(scan_properties "$f") || die "cannot read the excludes of $f (the scanner failed)"
       records="$records
-$(scan_properties "$f")"
+$props_out"
     fi
   done
 fi
@@ -430,7 +431,7 @@ note() {
 }
 
 # Judge each exclude list as a whole too: entries that are narrow alone but together leave out a whole source scope fail as one finding.
-unions=$(printf '%s\n' "$records" | rules_union_groups)
+unions=$(printf '%s\n' "$records" | rules_union_groups) || die "cannot judge the exclude lists as a whole (the union scan failed)"
 while IFS="$tab" read -r ufile ukind uline ulist; do
   [ -n "$ufile" ] || continue
   ucdir=${ufile%/*}

@@ -15,8 +15,8 @@
 #   is_binary FILE          true when FILE holds a NUL byte, so no text scanner can read it.
 #   cmd_scan FILE...        print F<TAB>file<TAB>line for an exclude flag and P<TAB>file<TAB>line<TAB>tool<TAB>path for a config pointer, on a
 #                           command line whose command word is a coverage, mutation or Sonar tool.
-#   resolve_python DIR      print the interpreter to run the TOML and INI scanner (DIR/.venv/bin/python3, then the highest python3.N on the
-#                           path, then python3) that can read TOML: the first with tomllib or tomli. RULES_PY_TRIED lists what was tried.
+#   resolve_python          print the interpreter to run the TOML and INI scanner (the highest python3.N on the
+#                           path, then python3; never a project .venv) that can read TOML: the first with tomllib or tomli. RULES_PY_TRIED lists what was tried.
 # Pattern forms handled: {a,b} groups (nested too), a leading ! ./ / or ^, a trailing $ or /, ./ and // inside, ** * ? [set], (a|b), and
 # the regex spellings .* and \. . A form with !( @( +( ?( or *( cannot be evaluated and counts as broad.
 
@@ -104,7 +104,7 @@ rules_in_git() {
 rules_files() {
   local root=$1 raw f nogit=0
   if rules_in_git "$root"; then
-    raw=$(git -C "$root" -c core.quotepath=off ls-files -co --exclude-standard 2> /dev/null) || raw=
+    raw=$(git -C "$root" -c core.quotepath=off ls-files -co --exclude-standard) || return 1
     local keep=
     while IFS= read -r f; do
       [ -n "$f" ] || continue
@@ -116,7 +116,8 @@ EOF
     raw=$keep
   else
     nogit=1
-    raw=$(cd "$root" && find . \( -name node_modules -o -name .git \) -prune -o \( -type f -o -type l \) -print 2> /dev/null | sed 's|^\./||')
+    raw=$(cd "$root" && find . \( -name node_modules -o -name .git \) -prune -o \( -type f -o -type l \) -print) || return 1
+    raw=$(printf '%s\n' "$raw" | sed 's|^\./||') || return 1
   fi
   # Outside git only: a folder is a virtual environment when it holds a pyvenv.cfg and also bin/python*, Scripts/python* or
   # lib/python*/site-packages. A pyvenv.cfg alone (a stray file in src/) hides nothing.
@@ -659,12 +660,10 @@ unparsed_exclude_line() {
   grep -nE -e "(^|[^A-Za-z_])(exclude|excludes|ignore|omit|exclusions|coveragePathIgnorePatterns|coverageExclude|ignorePatterns)[A-Za-z]*['\"]?[[:space:]]*[:=]" "$1" 2> /dev/null | head -n 1
 }
 
-# Print the interpreter for the TOML and INI scanner: the first of DIR/.venv/bin/python3, the highest python3.N on the path and python3
+# Print the interpreter for the TOML and INI scanner: the first of the highest python3.N on the path and python3
 # that can import tomllib or tomli. Prints nothing when none can; RULES_PY_TRIED then lists what was tried and why each failed.
 resolve_python() {
-  local dir=${1:-.} cand cands='' n tried='' out
-  if [ -x "$dir/.venv/bin/python3" ]; then cands="$dir/.venv/bin/python3
-"; fi
+  local cand cands='' n tried='' out
   for n in $(compgen -c python3. 2> /dev/null | grep -E '^python3\.[0-9]+$' | sort -t. -k2 -n -r | uniq); do
     cands="$cands$n
 "
@@ -689,6 +688,6 @@ print(".".join(map(str, sys.version_info[:3])))' 2>&1) && {
   done <<EOF
 $cands
 EOF
-  RULES_PY_TRIED=${tried:-none found: no .venv/bin/python3, no python3.N and no python3 on the path}
+  RULES_PY_TRIED=${tried:-none found: no python3.N and no python3 on the path}
   return 1
 }

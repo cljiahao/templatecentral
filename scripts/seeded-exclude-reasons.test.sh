@@ -61,7 +61,7 @@ tree_hash() {
   done | shasum | cut -d' ' -f1)
 }
 
-# The gate picks its Python the same way (rules.sh resolve_python): .venv/bin/python3, the highest python3.N, then python3; the first that
+# The gate picks its Python the same way (rules.sh resolve_python): the highest python3.N, then python3, never a project .venv; the first that
 # can read TOML. Without one, every case that needs a TOML or INI reader is skipped and one failure says so, instead of one per case.
 # shellcheck source=/dev/null
 . "$root/skills/scaffold/shared/template/scripts/check-exclude-rules.sh"
@@ -876,7 +876,7 @@ r3_fail "item 9: mutmut --paths-to-mutate" "$d" "Makefile:2 $CMDP"
 d=$(r4dir son10)
 mk "$d" .sonarcloud.properties $'sonar.exclusions=src/a.ts\n'
 r3_fail "item 10: .sonarcloud.properties" "$d" "sonarcloud\.properties:1 .*$NR"
-r3_lost "item 10" "$d" "sonarcloud\.properties:1" "$G" "grep -qaE '^[[:space:]]*sonar" "grep -qaE '^zzz[[:space:]]*sonar"
+r3_lost "item 10" "$d" "sonarcloud\.properties:1" "$G" "file_has '^[[:space:]]*sonar" "file_has '^zzz[[:space:]]*sonar"
 mk "$d" .sonarcloud.properties $'# reason: generated code not written by hand\nsonar.exclusions=src/a.ts\n'
 r3_ok "item 10 control: a reason on the line above" "$d"
 mk "$d" notes.properties $'greeting=hello\n'
@@ -1110,6 +1110,24 @@ h2=$(tree_hash "$d")
 if [ "$h1" = "$h2" ]; then ok "the gate leaves the project untouched"; else nok "the gate changed the project"; fi
 after=$(tree_hash "$FIX")
 if [ "$before" = "$after" ]; then ok "fixtures unchanged by the run"; else nok "fixtures changed during the run"; fi
+
+# Review round: a failing git ls-files fails the gate with exit 2, never an empty list that reads as nothing to check.
+d=$(r3dir gitfail)
+vcfg "$d" 'src/**'
+git init -q "$d"
+git -C "$d" add -A
+r3_fail "git control: broad src/** in a git work tree" "$d" "hides hand-written code"
+printf 'garbage' > "$d/.git/index"
+run_gate "$d"
+if [ "$RC" -eq 2 ] && ! printf '%s' "$OUT" | grep -q 'nothing to check'; then ok "a corrupted git index fails closed with exit 2"; else nok "a corrupted git index should exit 2 (exit $RC)" "$OUT"; fi
+
+# Review round: a planted project .venv/bin/python3 is never run by the gate.
+d=$(r3dir venvplant)
+mk "$d" pyproject.toml $'[tool.coverage.run]\nomit = ["src/gen/*"]\n'
+mk "$d" .venv/bin/python3 $'#!/bin/sh\ntouch "$0.ran"\nexit 0\n'
+chmod +x "$d/.venv/bin/python3"
+run_gate "$d"
+if [ ! -e "$d/.venv/bin/python3.ran" ]; then ok "the gate never runs a project .venv/bin/python3"; else nok "the gate ran a planted .venv/bin/python3"; fi
 
 printf '%d passed, %d failed\n' "$pass" "$failed"
 [ "$failed" -eq 0 ]
