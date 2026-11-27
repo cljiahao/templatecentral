@@ -14,7 +14,7 @@ a40852ef25d448f419e38aedb7ca58407077da76efe740312e20bd3f13836727  .claude/gates.
 56fed523dc04a1d00d305df04f166cea15d2844ab8eb229cdaf2ad715aa4ef62  .claude/hooks/block-no-verify.sh
 087c4a81b2f96433a2316fcec8323eb7f695b5a4c0bd3dc8205e23429bab0203  .claude/hooks/post-edit-comment-check.sh
 efc0ec44f4292f24021d0980010e36896f01f9feb63ebd1b219ab317c547ea46  .claude/hooks/post-edit-typecheck.sh
-b7f788284f941c65e7c3db3fb6ef34aa103b096d1098627be41ba143302a68e1  .claude/hooks/protect-files.sh
+f17ce0c817e4b5d5b6b8db906b77b149eb9d167aea09bdea822da3568f5b31f8  .claude/hooks/protect-files.sh
 18a33b122d46248a120903d1c1c7408fdd865f920c4d3f52d42547465ff73f47  .claude/hooks/session-context.sh
 7eed857cb3a62268a1f5904abd0f51a4e4427e9eb155af606e19c180bd3faf01  .claude/hooks/skill-usage-log.sh
 e29e707e8af68c2a5b19d407d772f1a7ca3e51c929091ab70eabe4d335ec771c  .claude/hooks/stop-checks.sh
