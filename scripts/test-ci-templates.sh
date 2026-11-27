@@ -273,16 +273,22 @@ def condition_errors(rel, doc, tmpl):
                 if text.lstrip().startswith("#"):
                     continue
                 # Every python call in a step runs isolated (-I): the project folder is not on sys.path, so a root venv.py or pip/__init__.py cannot stand in for the module. pytest runs the project's own tests and is the one exception.
-                for call in re.finditer(r"(?:^|[\s;&|(\"])((?:[^\s;&|()\"']*/)?python3?)(?=[\s\"'])[\"']?(.*)", text):
-                    rest = call.group(2).split()
-                    if rest[:1] != ["-I"] and rest[:2] != ["-m", "pytest"]:
-                        errors.append(f"{rel}: job {job} step {ident} runs {call.group(1)} without -I, so a root venv.py or pip/__init__.py in the project can run in place of the module")
-                # A pip, pip3, pipx or uv pip, with or without a leading path, cannot take -I: use python -I -m pip. pipx run is the one exception, and only for an exact pin (name==version) because it installs into its own isolated environment.
-                for call in re.finditer(r"(?:^|[\s;&|(\"])(?<!-m )(?<!uv )((?:[^\s;&|()\"']*/)?(?:pip3?|pipx|uv pip))(?=[\s\"'])[\"']?(.*)", text):
-                    rest = call.group(2).split()
-                    if call.group(1) == "pipx" and rest[:1] == ["run"] and len(rest) > 1 and re.search(r"==\S", rest[1].strip("\"")):
-                        continue
-                    errors.append(f"{rel}: job {job} step {ident} runs bare {call.group(1)}, which cannot run isolated: use python -I -m pip (pipx run only with an exact == pin)")
+                # A pip, pip3, pip3.N, pipx or uv pip, with or without a path, quotes or $(pwd) in front, cannot take -I: use python -I -m pip. pipx run is the one exception, and only for an exact pin (name==version) because it installs into its own isolated environment.
+                # A command word is any token whose base name, after quotes, a path prefix and shell punctuation are stripped, is python, python3, python3.N, pip, pip3 or pip3.N.
+                words = re.findall(r"[^\s;&|()\"'`]+", text)
+                for pos, word in enumerate(words):
+                    base = word.rsplit("/", 1)[-1]
+                    rest = words[pos + 1:]
+                    before = words[pos - 1] if pos else ""
+                    if re.fullmatch(r"python3?(\.[0-9]+)?", base):
+                        if rest[:1] != ["-I"] and rest[:2] != ["-m", "pytest"]:
+                            errors.append(f"{rel}: job {job} step {ident} runs {word} without -I, so a root venv.py or pip/__init__.py in the project can run in place of the module")
+                    elif re.fullmatch(r"pip(3(\.[0-9]+)?)?", base) and before != "-m":
+                        name = "uv pip" if before == "uv" else word
+                        errors.append(f"{rel}: job {job} step {ident} runs bare {name}, which cannot run isolated: use python -I -m pip (pipx run only with an exact == pin)")
+                    elif base == "pipx":
+                        if not (rest[:1] == ["run"] and len(rest) > 1 and re.search(r"==\S", rest[1])):
+                            errors.append(f"{rel}: job {job} step {ident} runs bare {word}, which cannot run isolated: use python -I -m pip (pipx run only with an exact == pin)")
             seen_steps.append(script + " " + str(step.get("template", "")))
             if "requirements-dev.txt" in script and "pip install" in script:
                 if "LICENCES_SCOPE=all" not in script or "scripts/check-licences.sh" not in script:
@@ -1180,6 +1186,11 @@ for host in github-py/.github/workflows/ci.yml:github-py azure-py/azure-pipeline
   mutate "/usr/bin/pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '/usr/bin/pip install -r requirements-dev.txt' static "runs bare"
   mutate "PWD-prefixed python without -I for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' "\$PWD/.venv/bin/python -m pip install -r requirements-dev.txt" static "without -I"
   mutate "/usr/bin/pip3 for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '/usr/bin/pip3 install -r requirements-dev.txt' static "runs bare"
+  mutate "command-substitution-prefixed pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' "\$(pwd)/.venv/bin/pip install -r requirements-dev.txt" static "runs bare"
+  mutate "single-quoted path pip for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' "'/usr/bin/pip' install -r requirements-dev.txt" static "runs bare"
+  mutate "pip3.12 for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' 'pip3.12 install -r requirements-dev.txt' static "runs bare"
+  mutate "python3.12 without -I for the dev install ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' '.venv/bin/python3.12 -m pip install -r requirements-dev.txt' static "without -I"
+  mutate "quoted python3.12 without -I behind a command substitution ($hn)" "$hf" '.venv/bin/python -I -m pip install -r requirements-dev.txt' "\"\$(pwd)/.venv/bin/python3.12\" -m pip install -r requirements-dev.txt" static "without -I"
   while IFS= read -r good; do
     rm -rf "$T/mut" && cp -R "$CI_DIR" "$T/mut"
     python3 - "$T/mut/$hf" ".venv/bin/python -I -m pip install -r requirements-dev.txt" "$good" <<'PY'
@@ -1196,6 +1207,8 @@ PY
 $PWD/.venv/bin/python -I -m pip install -r requirements-dev.txt
 "$VIRTUAL_ENV/bin/python" -I -m pip install -r requirements-dev.txt
 /usr/bin/python3 -I -m pip install -r requirements-dev.txt
+$(pwd)/.venv/bin/python3.12 -I -m pip install -r requirements-dev.txt
+'/usr/bin/python3.12' -I -m pip install -r requirements-dev.txt
 GOODS
 done
 # The unhashed dev install runs after every gate that does not need the dev tools: a dev install placed ahead of any of them is caught.
