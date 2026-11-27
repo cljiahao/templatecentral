@@ -103,6 +103,8 @@ for ST in nestjs nextjs vite-react fastapi; do
     TC_STACK=$ST TC_PART=manifest bash "$SHARED/tc-copy.sh" "$P" > /dev/null 2>&1 || bad "$ST/$HOST tc-copy part manifest failed"
     printf '# %s\n\nA scaffolded project.\n' "$ST" > "$P/README.md"
     git -C "$P" init -q -b main
+    git -C "$P" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q --allow-empty -m "chore: root"
+    ROOT=$(git -C "$P" rev-parse HEAD)
     git -C "$P" add -A
     git -C "$P" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m "chore: scaffold" || bad "$ST/$HOST base commit failed"
     git -C "$P" checkout -q -b work
@@ -112,6 +114,7 @@ for ST in nestjs nextjs vite-react fastapi; do
     gate testbudget bash scripts/test-budget.sh
     gate nosonar bash .claude/ci-gates.sh nosonar
     gate workarounds bash scripts/check-workarounds.sh main
+    gate workarounds-whole-scaffold bash scripts/check-workarounds.sh "$ROOT"
     gate ratchet bash scripts/gate-ratchet.sh auto
     gate envexample bash scripts/check-env-example.sh
     gate workflows bash scripts/check-workflows.sh

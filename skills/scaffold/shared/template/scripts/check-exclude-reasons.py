@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Scanner for check-exclude-reasons.sh: reads TOML and INI coverage and mutation settings without running anything."""
 import configparser
+import importlib
 import os
 import re
 import sys
@@ -328,6 +329,16 @@ def threshold(file, leaf, key):
         emit("T", file, line, key, node[1])
 
 
+# The stdlib TOML reader, else the tomli package, else None; loaded by name so type checkers need no stub for either.
+def load_toml_module():
+    for name in ("tomllib", "tomli"):
+        try:
+            return importlib.import_module(name)
+        except ImportError:
+            continue
+    return None
+
+
 def scan_toml(file, text):
     parser = Toml(text)
     try:
@@ -335,14 +346,7 @@ def scan_toml(file, text):
     except TomlError as err:
         emit("X", file, err.line, "toml cannot be read: %s" % err)
         return
-    try:
-        try:
-            import tomllib  # type: ignore[import-not-found]  # absent on older interpreters, tomli covers it
-        except ImportError:
-            import tomli as tomllib  # type: ignore[import-not-found,no-redef]  # fallback name for the same module
-    except ImportError:
-        tomllib = None
-    reference = None
+    tomllib = load_toml_module()
     if tomllib is not None:
         try:
             reference = tomllib.loads(text)
