@@ -91,6 +91,10 @@ Local checks match the default Sonar way profile. If your server flags a rule be
 - The server ignores the coverage and duplication conditions until the new code reaches 20 lines; local diff coverage has no such exemption.
 - Sonar has two built-in gates; the local checks target plain "Sonar way", not "Sonar way for agentic AI".
 
+## Layer rules, accessibility lint and strict types
+
+`docs/architecture.md` is enforced by an allow-list: a layer imports only the layers its rule names, so a new or misspelt layer fails instead of passing. TypeScript stacks use ESLint (`no-restricted-imports` for static and re-export imports, `no-restricted-syntax` for `import()`) and fastapi uses `import-linter` (contract in `pyproject.toml`) plus ruff `TID251` and `TID252`. Each failure names the layer rule. Next.js and Vite also run the full `jsx-a11y` recommended set at error level, and every TypeScript stack turns on the extra strictness flags in its `tsconfig.json`. It does not catch string-built dynamic imports, runtime reflection, layering inside one feature folder, a path alias or top-level folder the config does not list, or (fastapi) a package importing a root module such as `app`. `lint-imports` has no gate row yet, so run it by hand: `PYTHONPATH=src lint-imports`.
+
 ## Skill capture
 
 - A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from the skill usage log in the `.claude` folder.

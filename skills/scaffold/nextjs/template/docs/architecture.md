@@ -15,7 +15,7 @@ Codemap. Update it in the same change that moves a layer or a shared module.
 
 ## Dependency direction
 
-`app` → `features` → `components`, `integrations`, `lib`. Features reach another feature only through its entry point. `lib` imports from no other layer. Nothing imports from `app`.
+`app` → `features` → `components`, `integrations`, `lib`. Features reach another feature only through its entry point. `lib` imports from no other layer except the shared error classes in `integrations/error`. Nothing imports from `app`.
 
 ## Reuse
 

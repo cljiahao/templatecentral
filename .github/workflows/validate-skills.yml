@@ -403,6 +403,8 @@ jobs:
           fetch-tags: true
       - name: Comment gate tests
         run: bash scripts/seeded-comments.test.sh
+      - name: Boundary, accessibility and strict-type tests
+        run: bash scripts/seeded-boundaries.test.sh
       - name: Duplicate-test gate tests
         run: bash scripts/seeded-duplicate-tests.test.sh
       - name: Exclusion reason gate tests

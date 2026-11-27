@@ -2,6 +2,7 @@ pytest>=9.2.0
 pytest-asyncio>=1.4.1
 pytest-cov>=7.1.0
 httpx2>=2.16.0
+import-linter==2.17
 ruff>=0.17.4
 pyright>=1.1.414
 lefthook>=2.2.2

@@ -15,7 +15,17 @@ select = [
   "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "ARG",
   "PLW0602", "PLW0603", "PLW2901", "PLR1714", "PLR5501",
   "N801", "N802", "N806", "N999",
+  # Layering: absolute imports only, so the import-linter contract sees every edge; no runtime-resolved imports.
+  "TID251", "TID252",
 ]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"importlib.import_module".msg = "Layer rule (docs/architecture.md): import statically so the layer contract can see the edge."
+"importlib.__import__".msg = "Layer rule (docs/architecture.md): import statically so the layer contract can see the edge."
+"builtins.__import__".msg = "Layer rule (docs/architecture.md): import statically so the layer contract can see the edge."
 
 [tool.ruff.lint.mccabe]
 max-complexity = 15
@@ -48,3 +58,12 @@ addopts = [
 # Global floor on every --cov run. The ratchet gate blocks lowering it or adding omit entries.
 fail_under = 80
 show_missing = true
+
+[tool.importlinter]
+root_packages = ["api", "logic", "models", "core", "utils", "constants"]
+
+[[tool.importlinter.contracts]]
+name = "Layer rule (docs/architecture.md): a layer imports only the layers below it"
+type = "layers"
+# Highest first; a package may import only layers listed after it.
+layers = ["api", "logic", "models", "core", "utils", "constants"]

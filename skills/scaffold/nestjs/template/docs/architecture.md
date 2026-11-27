@@ -13,7 +13,7 @@ Codemap. Update it in the same change that moves a layer or a shared module.
 
 ## Dependency direction
 
-Controller → service → repository. A module reaches another module only through its exported service. `common` and `config` import from no module. Nothing imports from a controller.
+Controller → service → repository. A module reaches another module only through its `*.service` or `*.module` file. `common` and `config` import from no module. Nothing imports from a controller.
 
 ## Reuse
 
