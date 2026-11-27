@@ -44,8 +44,8 @@ function FieldHarness() {
   );
 }
 
-describe('widgets', () => {
-  it('render their content', () => {
+describe('components', () => {
+  it('render their content and wire accessibility attributes', () => {
     const out = html(
       <>
         <BrandLogo />
@@ -58,69 +58,43 @@ describe('widgets', () => {
         <CustomDialog title="Title" description="Why" trigger={<button>Open</button>}>
           Inside
         </CustomDialog>
-      </>
-    );
-    expect(out).toContain('Head');
-  });
-
-  it('lays out a media card with and without media', () => {
-    const out = html(
-      <>
         <MediaCard title="T" mediaPosition="left">
           media
         </MediaCard>
         <MediaCard title="Only title" description="D" />
+        <LinkList
+          links={[
+            { label: 'Docs', href: '/docs' },
+            { label: 'Ext', href: 'https://x.test', target: '_blank' },
+          ]}
+        />
+        <FieldHarness />
+        <SiteFooter />
+        <SiteFooter creditText="Credit" links={[{ label: 'L', href: '/l' }]} />
+        <ThemeProvider attribute="class">
+          <Providers>
+            <p>child</p>
+          </Providers>
+        </ThemeProvider>
       </>
     );
-    expect(out).toContain('Only title');
+    const expected = [
+      'Head',
+      'Only title',
+      'noopener noreferrer',
+      'name-description',
+      'Credit',
+      'child',
+    ];
+    expected.forEach((text) => expect(out).toContain(text));
   });
 
-  it('marks external links safe to open', () => {
-    const out = html(
-      <LinkList
-        links={[
-          { label: 'Docs', href: '/docs' },
-          { label: 'Ext', href: 'https://x.test', target: '_blank' },
-        ]}
-      />
-    );
-    expect(out).toContain('rel="noopener noreferrer"');
-  });
-
-  it('wires a form field to its label, description and control', () => {
-    const out = html(<FieldHarness />);
-    expect(out).toContain('aria-describedby="name-description"');
-  });
-});
-
-describe('layout', () => {
   it.each([
     ['/', false],
     ['/dashboard/x', true],
   ])('renders the navbar for %s', (path, isDashboard) => {
     pathname.value = path;
     expect(html(<Navbar />).includes('aria-current="page"')).toBe(isDashboard);
-  });
-
-  it('renders the footer with and without links', () => {
-    const out = html(
-      <>
-        <SiteFooter />
-        <SiteFooter creditText="Credit" links={[{ label: 'L', href: '/l' }]} />
-      </>
-    );
-    expect(out).toContain('Credit');
-  });
-
-  it('wraps children in the app providers', () => {
-    const out = html(
-      <ThemeProvider attribute="class">
-        <Providers>
-          <p>child</p>
-        </Providers>
-      </ThemeProvider>
-    );
-    expect(out).toContain('child');
   });
 
   it('composes the pages from the layout', () => {

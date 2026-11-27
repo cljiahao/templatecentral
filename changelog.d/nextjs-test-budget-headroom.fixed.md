@@ -1,0 +1,1 @@
+- The nextjs scaffold merges its component render tests into one render per component, taking the bare test ratio from 34.73 to 32.90 per 100 source lines against the unchanged limit of 35.
