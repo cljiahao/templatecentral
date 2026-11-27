@@ -712,6 +712,16 @@ run "$T/control.tsv"
 check 1 "$EC" "ruff extend-exclude under lint fails closed"
 has "extend-exclude is not read" "$OUT" "extend-exclude message"
 
+fresh_root ruff_extend_exclude_top_source
+edit "$PYP" "s.replace('extend-exclude = [', 'extend-exclude = [\"src\",', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a top-level extend-exclude that hides a source folder fails closed"
+has "extend-exclude is not read" "$OUT" "top-level extend-exclude message"
+
+fresh_root ruff_extend_exclude_seeded_helpers
+run "$T/control.tsv"
+check 0 "$EC" "a top-level extend-exclude of only the seeded Python helpers passes"
+
 fresh_root ruff_inline_extend_pfi
 edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\nextend-per-file-ignores = {\"app/*.py\" = [\"C901\"]}\n', 1)"
 run "$T/control.tsv"
