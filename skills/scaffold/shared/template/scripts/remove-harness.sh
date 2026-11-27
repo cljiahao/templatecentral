@@ -75,6 +75,10 @@ is_removable() {
     azure-pipelines.yml | azure-pipelines/templatecentral-gates.yml | lefthook.yml) return 0 ;;
     docs/harness.md | docs/adr/0001-test-each-behaviour-once.md) return 0 ;;
     scripts/check-dockerfile.sh | scripts/check-docs.sh | scripts/check-env-example.sh | scripts/check-review-record.sh) return 0 ;;
+    scripts/check-comments.sh | scripts/check-comments.mjs | scripts/check-comments.py | scripts/check-comments.licences.txt) return 0 ;;
+    scripts/check-duplicate-tests.sh | scripts/duplicate-tests-ts.mjs | scripts/duplicate_tests_py.py) return 0 ;;
+    scripts/check-exclude-reasons.sh | scripts/check-exclude-rules.sh | scripts/check-exclude-reasons.awk) return 0 ;;
+    scripts/check-exclude-reasons.mjs | scripts/check-exclude-reasons.py) return 0 ;;
     scripts/check-bundle-size.sh | scripts/check-change-size.sh | scripts/check-licences.sh | scripts/generate-sbom.sh | scripts/py-env.py) return 0 ;;
     scripts/check-secret-scanner.sh | scripts/check-supply-chain.sh | scripts/check-workflows.sh | scripts/gate-ratchet.sh) return 0 ;;
     scripts/record-review.sh | scripts/remove-harness.sh | scripts/test-budget.sh) return 0 ;;

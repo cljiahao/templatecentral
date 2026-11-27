@@ -40,9 +40,16 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'cobertura', 'lcov'],
+      // reason: coverage counts production source files only, never config or tooling files
       include: ['src/**/*.{ts,tsx}'],
-      // src/components/ui holds vendor-generated shadcn primitives, so it is not measured; hand-written code stays at the floor.
-      exclude: ['**/*.{test,spec}.{ts,tsx}', 'src/test/**', '**/*.d.ts', 'src/components/ui/**'],
+      exclude: [
+        '**/*.{test,spec}.{ts,tsx}',
+        // reason: the test folder holds setup and helper files that tests run, not production code
+        'src/test/**',
+        '**/*.d.ts',
+        // reason: vendor-generated shadcn primitives are not hand written, so hand-written code stays at the floor
+        'src/components/ui/**',
+      ],
       // Global floor on every run. The ratchet gate blocks lowering it or widening exclude.
       thresholds: { lines: 80 },
     },

@@ -244,6 +244,7 @@ add_config() {
   case "$base" in
     *.properties) prop_files+=("$f") ;;
     pyproject.toml | .coveragerc | setup.cfg | tox.ini | *.toml | *.ini | *.cfg | .coveragerc*) py_files+=("$f") ;;
+    .jscpd.json) py_files+=("$f") ;;
     karma*.conf* | nyc.config.* | codecov.yml | .codecov.yml) other_files+=("$f") ;;
     *.js | *.cjs | *.mjs | *.ts | *.mts | *.cts | *.json | .nycrc* | .c8rc*) js_files+=("$f"); js_modes+=("") ;;
     *) return 1 ;;
@@ -384,6 +385,7 @@ $out"
   else
     needs=
     for f in "${py_files[@]}"; do
+      case "${f##*/}" in .jscpd.json) needs=$f ;; esac
       if grep -qE 'coverage|mutmut' "$f" 2> /dev/null; then needs=$f; fi
     done
     if [ -n "$needs" ]; then bad "$needs cannot be read because python3 is not installed. $SUPPORTED"; fi

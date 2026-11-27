@@ -72,7 +72,7 @@ kind_of() {
     .claude/dep-audit-allow.txt | */.claude/dep-audit-allow.txt) KIND=allow ;;
     .claude/comment-hygiene-patterns.txt | */.claude/comment-hygiene-patterns.txt) KIND=patterns ;;
     .claude/gate-budget.conf | */.claude/gate-budget.conf) KIND=gatetime ;;
-    .claude/allowed-licences.txt | */.claude/allowed-licences.txt | .claude/licence-exceptions.txt | */.claude/licence-exceptions.txt | .claude/change-size-exclude.txt | */.claude/change-size-exclude.txt) KIND=lines ;;
+    .claude/allowed-licences.txt | */.claude/allowed-licences.txt | .claude/licence-exceptions.txt | */.claude/licence-exceptions.txt | .claude/change-size-exclude.txt | */.claude/change-size-exclude.txt | scripts/check-comments.licences.txt | */scripts/check-comments.licences.txt) KIND=lines ;;
     .claude/bundle-budget.txt | */.claude/bundle-budget.txt) KIND=bundle ;;
     tsconfig.json | tsconfig.*.json | */tsconfig.json | */tsconfig.*.json) KIND=tsconfig ;;
     pyrightconfig.json | */pyrightconfig.json) KIND=pyright ;;

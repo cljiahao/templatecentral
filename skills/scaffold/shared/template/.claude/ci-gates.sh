@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle|list> [base-branch]
+# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|commentshape|duptests|exclusions|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle|list> [base-branch]
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -119,7 +119,7 @@ pr_only() {
 }
 
 case "$gate" in
-  secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle)
+  secrets|changelog|comments|commentshape|duptests|exclusions|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle)
     gate_listed "$gate" || fail "gate '$gate' is not listed in .claude/gates.txt"
     ;;
   list)
@@ -467,6 +467,19 @@ JS
     [ -f scripts/check-licences.sh ] || fail "scripts/check-licences.sh is missing"
     bash scripts/check-licences.sh || fail "licence check failed (output above). Install the dependencies first; change .claude/allowed-licences.txt only after a licence review."
     ;;
+  commentshape)
+    pr_only
+    [ -f scripts/check-comments.sh ] || fail "scripts/check-comments.sh is missing"
+    bash scripts/check-comments.sh "$base" || fail "a comment this change adds breaks the comment rules, or the gate could not run (output above). Delete the comment or shorten it to one reason; never add a disable."
+    ;;
+  duptests)
+    [ -f scripts/check-duplicate-tests.sh ] || fail "scripts/check-duplicate-tests.sh is missing"
+    bash scripts/check-duplicate-tests.sh || fail "duplicate test cases found, or the gate could not run (output above). Delete the copy or merge the cases into one parameterised test."
+    ;;
+  exclusions)
+    [ -f scripts/check-exclude-reasons.sh ] || fail "scripts/check-exclude-reasons.sh is missing"
+    bash scripts/check-exclude-reasons.sh || fail "a coverage, Sonar or mutation exclude has no reason, hides a whole source scope, or could not be read (output above). Write a reason: line above it, or remove the exclude."
+    ;;
   sbom)
     [ -f scripts/generate-sbom.sh ] || fail "scripts/generate-sbom.sh is missing"
     bash scripts/generate-sbom.sh || fail "SBOM generation failed (output above). Install the dependencies first."
@@ -482,7 +495,7 @@ JS
     bash scripts/check-bundle-size.sh --build || fail "bundle size check failed (output above). Lazy-load heavy routes or drop the large dependency; raise .claude/bundle-budget.txt only after a human decision."
     ;;
   *)
-    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle|list> [base-branch]" >&2
+    echo "usage: ci-gates.sh <secrets|changelog|comments|commentshape|duptests|exclusions|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle|list> [base-branch]" >&2
     exit 2
     ;;
 esac

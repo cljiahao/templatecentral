@@ -60,6 +60,9 @@ case "$rel" in
   .claude/dep-audit-allow.txt|*/.claude/dep-audit-allow.txt) reason="dependency-audit allowlist — an edit can suppress a known vulnerability" ;;
   .claude/allowed-licences.txt|*/.claude/allowed-licences.txt|.claude/licence-exceptions.txt|*/.claude/licence-exceptions.txt) reason="licence allow-list — adding a line lets a dependency with that licence ship" ;;
   .claude/change-size-exclude.txt|*/.claude/change-size-exclude.txt) reason="change-size exclude list — a line stops the matching files counting toward the review size budget" ;;
+  scripts/check-comments.mjs|*/scripts/check-comments.mjs|scripts/check-comments.py|*/scripts/check-comments.py|scripts/check-comments.licences.txt|*/scripts/check-comments.licences.txt) reason="comment gate helper or licence text list — an edit can let a long or disabled comment pass" ;;
+  scripts/duplicate-tests-ts.mjs|*/scripts/duplicate-tests-ts.mjs|scripts/duplicate_tests_py.py|*/scripts/duplicate_tests_py.py) reason="duplicate-test gate helper — an edit can hide a copied test" ;;
+  scripts/check-exclude-rules.sh|*/scripts/check-exclude-rules.sh|scripts/check-exclude-reasons.awk|*/scripts/check-exclude-reasons.awk|scripts/check-exclude-reasons.mjs|*/scripts/check-exclude-reasons.mjs|scripts/check-exclude-reasons.py|*/scripts/check-exclude-reasons.py) reason="exclude-reason gate helper — an edit can let an exclude pass without a reason" ;;
   .claude/bundle-budget.txt|*/.claude/bundle-budget.txt) reason="bundle-size budget — raising it lets the shipped bundle grow" ;;
   .claude/.harness-base/*|*/.claude/.harness-base/*) reason="merge base snapshot — editing it can poison harness re-sync merges" ;;
   Dockerfile|*/Dockerfile) reason="container image definition" ;;

@@ -469,6 +469,35 @@ def ini_sections(base):
     return wanted
 
 
+def scan_jscpd(file, text):
+    """jscpd reads .jscpd.json as strict JSON and drops the whole file on a comment, so no reason can sit in it; every ignore entry must be a framework default."""
+    import json
+
+    def pairs(items):
+        keys = [k for k, _ in items]
+        if len(keys) != len(set(keys)):
+            raise ValueError("a key is set twice")
+        return dict(items)
+
+    doc = json.loads(text, object_pairs_hook=pairs)
+    if not isinstance(doc, dict):
+        raise ValueError("the top level is not an object")
+    entries = doc.get("ignore", [])
+    if not isinstance(entries, list) or not all(isinstance(e, str) for e in entries):
+        emit("X", file, 1, "ignore %s" % DYNAMIC)
+        return
+    lines = text.split("\n")
+    used = {}
+    found = []
+    for entry in entries:
+        quoted = json.dumps(entry)
+        seen = used.get(entry, 0)
+        hits = [n for n, row in enumerate(lines, 1) for _ in range(row.count(quoted))]
+        found.append((entry, hits[seen] if seen < len(hits) else 1))
+        used[entry] = seen + 1
+    emit_excludes(file, "cpd-ignore", {}, 1, found)
+
+
 for path in sys.argv[1:]:
     name = os.path.basename(path)
     try:
@@ -478,7 +507,9 @@ for path in sys.argv[1:]:
         emit("X", path, 1, "config could not be read: %s" % err)
         continue
     try:
-        if name.endswith(".toml"):
+        if name == ".jscpd.json":
+            scan_jscpd(path, body)
+        elif name.endswith(".toml"):
             scan_toml(path, body)
         else:
             scan_ini(path, body, ini_sections(name))
