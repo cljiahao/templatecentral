@@ -316,6 +316,9 @@ def tooling_path(pat):
         return False
     if pat in SEEDED_HELPERS:
         return True
+    group = re.fullmatch(r"(scripts/)\{([\w.-]+(?:,[\w.-]+)+)\}(\.mjs)", pat)
+    if group:
+        return all(group.group(1) + name + group.group(3) in SEEDED_HELPERS for name in group.group(2).split(","))
     q = re.sub(r"^(\*\*/)+", "", pat)
     anywhere = pat != q and q.split("/")[0] in TOOLING_ANYWHERE
     return (anywhere or (pat == q and (pat.split("/")[0] in TOOLING_DIRS or pat == "next-env.d.ts"))

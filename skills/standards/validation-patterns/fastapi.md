@@ -51,7 +51,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from core.exceptions import NoResultsFoundError
+from core.exceptions import NoResultsFound
 from core.logging import logger
 
 
@@ -65,14 +65,14 @@ class GitHubUser(BaseModel):
 
 
 async def fetch_github_user(username: str) -> GitHubUser:
-    """Fetch a GitHub user; an absent user raises NoResultsFoundError, other failures RuntimeError."""
+    """Fetch a GitHub user; an absent user raises NoResultsFound, other failures RuntimeError."""
     # Encode the path segment — an unencoded `../` or `?` rewrites the request URL
     url = f"https://api.github.com/users/{quote(username, safe='')}"
     async with httpx.AsyncClient(timeout=10) as client:
         response = await client.get(url)
 
     if response.status_code == httpx.codes.NOT_FOUND:
-        raise NoResultsFoundError("GitHub user not found")
+        raise NoResultsFound("GitHub user not found")
     response.raise_for_status()
 
     try:

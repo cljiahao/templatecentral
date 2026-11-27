@@ -15,9 +15,7 @@ export default tseslint.config(
       'dist',
       'coverage/**',
       '.claude/**',
-      'scripts/check-comments.mjs',
-      'scripts/check-exclude-reasons.mjs',
-      'scripts/duplicate-tests-ts.mjs',
+      'scripts/{check-comments,check-exclude-reasons,duplicate-tests-ts}.mjs',
     ],
   },
   {

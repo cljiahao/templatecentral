@@ -91,14 +91,9 @@ const config = [
   // The seeded gate helpers are guarded harness files that nobody may edit, so lint cannot be satisfied.
   {
     ignores: [
-      '.next/**',
-      'node_modules/**',
-      'next-env.d.ts',
       'coverage/**',
       '.claude/**',
-      'scripts/check-comments.mjs',
-      'scripts/check-exclude-reasons.mjs',
-      'scripts/duplicate-tests-ts.mjs',
+      'scripts/{check-comments,check-exclude-reasons,duplicate-tests-ts}.mjs',
     ],
   },
 ];

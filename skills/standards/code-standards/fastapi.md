@@ -12,7 +12,7 @@
 | Private helpers | `_leading_underscore` | `_coerce_account` |
 | Tests | `test_<function>_<scenario>` | `test_refund_raises_after_window` |
 
-Ruff `N` (pep8-naming) enforces class, function, variable and module names. The rows above have no pinned rule.
+Ruff N801, N802, N806 and N999 (pep8-naming) enforce class, function, variable and module names. The rows above have no pinned rule.
 
 ### Type Annotations
 
@@ -29,7 +29,7 @@ Ruff `N` (pep8-naming) enforces class, function, variable and module names. The 
 - Built-in exceptions with descriptive messages (`ValueError` for values, `TypeError` for types).
 - Chain exceptions with `from` to preserve traceback.
 - Avoid bare `except:` or broad `except Exception:` except at boundaries.
-- Custom exceptions (`InvalidInputError`, `NoResultsFoundError`) for crossing layer boundaries.
+- Custom exceptions (`InvalidInputError`, `NoResultsFound`) for crossing layer boundaries.
 
 ### Imports
 
