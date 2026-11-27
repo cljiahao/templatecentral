@@ -1,0 +1,6 @@
+[tool.coverage.run]
+# reason: only the api package is measured by this project
+include = ["app/api/*"]
+
+[tool.coverage.report]
+fail_under = 80

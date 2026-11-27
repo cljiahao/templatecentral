@@ -22,9 +22,9 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// Dev bypass, tree-shaken in production; keep the ENV.IS_DEV guard.
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(
-    // Dev bypass, tree-shaken in production; keep the ENV.IS_DEV guard.
     ENV.IS_DEV ? DEV_USER : null
   );
   const [isLoading] = useState(false);

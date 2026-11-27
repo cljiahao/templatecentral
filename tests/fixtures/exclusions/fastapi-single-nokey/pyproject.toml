@@ -1,0 +1,5 @@
+[tool.coverage.run]
+omit = ["app/migrations/*"]
+
+[tool.coverage.report]
+fail_under = 80

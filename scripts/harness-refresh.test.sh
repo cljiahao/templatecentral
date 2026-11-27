@@ -491,15 +491,13 @@ absent "control: no 'not bumped' line when nothing waits" "version not bumped" "
 
 # Item 8: plan notes where a seeded file lands next to the project's own CI or hook manager.
 seed "$T/n1" nestjs
-rm "$T/n1/.github/dependabot.yml" "$T/n1/lefthook.yml" "$T/n1/sonar-project.properties"
+rm "$T/n1/.github/dependabot.yml" "$T/n1/lefthook.yml"
 mkdir -p "$T/n1/.githooks"
 printf 'name: own\n' >"$T/n1/.github/workflows/own.yml"
 commit "$T/n1" own
 out=$(run "$T/n1")
 contains "own CI: a CI file added next to it is noted" "note: .github/dependabot.yml will be added next to the project's own CI (.github/workflows/own.yml); review it before you commit." "$out"
 contains "other hook manager: lefthook.yml is noted" "note: lefthook.yml will be added but the project already uses another git-hook manager (.githooks)" "$out"
-contains "sonar-project.properties: noted, stays seeded" "note: sonar-project.properties is seeded as a file only; it runs no scanner." "$out"
-contains "sonar-project.properties: still an ADD" "ADD       sonar-project.properties" "$out"
 seed "$T/n2" nestjs
 rm "$T/n2/.github/dependabot.yml" "$T/n2/lefthook.yml"
 commit "$T/n2" plain

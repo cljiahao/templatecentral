@@ -71,7 +71,7 @@ write_diff() {
   [ "$mb" != "$hsha" ] || fail "HEAD has no commit beyond '$1': there is nothing to review."
   mb_out=$mb
   git -c core.quotepath=false -c diff.noprefix=false -c diff.mnemonicPrefix=false diff \
-    --no-ext-diff --no-textconv --no-color --no-renames --full-index \
+    --no-ext-diff --no-textconv --text --no-color --no-renames --full-index \
     --src-prefix=a/ --dst-prefix=b/ -U3 --diff-algorithm=myers "$mb" HEAD -- . > "$2" 2> /dev/null || fail "git diff failed against '$1'."
   [ -s "$2" ] || fail "the diff against '$1' is empty: there is nothing to review."
 }

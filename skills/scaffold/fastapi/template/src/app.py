@@ -33,8 +33,6 @@ class SecurityHeadersMiddleware:
 class ForwardedHostMiddleware:
     """Rewrites Host from X-Forwarded-Host so request.base_url reflects the public hostname."""
 
-    # Honored only from TRUST_PROXY peers; otherwise a direct client could spoof generated URLs such as reset links.
-
     def __init__(self, app: ASGIApp, trusted: str = "*") -> None:
         self.app = app
         self.trust_all = trusted.strip() == "*"
@@ -89,21 +87,20 @@ def configure_security_headers(app: FastAPI) -> None:
     app.add_middleware(SecurityHeadersMiddleware)
 
 
+# TRUST_PROXY takes IPs/CIDRs, not a hop count: list every proxy hop; the last added middleware runs outermost.
 def configure_proxy_headers(app: FastAPI) -> None:
     """Trusts reverse-proxy headers when TRUST_PROXY is set."""
-    # TRUST_PROXY takes IPs/CIDRs, not a hop count: list every proxy hop and have an inner proxy keep the outer X-Forwarded-For, or all clients resolve to the nearest proxy; * lets a client-supplied X-Forwarded-For win.
     if not api_settings.TRUST_PROXY:
         return
     from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-    # Last added runs outermost, so ForwardedHostMiddleware sees the request before ProxyHeadersMiddleware rewrites the client.
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=api_settings.TRUST_PROXY)
     app.add_middleware(ForwardedHostMiddleware, trusted=api_settings.TRUST_PROXY)
 
 
+# Docs are dev-only and set explicitly; security headers wrap CORS so preflight responses get them.
 def start_application() -> FastAPI:
     """Builds the configured FastAPI application."""
-    # Docs are dev-only: openapi_url=None already disables the docs routes; all three are set explicitly.
     is_dev = common_settings.ENVIRONMENT == "dev"
     app = FastAPI(
         title=common_settings.PROJECT_NAME,
@@ -119,7 +116,6 @@ def start_application() -> FastAPI:
         },
     )
 
-    # Security headers wrap CORS so preflight responses get them.
     configure_cors(app)
     configure_security_headers(app)
     configure_proxy_headers(app)

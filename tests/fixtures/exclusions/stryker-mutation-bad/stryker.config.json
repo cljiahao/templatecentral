@@ -1,0 +1,7 @@
+{
+  "mutator": {
+    "excludedMutations": [
+      "StringLiteral"
+    ]
+  }
+}

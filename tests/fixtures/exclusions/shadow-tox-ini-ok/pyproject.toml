@@ -1,0 +1,5 @@
+[project]
+name = "demo"
+
+[tool.coverage.report]
+fail_under = 80

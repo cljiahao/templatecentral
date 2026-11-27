@@ -7,6 +7,9 @@ secrets|gitleaks|ci-gates.sh secrets
 deps|-|ci-gates.sh deps
 changelog|-|ci-gates.sh changelog
 comments|-|ci-gates.sh comments
+commentshape|scripts/check-comments.sh|ci-gates.sh commentshape
+duptests|scripts/check-duplicate-tests.sh|ci-gates.sh duptests
+exclusions|scripts/check-exclude-reasons.sh|ci-gates.sh exclusions
 ratchet|scripts/gate-ratchet.sh|ci-gates.sh ratchet
 supplychain|scripts/check-supply-chain.sh|ci-gates.sh supplychain
 workflows|scripts/check-workflows.sh|ci-gates.sh workflows

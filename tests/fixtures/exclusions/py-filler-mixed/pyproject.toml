@@ -1,0 +1,5 @@
+[tool.coverage.run]
+omit = [
+    # reason: TODO replace this soon
+    "app/migrations/*",
+]

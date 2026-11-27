@@ -31,7 +31,7 @@ fi
 wd=$(mktemp -d "${TMPDIR:-/tmp}/workarounds.XXXXXX") || { echo "check-workarounds: cannot create a temporary directory" >&2; exit 1; }
 trap 'rm -rf "$wd"' EXIT
 
-git -c core.quotepath=off diff -U0 --no-color --no-ext-diff -M --diff-filter=d --src-prefix=a/ --dst-prefix=b/ "$from" HEAD -- '*.py' '*.pyi' '*.ts' '*.tsx' '*.mts' '*.cts' '*.js' '*.jsx' '*.mjs' '*.cjs' > "$wd/added.diff" || { echo "check-workarounds: git diff failed" >&2; exit 1; }
+git -c core.quotepath=off diff -U0 --no-color --no-ext-diff --no-textconv --text -M --diff-filter=d --src-prefix=a/ --dst-prefix=b/ "$from" HEAD -- '*.py' '*.pyi' '*.ts' '*.tsx' '*.mts' '*.cts' '*.js' '*.jsx' '*.mjs' '*.cjs' > "$wd/added.diff" || { echo "check-workarounds: git diff failed" >&2; exit 1; }
 
 cat > "$wd/ranges.awk" <<'AWK'
 /^diff --git / { st = 1; file = ""; next }

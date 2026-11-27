@@ -1,0 +1,2 @@
+[tool.coverage.report]
+fail_under = 70

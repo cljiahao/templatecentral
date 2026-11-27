@@ -251,8 +251,6 @@ while IFS="$TAB" read -r cls path _; do
       [ -z "$OWNCI" ] || echo "note: $path will be added next to the project's own CI (${OWNCI# }); review it before you commit." ;;
     lefthook.yml)
       [ -z "$OTHERHK" ] || echo "note: lefthook.yml will be added but the project already uses another git-hook manager (${OTHERHK# }); two managers can fight over .git/hooks, so choose one." ;;
-    sonar-project.properties)
-      echo "note: sonar-project.properties is seeded as a file only; it runs no scanner. Review the project key and sources, or delete it if the project does not use it." ;;
     scripts/record-review.sh)
       grep -qx '\.claude\/review\/\{0,1\}' "$P/.gitignore" 2>/dev/null || echo "note: the review gate is added but the refresh never edits .gitignore; add the line .claude/review/ to .gitignore, or scripts/record-review.sh refuses to record." ;;
   esac
@@ -442,7 +440,7 @@ if [ "$GB" -eq 1 ]; then
   if [ "$PRUNE" -eq 1 ]; then GBMODE=prune; else GBMODE=record; fi
   echo "gate baseline ($GBMODE): the project's own lint and type tools run now"
   bash "$GEN/gate-baseline.sh" -C "$P" run "$GBMODE" || GBRC=1
-  echo "Put .claude/gate-baseline.txt under review: it may only shrink after this change (wire it into the gate ratchet; see harness-refresh.md)."
+  echo "Put .claude/gate-baseline.txt under review: it may only shrink after this change (the gate ratchet refuses growth once the merge base carries scripts/gate-baseline.sh; see harness-refresh.md)."
 fi
 
 CMP=0

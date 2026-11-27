@@ -9,7 +9,15 @@ import tseslint from 'typescript-eslint';
 const sonarjsPlugin = sonarjs.configs.recommended.plugins.sonarjs;
 
 export default tseslint.config(
-  { ignores: ['dist', 'coverage/**', '.claude/**'] },
+  // The seeded gate helpers are guarded harness files that nobody may edit, so lint cannot be satisfied.
+  {
+    ignores: [
+      'dist',
+      'coverage/**',
+      '.claude/**',
+      'scripts/{check-comments,check-exclude-reasons,duplicate-tests-ts}.mjs',
+    ],
+  },
   {
     linterOptions: {
       reportUnusedDisableDirectives: 'error',
@@ -17,7 +25,7 @@ export default tseslint.config(
     },
   },
   eslintComments.recommended,
-  // innerHTML, outerHTML, insertAdjacentHTML and document.write take sanitized input only: use DOMPurify or a Trusted Types policy.
+  // innerHTML, outerHTML, insertAdjacentHTML and document.write take only DOMPurify or Trusted Types sanitized input.
   noUnsanitized.configs.recommended,
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
@@ -60,6 +68,26 @@ export default tseslint.config(
         { allowWholeFile: true },
       ],
     },
+  },
+  {
+    // Standards: PascalCase types and classes, camelCase functions and variables.
+    files: ['**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/naming-convention': [
+        'error',
+        { selector: 'typeLike', format: ['PascalCase'] },
+        {
+          selector: ['variable', 'function'],
+          format: ['camelCase', 'PascalCase', 'UPPER_CASE'],
+          leadingUnderscore: 'allowSingleOrDouble',
+        },
+      ],
+    },
+  },
+  {
+    // Standards: named exports only in application code.
+    files: ['src/**/*.{ts,tsx}'],
+    rules: { 'no-restricted-exports': ['error', { restrictDefaultExports: { direct: true } }] },
   },
   {
     // shadcn/ui primitives are generated; prefer-read-only-props cannot be fixed without diverging from shadcn add output.

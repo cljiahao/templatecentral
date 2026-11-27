@@ -1,0 +1,9 @@
+[tool.coverage.run]
+omit = [
+    # reason: generated
+    "app/migrations/*",
+    "*/tests/*",
+]
+
+[tool.coverage.report]
+fail_under = 80

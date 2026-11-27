@@ -71,10 +71,14 @@ is_removable() {
     .claude/registry-hosts.txt | .claude/settings.json | .claude/verify-harness.sh) return 0 ;;
     .claude/review-checklist.txt | .claude/review-checklist-stack.txt) return 0 ;;
     .claude/allowed-licences.txt | .claude/bundle-budget.txt | .claude/change-size-exclude.txt | .claude/licence-exceptions.txt) return 0 ;;
-    .github/dependabot.yml | .github/workflows/ci.yml | .gitleaks.toml | .jscpd.json | sonar-project.properties) return 0 ;;
+    .github/dependabot.yml | .github/workflows/ci.yml | .gitleaks.toml | .jscpd.json) return 0 ;;
     azure-pipelines.yml | azure-pipelines/templatecentral-gates.yml | lefthook.yml) return 0 ;;
     docs/harness.md | docs/adr/0001-test-each-behaviour-once.md) return 0 ;;
     scripts/check-dockerfile.sh | scripts/check-docs.sh | scripts/check-env-example.sh | scripts/check-review-record.sh) return 0 ;;
+    scripts/check-comments.sh | scripts/check-comments.mjs | scripts/check-comments.py | scripts/check-comments.licences.txt) return 0 ;;
+    scripts/check-duplicate-tests.sh | scripts/duplicate-tests-ts.mjs | scripts/duplicate_tests_py.py) return 0 ;;
+    scripts/check-exclude-reasons.sh | scripts/check-exclude-rules.sh | scripts/check-exclude-reasons.awk) return 0 ;;
+    scripts/check-exclude-reasons.mjs | scripts/check-exclude-reasons.py) return 0 ;;
     scripts/check-bundle-size.sh | scripts/check-change-size.sh | scripts/check-licences.sh | scripts/generate-sbom.sh | scripts/py-env.py) return 0 ;;
     scripts/check-secret-scanner.sh | scripts/check-supply-chain.sh | scripts/check-workflows.sh | scripts/gate-ratchet.sh) return 0 ;;
     scripts/record-review.sh | scripts/remove-harness.sh | scripts/test-budget.sh) return 0 ;;
@@ -152,7 +156,9 @@ while IFS="$(printf '\t')" read -r path origin; do
   if [ "$hash_ok" -eq 0 ]; then differs=$((differs + 1)); fi
   if [ "$hash_ok" -ne 1 ]; then
     if [ "$hash_ok" -eq 0 ]; then why="content differs from what was seeded"; else why="no seeded hash recorded, so unchanged content cannot be proved"; fi
-    if grep -Fxq -- "$path" <<<"$force"; then
+    nl=$'\n'
+    case "$nl$force$nl" in *"$nl$path$nl"*) forced=1 ;; *) forced=0 ;; esac
+    if [ "$forced" -eq 1 ]; then
       printf 'remove-harness: %s %s (forced; %s).\n' "$verb" "$path" "$why"
     else
       printf 'remove-harness: KEEP %s: %s. To remove it anyway: --apply --force %s\n' "$path" "$why" "$path"

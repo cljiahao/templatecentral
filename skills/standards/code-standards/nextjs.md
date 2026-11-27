@@ -11,12 +11,11 @@ All files use **kebab-case**. Exceptions: Next.js special files (`layout.tsx`, `
 
 | Type | Convention | Example |
 |------|-----------|---------|
-| Components, classes | PascalCase | `UploadService`, `DashboardHeader` |
+| Components | PascalCase | `DashboardHeader` |
 | Functions, hooks, variables | camelCase | `useUploadForm`, `projectFormSchema` |
 | Constants | UPPER_SNAKE_CASE | `FRAMEWORK_OPTIONS` |
-| Types/interfaces | PascalCase | `ProjectFormSchema`, `UploadMode` |
 
-**Always use named exports.** Never `export default` except where required by Next.js.
+Lint enforces PascalCase types and classes, camelCase, PascalCase or UPPER_CASE variables and functions, and named exports (route files such as `page.tsx` keep their default export). Component and constant casing and file names have no pinned rule.
 
 ### Function vs Const
 
@@ -66,7 +65,7 @@ Each feature and shared folder has an `index.ts`. Prefer `import { X } from '@/f
 
 ### Quality gate
 
-Targets on new code, the SonarQube default gate: cognitive complexity 15, duplication 3%, coverage 80%. Enforced locally with no scanner or server: `sonarjs` rules in `eslint.config.mjs`, `.jscpd.json` and `diff-cover --fail-under=80`.
+Targets on new code, the SonarQube default gate: cognitive complexity 15, duplication 3%, coverage 80%. Enforced locally, with no server: `sonarjs` rules in `eslint.config.mjs`, `.jscpd.json` and `diff-cover --fail-under=80`.
 
 ### Security (Next.js)
 

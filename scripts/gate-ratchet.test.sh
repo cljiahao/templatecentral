@@ -6,6 +6,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SH="$REPO_ROOT/skills/scaffold/shared"
 RATCHET="$SH/template/scripts/gate-ratchet.sh"
+FX="$REPO_ROOT/tests/fixtures/gate-ratchet"
 
 PASS=0
 FAIL=0
@@ -40,7 +41,7 @@ seed() {
   if [[ "$1" == ts ]]; then
     cp "$SH/../nestjs/template/eslint.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
     cp "$SH/template-ts/.jscpd.json" "$R/.jscpd.json"
-    cp "$SH/template-ts/sonar-project.properties" "$R/sonar-project.properties"
+    cp "$FX/sonar-ts.properties" "$R/sonar-project.properties"
     cp "$SH/../nestjs/template/package.json" "$R/package.json"
     cp "$SH/../nestjs/template/tsconfig.json" "$R/tsconfig.json"
     cp "$SH/../nestjs/template/pnpm-workspace.yaml" "$R/pnpm-workspace.yaml"
@@ -66,7 +67,7 @@ PY
     cp "$SH/../fastapi/template/pyproject.toml" "$R/pyproject.toml"
     cp "$SH/../fastapi/template/pyrightconfig.json" "$R/pyrightconfig.json"
     cp "$SH/template-py/.jscpd.json" "$R/.jscpd.json"
-    cp "$SH/template-py/sonar-project.properties" "$R/sonar-project.properties"
+    cp "$FX/sonar-py.properties" "$R/sonar-project.properties"
     cp "$SH/template-ci/github-py/.github/workflows/ci.yml" "$R/.github/workflows/ci.yml"
     printf '\n[tool.coverage.report]\nfail_under = 80\n' >> "$R/pyproject.toml"
   fi
@@ -115,7 +116,7 @@ ci_gate() {
   EC=$?
 }
 
-# run_step <gh|az> <base branch>: sets OUT and EC from the seeded CI ratchet step script, run in the current repo.
+# run_step <gh|ghpy|az> <base branch>: sets OUT and EC from the seeded CI ratchet step script, run in the current repo.
 run_step() {
   mkdir -p "$T/rt"
   rm -f "$T/rt"/*
@@ -168,6 +169,7 @@ expect() {
   for frag in "$@"; do has "$frag" "$OUT" "$label: reports $frag"; done
 }
 
+TAB=$(printf '\t')
 NEWSHA=$(printf 'a%.0s' {1..40})
 seed ts
 ratchet
@@ -182,7 +184,10 @@ weakens eslint.config.mjs "'sonarjs/no-commented-code': 'error'" "'sonarjs/no-co
 weakens eslint.config.mjs "      'sonarjs/no-commented-code': 'error',
 " "" "rule removed" "sonarjs/no-commented-code" "now removed"
 weakens eslint.config.mjs "'sonarjs/todo-tag': 'warn'" "'sonarjs/todo-tag': 'off'" "warn lowered to off" "sonarjs/todo-tag" "now off"
-weakens eslint.config.mjs "ignores: ['eslint.config.mjs'," "ignores: ['src/legacy/**', 'eslint.config.mjs'," "new eslint ignore" "src/legacy/**"
+weakens eslint.config.mjs "    ignores: [
+      'eslint.config.mjs'," "    ignores: [
+      'src/legacy/**',
+      'eslint.config.mjs'," "new eslint ignore" "src/legacy/**"
 weakens eslint.config.mjs "  eslint.configs.recommended,
 " "" "eslint preset dropped" "eslint.configs.recommended"
 weakens vitest.config.ts "lines: 80" "lines: 60" "coverage threshold lowered" "was 80" "now 60"
@@ -223,7 +228,9 @@ passes .gitleaks.toml "description = \"Known non-secrets\"" "description = \"Kno
 passes .claude/gates.txt "secrets|gitleaks|ci-gates.sh secrets" "secrets|gitleaks|ci-gates.sh secrets
 extra|-|ci-gates.sh extra" "gate added"
 
-edit eslint.config.mjs "ignores: ['eslint.config.mjs'," "ignores: ['eslint.config.mjs"
+edit eslint.config.mjs "    ignores: [
+      'eslint.config.mjs'," "    ignores: [
+      'eslint.config.mjs"
 ratchet
 check 2 "$EC" "broken eslint config: exits 2 ($OUT)"
 has "UNREADABLE eslint.config.mjs" "$OUT" "broken eslint config: names the file"
@@ -473,8 +480,12 @@ for UI in next:nextjs/template/vitest.config.ts vite:vite-react/template/vite.co
   git_ commit -q -m base
   ratchet
   check 0 "$EC" "${UI%%:*}: seeded coverage exclude with src/components/ui/** passes ($OUT)"
-  weakens "$CFG" "'src/components/ui/**']" "'src/components/ui/**', 'src/lib/**']" "${UI%%:*}: src/lib/** added to the coverage exclude" "src/lib/**" "new ignore or exclude"
-  passes "$CFG" "'src/components/ui/**']" "]" "${UI%%:*}: dropping the ui exclude is a tightening"
+  weakens "$CFG" "        'src/components/ui/**',
+      ]" "        'src/components/ui/**',
+        'src/lib/**',
+      ]" "${UI%%:*}: src/lib/** added to the coverage exclude" "src/lib/**" "new ignore or exclude"
+  passes "$CFG" "        'src/components/ui/**',
+      ]" "      ]" "${UI%%:*}: dropping the ui exclude is a tightening"
 done
 R=$R_TS
 
@@ -539,6 +550,11 @@ block_scalar() {
   fi
 }
 block_scalar "$SH/template-ci/github-ts/.github/workflows/ci.yml" "  gate-ratchet:" '^ +run: [|]$' "$T/step-gh.sh"
+block_scalar "$SH/template-ci/github-py/.github/workflows/ci.yml" "  gate-ratchet:" '^ +run: [|]$' "$T/step-ghpy.sh"
+NOSTEP="$T/ci-no-ratchet.yml"
+awk '/^  gate-ratchet:/ { skip = 1; next } /^  [a-z]/ { skip = 0 } !skip' "$SH/template-ci/github-py/.github/workflows/ci.yml" > "$NOSTEP"
+( block_scalar "$NOSTEP" "  gate-ratchet:" '^ +run: [|]$' "$T/step-none.sh" ) >/dev/null 2>&1
+check 2 "$?" "ci step ghpy: a template without the ratchet step is refused"
 block_scalar "$SH/template-ci/azure/azure-pipelines/templatecentral-gates.yml" "# The merge-base copy of ci-gates.sh runs" '^ +- bash: [|]$' "$T/step-az.sh"
 git_ checkout -q -B main main
 printf '#!/usr/bin/env bash\necho BASE-ENTRY\nexit 9\n' > "$R/.claude/ci-gates.sh"
@@ -546,14 +562,14 @@ git_ commit -q -am "base entry"
 git_ checkout -q -B work main
 cp "$SH/template/.claude/ci-gates.sh" "$R/.claude/ci-gates.sh"
 git_ commit -q -am "head entry"
-for kind in gh az; do
+for kind in gh ghpy az; do
   run_step "$kind" main
   check 9 "$EC" "ci step $kind: the merge-base entry point runs ($OUT)"
   has "BASE-ENTRY" "$OUT" "ci step $kind: output from the base entry point"
   check 0 "$LEFT" "ci step $kind: temporary copy removed"
   git_ checkout -q -f work
 done
-for kind in gh az; do
+for kind in gh ghpy az; do
   run_step "$kind" no-such-branch
   check 1 "$EC" "ci step $kind: missing base ref exits 1 ($OUT)"
   has "fetch" "$OUT" "ci step $kind: says how to fix a missing base ref"
@@ -563,7 +579,7 @@ for kind in gh az; do
 done
 git_ checkout -q --orphan lone
 git_ commit -q -m lone
-for kind in gh az; do
+for kind in gh ghpy az; do
   run_step "$kind" main
   check 1 "$EC" "ci step $kind: no merge base exits 1 ($OUT)"
   has "no merge base" "$OUT" "ci step $kind: names the missing merge base"
@@ -575,7 +591,7 @@ git_ commit -q -m "base without the harness entry"
 git_ checkout -q -B work main
 git_ checkout main~1 -- .claude/ci-gates.sh .claude/gates.txt
 git_ commit -q -m "adopt"
-for kind in gh az; do
+for kind in gh ghpy az; do
   run_step "$kind" main
   check 0 "$EC" "ci step $kind: first adoption falls back to the head entry point ($OUT)"
   has "first adoption" "$OUT" "ci step $kind: first adoption reported"
@@ -590,7 +606,9 @@ has "cannot waive" "$OUT" "pin moved to a tag: says the label cannot waive it"
 weakens azure-pipelines.yml "NodeTool@0" "NodeTool@latest" "azure task moved off a numeric version" "gate script, runner or manifest changed"
 passes .github/workflows/ci.yml "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1" "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" "pin comment dropped"
 
-edit eslint.config.mjs "ignores: ['eslint.config.mjs'," "ignores: ['eslint.config.mjs"
+edit eslint.config.mjs "    ignores: [
+      'eslint.config.mjs'," "    ignores: [
+      'eslint.config.mjs"
 ci_gate "allow-gate-change"
 check 1 "$EC" "unreadable config: the label does not waive it ($OUT)"
 has "cannot waive an unreadable config" "$OUT" "unreadable config: says why"
@@ -1596,6 +1614,68 @@ git_ add -A
 git_ commit -q -m "touch"
 expect 0 "a gitlink in the tree: passes"
 weakens eslint.config.mjs "['error', 15]" "['error', 25]" "a gitlink in the tree: a weakened gate is still caught" "was 15" "now 25"
+
+# The adopted-project baseline: growth is refused with the merge-base copy of gate-baseline.sh, shrinking passes, the helper is content-frozen.
+GBS="$SH/../../migrate/general/gate-baseline.sh"
+gb_seed() { # gb_seed <with-script: 1|0> <with-file: 1|0>
+  seed ts
+  if [[ "$1" == 1 ]]; then cp "$GBS" "$R/scripts/gate-baseline.sh"; fi
+  if [[ "$2" == 1 ]]; then
+    printf '# templatecentral gate baseline v2\n# gate\tlint\tcolon\n# gate\ttypes\ttsc\nlint\tsrc/a.ts\t1\tmsg one\nlint\tsrc/b.ts\t2\tmsg two\n' > "$R/.claude/gate-baseline.txt"
+  fi
+  git_ add -A
+  git_ commit -q -m baseline
+}
+gb_seed 1 1
+expect 0 "baseline: unchanged control"
+edit .claude/gate-baseline.txt "src/a.ts${TAB}1${TAB}msg one" "src/a.ts${TAB}2${TAB}msg one"
+expect 1 "baseline: a count raised" ".claude/gate-baseline.txt" "the baseline grew"
+edit .claude/gate-baseline.txt "msg two
+" "msg two
+lint${TAB}src/c.ts${TAB}1${TAB}msg new
+"
+expect 1 "baseline: a new entry" "the baseline grew"
+edit .claude/gate-baseline.txt "# gate${TAB}types${TAB}tsc
+" ""
+expect 1 "baseline: a gate line removed" "was removed"
+edit .claude/gate-baseline.txt "# gate${TAB}types${TAB}tsc" "# gate${TAB}types${TAB}pyright"
+expect 1 "baseline: a gate tool changed" "tool of gate types changed"
+edit .claude/gate-baseline.txt "lint${TAB}src/a.ts${TAB}1${TAB}msg one
+" ""
+expect 0 "baseline: an entry removed"
+edit .claude/gate-baseline.txt "src/b.ts${TAB}2${TAB}msg two" "src/b.ts${TAB}1${TAB}msg two"
+expect 0 "baseline: a count lowered"
+drop .claude/gate-baseline.txt
+expect 0 "baseline: the file deleted"
+edit scripts/gate-baseline.sh "set -u" "set -u
+exit 0"
+expect 1 "baseline: helper edited" "scripts/gate-baseline.sh" "content differs"
+drop scripts/gate-baseline.sh
+expect 1 "baseline: helper deleted" "scripts/gate-baseline.sh" "now removed"
+gb_seed 0 1
+edit .claude/gate-baseline.txt "src/a.ts${TAB}1${TAB}msg one" "src/a.ts${TAB}9${TAB}msg one"
+expect 1 "baseline: no helper at the merge base" "fail closed"
+gb_seed 1 0
+add_file .claude/gate-baseline.txt "# templatecentral gate baseline v2"
+expect 1 "baseline: a new file" "a new baseline file"
+gb_seed 1 1
+git_ checkout -q main
+mkdir -p "$R/sub/.claude" "$R/sub/scripts"
+cp "$GBS" "$R/sub/scripts/gate-baseline.sh"
+cp "$R/.claude/gate-baseline.txt" "$R/sub/.claude/gate-baseline.txt"
+git_ add -A
+git_ commit -q -m sub
+edit sub/.claude/gate-baseline.txt "src/a.ts${TAB}1${TAB}msg one" "src/a.ts${TAB}2${TAB}msg one"
+expect 1 "baseline: an app folder grows" "sub/.claude/gate-baseline.txt" "the baseline grew"
+# Revert proof: with the growth check skipped, the raised count passes.
+sed "s|bash \"\$wd/gb.sh\" -C . growth \"\$mb\" HEAD|true|" "$RATCHET" > "$T/ratchet-nogrowth.sh"
+cmp -s "$RATCHET" "$T/ratchet-nogrowth.sh" && check 0 1 "baseline revert proof: the mutation applied"
+RATCHET_REAL=$RATCHET
+RATCHET="$T/ratchet-nogrowth.sh"
+gb_seed 1 1
+edit .claude/gate-baseline.txt "src/a.ts${TAB}1${TAB}msg one" "src/a.ts${TAB}2${TAB}msg one"
+expect 0 "baseline revert proof: growth passes with the check skipped"
+RATCHET=$RATCHET_REAL
 
 echo "gate-ratchet.test: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

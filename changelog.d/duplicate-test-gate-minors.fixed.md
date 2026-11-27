@@ -1,0 +1,1 @@
+- The duplicate-test gate keeps its row check when a table is also read with `.map`, `for..of` or `len()` (only a write or an escape switches it off), counts a repository nested inside another nested repository once, and fails closed when a `.git` directory exists but git cannot open it.

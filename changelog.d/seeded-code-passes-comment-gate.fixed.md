@@ -1,0 +1,1 @@
+- Seeded template code now passes the comment gate: comments inside function bodies move above the function and each comment block is one line of at most 120 characters, so the scaffold's own sources need no disables.

@@ -291,7 +291,7 @@ def condition_errors(rel, doc, tmpl):
                 if not (("ci-gates.sh licences" in before and "ci-gates.sh sbom" in before) or GATES_INCLUDE in before):
                     errors.append(f"{rel}: job {job} step {ident} installs the unhashed dev requirements before the licence and SBOM gates have read the hash-pinned environment")
                 # Every gate that does not need the dev tools runs before the unhashed install, which can run code (setup.py, a build backend, a .pth file) and rewrite scripts/ and .claude/ci-gates.sh.
-                for gate in ("secrets", "changesize", "bundle"):
+                for gate in ("secrets", "changesize", "duptests", "exclusions", "commentshape", "bundle"):
                     if f"ci-gates.sh {gate}" not in before and GATES_INCLUDE not in before:
                         errors.append(f"{rel}: job {job} step {ident} installs the unhashed dev requirements before the {gate} gate, so the install can rewrite the gate or its inputs")
                 if "jscpd" not in before:
@@ -446,6 +446,9 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('jscpd', 'quality', 'run', 'pnpm exec jscpd'),
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
                          ('change size', 'quality', 'run', 'bash .claude/ci-gates.sh changesize "$BASE_REF"'),
+                         ('duplicate tests', 'quality', 'run', 'bash .claude/ci-gates.sh duptests'),
+                         ('exclude reasons', 'quality', 'run', 'bash .claude/ci-gates.sh exclusions'),
+                         ('comment shape', 'quality', 'run', 'bash .claude/ci-gates.sh commentshape "$BASE_REF"'),
                          ('bundle size', 'quality', 'run', 'bash .claude/ci-gates.sh bundle'),
                          ('gate-time note', 'quality', 'run', 'bash .claude/gate-budget.sh check'),
                          ('tests',
@@ -515,6 +518,9 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('diffcover empty-report check', 'quality', 'run', 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'),
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
                          ('change size', 'quality', 'run', 'bash .claude/ci-gates.sh changesize "$BASE_REF"'),
+                         ('duplicate tests', 'quality', 'run', 'bash .claude/ci-gates.sh duptests'),
+                         ('exclude reasons', 'quality', 'run', 'bash .claude/ci-gates.sh exclusions'),
+                         ('comment shape', 'quality', 'run', 'bash .claude/ci-gates.sh commentshape "$BASE_REF"'),
                          ('bundle size', 'quality', 'run', 'bash .claude/ci-gates.sh bundle'),
                          ('gate-time note', 'quality', 'run', 'bash .claude/gate-budget.sh check'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
@@ -644,6 +650,9 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                             'fi\n'
                             'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n'),
                            ('Change size (the PR stays within the line and file budget)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh changesize "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'),
+                           ('Duplicate tests (no two cases with the same body and context)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh duptests'),
+                           ('Exclude reasons (every coverage, Sonar and mutation exclude has a reason)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh exclusions'),
+                           ('Comment shape (added comments are short, above a statement, never a bare disable)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh commentshape "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'),
                            ('Bundle size (gzip JS and CSS within .claude/bundle-budget.txt)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh bundle'),
                            ('Gate-time budget note',
                             '(gates include)',
@@ -703,6 +712,10 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                       'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                       'run': 'bash .claude/ci-gates.sh changesize "$BASE_REF"'},
+                                     {'run': 'bash .claude/ci-gates.sh duptests'},
+                                     {'run': 'bash .claude/ci-gates.sh exclusions'},
+                                     {'env': {'BASE_REF': '${{ github.base_ref }}'},
+                                      'run': 'bash .claude/ci-gates.sh commentshape "$BASE_REF"'},
                                      {'run': 'bash .claude/ci-gates.sh bundle'},
                                      {'run': 'bash .claude/gate-budget.sh check'}],
                          'test': [{'uses': 'actions/checkout', 'with': {'persist-credentials': False}},
@@ -865,6 +878,10 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                       'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                       'run': 'bash .claude/ci-gates.sh changesize "$BASE_REF"'},
+                                     {'run': 'bash .claude/ci-gates.sh duptests'},
+                                     {'run': 'bash .claude/ci-gates.sh exclusions'},
+                                     {'env': {'BASE_REF': '${{ github.base_ref }}'},
+                                      'run': 'bash .claude/ci-gates.sh commentshape "$BASE_REF"'},
                                      {'run': 'bash .claude/ci-gates.sh bundle'},
                                      {'run': 'npx --yes jscpd@${JSCPD_VERSION}'},
                                      {'run': 'set -euo pipefail\nif [ -f requirements-dev.txt ]; then\n  .venv/bin/python -I -m pip install -r requirements-dev.txt\n  LICENCES_SCOPE=all bash scripts/check-licences.sh\nfi\n'},
@@ -958,6 +975,10 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                         'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n',
                                                 'env': {'LABELS': '$(LABELS)'}},
                                                {'bash': 'bash .claude/ci-gates.sh changesize '
+                                                        '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'},
+                                               {'bash': 'bash .claude/ci-gates.sh duptests'},
+                                               {'bash': 'bash .claude/ci-gates.sh exclusions'},
+                                               {'bash': 'bash .claude/ci-gates.sh commentshape '
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'},
                                                {'bash': 'bash .claude/ci-gates.sh bundle'},
                                                {'bash': 'bash .claude/gate-budget.sh check'}]}}}
@@ -1510,7 +1531,7 @@ gate_fixture() { # gate_fixture <dir> <ts|py> <github|azure>
     esac
   done < "$d/.claude/gates.txt"
   # verify-harness also needs the config files each gate reads registered (GATE FILE UNREGISTERED)
-  for gp in .claude/allowed-licences.txt .claude/licence-exceptions.txt scripts/py-env.py .claude/bundle-budget.txt .claude/change-size-exclude.txt; do
+  for gp in .claude/allowed-licences.txt .claude/licence-exceptions.txt scripts/py-env.py .claude/bundle-budget.txt .claude/change-size-exclude.txt scripts/duplicate-tests-ts.mjs scripts/duplicate_tests_py.py scripts/check-exclude-rules.sh scripts/check-exclude-reasons.awk scripts/check-exclude-reasons.mjs scripts/check-exclude-reasons.py scripts/check-comments.mjs scripts/check-comments.py scripts/check-comments.licences.txt; do
     mkdir -p "$d/$(dirname "$gp")"
     [[ -f "$d/$gp" ]] || echo "$gp" > "$d/$gp"
     entries="$entries,$(printf '"%s":{"path":"%s","origin_hash":"%s"}' "$gp" "$gp" "$(shasum -a 256 "$d/$gp" | cut -d' ' -f1)")"

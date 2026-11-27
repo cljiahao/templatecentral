@@ -21,17 +21,21 @@ export function createHttpsAgent(options?: HttpsAgentOptions): https.Agent {
   return new https.Agent({ ...DEFAULT_AGENT_OPTIONS, ...options });
 }
 
-export function normalizePem(pem: string): string {
-  if (pem.trim().startsWith('{')) {
-    try {
-      const parsed = JSON.parse(pem);
-      if (typeof parsed === 'string')
-        return parsed.replace(/\\n/g, '\n').trim();
-      if (parsed.cert) return String(parsed.cert).replace(/\\n/g, '\n').trim();
-    } catch {
-      // fall through to string normalization
-    }
+function unwrapJsonPem(pem: string): string | undefined {
+  try {
+    const parsed = JSON.parse(pem);
+    if (typeof parsed === 'string') return parsed.replace(/\\n/g, '\n').trim();
+    if (parsed.cert) return String(parsed.cert).replace(/\\n/g, '\n').trim();
+  } catch {
+    return undefined;
   }
+  return undefined;
+}
+
+// A value that is not JSON falls through to string normalization.
+export function normalizePem(pem: string): string {
+  const unwrapped = pem.trim().startsWith('{') ? unwrapJsonPem(pem) : undefined;
+  if (unwrapped !== undefined) return unwrapped;
 
   return pem.replace(/\\n/g, '\n').replace(/^"|"$/g, '').trim();
 }

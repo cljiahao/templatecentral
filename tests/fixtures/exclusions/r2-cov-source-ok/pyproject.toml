@@ -1,0 +1,3 @@
+[tool.coverage.run]
+# reason: only the core package is measured here
+source = ["app/core"]

@@ -5,7 +5,7 @@
 #
 # Usage: bash scripts/check-sonar-parity.sh [--root DIR] [--table FILE]
 #   Default root: the repository this script lives in; default table: <root>/scripts/sonar-parity.tsv.
-#   Static: no package is installed, no scanner runs, no login, key or network. Preset contents (sonarjs,
+#   Static: no package is installed, no Sonar server, login, key or network. Preset contents (sonarjs,
 #   typescript-eslint, @eslint/js, eslint-config-next) come from scripts/sonar-parity-presets/. A config form
 #   the reader cannot resolve fails the row that needs it; a rule is never assumed enabled.
 #   Prints covered, partial and not-covered counts per language and the not-covered rows with reasons.

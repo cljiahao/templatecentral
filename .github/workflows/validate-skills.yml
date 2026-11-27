@@ -191,6 +191,18 @@ jobs:
         run: bash scripts/seeded-gates.test.sh
       - name: Seeded gate-time budget, record, check, hook and ratchet guards
         run: bash scripts/gate-budget.test.sh
+
+  seeded-gate-ci-tests:
+    name: Seeded gate tests, day-one and CI templates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - name: Seeded review gate, its wiring probes and the harness removal script
         run: |
           bash scripts/seeded-review-gate.test.sh
@@ -359,7 +371,7 @@ jobs:
           fi
 
   harness-tests:
-    name: Harness live and refresh tests
+    name: Harness live check tests
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -371,6 +383,18 @@ jobs:
           fetch-tags: true
       - name: Harness live check tests
         run: bash scripts/harness-live.test.sh
+
+  harness-refresh-tests:
+    name: Harness refresh tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - name: Harness refresh tests
         run: bash scripts/harness-refresh.test.sh
 
@@ -385,8 +409,30 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+      - name: Sonar parity of the seeded lint configs
+        run: bash scripts/check-sonar-parity.sh
       - name: Sonar parity check tests
         run: bash scripts/check-sonar-parity.test.sh
+
+  seeded-gate-helper-tests:
+    name: Seeded gate helper tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Comment gate tests
+        run: bash scripts/seeded-comments.test.sh
+      - name: Duplicate-test gate tests
+        run: bash scripts/seeded-duplicate-tests.test.sh
+      - name: Exclusion reason gate tests
+        run: bash scripts/seeded-exclude-reasons.test.sh
+      - name: Exclusion audit tests
+        run: bash scripts/exclusion-audit.test.sh
 
   defect-report-tests:
     name: Migrate defect report tests
@@ -415,6 +461,8 @@ jobs:
           fetch-tags: true
       - name: Migrate gate baseline tests
         run: bash scripts/migrate-baseline.test.sh
+      - name: Pristine hashes are current
+        run: bash skills/migrate/general/gen-pristine-hashes.sh --check
 
   lint-negative-tests:
     name: Lint check negative tests
@@ -520,11 +568,14 @@ jobs:
       - plugin-validate
       - shell-lint
       - seeded-gate-tests
+      - seeded-gate-ci-tests
+      - seeded-gate-helper-tests
       - keyless-gate-tests
       - golden-tests
       - template-copy-tests
       - version-docs-tests
       - harness-tests
+      - harness-refresh-tests
       - sonar-parity-tests
       - defect-report-tests
       - migrate-baseline-tests

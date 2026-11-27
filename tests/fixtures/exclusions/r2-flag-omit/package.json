@@ -1,0 +1,4 @@
+{
+  "name": "demo",
+  "scripts": { "test": "coverage run --omit=src/gen/* -m pytest" }
+}

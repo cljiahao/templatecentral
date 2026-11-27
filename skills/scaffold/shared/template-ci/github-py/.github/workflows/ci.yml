@@ -66,12 +66,20 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: bash .claude/ci-gates.sh changesize "$BASE_REF"
+      - name: Duplicate tests (no two cases with the same body and context)
+        run: bash .claude/ci-gates.sh duptests
+      - name: Exclude reasons (every coverage, Sonar and mutation exclude has a reason)
+        run: bash .claude/ci-gates.sh exclusions
+      - name: Comment shape (added comments are short, above a statement, never a bare disable)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash .claude/ci-gates.sh commentshape "$BASE_REF"
       - name: Bundle size (gzip JS and CSS within .claude/bundle-budget.txt)
         run: bash .claude/ci-gates.sh bundle
       - name: Duplication (production source <= 3%, per .jscpd.json)
         # Pinned by JSCPD_VERSION; bump it deliberately.
         run: npx --yes jscpd@${JSCPD_VERSION}
-      # Dev tools install last, after every gate that does not need them.
+      # Dev tools install after every gate that does not need them; only the budget note, which reports last, runs after the tests.
       - name: Install dev tools and check their licences (after the licence and SBOM gates)
         run: |
           set -euo pipefail

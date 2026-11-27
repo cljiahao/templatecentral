@@ -1,0 +1,3 @@
+[tool.coverage.run]
+omit = [
+    "app/migrations/*"

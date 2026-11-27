@@ -5,13 +5,13 @@ import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from '../src/app.module';
 
+// Mirrors app.factory.ts's adapter options so request IDs behave as in the running app.
 describe('AppController (e2e)', () => {
   let app: NestFastifyApplication;
 
   beforeAll(async () => {
     const moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
 
-    // Mirrors app.factory.ts's adapter options so request IDs behave as in the running app.
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter({ genReqId: () => crypto.randomUUID() })
     );
@@ -28,7 +28,6 @@ describe('AppController (e2e)', () => {
     expect([result.statusCode, result.payload]).toEqual([200, 'Hello World!']);
   });
 
-  // nestjs-zod hooks into Nest's pipes and Swagger's document; these three tests prove that.
   it('POST /examples rejects an invalid body with 400 in the project error shape (ZodValidationPipe)', async () => {
     const result = await app.inject({ method: 'POST', url: '/examples', payload: { name: '' } });
     const body = result.json<{ statusCode: number; message: string }>();

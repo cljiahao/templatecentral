@@ -1,0 +1,4 @@
+{
+  "name": "demo",
+  "scripts": { "test": "jest --coverage --coveragePathIgnorePatterns src/gen" }
+}

@@ -35,7 +35,6 @@ template-py/.claude/hooks/user-prompt-guard.py 644 - -
 template-py/.claude/review-checklist-stack.txt 644 - -
 template-py/.jscpd.json 644 - -
 template-py/lefthook.yml 644 - -
-template-py/sonar-project.properties 644 - -
 template-settings-py/.claude/settings.json 644 - -
 template-settings-ts/.claude/settings.json 644 - -
 template-tail/AGENTS-tail.md 644 - -
@@ -49,7 +48,6 @@ template-ts/.claude/hooks/user-prompt-guard.cjs 644 - -
 template-ts/.claude/review-checklist-stack.txt 644 - -
 template-ts/.jscpd.json 644 - -
 template-ts/lefthook.yml 644 - -
-template-ts/sonar-project.properties 644 - -
 template/.claude/agents/code-reviewer.md 644 - -
 template/.claude/ci-gates.sh 755 - -
 template/.claude/comment-hygiene-patterns.txt 644 - -
@@ -81,6 +79,18 @@ template/scripts/remove-harness.sh 755 - -
 template/scripts/check-workarounds.sh 755 - -
 template/scripts/scan-secrets.sh 755 - -
 template/scripts/check-bundle-size.sh 755 - -
+template/scripts/check-comments.licences.txt 644 - -
+template/scripts/check-comments.mjs 644 - -
+template/scripts/check-comments.py 644 - -
+template/scripts/check-comments.sh 755 - -
+template/scripts/check-duplicate-tests.sh 755 - -
+template/scripts/check-exclude-reasons.awk 644 - -
+template/scripts/check-exclude-reasons.mjs 644 - -
+template/scripts/check-exclude-reasons.py 644 - -
+template/scripts/check-exclude-reasons.sh 755 - -
+template/scripts/check-exclude-rules.sh 755 - -
+template/scripts/duplicate-tests-ts.mjs 644 - -
+template/scripts/duplicate_tests_py.py 644 - -
 template/scripts/check-change-size.sh 755 - -
 template/scripts/check-licences.sh 755 - -
 template/scripts/generate-sbom.sh 755 - -

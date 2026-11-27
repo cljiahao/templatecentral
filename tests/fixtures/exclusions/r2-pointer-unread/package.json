@@ -1,0 +1,4 @@
+{
+  "name": "demo",
+  "scripts": { "test": "pytest --cov-config=conf/cov.cfg" }
+}

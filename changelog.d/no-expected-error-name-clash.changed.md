@@ -1,0 +1,1 @@
+- The FastAPI template's `NoResultsFound` exception is renamed `NoResultsFoundError` (ruff `N818`) in the template and every guide that names it.

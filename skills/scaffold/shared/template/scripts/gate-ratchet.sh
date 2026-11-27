@@ -72,7 +72,9 @@ kind_of() {
     .claude/dep-audit-allow.txt | */.claude/dep-audit-allow.txt) KIND=allow ;;
     .claude/comment-hygiene-patterns.txt | */.claude/comment-hygiene-patterns.txt) KIND=patterns ;;
     .claude/gate-budget.conf | */.claude/gate-budget.conf) KIND=gatetime ;;
-    .claude/allowed-licences.txt | */.claude/allowed-licences.txt | .claude/licence-exceptions.txt | */.claude/licence-exceptions.txt | .claude/change-size-exclude.txt | */.claude/change-size-exclude.txt) KIND=lines ;;
+    .claude/gate-baseline.txt | */.claude/gate-baseline.txt) KIND=baseline ;;
+    scripts/gate-baseline.sh | */scripts/gate-baseline.sh) KIND=guard ;;
+    .claude/allowed-licences.txt | */.claude/allowed-licences.txt | .claude/licence-exceptions.txt | */.claude/licence-exceptions.txt | .claude/change-size-exclude.txt | */.claude/change-size-exclude.txt | scripts/check-comments.licences.txt | */scripts/check-comments.licences.txt) KIND=lines ;;
     .claude/bundle-budget.txt | */.claude/bundle-budget.txt) KIND=bundle ;;
     tsconfig.json | tsconfig.*.json | */tsconfig.json | */tsconfig.*.json) KIND=tsconfig ;;
     pyrightconfig.json | */pyrightconfig.json) KIND=pyright ;;
@@ -105,7 +107,7 @@ gs_grep() {
 
 # Tracked files of <ref> into $wd/tracked.lst, then the derived guard set into $wd/guard.lst: each file under .claude/hooks/, each .claude/*.sh, .claude/settings.json, each Node hook-manager file, every scripts/ or .claude/ path named in a gate-bearing source, and the protect-files.sh gate patterns. Gate-bearing sources are hooks, .claude/*.sh, gates.txt, scripts/, lefthook, a Node hook-manager folder, CI files, the Makefile and the gate or install scripts of a package.json; skill, agent, rule and markdown files are never read. No stage hides a failure: every command writes to a file and its status is checked, so a source that cannot be listed, read or parsed returns 1.
 guard_scan() {
-  local ref=$1 f pf line labels reason mre
+  local ref=$1 f pf mre
   mre='(scripts|[.]claude)/[A-Za-z0-9_@./-]*[A-Za-z0-9_@-]'
   git ls-tree -r "$ref" > "$wd/tree.raw" 2>/dev/null || return 1
   awk -F'\t' '$1 !~ /^160000 / { print substr($0, index($0, "\t") + 1) }' "$wd/tree.raw" > "$wd/tracked.lst" || return 1
@@ -113,16 +115,33 @@ guard_scan() {
   gs_grep -E '(^|/)[.]claude/hooks/|(^|/)[.]claude/[^/]*[.]sh$|(^|/)[.]claude/settings[.]json$|(^|/)lefthook[.]yml$|(^|/)[.]lefthook/|(^|/)[.]hus[k]y/' "$wd/tracked.lst" > "$wd/guard.lst" || return 1
   gs_grep -E '(^|/)[.]claude/(hooks/|[^/]*[.]sh$|gates[.]txt$|settings[.]json$)|(^|/)scripts/|(^|/)[.]lefthook/|(^|/)[.]hus[k]y/|(^|/)[.]github/workflows/|(^|/)azure-pipelines|(^|/)(lefthook[.]yml|Makefile|package[.]json)$' "$wd/tracked.lst" > "$wd/sources.raw" || return 1
   gs_grep -Ev '[.]md$' "$wd/sources.raw" > "$wd/sources.lst" || return 1
+  gs_grep -vE '(^|/)package[.]json$' "$wd/sources.lst" > "$wd/sources.plain" || return 1
+  gs_grep -E '(^|/)package[.]json$' "$wd/sources.lst" > "$wd/sources.pkg" || return 1
+  # Every other source is read in one git process and scanned in one awk: a start per file is the cost.
+  R="$ref" awk '{ print ENVIRON["R"] ":" $0 }' "$wd/sources.plain" > "$wd/sources.refs" || return 1
+  git cat-file --batch < "$wd/sources.refs" > "$wd/sources.blobs" 2>/dev/null || return 1
+  LC_ALL=C awk -v re="$mre" '
+    state == 1 {
+      s = $0
+      while (match(s, re)) { print substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH) }
+      need -= length($0) + 1
+      if (need == 0) state = 2
+      else if (need < 0) state = 0
+      next
+    }
+    state == 2 { state = 0; next }
+    {
+      if (NF != 3 || $2 != "blob") bad = 1
+      need = $3 + 0
+      state = (need == 0 ? 2 : 1)
+    }
+    END { exit (bad || state == 1) }
+  ' "$wd/sources.blobs" >> "$wd/mentions.lst" || return 1
   while IFS= read -r f; do
     git show "$ref:$f" > "$wd/src.txt" 2>/dev/null || return 1
-    case "$f" in
-      package.json | */package.json)
-        awk -v K=pkgjson -v B=1 -v CMDS=1 -f "$wd/facts.awk" "$wd/src.txt" > "$wd/cmds.txt" 2>/dev/null || return 1
-        gs_grep -aoE "$mre" "$wd/cmds.txt" >> "$wd/mentions.lst" || return 1
-        ;;
-      *) gs_grep -aoE "$mre" "$wd/src.txt" >> "$wd/mentions.lst" || return 1 ;;
-    esac
-  done < "$wd/sources.lst"
+    awk -v K=pkgjson -v B=1 -v CMDS=1 -f "$wd/facts.awk" "$wd/src.txt" > "$wd/cmds.txt" 2>/dev/null || return 1
+    gs_grep -aoE "$mre" "$wd/cmds.txt" >> "$wd/mentions.lst" || return 1
+  done < "$wd/sources.pkg"
   sort -u -o "$wd/mentions.lst" "$wd/mentions.lst" || return 1
   awk 'NR == FNR { m[$0] = 1; next } { p = $0; while (1) { if (p in m) { print $0; break }; i = index(p, "/"); if (!i) break; p = substr(p, i + 1) } }' "$wd/mentions.lst" "$wd/tracked.lst" >> "$wd/guard.lst" || return 1
   gs_grep -E '(^|/)[.]claude/hooks/protect-files[.]sh$' "$wd/tracked.lst" > "$wd/pf.lst" || return 1
@@ -130,13 +149,15 @@ guard_scan() {
   if [ -n "$pf" ]; then
     git show "$ref:$pf" > "$wd/src.txt" 2>/dev/null || return 1
     gs_grep -E '^  [^ #].*\) reason=' "$wd/src.txt" > "$wd/pf.rows" || return 1
-    : > "$wd/pats.split"
-    while IFS= read -r line; do
-      reason=${line#*reason=}
-      case "$reason" in *"instruction file"* | *"binding invariants"* | *"agent definition"* | *"MCP server"* | *"container image"* | *"merge base snapshot"*) continue ;; esac
-      labels=${line%%\) reason=*}
-      printf '%s\n' "$labels" | tr '|' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' >> "$wd/pats.split" || return 1
-    done < "$wd/pf.rows"
+    awk '
+      {
+        i = index($0, "reason="); reason = substr($0, i + 7)
+        if (index(reason, "instruction file") || index(reason, "binding invariants") || index(reason, "agent definition") || index(reason, "MCP server") || index(reason, "container image") || index(reason, "merge base snapshot")) next
+        j = index($0, ") reason="); labels = (j ? substr($0, 1, j - 1) : $0)
+        n = split(labels, a, "|")
+        for (k = 1; k <= n; k++) { t = a[k]; gsub(/^[[:space:]]+|[[:space:]]+$/, "", t); print t }
+      }
+    ' "$wd/pf.rows" > "$wd/pats.split" || return 1
     gs_grep -v '^$' "$wd/pats.split" > "$wd/pats.nz" || return 1
     sort -u "$wd/pats.nz" > "$wd/pats.lst" || return 1
     awk 'NR == FNR { g = $0; gsub(/[.]/, "[.]", g); gsub(/[*]/, ".*", g); re[++n] = "^" g "$"; next } { for (i = 1; i <= n; i++) if ($0 ~ re[i]) { print; break } }' "$wd/pats.lst" "$wd/tracked.lst" >> "$wd/guard.lst" || return 1
@@ -251,6 +272,21 @@ content_ok() {
       local n
       n=$(awk 'END { print NR }' "$wd/base")
       head -n "$n" "$wd/head" | cmp -s - "$wd/base"
+      ;;
+    baseline)
+      local pre
+      pre=${path%.claude/gate-baseline.txt}
+      baseline_msg=""
+      if ! base_has "${pre}scripts/gate-baseline.sh"; then
+        baseline_msg="the merge base has no ${pre}scripts/gate-baseline.sh to judge growth with (fail closed)"
+        return 1
+      fi
+      git show "$mb:${pre}scripts/gate-baseline.sh" > "$wd/gb.sh" 2>/dev/null || die "cannot read ${pre}scripts/gate-baseline.sh at the merge base $mb"
+      if ! (cd "${pre:-.}" && bash "$wd/gb.sh" -C . growth "$mb" HEAD > "$wd/gb.out" 2>&1); then
+        baseline_msg="the baseline grew or cannot be read: $(tr '\n' ' ' < "$wd/gb.out" | cut -c1-300)"
+        return 1
+      fi
+      return 0
       ;;
     gates)
       local l
@@ -1369,7 +1405,7 @@ while IFS=$'\t' read -r kind path _; do
     have_head=1
   fi
   if [ "$have_head" -eq 0 ]; then
-    if [ "$kind" = conftest ]; then continue; fi
+    if [ "$kind" = conftest ] || [ "$kind" = baseline ]; then continue; fi
     moved=$(awk -F'\t' -v p="$path" '$2 == p { print $3; exit }' "$wd/renames.txt") || die "cannot read the renames since the merge base"
     if [ -n "$moved" ]; then
       printf 'WEAKENED %s: file was present at the merge base, now removed (renamed to %s; tools read the original name, so a rename counts as a removal)\n' "$path" "$moved"
@@ -1382,7 +1418,7 @@ while IFS=$'\t' read -r kind path _; do
   file_bad=0
   newfile=""
   seeded=0
-  if [ "$kind" != guard ] && [ "$kind" != allow ] && [ "$kind" != patterns ]; then
+  if [ "$kind" != guard ] && [ "$kind" != allow ] && [ "$kind" != patterns ] && [ "$kind" != baseline ]; then
     if ! msg=$(awk -v K="$kind" -v B="$have_base" -f "$wd/facts.awk" "$wd/head" 2>&1 > "$wd/head.f"); then
       printf 'UNREADABLE %s: %s (fail closed)\n' "$path" "$msg"
       unreadable=1
@@ -1399,12 +1435,17 @@ while IFS=$'\t' read -r kind path _; do
     fi
   fi
   if [ "$have_base" -eq 0 ]; then
+    if [ "$kind" = baseline ]; then
+      printf 'WEAKENED %s: a new baseline file lets known findings pass; the merge base had none\n' "$path"
+      file_bad=1
+    fi
     if [ "$file_bad" -eq 1 ]; then weakened=1; fi
     continue
   fi
   if [ "$file_bad" -eq 0 ] && ! content_ok "$kind"; then
     case "$kind" in
       allow) printf 'WEAKENED %s: the advisory allow-list gained a line the merge base did not have\n' "$path" ;;
+      baseline) printf 'WEAKENED %s: %s\n' "$path" "$baseline_msg" ;;
       patterns) printf 'WEAKENED %s: comment-hygiene patterns were removed, edited or reordered (lines may only be added at the end)\n' "$path" ;;
       *) printf 'WEAKENED %s: gate script, runner or manifest changed (content differs from the merge base)\n' "$path" ;;
     esac
@@ -1423,7 +1464,7 @@ while IFS= read -r path; do
     printf 'WEAKENED %s: new config file competes with a ratcheted one (%s)\n' "$path" "$why"
     weakened=1
   fi
-done <<< "$added"
+done < <(printf '%s\n' "$added")
 
 if [ "$weakened" -eq 1 ]; then
   echo "gate-ratchet: FAIL, a gate is weaker than at the merge base ($checked config files compared)"

@@ -73,7 +73,7 @@ edits_of() { case "$1" in
   nextjs) echo "src/app/dashboard/(overview)/page.tsx:-8 test/components/render.test.tsx:-35" ;;
   vite-react) echo "src/pages/dashboard.tsx:-9" ;;
   fastapi) echo "src/api/routes.py:-3 src/api/tags.py:-1" ;;
-  nestjs) echo "test/app.e2e-spec.ts:-34 src/modules/index.ts:-1 src/app.module.ts:-1" ;; esac; }
+  nestjs) echo "test/app.e2e-spec.ts:-33 src/modules/index.ts:-1 src/app.module.ts:-1" ;; esac; }
 left_of() { case "$1" in
   nextjs | vite-react) echo 'features/example|ExampleList' ;;
   fastapi) echo 'routers import example|APITags\.EXAMPLE|services\.example|schemas\.(request|response)\.example|example\.router' ;;
@@ -367,7 +367,7 @@ r=$(outcwd "$D" --apply --force 'src/features/example/[i]ndex.ts')
 contains "a --force path with glob characters: applied, taken literally" "remove-example: applied" "$r"
 check "a --force path with glob characters: the example directory is gone" "0" "$(exists01 "$D/src/features/example")"
 
-# a same-length edit of a middle line of a removed block is a blocker (3-line and 31-line blocks)
+# a same-length edit of a middle line of a removed block is a blocker (3-line and 30-line blocks)
 mid_probe() { # name stack file count
   local name=$1 s=$2 file=$3 cnt=$4 D C key at mid
   D=$T/mid-$PN; PN=$((PN + 1))
@@ -389,7 +389,7 @@ mid_probe() { # name stack file count
   contains "$name, control: the unedited block applies" "remove-example: applied" "$(out "$C" --apply)"
 }
 mid_probe "a 3-line block with a changed middle line" vite-react src/pages/dashboard.tsx 3
-mid_probe "the 31-line e2e block with a changed middle line" nestjs test/app.e2e-spec.ts 31
+mid_probe "the 30-line e2e block with a changed middle line" nestjs test/app.e2e-spec.ts 30
 
 # a failed write leaves every file as it was (needs a non-root user: a read-only directory)
 if [ "$NOTROOT" -eq 1 ]; then
