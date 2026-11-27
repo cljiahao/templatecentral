@@ -1796,6 +1796,9 @@ gate_support() {
     sbom) echo "scripts/py-env.py" ;;
     bundle) echo ".claude/bundle-budget.txt" ;;
     changesize) echo ".claude/change-size-exclude.txt" ;;
+    duptests) echo "scripts/duplicate-tests-ts.mjs scripts/duplicate_tests_py.py" ;;
+    exclusions) echo "scripts/check-exclude-rules.sh scripts/check-exclude-reasons.awk scripts/check-exclude-reasons.mjs scripts/check-exclude-reasons.py" ;;
+    commentshape) echo "scripts/check-comments.mjs scripts/check-comments.py scripts/check-comments.licences.txt" ;;
   esac
 }
 
@@ -1956,6 +1959,39 @@ for f in lefthook.yml .github/workflows/ci.yml azure-pipelines/templatecentral-g
     mv "$GV/$f.bak" "$GV/$f"
   done <<< "$gate_lines"
 done
+# Every required gate id must keep its manifest row: deleting one fails and names it (control: the full manifest passes).
+cp "$GV/.claude/gates.txt" "$GV/.claude/gates.full"
+while IFS='|' read -r gid lh ci; do
+  grep -vE "^$gid\\|" "$GV/.claude/gates.full" > "$GV/.claude/gates.txt" || true
+  out=$(gate_verify); rc=$?
+  check 1 "$rc" "verify-harness fails when gates.txt drops the $gid row"
+  check 1 "$(grep -c "GATE ROW MISSING: $gid " <<<"$out")" "verify-harness names the missing $gid row"
+done <<< "$gate_lines"
+cp "$GV/.claude/gates.full" "$GV/.claude/gates.txt"
+out=$(gate_verify); check 0 "$?" "verify-harness passes again once the rows are restored ($out)"
+req=$(sed -n 's/^required_gates="\(.*\)"$/\1/p' "$KIT/verify-harness.sh")
+want=$(cut -d'|' -f1 <<<"$gate_lines" | tr '\n' ' ' | sed 's/ $//')
+check "$want" "$req" "verify-harness required_gates lists exactly the seeded gate ids"
+# A blank or symlinked gate script is refused by name.
+cp "$GV/scripts/check-comments.sh" "$T/cc.keep"
+: > "$GV/scripts/check-comments.sh"
+out=$(gate_verify); rc=$?
+check 1 "$rc" "verify-harness fails on a blank gate script"
+check 1 "$(grep -c 'GATE FILE BLANK' <<<"$out")" "verify-harness names the blank gate script"
+rm -f "$GV/scripts/check-comments.sh"; ln -s gate-ratchet.sh "$GV/scripts/check-comments.sh"
+out=$(gate_verify); rc=$?
+check 1 "$rc" "verify-harness fails on a symlinked gate script"
+check 1 "$(grep -c 'GATE FILE SYMLINK' <<<"$out")" "verify-harness names the symlinked gate script"
+rm -f "$GV/scripts/check-comments.sh"; cp "$T/cc.keep" "$GV/scripts/check-comments.sh"
+# With TMPDIR read-only the verdict stays the same as with a writable one.
+ro="$T/ro"; mkdir -p "$ro"; chmod 555 "$ro"
+out=$(vcommit "$GV"; cd "$GV" && TMPDIR="$ro" bash "$KIT/verify-harness.sh" 2>&1); rc=$?
+check 2 "$rc" "verify-harness fails closed with a read-only TMPDIR where the writable run passes"
+grep -vE '^review\|' "$GV/.claude/gates.full" > "$GV/.claude/gates.txt" || true
+out=$(vcommit "$GV"; cd "$GV" && TMPDIR="$ro" bash "$KIT/verify-harness.sh" 2>&1); rc=$?
+check 1 "$(( rc != 0 ))" "verify-harness never passes with a read-only TMPDIR where the writable run fails"
+cp "$GV/.claude/gates.full" "$GV/.claude/gates.txt"
+chmod 755 "$ro"
 printf 'extra|run-extra|run-extra\n' >> "$GV/.claude/gates.txt"
 out=$(gate_verify); check 1 "$?" "verify-harness fails when the manifest lists a gate no runner has"
 rm "$GV/.claude/gates.txt"
@@ -1963,7 +1999,7 @@ out=$(gate_verify); check 2 "$?" "verify-harness fails when gates.txt is missing
 cp "$KIT/gates.txt" "$GV/.claude/gates.txt"; printf 'broken\n' >> "$GV/.claude/gates.txt"
 out=$(gate_verify); check 2 "$?" "verify-harness fails on a malformed manifest line"
 bash "$KIT/ci-gates.sh" list > "$T/gl.txt" 2>&1
-check "harness docs testbudget nosonar secrets deps changelog comments ratchet supplychain workflows envexample dockerfile workarounds review licences sbom changesize bundle diffcover" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints the manifest gates in order"
+check "harness docs testbudget nosonar secrets deps changelog comments commentshape duptests exclusions ratchet supplychain workflows envexample dockerfile workarounds review licences sbom changesize bundle diffcover" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints the manifest gates in order"
 KG=$(mktemp -d "$T/kg.XXXX"); cp "$KIT/ci-gates.sh" "$KG/"; grep -v '^nosonar|' "$KIT/gates.txt" > "$KG/gates.txt"
 bash "$KG/ci-gates.sh" nosonar >/dev/null 2>&1
 check 1 "$?" "ci-gates refuses a gate the manifest does not list"

@@ -1,0 +1,6 @@
+[tool.coverage.report]
+exclude_also = [
+    "if DEBUG:",
+    "pragma: no cover",
+]
+fail_under = 80

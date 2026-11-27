@@ -21,6 +21,7 @@ SOURCE_EXTS = {"nextjs": ("ts", "tsx"), "vite-react": ("ts", "tsx"), "nestjs": (
 TOOLING_ANYWHERE = ("node_modules", ".next", ".turbo", ".git", ".venv", "venv", "__pycache__")
 TOOLING_DIRS = ("node_modules", "dist", "build", "out", "coverage", ".next", ".claude", ".turbo", ".git", ".venv", "venv",
                 "__pycache__")
+SEEDED_HELPERS = ("scripts/check-comments.mjs", "scripts/check-exclude-reasons.mjs", "scripts/duplicate-tests-ts.mjs")
 # Config references the seeded files use today: (import source, dotted tail) -> (snapshot or None, rule prefixes it may touch).
 # A None snapshot means the reference only adds rules under those prefixes (a plugin's own namespace); a mapped rule with one
 # of those prefixes fails because the reference is not read.
@@ -309,10 +310,15 @@ def is_test_glob(pat, py=False):
 
 
 def tooling_path(pat):
-    """Build or tooling paths a global ignore may hide. Folders that can also be source folders (dist, build, out, coverage,
+    """Build or tooling paths a global ignore may hide, and the exact names of the seeded gate helpers (guarded files nobody edits). Folders that can also be source folders (dist, build, out, coverage,
     .claude) count only when anchored at the project root: '**/out/**' also hides src/out/. Config files count at the root only."""
     if pat.startswith("!") or ".." in pat.split("/"):
         return False
+    if pat in SEEDED_HELPERS:
+        return True
+    group = re.fullmatch(r"(scripts/)\{([\w.-]+(?:,[\w.-]+)+)\}(\.mjs)", pat)
+    if group:
+        return all(group.group(1) + name + group.group(3) in SEEDED_HELPERS for name in group.group(2).split(","))
     q = re.sub(r"^(\*\*/)+", "", pat)
     anywhere = pat != q and q.split("/")[0] in TOOLING_ANYWHERE
     return (anywhere or (pat == q and (pat.split("/")[0] in TOOLING_DIRS or pat == "next-env.d.ts"))

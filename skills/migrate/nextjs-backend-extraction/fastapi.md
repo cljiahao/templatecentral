@@ -40,7 +40,7 @@ Create a FastAPI router for each Phase 1c `route.ts`.
 | `export async function PUT(request, { params })` | `@router.put("/<resource>/{id}")` |
 | `export async function PATCH(request, { params })` | `@router.patch("/<resource>/{id}")` |
 | `export async function DELETE(_, { params })` | `@router.delete("/<resource>/{id}")` |
-| `handleApiError(label, error)` / error `NextResponse` | Service raises `NoResultsFound` (404) / `InvalidInputError` (400) from `core.exceptions` |
+| `handleApiError(label, error)` / error `NextResponse` | Service raises `NoResultsFoundError` (404) / `InvalidInputError` (400) from `core.exceptions` |
 | Dynamic segment `[id]/route.ts` | `/{id}` path parameter on the same router |
 | Zod `safeParse` validation | Pydantic model as function parameter |
 
@@ -103,7 +103,7 @@ class UserResponse(BaseResponseSchema):
     email: str
 ```
 
-**Service** — `src/api/services/users.py`: `UsersService` whose `find_all()`, `find_one(user_id)` (raises `NoResultsFound` when absent) and `create(body: CreateUserRequest)` take over the handler bodies.
+**Service** — `src/api/services/users.py`: `UsersService` whose `find_all()`, `find_one(user_id)` (raises `NoResultsFoundError` when absent) and `create(body: CreateUserRequest)` take over the handler bodies.
 
 **Register each new router in `../[project-name]-api/src/api/routes.py`:**
 

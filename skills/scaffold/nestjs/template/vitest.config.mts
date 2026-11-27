@@ -14,6 +14,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'cobertura', 'lcov'],
+      // reason: coverage counts production source files only, never config or tooling files
       include: ['src/**/*.ts'],
       // Production source only: test files are not measured.
       exclude: ['**/*.{test,spec}.ts', '**/*.d.ts'],

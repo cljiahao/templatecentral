@@ -113,6 +113,15 @@ pre-push:
     sbom:
       # Writes the CycloneDX bill of materials to dist/sbom and fails when it does not match the lockfile.
       run: bash scripts/generate-sbom.sh
+    duplicate-tests:
+      # Fails when two test cases have the same body and context, or one shape repeats and should be a parameterised test.
+      run: bash scripts/check-duplicate-tests.sh
+    exclude-reasons:
+      # Fails when a coverage, Sonar or mutation exclude has no reason: line above it, or hides a whole source scope.
+      run: bash scripts/check-exclude-reasons.sh
+    comment-shape:
+      # Fails on a comment this branch adds that is long, a parenthetical aside, inside a function body, or a bare disable. Needs the project's own typescript in node_modules for TS files.
+      run: bash scripts/check-comments.sh
     change-size:
       # Fails when the branch changes more lines or files than the change-size budget, so reviews stay small.
       run: bash scripts/check-change-size.sh

@@ -220,6 +220,33 @@ inject nextjs "  { ignores: ['dist/**', '*.config.mjs'] },"
 run "$T/control.tsv"
 check 0 "$EC" "a global ignore of build and tooling paths is fine"
 
+fresh_root global_ignores_helper
+inject nextjs "  { ignores: ['scripts/check-comments.mjs'] },"
+run "$T/control.tsv"
+check 0 "$EC" "a global ignore of an exact seeded gate helper is fine"
+
+fresh_root global_ignores_helper_group
+inject nextjs "  { ignores: ['scripts/{check-comments,duplicate-tests-ts}.mjs'] },"
+run "$T/control.tsv"
+check 0 "$EC" "a brace group of exact seeded gate helpers is fine"
+
+fresh_root global_ignores_helper_group_extra
+inject nextjs "  { ignores: ['scripts/{check-comments,my-own}.mjs'] },"
+run "$T/control.tsv"
+check 1 "$EC" "a brace group naming a file that is not a seeded helper fails closed"
+has "is not a build or tooling path" "$OUT" "brace group message"
+
+fresh_root global_ignores_scripts_glob
+inject nextjs "  { ignores: ['scripts/**'] },"
+run "$T/control.tsv"
+check 1 "$EC" "a global ignore of the whole scripts folder fails closed"
+has "global ignores entry 'scripts/**' is not a build or tooling path" "$OUT" "scripts glob message"
+
+fresh_root global_ignores_helper_lookalike
+inject nextjs "  { ignores: ['scripts/check-comments.mjs.bak', 'scripts/other.mjs'] },"
+run "$T/control.tsv"
+check 1 "$EC" "a global ignore of a name next to a seeded helper fails closed"
+
 # --- unresolvable forms: a spread, reference or call that is not a known preset or constant
 fresh_root unknown_rules_spread
 inject nextjs "  { rules: { ...someObj } },"

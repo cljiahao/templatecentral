@@ -1576,55 +1576,6 @@ check_security_seeds_present() {
     "Deps gate and authz seeds present"
 }
 
-check_sonar_scope_alignment() {
-  # What the runner leaves out of coverage must be what Sonar treats as tests (or excludes), or Sonar counts
-  # the file as uncovered production code. Every entry of a TS stack's coverage `exclude` list, brace-expanded,
-  # must appear in sonar.test.inclusions or sonar.exclusions of the shared sonar-project.properties. The Python
-  # properties must keep sources=src, tests=test, matching `pytest --cov=src`.
-  header "Sonar test scope matches the coverage excludes of each stack"
-  local out
-  out=$(python3 - "$SKILLS_DIR/scaffold" <<'PY'
-import re, sys
-root = sys.argv[1]
-errors = []
-def read(rel):
-    try:
-        return open(f"{root}/{rel}").read()
-    except OSError:
-        errors.append(f"{rel}: file not found")
-        return ""
-def expand(g):
-    m = re.search(r"\{([^{}]*)\}", g)
-    if not m:
-        return [g]
-    return [x for alt in m.group(1).split(",") for x in expand(g[:m.start()] + alt + g[m.end():])]
-props = read("shared/template-ts/sonar-project.properties")
-def prop(name):
-    m = re.search(rf"^{re.escape(name)}=(.*)$", props, re.M)
-    return set(m.group(1).split(",")) if m else set()
-allowed = prop("sonar.test.inclusions") | prop("sonar.exclusions")
-for rel in ("vite-react/template/vite.config.ts", "nextjs/template/vitest.config.ts", "nestjs/template/vitest.config.mts"):
-    cfg = read(rel)
-    m = re.search(r"coverage:\s*\{.*?exclude:\s*\[(.*?)\]", cfg, re.S)
-    if not m:
-        errors.append(f"{rel}: no coverage exclude list found")
-        continue
-    for entry in re.findall(r"'([^']+)'", m.group(1)):
-        for g in expand(entry):
-            if g not in allowed:
-                errors.append(f"{rel}: coverage exclude '{entry}' ({g}) is in neither sonar.test.inclusions nor sonar.exclusions")
-pyprops = read("shared/template-py/sonar-project.properties")
-for want in ("sonar.sources=src", "sonar.tests=test"):
-    if not re.search(rf"^{re.escape(want)}$", pyprops, re.M):
-        errors.append(f"shared/template-py/sonar-project.properties: missing {want}")
-print("\n".join(errors))
-PY
-)
-  report "$out" \
-    "Sonar scope drifted from the coverage excludes — add the path to sonar.test.inclusions (or sonar.exclusions), or drop the coverage exclude" \
-    "Sonar test inclusions cover every coverage exclude; Python sources/tests match pytest --cov=src"
-}
-
 check_template_security_defaults() {
   # Security defaults the audit used to verify by hand, now greped in the shipped template trees so a
   # drop fails the lint. Each row is "<file under skills/>|<ERE>|<what it guards>"; a missing file or a
@@ -2752,7 +2703,6 @@ check_no_starlette_startup_events
 check_no_fastapi_orjson_response
 check_security_seeds_present
 check_template_security_defaults
-check_sonar_scope_alignment
 check_harness_version_matches_plugin
 check_agents_marker_not_drifted_to_semver
 echo ""

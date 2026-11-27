@@ -28,6 +28,7 @@ export abstract class FetchClient {
     protected headers: Record<string, string>
   ) {}
 
+  // Node's fetch has no default timeout; log status and URL only, since error bodies may contain PII.
   protected async request<T>(
     path: string,
     method: HttpMethod = 'GET',
@@ -49,13 +50,11 @@ export abstract class FetchClient {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
-      // Node's fetch has no default timeout.
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 
     if (!res.ok) {
       const data = await this.parseErrorBody(res);
-      // Log status and URL only; error bodies may contain PII.
       console.error(`[HTTP ${res.status}] ${res.statusText} from ${res.url}`);
       throw new APIError({ statusCode: res.status, data });
     }
@@ -86,11 +85,8 @@ export abstract class FetchClient {
     const contentType = res.headers.get('Content-Type') ?? '';
 
     if (contentType.includes('json') || contentType.includes('+json')) {
-      try {
-        return await res.json();
-      } catch {
-        /* not valid JSON */
-      }
+      const body: unknown = await res.json().catch(() => undefined);
+      if (body !== undefined) return body;
     }
 
     const text = await res.text().catch(() => '');

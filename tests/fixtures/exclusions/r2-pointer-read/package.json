@@ -1,0 +1,4 @@
+{
+  "name": "demo",
+  "scripts": { "test": "coverage run --rcfile=.coveragerc -m pytest" }
+}

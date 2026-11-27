@@ -31,6 +31,7 @@ export abstract class FetchClient {
     return {};
   }
 
+  // FormData needs no Content-Type, the browser adds the boundary; fetch has no timeout; error bodies may hold PII.
   protected async request<T>(
     path: string,
     method: HttpMethod = 'GET',
@@ -50,14 +51,12 @@ export abstract class FetchClient {
     const headers: Record<string, string> = { ...this.headers, ...this.requestHeaders(method) };
     let payload: BodyInit | undefined;
     if (body instanceof FormData) {
-      // No Content-Type: the browser adds the multipart boundary.
       payload = body;
     } else if (body !== undefined) {
       headers['Content-Type'] = 'application/json';
       payload = JSON.stringify(body);
     }
 
-    // fetch has no default timeout.
     const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
     const res = await fetch(url, {
       method,
@@ -70,7 +69,6 @@ export abstract class FetchClient {
 
     if (!res.ok) {
       const data = await this.parseErrorBody(res);
-      // Log status and URL only; error bodies may contain PII.
       console.error(`[HTTP ${res.status}] ${res.statusText} from ${res.url}`);
       throw new APIError({ statusCode: res.status, data });
     }
@@ -98,11 +96,8 @@ export abstract class FetchClient {
     const contentType = res.headers.get('Content-Type') ?? '';
 
     if (contentType.includes('json') || contentType.includes('+json')) {
-      try {
-        return await res.json();
-      } catch {
-        /* not valid JSON — fall through */
-      }
+      const body: unknown = await res.json().catch(() => undefined);
+      if (body !== undefined) return body;
     }
 
     const text = await res.text().catch(() => '');

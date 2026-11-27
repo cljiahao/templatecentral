@@ -1,0 +1,15 @@
+todo
+tbd
+tbc
+fixme
+xxx
+placeholder
+changeme
+lorem
+ipsum
+n/a
+wip
+temp
+temporary
+later
+hack

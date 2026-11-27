@@ -49,6 +49,12 @@ steps:
     env: { LABELS: $(LABELS) }
   - bash: bash .claude/ci-gates.sh changesize "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Change size (the PR stays within the line and file budget)
+  - bash: bash .claude/ci-gates.sh duptests
+    displayName: Duplicate tests (no two cases with the same body and context)
+  - bash: bash .claude/ci-gates.sh exclusions
+    displayName: Exclude reasons (every coverage, Sonar and mutation exclude has a reason)
+  - bash: bash .claude/ci-gates.sh commentshape "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
+    displayName: Comment shape (added comments are short, above a statement, never a bare disable)
   - bash: bash .claude/ci-gates.sh bundle
     displayName: Bundle size (gzip JS and CSS within .claude/bundle-budget.txt)
   # Prints the gate-time note for the gates this job ran. Exits 0 when over budget and 2 when the budget file, gate list or timing record is broken. Skipped when an earlier step fails.

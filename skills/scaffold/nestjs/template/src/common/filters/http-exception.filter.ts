@@ -8,6 +8,7 @@ import { HTTP_STATUS_MESSAGES } from '../constants';
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
+  // 5xx messages are server-side detail: log them, return generic text.
   catch(exception: HttpException, host: ArgumentsHost): void {
     if (exception instanceof ZodSerializationException) {
       const zodError: unknown = exception.getZodError();
@@ -19,7 +20,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const reply = ctx.getResponse<FastifyReply>();
     const status = exception.getStatus();
-    // 5xx messages are server-side detail: log them, return generic text.
     const isServerError = status >= 500;
     if (isServerError) {
       this.logger.error(exception.message, exception.stack);

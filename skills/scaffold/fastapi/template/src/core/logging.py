@@ -77,6 +77,7 @@ _shared_processors: list[Any] = [
 ]
 
 
+# One ProcessorFormatter renders structlog and stdlib records; dev writes JSON files, prod/uat log JSON to stdout.
 def setup_logging() -> None:
     """Configure structlog + stdlib logging: JSON in prod/uat, colored console in dev."""
     env = common_settings.ENVIRONMENT
@@ -92,7 +93,6 @@ def setup_logging() -> None:
         cache_logger_on_first_use=True,
     )
 
-    # One ProcessorFormatter renders both structlog and stdlib records.
     def make_formatter(render: Any) -> structlog.stdlib.ProcessorFormatter:
         return structlog.stdlib.ProcessorFormatter(
             foreign_pre_chain=_shared_processors,
@@ -112,7 +112,6 @@ def setup_logging() -> None:
     console_handler.setFormatter(make_formatter(console_render))
     handlers: list[logging.Handler] = [console_handler]
 
-    # Dev writes rotating JSON files; prod/uat log JSON to stdout only.
     if not use_json:
         dm.create_directory(dm.log_dir)
         file_formatter = make_formatter(

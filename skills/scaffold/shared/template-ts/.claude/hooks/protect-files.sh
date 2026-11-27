@@ -58,6 +58,8 @@ case "$rel" in
   pnpm-workspace.yaml|*/pnpm-workspace.yaml|.npmrc|*/.npmrc|.github/dependabot.yml|*/.github/dependabot.yml|.hadolint.yaml|*/.hadolint.yaml|.hadolint.yml|*/.hadolint.yml) reason="supply-chain or lint config — an edit can shorten the release-age wait, allow install scripts, change the registry or silence a Dockerfile rule" ;;
   .claude/registry-hosts.txt|*/.claude/registry-hosts.txt) reason="registry host allow-list — adding a host lets a lockfile pull packages from it" ;;
   .claude/dep-audit-allow.txt|*/.claude/dep-audit-allow.txt) reason="dependency-audit allowlist — an edit can suppress a known vulnerability" ;;
+  .claude/gate-baseline.txt|*/.claude/gate-baseline.txt) reason="gate baseline — an edit can hide known findings from the lint and type gates" ;;
+  scripts/gate-baseline.sh|*/scripts/gate-baseline.sh) reason="gate baseline helper — an edit can make the gates pass without checking" ;;
   .claude/allowed-licences.txt|*/.claude/allowed-licences.txt|.claude/licence-exceptions.txt|*/.claude/licence-exceptions.txt) reason="licence allow-list — adding a line lets a dependency with that licence ship" ;;
   .claude/change-size-exclude.txt|*/.claude/change-size-exclude.txt) reason="change-size exclude list — a line stops the matching files counting toward the review size budget" ;;
   .claude/bundle-budget.txt|*/.claude/bundle-budget.txt) reason="bundle-size budget — raising it lets the shipped bundle grow" ;;

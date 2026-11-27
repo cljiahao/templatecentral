@@ -22,6 +22,7 @@ interface AxiosErrorResponse {
   details?: unknown;
 }
 
+// Log method, status and URL only; params and bodies may contain PII.
 export function createAxiosClient(options: AxiosClientOptions): AxiosInstance {
   const {
     baseURL,
@@ -51,7 +52,6 @@ export function createAxiosClient(options: AxiosClientOptions): AxiosInstance {
       }
 
       if (enableLogging) {
-        // Log method and URL only; params and bodies may contain PII.
         console.log(`[Request] ${config.method?.toUpperCase()} ${config.url}`);
       }
 
@@ -66,7 +66,6 @@ export function createAxiosClient(options: AxiosClientOptions): AxiosInstance {
   client.interceptors.response.use(
     (response) => {
       if (enableLogging) {
-        // Log status and URL only; response bodies may contain PII.
         console.log(`[Response] ${response.status} ${response.config.url}`);
       }
       return response;

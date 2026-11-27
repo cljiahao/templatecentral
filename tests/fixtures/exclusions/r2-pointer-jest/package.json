@@ -1,0 +1,4 @@
+{
+  "name": "demo",
+  "scripts": { "test": "jest --config conf/jest.custom.js" }
+}

@@ -1,0 +1,4 @@
+{
+  "name": "demo",
+  "scripts": { "test": "vitest run --coverage.exclude=src/gen/**" }
+}

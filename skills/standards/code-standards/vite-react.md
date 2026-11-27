@@ -11,12 +11,11 @@ All files use **kebab-case**, no exceptions.
 
 | Type | Convention | Example |
 |------|-----------|---------|
-| Components, classes | PascalCase | `DashboardHeader`, `APIError` |
+| Components | PascalCase | `DashboardHeader` |
 | Functions, hooks, variables | camelCase | `useUploadForm`, `projectFormSchema` |
 | Constants | UPPER_SNAKE_CASE | `STATUS_OPTIONS`, `API_ROUTES` |
-| Types/interfaces | PascalCase | `ProjectItem`, `ExampleCardProps` |
 
-**Always use named exports.** Never `export default` in application code. Exception: build/tooling config files.
+Lint enforces PascalCase types and classes, camelCase, PascalCase or UPPER_CASE variables and functions, and named exports in `src/` (tooling configs keep theirs). Component and constant casing and file names have no pinned rule.
 
 ### Function vs Const
 
@@ -64,7 +63,7 @@ Centralized in `src/lib/constants/env.ts` — read it for the shape of `ENV` and
 
 ### Quality gate
 
-Targets on new code, the SonarQube default gate: cognitive complexity 15, duplication 3%, coverage 80%. Enforced locally with no scanner or server: `sonarjs` rules in `eslint.config.mjs`, `.jscpd.json` and `diff-cover --fail-under=80`.
+Targets on new code, the SonarQube default gate: cognitive complexity 15, duplication 3%, coverage 80%. Enforced locally, with no server: `sonarjs` rules in `eslint.config.mjs`, `.jscpd.json` and `diff-cover --fail-under=80`.
 
 ### Security (Vite + React)
 

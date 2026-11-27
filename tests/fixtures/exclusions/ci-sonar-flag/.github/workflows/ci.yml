@@ -1,0 +1,7 @@
+name: ci
+on: push
+jobs:
+  sonar:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sonar-scanner -Dsonar.exclusions=src/gen/**

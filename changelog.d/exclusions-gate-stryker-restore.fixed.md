@@ -1,0 +1,1 @@
+- The exclusions gate reports a `Stryker restore` that closes no open `Stryker disable`, matching the mutator list as a set (a mutator named twice is one mutator, free text is no mutator name); the migrate audit reports the same.

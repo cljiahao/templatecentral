@@ -1,0 +1,4 @@
+{
+  "name": "demo",
+  "scripts": { "test": "nyc --exclude=src/gen/** vitest run" }
+}
