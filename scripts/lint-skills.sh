@@ -353,7 +353,7 @@ check_file_line_budget() {
   # SKILL.md also has 50 prose lines outside fences. A SKILL.md that registered_skillmds lists stays with
   # check_skillmd_body_length (its frontmatter is capped here: 7 lines, closed); every other SKILL.md is
   # capped at 12. Any symlink, hidden directory or skill.md in another letter case outside a template root, or a carriage return, fails. A row may only shrink
-  # and none is born after the initial capture: scripts/check-line-budget-frozen.sh compares it with the
+  # and none is ever added: scripts/check-line-budget-frozen.sh compares it with the
   # base ref. TIMELESS.
   # Not caught: text quality; growth that stays under a file's own limit; any file in a template root
   # (a real template directory beside a template.manifest; the template checks list its files); files with
