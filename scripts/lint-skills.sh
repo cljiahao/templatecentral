@@ -1316,7 +1316,7 @@ check_no_version_pins() {
         | grep -vE ':[[:space:]]+[a-zA-Z][a-zA-Z0-9_-]*@[0-9]' || true
       echo
       scan -E '[a-zA-Z0-9_-]+[=]{2}[0-9]+\.[0-9]+'
-    } | grep -v '^$' | sort -u | grep -v 'shadcn@latest' | grep -vE '[^a-zA-Z0-9_-]uv==[0-9]' | grep -vE 'requirements-dev\.txt:[0-9]+:import-linter==[0-9]' || true)" \
+    } | grep -v '^$' | sort -u | grep -v 'shadcn@latest' | grep -vE '[^a-zA-Z0-9_-]uv==[0-9]' | grep -vE '^[^:]*requirements-dev\.txt:[0-9]+:import-linter==[0-9]' || true)" \
     "Version pins found — move floors/pins to .claude/rules/*.md" \
     "No version pins in skills"
 

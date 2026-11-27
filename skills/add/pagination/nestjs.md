@@ -6,7 +6,6 @@
 Run `TC_PART=leaf TC_LEAF=add/pagination/nestjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/pagination/nestjs/template/` (listed in `<skill-dir>/pagination/nestjs/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
 **1. Pagination Query DTO** (`src/common/dto/pagination.dto.ts`; shared — every paginated module reuses it)
-
 **2. Pagination Service** (`src/common/services/pagination.service.ts`)
 
 `PaginationService` has no module — register it in each feature module that uses it. Export the module from `src/modules/index.ts` and append `ProjectsModule` to the `imports` array in `src/app.module.ts` (never replace the array):
@@ -28,9 +27,7 @@ export class ProjectsModule {}
 
 **3. Project Response DTO**
 
-`src/modules/projects/projects.dto.ts` may already exist (from `templatecentral:add (endpoint)`,
-holding `CreateProjectDto`). **Add** the schema and class below to it — do not
-overwrite the existing DTOs. Create the file (with the two imports) only if it is absent.
+`src/modules/projects/projects.dto.ts` may already exist (from `templatecentral:add (endpoint)`, holding `CreateProjectDto`). **Add** the schema and class below to it; do not overwrite the existing DTOs. Create the file (with the two imports) only if it is absent.
 
 ```ts
 // src/modules/projects/projects.dto.ts

@@ -5,21 +5,16 @@
 # Add an Endpoint (NestJS module)
 
 ## Naming Convention
-
-Replace `<name>` throughout using these rules:
-
 | Context | Format | Example (`<name>` = `task`) |
 |---------|--------|-----------------------------|
 | Directory | kebab-case | `src/modules/task/` |
 | File names | kebab-case + dot suffix | `task.controller.ts` |
 | Class names | PascalCase + suffix | `TaskController`, `TaskService`, `TaskModule` |
-| Route path | kebab-case plural | `@Controller('tasks')` |
-| Swagger tag | Title case plural | `@ApiTags('Tasks')` |
+| Route, tag | kebab-case plural, Title case plural | `@Controller('tasks')`, `@ApiTags('Tasks')` |
 
 ## Steps
 
 ### 1. Create Module Directory
-
 Create `src/modules/<name>/`; Steps 2–7 fill it.
 
 ### 2. Define Types
@@ -196,13 +191,10 @@ export class TaskController {
 ```
 
 #### Authorization — decide before moving on
-
-The controller above is **fully public** — anyone can create, update and delete records.
-
-- **If `src/modules/auth/` exists** (the project ran `templatecentral:add` (auth)), apply
-  the project's guard by default. Put `@UseGuards(JwtAuthGuard)` + `@ApiBearerAuth()` on
-  the controller class to cover every route, then remove the guard from individual read
-  routes only where public access is a deliberate product decision.
+The controller above is **fully public**: anyone can create, update and delete records.
+- **If `src/modules/auth/` exists**, put `@UseGuards(JwtAuthGuard)` + `@ApiBearerAuth()` on
+  the controller class, and remove the guard from read routes only where public access is
+  deliberate.
 
   ```typescript
   import { Controller, UseGuards } from '@nestjs/common';
@@ -216,15 +208,11 @@ The controller above is **fully public** — anyone can create, update and delet
   export class TaskController {
   ```
 
-  Without `@ApiBearerAuth()` the routes still work but Swagger renders them as
-  unauthenticated, so "try it out" fails with a confusing 401.
+  Without `@ApiBearerAuth()` Swagger shows the routes as unauthenticated and "try it out" fails with a 401.
 
-- **If the project has no auth yet**, ask the user explicitly: *"POST/PATCH/DELETE on
-  `/tasks` will be reachable without credentials — is unauthenticated write access
-  intended?"* If it is not, run `templatecentral:add` (auth) before shipping the module.
-- **Ownership is separate from authentication.** A guard only proves *someone* is logged
-  in. If a record belongs to a user, the service must also check that the caller owns the
-  row before updating or deleting it.
+- **No auth yet**: ask whether unauthenticated POST/PATCH/DELETE on `/tasks` is intended;
+  if not, run `templatecentral:add` (auth) first. Ownership is separate from authentication:
+  the service must also check that the caller owns a row before updating or deleting it.
 
 ### 7. Create Module
 
@@ -265,7 +253,7 @@ import { BaseModule, ExampleModule, TaskModule } from './modules';
 
 ### 9. Add Tests
 
-Apply the test-value rule (`docs/CONSTITUTION.md` §4). Extend an existing spec when one covers the module, otherwise create `test/modules/<name>.controller.spec.ts` (`<name>` = module name, e.g. `task`):
+Apply the test-value rule (`docs/CONSTITUTION.md` §4). Extend an existing spec when one covers the module, otherwise create `test/modules/<name>.controller.spec.ts` (`<name>` = module name, e.g. `task`); for a public controller, drop the `JwtAuthGuard` import and `.overrideGuard(...)` lines:
 
 ```typescript
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -297,12 +285,7 @@ describe('TaskController', () => {
 });
 ```
 
-Drop the `JwtAuthGuard` import and `.overrideGuard(...)` lines if the controller is deliberately public.
-
 ### 10. Validate
 
-After creating all files:
-1. Run `pnpm start:dev` — confirm no import or DI errors
-2. Open Swagger docs at `/docs` — verify the new endpoints appear under the correct tag
-3. Run `pnpm test` — confirm the new unit test passes
-4. Test one endpoint manually via Swagger or `curl` to verify the full flow
+1. Run `pnpm start:dev` and open Swagger at `/docs`: no import or DI errors, and the new endpoints sit under the correct tag
+2. Run `pnpm test` and test one endpoint via Swagger or `curl`: the new unit test passes and the full flow works
