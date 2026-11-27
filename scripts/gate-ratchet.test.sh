@@ -6,6 +6,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SH="$REPO_ROOT/skills/scaffold/shared"
 RATCHET="$SH/template/scripts/gate-ratchet.sh"
+FX="$REPO_ROOT/tests/fixtures/gate-ratchet"
 
 PASS=0
 FAIL=0
@@ -40,7 +41,7 @@ seed() {
   if [[ "$1" == ts ]]; then
     cp "$SH/../nestjs/template/eslint.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
     cp "$SH/template-ts/.jscpd.json" "$R/.jscpd.json"
-    cp "$SH/template-ts/sonar-project.properties" "$R/sonar-project.properties"
+    cp "$FX/sonar-ts.properties" "$R/sonar-project.properties"
     cp "$SH/../nestjs/template/package.json" "$R/package.json"
     cp "$SH/../nestjs/template/tsconfig.json" "$R/tsconfig.json"
     cp "$SH/../nestjs/template/pnpm-workspace.yaml" "$R/pnpm-workspace.yaml"
@@ -66,7 +67,7 @@ PY
     cp "$SH/../fastapi/template/pyproject.toml" "$R/pyproject.toml"
     cp "$SH/../fastapi/template/pyrightconfig.json" "$R/pyrightconfig.json"
     cp "$SH/template-py/.jscpd.json" "$R/.jscpd.json"
-    cp "$SH/template-py/sonar-project.properties" "$R/sonar-project.properties"
+    cp "$FX/sonar-py.properties" "$R/sonar-project.properties"
     cp "$SH/template-ci/github-py/.github/workflows/ci.yml" "$R/.github/workflows/ci.yml"
     printf '\n[tool.coverage.report]\nfail_under = 80\n' >> "$R/pyproject.toml"
   fi
@@ -182,7 +183,10 @@ weakens eslint.config.mjs "'sonarjs/no-commented-code': 'error'" "'sonarjs/no-co
 weakens eslint.config.mjs "      'sonarjs/no-commented-code': 'error',
 " "" "rule removed" "sonarjs/no-commented-code" "now removed"
 weakens eslint.config.mjs "'sonarjs/todo-tag': 'warn'" "'sonarjs/todo-tag': 'off'" "warn lowered to off" "sonarjs/todo-tag" "now off"
-weakens eslint.config.mjs "ignores: ['eslint.config.mjs'," "ignores: ['src/legacy/**', 'eslint.config.mjs'," "new eslint ignore" "src/legacy/**"
+weakens eslint.config.mjs "    ignores: [
+      'eslint.config.mjs'," "    ignores: [
+      'src/legacy/**',
+      'eslint.config.mjs'," "new eslint ignore" "src/legacy/**"
 weakens eslint.config.mjs "  eslint.configs.recommended,
 " "" "eslint preset dropped" "eslint.configs.recommended"
 weakens vitest.config.ts "lines: 80" "lines: 60" "coverage threshold lowered" "was 80" "now 60"
@@ -223,7 +227,9 @@ passes .gitleaks.toml "description = \"Known non-secrets\"" "description = \"Kno
 passes .claude/gates.txt "secrets|gitleaks|ci-gates.sh secrets" "secrets|gitleaks|ci-gates.sh secrets
 extra|-|ci-gates.sh extra" "gate added"
 
-edit eslint.config.mjs "ignores: ['eslint.config.mjs'," "ignores: ['eslint.config.mjs"
+edit eslint.config.mjs "    ignores: [
+      'eslint.config.mjs'," "    ignores: [
+      'eslint.config.mjs"
 ratchet
 check 2 "$EC" "broken eslint config: exits 2 ($OUT)"
 has "UNREADABLE eslint.config.mjs" "$OUT" "broken eslint config: names the file"
@@ -473,8 +479,12 @@ for UI in next:nextjs/template/vitest.config.ts vite:vite-react/template/vite.co
   git_ commit -q -m base
   ratchet
   check 0 "$EC" "${UI%%:*}: seeded coverage exclude with src/components/ui/** passes ($OUT)"
-  weakens "$CFG" "'src/components/ui/**']" "'src/components/ui/**', 'src/lib/**']" "${UI%%:*}: src/lib/** added to the coverage exclude" "src/lib/**" "new ignore or exclude"
-  passes "$CFG" "'src/components/ui/**']" "]" "${UI%%:*}: dropping the ui exclude is a tightening"
+  weakens "$CFG" "        'src/components/ui/**',
+      ]" "        'src/components/ui/**',
+        'src/lib/**',
+      ]" "${UI%%:*}: src/lib/** added to the coverage exclude" "src/lib/**" "new ignore or exclude"
+  passes "$CFG" "        'src/components/ui/**',
+      ]" "      ]" "${UI%%:*}: dropping the ui exclude is a tightening"
 done
 R=$R_TS
 
@@ -590,7 +600,9 @@ has "cannot waive" "$OUT" "pin moved to a tag: says the label cannot waive it"
 weakens azure-pipelines.yml "NodeTool@0" "NodeTool@latest" "azure task moved off a numeric version" "gate script, runner or manifest changed"
 passes .github/workflows/ci.yml "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1" "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" "pin comment dropped"
 
-edit eslint.config.mjs "ignores: ['eslint.config.mjs'," "ignores: ['eslint.config.mjs"
+edit eslint.config.mjs "    ignores: [
+      'eslint.config.mjs'," "    ignores: [
+      'eslint.config.mjs"
 ci_gate "allow-gate-change"
 check 1 "$EC" "unreadable config: the label does not waive it ($OUT)"
 has "cannot waive an unreadable config" "$OUT" "unreadable config: says why"

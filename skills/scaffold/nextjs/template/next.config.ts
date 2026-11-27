@@ -1,7 +1,6 @@
 import type { NextConfig } from 'next';
 
-// CSP and X-Frame-Options are set per request in src/proxy.ts, because the framing origin is only known at runtime.
-// HSTS — browsers ignore HSTS received over HTTP, so this is only effective over HTTPS.
+// CSP and X-Frame-Options are set per request in src/proxy.ts; browsers ignore HSTS received over HTTP.
 const nextConfig: NextConfig = {
   // Standalone only for the Docker image; `next start` rejects it locally.
   output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,

@@ -1,5 +1,4 @@
-# Lists the project Python environment for check-licences.sh and generate-sbom.sh.
-# Limit: a marker line that applies here but is not installed passes, and the SBOM omits it.
+# Environment lister for check-licences.sh and generate-sbom.sh; an applicable but uninstalled marker line passes.
 import datetime
 import importlib.metadata as md
 import json

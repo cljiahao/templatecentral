@@ -13,9 +13,7 @@ def frame_ancestors(portal_origin: str) -> bytes | None:
     return None
 
 
-# Frame protection is skipped in dev so /docs renders in IDE preview panes; only the portal origin may frame the app.
-# frame-ancestors supersedes X-Frame-Options, sent only when framing is denied. 0 disables the exploitable XSS auditor.
-# Per-user data must not reach shared caches. Outside dev nothing may load: OWASP REST baseline.
+# Frame protection is skipped in dev for IDE previews; only the portal origin may frame; no shared caching of user data.
 def _build() -> list[tuple[bytes, bytes]]:
     is_dev = common_settings.ENVIRONMENT == "dev"
     portal = frame_ancestors(common_settings.EMBED_PARENT_ORIGIN)

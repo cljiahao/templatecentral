@@ -116,7 +116,7 @@ import httpx
 from fastapi import HTTPException, status
 from pydantic import TypeAdapter, ValidationError
 
-from core.exceptions import NoResultsFound
+from core.exceptions import NoResultsFoundError
 from core.logging import logger
 from integrations.github_client import GithubClient
 from integrations.github_schemas import GithubRepo
@@ -145,7 +145,7 @@ class GithubService:
             # Log status only — never the request, whose headers carry the token.
             logger.warning("GitHub upstream error", status=exc.response.status_code)
             if exc.response.status_code == status.HTTP_404_NOT_FOUND:
-                raise NoResultsFound("Repository not found.") from exc
+                raise NoResultsFoundError("Repository not found.") from exc
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Upstream service error.") from exc
         except httpx.RequestError as exc:
             logger.warning("GitHub upstream unreachable", error_type=type(exc).__name__)
@@ -161,7 +161,7 @@ class GithubService:
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Upstream service error.") from exc
 ```
 
-`NoResultsFound` maps to 404 via `src/error_handler.py`; upstream failures map to 502/504 so a broken dependency is never reported as a bug here.
+`NoResultsFoundError` maps to 404 via `src/error_handler.py`; upstream failures map to 502/504 so a broken dependency is never reported as a bug here.
 
 #### 5. Add Config
 
@@ -272,7 +272,7 @@ import httpx
 import pytest
 from fastapi import HTTPException
 
-from core.exceptions import NoResultsFound
+from core.exceptions import NoResultsFoundError
 from integrations.github_client import GithubClient
 from integrations.github_service import GithubService
 
@@ -294,8 +294,8 @@ async def test_get_repo_returns_validated_model() -> None:
 
 @pytest.mark.unit
 async def test_upstream_404_maps_to_not_found() -> None:
-    """Upstream 404 becomes the domain NoResultsFound."""
-    with pytest.raises(NoResultsFound, match="not found"):
+    """Upstream 404 becomes the domain NoResultsFoundError."""
+    with pytest.raises(NoResultsFoundError, match="not found"):
         await make_service(404, {}).get_repo("o", "missing")
 
 

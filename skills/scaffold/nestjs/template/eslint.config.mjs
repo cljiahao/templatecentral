@@ -10,7 +10,16 @@ const sonarjsPlugin = sonarjs.configs.recommended.plugins.sonarjs;
 
 export default tseslint.config(
   {
-    ignores: ['eslint.config.mjs', 'vitest.config.mts', 'vitest.config.e2e.mts', 'coverage/**', '.claude/**'],
+    ignores: [
+      'eslint.config.mjs',
+      'vitest.config.mts',
+      'vitest.config.e2e.mts',
+      'coverage/**',
+      '.claude/**',
+      'scripts/check-comments.mjs',
+      'scripts/check-exclude-reasons.mjs',
+      'scripts/duplicate-tests-ts.mjs',
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -39,7 +48,7 @@ export default tseslint.config(
     ...sonarjs.configs.recommended,
     rules: {
       ...sonarjs.configs.recommended.rules,
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unsafe-argument': 'warn',
       '@typescript-eslint/no-unsafe-call': 'off',
       // Honour the `_`-prefix convention for intentionally-unused args/vars.
@@ -67,6 +76,22 @@ export default tseslint.config(
       '@eslint-community/eslint-comments/disable-enable-pair': [
         'error',
         { allowWholeFile: true },
+      ],
+    },
+  },
+  {
+    // Standards: PascalCase types and classes, camelCase functions and methods.
+    files: ['**/*.ts'],
+    rules: {
+      '@typescript-eslint/naming-convention': [
+        'error',
+        { selector: 'typeLike', format: ['PascalCase'] },
+        { selector: ['function', 'method'], format: ['camelCase'], leadingUnderscore: 'allow' },
+        {
+          selector: 'variable',
+          format: ['camelCase', 'PascalCase', 'UPPER_CASE'],
+          leadingUnderscore: 'allowSingleOrDouble',
+        },
       ],
     },
   },

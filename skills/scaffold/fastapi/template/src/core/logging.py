@@ -77,8 +77,7 @@ _shared_processors: list[Any] = [
 ]
 
 
-# One ProcessorFormatter renders both structlog and stdlib records.
-# Dev writes rotating JSON files; prod/uat log JSON to stdout only.
+# One ProcessorFormatter renders structlog and stdlib records; dev writes JSON files, prod/uat log JSON to stdout.
 def setup_logging() -> None:
     """Configure structlog + stdlib logging: JSON in prod/uat, colored console in dev."""
     env = common_settings.ENVIRONMENT

@@ -6,7 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette import status
 
-from core.exceptions import InvalidInputError, NoResultsFound
+from core.exceptions import InvalidInputError, NoResultsFoundError
 from core.logging import logger
 from core.security_headers import SECURITY_HEADERS
 
@@ -45,8 +45,8 @@ def configure_exceptions(app: FastAPI) -> None:
             content={"detail": str(exc)},
         )
 
-    @app.exception_handler(NoResultsFound)
-    async def no_results_handler(request: Request, exc: NoResultsFound) -> JSONResponse:
+    @app.exception_handler(NoResultsFoundError)
+    async def no_results_handler(request: Request, exc: NoResultsFoundError) -> JSONResponse:
         logger.info("No results found", path=request.url.path, detail=str(exc))
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,

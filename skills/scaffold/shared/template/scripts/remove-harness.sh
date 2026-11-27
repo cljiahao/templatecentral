@@ -71,7 +71,7 @@ is_removable() {
     .claude/registry-hosts.txt | .claude/settings.json | .claude/verify-harness.sh) return 0 ;;
     .claude/review-checklist.txt | .claude/review-checklist-stack.txt) return 0 ;;
     .claude/allowed-licences.txt | .claude/bundle-budget.txt | .claude/change-size-exclude.txt | .claude/licence-exceptions.txt) return 0 ;;
-    .github/dependabot.yml | .github/workflows/ci.yml | .gitleaks.toml | .jscpd.json | sonar-project.properties) return 0 ;;
+    .github/dependabot.yml | .github/workflows/ci.yml | .gitleaks.toml | .jscpd.json) return 0 ;;
     azure-pipelines.yml | azure-pipelines/templatecentral-gates.yml | lefthook.yml) return 0 ;;
     docs/harness.md | docs/adr/0001-test-each-behaviour-once.md) return 0 ;;
     scripts/check-dockerfile.sh | scripts/check-docs.sh | scripts/check-env-example.sh | scripts/check-review-record.sh) return 0 ;;

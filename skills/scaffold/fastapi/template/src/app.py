@@ -88,9 +88,7 @@ def configure_security_headers(app: FastAPI) -> None:
     app.add_middleware(SecurityHeadersMiddleware)
 
 
-# TRUST_PROXY takes IPs/CIDRs, not a hop count: list every proxy hop and have an inner proxy keep the outer
-# X-Forwarded-For, or all clients resolve to the nearest proxy; * lets a client-supplied X-Forwarded-For win.
-# Last added runs outermost, so ForwardedHostMiddleware sees the request before ProxyHeadersMiddleware.
+# TRUST_PROXY takes IPs/CIDRs, not a hop count: list every proxy hop; the last added middleware runs outermost.
 def configure_proxy_headers(app: FastAPI) -> None:
     """Trusts reverse-proxy headers when TRUST_PROXY is set."""
     if not api_settings.TRUST_PROXY:
@@ -101,8 +99,7 @@ def configure_proxy_headers(app: FastAPI) -> None:
     app.add_middleware(ForwardedHostMiddleware, trusted=api_settings.TRUST_PROXY)
 
 
-# Docs are dev-only: openapi_url=None already disables the docs routes; all three are set explicitly.
-# Security headers wrap CORS so preflight responses get them.
+# Docs are dev-only and set explicitly; security headers wrap CORS so preflight responses get them.
 def start_application() -> FastAPI:
     """Builds the configured FastAPI application."""
     is_dev = common_settings.ENVIRONMENT == "dev"

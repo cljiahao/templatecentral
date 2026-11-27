@@ -24,7 +24,7 @@ from fastapi.responses import JSONResponse, Response
 from starlette import status
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from core.exceptions import InvalidInputError, NoResultsFound
+from core.exceptions import InvalidInputError, NoResultsFoundError
 from core.logging import logger
 from core.security_headers import SECURITY_HEADERS
 
@@ -68,8 +68,8 @@ def configure_exceptions(app: FastAPI) -> None:
             content=content,
         )
 
-    @app.exception_handler(NoResultsFound)
-    async def no_results_handler(request: Request, exc: NoResultsFound) -> JSONResponse:
+    @app.exception_handler(NoResultsFoundError)
+    async def no_results_handler(request: Request, exc: NoResultsFoundError) -> JSONResponse:
         logger.warning(
             "No results found",
             path=request.url.path,
@@ -177,10 +177,10 @@ async def create_project(req: CreateProjectRequest) -> ProjectResponse:
 async def get_project(project_id: str) -> ProjectResponse:
     """Get a project by ID."""
     raise NotImplementedError(
-        "Call the project service; raise NoResultsFound when the lookup returns nothing."
+        "Call the project service; raise NoResultsFoundError when the lookup returns nothing."
     )
 ```
 
-Register the router with an `APITags` tag in `src/api/routes.py` (see `add/endpoint/fastapi.md`). Replace each `raise NotImplementedError` with a service call. The router imports no exception types: the service raises `InvalidInputError` for domain validation failures (→ 400) and `NoResultsFound` for missing records (→ 404) from `core.exceptions`, and the handlers in Section 1 turn both into the structured envelope.
+Register the router with an `APITags` tag in `src/api/routes.py` (see `add/endpoint/fastapi.md`). Replace each `raise NotImplementedError` with a service call. The router imports no exception types: the service raises `InvalidInputError` for domain validation failures (→ 400) and `NoResultsFoundError` for missing records (→ 404) from `core.exceptions`, and the handlers in Section 1 turn both into the structured envelope.
 
 **2b. Wiring** — `start_application()` already calls `configure_exceptions(app)`. Replace only the handler bodies; do not add a second `FastAPI(...)` or `configure_exceptions` call.

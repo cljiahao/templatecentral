@@ -385,8 +385,30 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+      - name: Sonar parity of the seeded lint configs
+        run: bash scripts/check-sonar-parity.sh
       - name: Sonar parity check tests
         run: bash scripts/check-sonar-parity.test.sh
+
+  seeded-gate-helper-tests:
+    name: Seeded gate helper tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Comment gate tests
+        run: bash scripts/seeded-comments.test.sh
+      - name: Duplicate-test gate tests
+        run: bash scripts/seeded-duplicate-tests.test.sh
+      - name: Exclusion reason gate tests
+        run: bash scripts/seeded-exclude-reasons.test.sh
+      - name: Exclusion audit tests
+        run: bash scripts/exclusion-audit.test.sh
 
   defect-report-tests:
     name: Migrate defect report tests
@@ -415,6 +437,8 @@ jobs:
           fetch-tags: true
       - name: Migrate gate baseline tests
         run: bash scripts/migrate-baseline.test.sh
+      - name: Pristine hashes are current
+        run: bash skills/migrate/general/gen-pristine-hashes.sh --check
 
   lint-negative-tests:
     name: Lint check negative tests

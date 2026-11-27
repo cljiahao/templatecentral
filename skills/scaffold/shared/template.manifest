@@ -35,7 +35,6 @@ template-py/.claude/hooks/user-prompt-guard.py 644 - -
 template-py/.claude/review-checklist-stack.txt 644 - -
 template-py/.jscpd.json 644 - -
 template-py/lefthook.yml 644 - -
-template-py/sonar-project.properties 644 - -
 template-settings-py/.claude/settings.json 644 - -
 template-settings-ts/.claude/settings.json 644 - -
 template-tail/AGENTS-tail.md 644 - -
@@ -49,7 +48,6 @@ template-ts/.claude/hooks/user-prompt-guard.cjs 644 - -
 template-ts/.claude/review-checklist-stack.txt 644 - -
 template-ts/.jscpd.json 644 - -
 template-ts/lefthook.yml 644 - -
-template-ts/sonar-project.properties 644 - -
 template/.claude/agents/code-reviewer.md 644 - -
 template/.claude/ci-gates.sh 755 - -
 template/.claude/comment-hygiene-patterns.txt 644 - -

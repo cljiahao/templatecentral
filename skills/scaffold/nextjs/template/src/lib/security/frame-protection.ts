@@ -16,8 +16,7 @@ function portalOrigin(): string | null {
   return origin && PORTAL_ORIGIN_RE.test(origin) ? origin : null;
 }
 
-// Frame protection is omitted in dev so IDE preview panes can render.
-// frame-ancestors supersedes X-Frame-Options, so the latter is not sent.
+// Frame protection is omitted in dev for IDE previews; frame-ancestors supersedes X-Frame-Options, so that is not sent.
 export function applyFrameProtection<T extends Response>(pathname: string, res: T): T {
   if (isBackendProxyPath(pathname)) return res;
   if (process.env.NODE_ENV === 'development') {

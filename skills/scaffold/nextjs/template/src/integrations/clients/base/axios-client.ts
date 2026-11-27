@@ -22,8 +22,7 @@ interface AxiosErrorResponse {
   details?: unknown;
 }
 
-// Log method and URL only; params and bodies may contain PII.
-// Log status and URL only; response bodies may contain PII.
+// Log method, status and URL only; params and bodies may contain PII.
 export function createAxiosClient(options: AxiosClientOptions): AxiosInstance {
   const {
     baseURL,

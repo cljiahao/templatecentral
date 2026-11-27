@@ -5,8 +5,7 @@ import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from '../src/app.module';
 
-// Mirrors app.factory.ts's adapter options so request IDs behave as in the running app.
-// nestjs-zod hooks into Nest's pipes and Swagger's document; these three tests prove that.
+// Mirrors app.factory.ts's adapter options; these tests prove nestjs-zod hooks into Nest's pipes and Swagger.
 describe('AppController (e2e)', () => {
   let app: NestFastifyApplication;
 

@@ -31,9 +31,7 @@ export abstract class FetchClient {
     return {};
   }
 
-  // No Content-Type: the browser adds the multipart boundary.
-  // fetch has no default timeout.
-  // Log status and URL only; error bodies may contain PII.
+  // FormData needs no Content-Type, the browser adds the boundary; fetch has no timeout; error bodies may hold PII.
   protected async request<T>(
     path: string,
     method: HttpMethod = 'GET',

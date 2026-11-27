@@ -7,15 +7,13 @@
 
 | Element | Convention | Example |
 |---------|-----------|---------|
-| Classes | `PascalCase` | `ExampleService` |
-| Interfaces | `PascalCase` | `ExampleItem` |
-| Functions / Methods | `camelCase` | `findById` |
-| Variables | `camelCase` | `createdAt` |
 | Constants | `UPPER_SNAKE_CASE` | `HTTP_STATUS_MESSAGES` |
 | Files | `kebab-case` (dot-separated) | `example.controller.ts` |
 | Directories | `kebab-case` | `common/` |
 | DTOs, modules, controllers, services, repositories | `PascalCase` + role suffix | `CreateExampleDto`, `ExampleModule`, `ExampleRepository` |
 | Tests | `<name>.spec.ts` / `<name>.e2e-spec.ts` | `app.factory.spec.ts` |
+
+Lint enforces PascalCase types and classes, camelCase functions and methods, and camelCase, PascalCase or UPPER_CASE variables. The rows above have no pinned rule.
 
 ### Module Structure
 
@@ -96,7 +94,7 @@ export class UpdateItemDto extends createZodDto(CreateItemSchema.partial()) {}
 
 ### Quality gate
 
-Targets on new code, the SonarQube default gate: cognitive complexity 15, duplication 3%, coverage 80%. Enforced locally with no scanner or server: `sonarjs` rules in `eslint.config.mjs`, `.jscpd.json` and `diff-cover --fail-under=80`.
+Targets on new code, the SonarQube default gate: cognitive complexity 15, duplication 3%, coverage 80%. Enforced locally, with no server: `sonarjs` rules in `eslint.config.mjs`, `.jscpd.json` and `diff-cover --fail-under=80`.
 
 ### Security (NestJS)
 

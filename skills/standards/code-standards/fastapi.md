@@ -7,15 +7,12 @@
 
 | Element | Convention | Example |
 |---------|-----------|---------|
-| Classes | `PascalCase` | `InterestSettings` |
-| Functions | `snake_case` | `get_limits` |
 | Constants | `UPPER_SNAKE_CASE` | `INTEREST_RATES` |
-| Variables | `snake_case` | `age_in_months` |
 | Type aliases | `PascalCase` | `DatedSchedules` |
 | Private helpers | `_leading_underscore` | `_coerce_account` |
-| Files | `snake_case.py` | `tiered_interest.py` |
-| Directories | `snake_case` | `billing_data/` |
 | Tests | `test_<function>_<scenario>` | `test_refund_raises_after_window` |
+
+Ruff `N` (pep8-naming) enforces class, function, variable and module names. The rows above have no pinned rule.
 
 ### Type Annotations
 
@@ -32,7 +29,7 @@
 - Built-in exceptions with descriptive messages (`ValueError` for values, `TypeError` for types).
 - Chain exceptions with `from` to preserve traceback.
 - Avoid bare `except:` or broad `except Exception:` except at boundaries.
-- Custom exceptions (`InvalidInputError`, `NoResultsFound`) for crossing layer boundaries.
+- Custom exceptions (`InvalidInputError`, `NoResultsFoundError`) for crossing layer boundaries.
 
 ### Imports
 
@@ -49,7 +46,7 @@
 
 ### Quality gate
 
-Targets on new code, the SonarQube default gate: cognitive complexity 15, duplication 3%, coverage 80%. Enforced locally with no scanner or server: ruff `select` in `pyproject.toml` (`C901` is cyclomatic, an approximation of cognitive complexity), `.jscpd.json` and `diff-cover --fail-under=80`.
+Targets on new code, the SonarQube default gate: cognitive complexity 15, duplication 3%, coverage 80%. Enforced locally, with no server: ruff `select` in `pyproject.toml` (`C901` is cyclomatic, an approximation of cognitive complexity), `.jscpd.json` and `diff-cover --fail-under=80`.
 
 ### Constants
 

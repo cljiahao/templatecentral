@@ -11,9 +11,7 @@ export function portalFrameAncestor(origin: string | undefined): string | null {
   return origin && PORTAL_ORIGIN_RE.test(origin) ? origin : null;
 }
 
-// Frame protection is skipped in dev so Swagger UI renders in IDE preview panes; only the portal origin may frame.
-// null omits a helmet directive; an empty array does not. X-Frame-Options goes out only when framing is denied.
-// Per-user data must not reach shared caches.
+// Frame protection is skipped in dev for IDE previews; null omits a helmet directive, an empty array does not.
 export async function setupSecurity(app: INestApplication): Promise<void> {
   const fastify = app.getHttpAdapter().getInstance() as FastifyInstance;
 

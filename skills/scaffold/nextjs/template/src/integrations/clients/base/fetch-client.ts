@@ -28,8 +28,7 @@ export abstract class FetchClient {
     protected headers: Record<string, string>
   ) {}
 
-  // Node's fetch has no default timeout.
-  // Log status and URL only; error bodies may contain PII.
+  // Node's fetch has no default timeout; log status and URL only, since error bodies may contain PII.
   protected async request<T>(
     path: string,
     method: HttpMethod = 'GET',
