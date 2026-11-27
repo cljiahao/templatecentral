@@ -57,6 +57,24 @@ ruff_gate() {
   local -a r=("${RUFF_CMD[@]}")
   gate ruff-format "${r[@]}" format --check src/ test/
   gate ruff-check "${r[@]}" check src/ test/
+  local f
+  for f in "$P"/scripts/*.py; do
+    gate "ruff check skips ${f##*/}" "${r[@]}" check "scripts/${f##*/}"
+    gate "ruff format skips ${f##*/}" "${r[@]}" format --check "scripts/${f##*/}"
+  done
+}
+
+# ts_helpers_skipped: every hash-guarded seeded scripts/*.mjs is named in the eslint ignores and in .prettierignore, so the first commit's format-lint cannot parse-fail or rewrite it.
+ts_helpers_skipped() {
+  local list f stem
+  list=$(grep -o '"scripts/[^"]*\.mjs"' "$P/.claude/harness.json" | tr -d '"')
+  if [ -z "$list" ]; then bad "$ST/$HOST harness.json lists no seeded scripts/*.mjs"; return 0; fi
+  for f in $list; do
+    stem=${f#scripts/}
+    stem=${stem%.mjs}
+    gate "eslint ignores $f" grep -Eq "'scripts/(\{([a-z-]+,)*$stem(,[a-z-]+)*\}|$stem)\.mjs'" eslint.config.mjs
+    gate "prettier ignores $f" grep -qx "$f" .prettierignore
+  done
 }
 
 for ST in nestjs nextjs vite-react fastapi; do
@@ -92,14 +110,17 @@ for ST in nestjs nextjs vite-react fastapi; do
         ;;
       nestjs)
         gate ignores bash -c 'git check-ignore -q coverage/x && git check-ignore -q blob/x'
+        ts_helpers_skipped
         gate coverage-floor grep -Eq 'thresholds: [{] lines: 80' vitest.config.mts
         ;;
       nextjs)
         gate ignores bash -c 'git check-ignore -q coverage/x'
+        ts_helpers_skipped
         gate coverage-floor grep -Eq 'thresholds: [{] lines: 80' vitest.config.ts
         ;;
       vite-react)
         gate ignores bash -c 'git check-ignore -q coverage/x'
+        ts_helpers_skipped
         gate coverage-floor grep -Eq 'thresholds: [{] lines: 80' vite.config.ts
         ;;
     esac
