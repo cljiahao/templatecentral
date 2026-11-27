@@ -122,6 +122,22 @@ export default tseslint.config(
     },
   },
   {
+    // Standards: PascalCase types and classes, camelCase functions and methods.
+    files: ['**/*.ts'],
+    rules: {
+      '@typescript-eslint/naming-convention': [
+        'error',
+        { selector: 'typeLike', format: ['PascalCase'] },
+        { selector: ['function', 'method'], format: ['camelCase'], leadingUnderscore: 'allow' },
+        {
+          selector: 'variable',
+          format: ['camelCase', 'PascalCase', 'UPPER_CASE'],
+          leadingUnderscore: 'allowSingleOrDouble',
+        },
+      ],
+    },
+  },
+  {
     // Test fixtures legitimately use fake secrets and http:// literals to exercise guards.
     files: ['test/**/*.{spec,test}.ts', 'src/**/*.spec.ts', 'test/**/*.e2e-spec.ts'],
     plugins: { sonarjs: sonarjsPlugin },

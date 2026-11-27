@@ -107,7 +107,7 @@ gs_grep() {
 
 # Tracked files of <ref> into $wd/tracked.lst, then the derived guard set into $wd/guard.lst: each file under .claude/hooks/, each .claude/*.sh, .claude/settings.json, each Node hook-manager file, every scripts/ or .claude/ path named in a gate-bearing source, and the protect-files.sh gate patterns. Gate-bearing sources are hooks, .claude/*.sh, gates.txt, scripts/, lefthook, a Node hook-manager folder, CI files, the Makefile and the gate or install scripts of a package.json; skill, agent, rule and markdown files are never read. No stage hides a failure: every command writes to a file and its status is checked, so a source that cannot be listed, read or parsed returns 1.
 guard_scan() {
-  local ref=$1 f pf line labels reason mre
+  local ref=$1 f pf mre
   mre='(scripts|[.]claude)/[A-Za-z0-9_@./-]*[A-Za-z0-9_@-]'
   git ls-tree -r "$ref" > "$wd/tree.raw" 2>/dev/null || return 1
   awk -F'\t' '$1 !~ /^160000 / { print substr($0, index($0, "\t") + 1) }' "$wd/tree.raw" > "$wd/tracked.lst" || return 1
@@ -115,16 +115,33 @@ guard_scan() {
   gs_grep -E '(^|/)[.]claude/hooks/|(^|/)[.]claude/[^/]*[.]sh$|(^|/)[.]claude/settings[.]json$|(^|/)lefthook[.]yml$|(^|/)[.]lefthook/|(^|/)[.]hus[k]y/' "$wd/tracked.lst" > "$wd/guard.lst" || return 1
   gs_grep -E '(^|/)[.]claude/(hooks/|[^/]*[.]sh$|gates[.]txt$|settings[.]json$)|(^|/)scripts/|(^|/)[.]lefthook/|(^|/)[.]hus[k]y/|(^|/)[.]github/workflows/|(^|/)azure-pipelines|(^|/)(lefthook[.]yml|Makefile|package[.]json)$' "$wd/tracked.lst" > "$wd/sources.raw" || return 1
   gs_grep -Ev '[.]md$' "$wd/sources.raw" > "$wd/sources.lst" || return 1
+  gs_grep -vE '(^|/)package[.]json$' "$wd/sources.lst" > "$wd/sources.plain" || return 1
+  gs_grep -E '(^|/)package[.]json$' "$wd/sources.lst" > "$wd/sources.pkg" || return 1
+  # Every other source is read in one git process and scanned in one awk: a start per file is the cost.
+  R="$ref" awk '{ print ENVIRON["R"] ":" $0 }' "$wd/sources.plain" > "$wd/sources.refs" || return 1
+  git cat-file --batch < "$wd/sources.refs" > "$wd/sources.blobs" 2>/dev/null || return 1
+  LC_ALL=C awk -v re="$mre" '
+    state == 1 {
+      s = $0
+      while (match(s, re)) { print substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH) }
+      need -= length($0) + 1
+      if (need == 0) state = 2
+      else if (need < 0) state = 0
+      next
+    }
+    state == 2 { state = 0; next }
+    {
+      if (NF != 3 || $2 != "blob") bad = 1
+      need = $3 + 0
+      state = (need == 0 ? 2 : 1)
+    }
+    END { exit (bad || state == 1) }
+  ' "$wd/sources.blobs" >> "$wd/mentions.lst" || return 1
   while IFS= read -r f; do
     git show "$ref:$f" > "$wd/src.txt" 2>/dev/null || return 1
-    case "$f" in
-      package.json | */package.json)
-        awk -v K=pkgjson -v B=1 -v CMDS=1 -f "$wd/facts.awk" "$wd/src.txt" > "$wd/cmds.txt" 2>/dev/null || return 1
-        gs_grep -aoE "$mre" "$wd/cmds.txt" >> "$wd/mentions.lst" || return 1
-        ;;
-      *) gs_grep -aoE "$mre" "$wd/src.txt" >> "$wd/mentions.lst" || return 1 ;;
-    esac
-  done < "$wd/sources.lst"
+    awk -v K=pkgjson -v B=1 -v CMDS=1 -f "$wd/facts.awk" "$wd/src.txt" > "$wd/cmds.txt" 2>/dev/null || return 1
+    gs_grep -aoE "$mre" "$wd/cmds.txt" >> "$wd/mentions.lst" || return 1
+  done < "$wd/sources.pkg"
   sort -u -o "$wd/mentions.lst" "$wd/mentions.lst" || return 1
   awk 'NR == FNR { m[$0] = 1; next } { p = $0; while (1) { if (p in m) { print $0; break }; i = index(p, "/"); if (!i) break; p = substr(p, i + 1) } }' "$wd/mentions.lst" "$wd/tracked.lst" >> "$wd/guard.lst" || return 1
   gs_grep -E '(^|/)[.]claude/hooks/protect-files[.]sh$' "$wd/tracked.lst" > "$wd/pf.lst" || return 1
@@ -132,13 +149,15 @@ guard_scan() {
   if [ -n "$pf" ]; then
     git show "$ref:$pf" > "$wd/src.txt" 2>/dev/null || return 1
     gs_grep -E '^  [^ #].*\) reason=' "$wd/src.txt" > "$wd/pf.rows" || return 1
-    : > "$wd/pats.split"
-    while IFS= read -r line; do
-      reason=${line#*reason=}
-      case "$reason" in *"instruction file"* | *"binding invariants"* | *"agent definition"* | *"MCP server"* | *"container image"* | *"merge base snapshot"*) continue ;; esac
-      labels=${line%%\) reason=*}
-      printf '%s\n' "$labels" | tr '|' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' >> "$wd/pats.split" || return 1
-    done < "$wd/pf.rows"
+    awk '
+      {
+        i = index($0, "reason="); reason = substr($0, i + 7)
+        if (index(reason, "instruction file") || index(reason, "binding invariants") || index(reason, "agent definition") || index(reason, "MCP server") || index(reason, "container image") || index(reason, "merge base snapshot")) next
+        j = index($0, ") reason="); labels = (j ? substr($0, 1, j - 1) : $0)
+        n = split(labels, a, "|")
+        for (k = 1; k <= n; k++) { t = a[k]; gsub(/^[[:space:]]+|[[:space:]]+$/, "", t); print t }
+      }
+    ' "$wd/pf.rows" > "$wd/pats.split" || return 1
     gs_grep -v '^$' "$wd/pats.split" > "$wd/pats.nz" || return 1
     sort -u "$wd/pats.nz" > "$wd/pats.lst" || return 1
     awk 'NR == FNR { g = $0; gsub(/[.]/, "[.]", g); gsub(/[*]/, ".*", g); re[++n] = "^" g "$"; next } { for (i = 1; i <= n; i++) if ($0 ~ re[i]) { print; break } }' "$wd/pats.lst" "$wd/tracked.lst" >> "$wd/guard.lst" || return 1
