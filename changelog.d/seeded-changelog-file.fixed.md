@@ -1,0 +1,1 @@
+- Every scaffold seeds a minimal `CHANGELOG.md` (Keep a Changelog header, one Unreleased section), so the `changelog` gate has a file to update.

@@ -121,6 +121,7 @@ for ST in nestjs nextjs vite-react fastapi; do
     gate supplychain bash scripts/check-supply-chain.sh
     gate dockerfile bash scripts/check-dockerfile.sh
     gate_outputs_ignored
+    gate changelog-seeded bash -c 'head -n 1 CHANGELOG.md | grep -qx "# Changelog" && grep -qx "## \[Unreleased\]" CHANGELOG.md'
     case $ST in
       fastapi)
         gate ignores bash -c 'git check-ignore -q coverage.xml && git check-ignore -q .coverage'
