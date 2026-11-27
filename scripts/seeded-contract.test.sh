@@ -131,7 +131,8 @@ check 1 "$EC" "an entry point under another name is not used ($OUT)"
 # --- the generator is fixed by the stack
 new_app fixedgen fastapi
 mkdir -p "$A/.claude"
-printf 'cat openapi.json\n' > "$A/.claude/contract-generator.txt"
+printf 'import sys\nsys.stdout.write(open("openapi.json").read())\n' > "$A/scripts/alt.py"
+printf 'scripts/alt.py\n' > "$A/.claude/contract-generator.txt"
 printf '{"scripts":{"openapi":"cat openapi.json"}}\n' > "$A/package.json"
 run "$D" STUB_OUT="$FIX/openapi.changed.json"
 check 1 "$EC" "a generator named in a project file is ignored ($OUT)"
