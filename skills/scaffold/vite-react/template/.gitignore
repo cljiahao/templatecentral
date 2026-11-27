@@ -9,7 +9,7 @@
 !.yarn/versions
 
 # build output
-dist/
+/dist/
 build/
 
 # vite

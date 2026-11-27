@@ -61,4 +61,4 @@ next-env.d.ts
 
 # Files the seeded gates write: the diffcover gate's report (CI redirects diff-cover output into it) and the SBOM
 diff-cover.txt
-dist/
+/dist/

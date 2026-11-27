@@ -99,6 +99,8 @@ tsconfig.tsbuildinfo verify-gate-tsc" ;;
     p=${row%% *}
     if ! git -C "$P" check-ignore -q "$p"; then bad "$ST/$HOST ${row#* } writes $p but .gitignore does not ignore it"; fi
   done <<< "$rows"
+  # dist/ is the root build and SBOM output only; developer source under src/ must stay visible to the git gates.
+  if git -C "$P" check-ignore -q src/dist/x; then bad "$ST/$HOST ignores src/dist/x, which hides developer source from the git gates"; fi
   mkdir -p "$P/$(dirname "$sbom")" "$P/.claude/review" && : > "$P/$sbom" && : > "$P/$dc" && : > "$P/.claude/review/current.diff"
   dirty=$(git -C "$P" status --porcelain)
   if [ -z "$dirty" ]; then ok; else bad "$ST/$HOST tree is dirty after the gates: $dirty"; fi
