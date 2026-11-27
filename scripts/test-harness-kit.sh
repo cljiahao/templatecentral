@@ -1712,6 +1712,9 @@ gate_support() {
     sbom) echo "scripts/py-env.py" ;;
     bundle) echo ".claude/bundle-budget.txt" ;;
     changesize) echo ".claude/change-size-exclude.txt" ;;
+    duptests) echo "scripts/duplicate-tests-ts.mjs scripts/duplicate_tests_py.py" ;;
+    exclusions) echo "scripts/check-exclude-rules.sh scripts/check-exclude-reasons.awk scripts/check-exclude-reasons.mjs scripts/check-exclude-reasons.py" ;;
+    commentshape) echo "scripts/check-comments.mjs scripts/check-comments.py scripts/check-comments.licences.txt" ;;
   esac
 }
 
@@ -1879,7 +1882,7 @@ out=$(gate_verify); check 2 "$?" "verify-harness fails when gates.txt is missing
 cp "$KIT/gates.txt" "$GV/.claude/gates.txt"; printf 'broken\n' >> "$GV/.claude/gates.txt"
 out=$(gate_verify); check 2 "$?" "verify-harness fails on a malformed manifest line"
 bash "$KIT/ci-gates.sh" list > "$T/gl.txt" 2>&1
-check "harness docs testbudget nosonar secrets deps changelog comments ratchet supplychain workflows envexample dockerfile workarounds review licences sbom changesize bundle diffcover" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints the manifest gates in order"
+check "harness docs testbudget nosonar secrets deps changelog comments commentshape duptests exclusions ratchet supplychain workflows envexample dockerfile workarounds review licences sbom changesize bundle diffcover" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints the manifest gates in order"
 KG=$(mktemp -d "$T/kg.XXXX"); cp "$KIT/ci-gates.sh" "$KG/"; grep -v '^nosonar|' "$KIT/gates.txt" > "$KG/gates.txt"
 bash "$KG/ci-gates.sh" nosonar >/dev/null 2>&1
 check 1 "$?" "ci-gates refuses a gate the manifest does not list"
