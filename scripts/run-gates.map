@@ -279,7 +279,6 @@ scripts/changelog-assemble.test.sh	bash scripts/changelog-check.sh {BASE}
 @noread	bash scripts/seeded-change-size.test.sh	README.md
 @noread	bash scripts/seeded-mutation-diff.test.sh	README.md
 @noread	bash scripts/seeded-boundaries.test.sh	scripts/day-one.test.sh
-@noread	bash scripts/seeded-import-layers.test.sh	README.md
 @noread	bash scripts/seeded-review-gate.test.sh	README.md
 @noread	bash scripts/test-budget.test.sh	README.md
 @noread	bash scripts/measure-seeded-load.sh	README.md

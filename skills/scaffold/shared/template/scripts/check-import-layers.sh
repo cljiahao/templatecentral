@@ -72,7 +72,7 @@ check_app() {
   if [ -x "$dir/.venv/bin/lint-imports" ]; then
     lint=$top/$dir/.venv/bin/lint-imports
   elif command -v lint-imports > /dev/null 2>&1; then
-    lint=lint-imports
+    lint="lint-imports"
   fi
   if [ -z "$lint" ]; then
     fail "$label: lint-imports is not installed, so the layer rule cannot run. Install it: pip install -r requirements-dev.txt"

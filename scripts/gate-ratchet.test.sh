@@ -996,8 +996,9 @@ expect 1 "new tsconfig with strict off" "tsconfig.spec.json" "strictness option 
 add_file tsconfig.spec.json '{"extends": "./tsconfig.json", "compilerOptions": {"strict": true}}'
 expect 0 "new tsconfig with strict on"
 seed py
-weakens pyrightconfig.json '"venvPath": "."' '"typeCheckingMode": "off", "venvPath": "."' "pyright mode off" "pyrightconfig.json" "typeCheckingMode"
-passes pyrightconfig.json '"venvPath": "."' '"typeCheckingMode": "strict", "venvPath": "."' "pyright mode strict"
+weakens pyrightconfig.json '"typeCheckingMode": "strict"' '"typeCheckingMode": "off"' "pyright mode off" "pyrightconfig.json" "typeCheckingMode"
+weakens pyrightconfig.json '"typeCheckingMode": "strict"' '"typeCheckingMode": "standard"' "pyright strict lowered to standard" "pyrightconfig.json" "pyright-mode"
+passes pyrightconfig.json '"venv": ".venv"' '"venv": ".venv", "reportMissingImports": "error"' "pyright rule set to error"
 weakens pyrightconfig.json '"venvPath": "."' '"reportMissingImports": "none", "venvPath": "."' "pyright rule none" "reportMissingImports"
 
 # Round 3: the guarded set is derived from the tree.
