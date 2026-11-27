@@ -1,0 +1,1 @@
+- `block-no-verify.sh` now unwraps a shell given by path (`/bin/sh -c 'git commit -n'`, `/usr/bin/ksh -c "…"`) and shells nested inside shells, and blocks a command nested more than 8 deep.

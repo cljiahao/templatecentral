@@ -416,6 +416,11 @@ dash -c 'git commit -n -m x'
 ksh -c 'git commit -n -m x'
 ash -c 'git commit --no-verify -m x'
 busybox sh -c 'git commit -n -m x'
+/bin/sh -c 'git commit -n -m x'
+/bin/bash -c 'git commit -n -m x'
+/bin/dash -c 'git commit -n -m x'
+/usr/bin/ksh -c "git commit --no-verify -m x"
+sh -c 'sh -c "git commit -n -m x"'
 echo hi | dash
 echo hi | ksh
 echo hi | ash
@@ -476,6 +481,9 @@ git commit -m ''
 ls | xargs -I{} sh -c 'echo {}'
 echo hi | dash script.sh
 dash -c 'git status'
+/bin/sh script.sh
+/usr/bin/env bash script.sh
+bash -c 'echo ok'
 git merge feat
 git rebase main
 grep -rn "no-verify" docs

@@ -149,13 +149,23 @@ protected_branch() {
   [[ "$b" =~ ^($protected)$ ]] && echo "$b"
 }
 
-# Empty quote pairs glued to a word vanish in the shell (--no-ver""ify, -""n), so they go first; a lone empty argument stays; then bash -c/eval is unwrapped for every POSIX-style shell on the allow-list, single words are unquoted, mask other quoted text as Q; double quotes first so an apostrophe cannot swallow flags.
-# A quoted word holding a shell operator stays masked: its pipe, semicolon or redirect is text, not syntax ('x|sh', "a|bash").
+# Empty quote pairs glued to a word vanish in the shell (--no-ver""ify, -""n), so they go first; a lone empty argument stays.
+# Then a quoted bash -c/eval string is unwrapped, one layer per pass, for every POSIX-style shell on the allow-list with or without a path (/bin/sh); more than 8 layers is blocked.
 sq="'"
+sh_re='(^|[[:space:];&|(])(/[^[:space:]]*/)?(bash|sh|zsh|dash|ksh|ash|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+'
 scan=$(printf '%s' "$cmd" | sed -E \
-  -e "s/([^[:space:]])\"\"/\1/g" -e "s/\"\"([^[:space:]])/\1/g" -e "s/([^[:space:]])${sq}${sq}/\1/g" -e "s/${sq}${sq}([^[:space:]])/\1/g" \
-  -e "s/(^|[[:space:];&|(])(bash|sh|zsh|dash|ksh|ash|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+\"([^\"]*)\"/\1 \4 /g" \
-  -e "s/(^|[[:space:];&|(])(bash|sh|zsh|dash|ksh|ash|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+${sq}([^${sq}]*)${sq}/\1 \4 /g" \
+  -e "s/([^[:space:]])\"\"/\1/g" -e "s/\"\"([^[:space:]])/\1/g" -e "s/([^[:space:]])${sq}${sq}/\1/g" -e "s/${sq}${sq}([^[:space:]])/\1/g")
+layers=0
+while rx "${sh_re}(\"[^\"]*\"|${sq}[^${sq}]*${sq})" "$scan"; do
+  layers=$((layers + 1))
+  [ "$layers" -gt 8 ] && block "shell wrappers nested more than 8 deep hide their commands from this guard. Run the commands directly."
+  scan=$(printf '%s' "$scan" | sed -E \
+    -e "s#${sh_re}\"([^\"]*)\"#\1 \5 #g" \
+    -e "s#${sh_re}${sq}([^${sq}]*)${sq}#\1 \5 #g")
+done
+# Single words are unquoted, other quoted text is masked as Q; double quotes first so an apostrophe cannot swallow flags.
+# A quoted word holding a shell operator stays masked: its pipe, semicolon or redirect is text, not syntax ('x|sh', "a|bash").
+scan=$(printf '%s' "$scan" | sed -E \
   -e "s/\"([^\"${sq}[:space:]|;\&<>()]+)\"/\1/g" -e "s/\"[^\"]*\"/ Q /g" \
   -e "s/${sq}([^${sq}[:space:]|;\&<>()]+)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g" \
   -e 's/\\([A-Za-z0-9_.-])/\1/g')
