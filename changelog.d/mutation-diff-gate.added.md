@@ -1,0 +1,1 @@
+- Seeded gate `check-mutation-diff.sh` (phase 1, not yet registered): runs StrykerJS or mutmut only on the source files a change touches, and fails on a surviving mutant, a lowered threshold, a new exclude, or a run the CPU cap ends. Offline, no key.
