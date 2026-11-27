@@ -1,1 +1,1 @@
-The seeded `.gitignore` of fastapi, nextjs and vite-react now ignores only the root `/dist/`, so a developer folder named `dist` under `src/` is no longer hidden from the git-based gates; day-one checks it on every stack.
+- The seeded `.gitignore` of fastapi, nextjs and vite-react now ignores only the root `/dist/`, so a developer folder named `dist` under `src/` is no longer hidden from the git-based gates; day-one checks it on every stack.
