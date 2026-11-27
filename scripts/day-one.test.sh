@@ -64,12 +64,17 @@ ruff_gate() {
   done
 }
 
+# gate_default FILE KEY: the first default value written as KEY...} in FILE.
+gate_default() {
+  awk -v key="$2" 'index($0, key) { v = substr($0, index($0, key) + length(key)); sub(/\}.*/, "", v); print v; exit }' "$1"
+}
+
 # gate_outputs_ignored: every path a seeded gate writes is ignored and the tree stays clean; rows are <path> <writer>.
 # SBOM needs a lockfile (network) and a review record needs a verdict, so those files are made by hand.
 gate_outputs_ignored() {
   local sbom dc rows row p dirty
-  sbom=$(sed -n 's/^out=\${SBOM_OUT:-\(.*\)}$/\1/p' "$P/scripts/generate-sbom.sh")
-  dc=$(sed -n 's/.*out=\${DIFF_COVER_OUTPUT:-\([^}]*\)}.*/\1/p' "$P/.claude/ci-gates.sh" | head -n 1)
+  sbom=$(gate_default "$P/scripts/generate-sbom.sh" 'SBOM_OUT:-')
+  dc=$(gate_default "$P/.claude/ci-gates.sh" 'DIFF_COVER_OUTPUT:-')
   if [ -z "$sbom" ] || [ -z "$dc" ]; then bad "$ST/$HOST cannot read the SBOM or diff-cover output path from the gates"; return; fi
   rows="$sbom sbom-gate
 $dc diffcover-gate
