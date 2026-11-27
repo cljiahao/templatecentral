@@ -173,6 +173,11 @@ for mode in empty truncated malformed nofiles; do
   esac
   run "$D" STUB_RAW="$T/raw.json"
   check 1 "$EC" "a $mode report fails ($OUT)"
+  case "$mode" in
+    empty) has "wrote no report" "$OUT" "an empty report is named" ;;
+    truncated | malformed) has "is not valid JSON" "$OUT" "a $mode report is named" ;;
+    nofiles) has "no schemaVersion or files object" "$OUT" "a report without files is named" ;;
+  esac
 done
 printf '{"schemaVersion":"1","files":{"src/a.ts":{"mutants":[{"id":"0","status":"Killed"}]}}}\n' > "$T/raw.json"
 run "$D" STUB_RAW="$T/raw.json"
@@ -265,6 +270,7 @@ check 0 "$EC" "two apps in one repository are both judged ($OUT)"
 check 2 "$(wc -l < "$ARGS" | tr -d ' ')" "the tool runs once per app"
 
 # --- attributes and file names
+# Regression guards for a later switch to per-file diffs: today file lists come from --name-only, which no attribute or pathspec line can change.
 new_repo attr
 printf 'src/a.ts -diff\n*.ts binary\nsrc/** linguist-generated=true\n' > "$D/.gitattributes"
 touch_src src/a.ts
