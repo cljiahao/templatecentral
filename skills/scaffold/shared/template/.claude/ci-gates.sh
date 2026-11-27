@@ -438,7 +438,9 @@ JS
     code=""
     while IFS= read -r f; do
       [ -n "$f" ] || continue
-      if git --literal-pathspecs diff -U0 --no-color --no-ext-diff --no-textconv --text "$base"...HEAD -- "$f" | awk -v py="$(case "$f" in *.py) echo 1 ;; *) echo 0 ;; esac)" '
+      is_py=0
+      case "$f" in *.py) is_py=1 ;; esac
+      if git --literal-pathspecs diff -U0 --no-color --no-ext-diff --no-textconv --text "$base"...HEAD -- "$f" | awk -v py="$is_py" '
         /^@@/ { inbody = 1; next }
         inbody && /^[+]/ {
           t = substr($0, 2); sub(/^[ \t]+/, "", t)

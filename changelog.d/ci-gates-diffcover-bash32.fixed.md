@@ -1,0 +1,1 @@
+- `ci-gates.sh diffcover` no longer prints a bash 3.2 syntax error on macOS: the `case` inside a command substitution is moved out of it.

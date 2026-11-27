@@ -292,13 +292,14 @@ dc_repo() { # dc_repo <name> <changed-file>
   g commit -q -m work
   git -C "$R" update-ref refs/remotes/origin/main main
 }
-dc() { OUT=$(cd "$R" && clean bash .claude/ci-gates.sh diffcover refs/heads/main 2>&1); RC=$?; }
+dc() { OUT=$(cd "$R" && clean /bin/bash .claude/ci-gates.sh diffcover refs/heads/main 2>&1); RC=$?; }
 
 dc_repo dc-empty src/more.ts
 printf 'No lines with coverage information in this diff.\n' > "$R/diff-cover.txt"
 dc
 check 1 "$RC" "diffcover fails closed on an empty coverage report"
 has "src/more.ts" "$OUT" "diffcover message names the changed source file"
+hasnt "syntax error" "$OUT" "diffcover runs under /bin/bash 3.2 without a syntax error"
 has "Do not exclude the files." "$OUT" "diffcover message says how to fix"
 
 dc_repo dc-good src/more.ts
@@ -726,6 +727,15 @@ check 1 "$RC" "ratchet gate: label does not waive a 200 KB unreadable finding ($
 has "cannot waive an unreadable config" "$OUT" "ratchet gate: says the unreadable finding is not waivable"
 stub_ratchet cg-ratchet-weakened "WEAKENED some.cfg: was 1, now 2"
 check 0 "$RC" "ratchet gate: label still waives a big weakened-only finding ($(printf '%s' "$OUT" | tail -c 300))"
+
+# ---- every seeded shell script parses under the oldest bash a macOS runner has (/bin/bash 3.2).
+parsed=0
+while IFS= read -r f; do
+  case "$f" in *.sh | *.envsh) ;; *) head -n 1 "$f" | grep -qE '^#!.*(bash|/sh)' || continue ;; esac
+  parsed=$((parsed + 1))
+  if err=$(/bin/bash -n "$f" 2>&1); then ok; else bad "bash 3.2 cannot parse ${f#"$REPO_ROOT"/}: $err"; fi
+done < <(find "$REPO_ROOT/skills/scaffold" -type f -not -name '*.md' -not -path '*/node_modules/*')
+if [ "$parsed" -ge 40 ]; then ok; else bad "bash parse check found only $parsed seeded shell scripts"; fi
 
 echo "seeded-gates: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]
