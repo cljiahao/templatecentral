@@ -45,8 +45,25 @@ die() {
   exit 2
 }
 
+# A helper must be a regular file with content: a link can point anywhere and an empty reader finds nothing.
+need_helper() {
+  [ ! -L "$1" ] || die "$1 is a symlink; restore the file itself"
+  [ -f "$1" ] || die "$1 is missing"
+  grep '[^[:space:]]' "$1" > /dev/null || die "$1 holds no content or cannot be read"
+}
+
+# 0 when the file has a line matching the pattern, 1 when none does, and a read error stops the run.
+file_has() {
+  local frc=0
+  grep -E "$1" "$2" > /dev/null || frc=$?
+  [ "$frc" -le 1 ] || die "cannot read $2"
+  return "$frc"
+}
+
 [ "$#" -le 1 ] || die "one project folder at most"
 HERE=$(cd "$(dirname "$0")" 2> /dev/null && pwd) || die "cannot find the script folder"
+need_helper "$HERE/duplicate-tests-ts.mjs"
+need_helper "$HERE/duplicate_tests_py.py"
 TARGET=${1:-$HERE/..}
 [ -d "$TARGET" ] || die "not a folder: $TARGET"
 root=$(cd "$TARGET" 2> /dev/null && pwd -P) || die "cannot enter $TARGET"
@@ -154,9 +171,9 @@ declared_tests() {
   local f found=
   while IFS= read -r f; do
     case "${f##*/}" in
-      package.json) grep -Eq '"test(:[^"]*)?"[[:space:]]*:' "$f" 2> /dev/null && found="$found ${f#"$root"/}" ;;
-      pyproject.toml) grep -Eq '^\[tool\.pytest' "$f" 2> /dev/null && found="$found ${f#"$root"/}" ;;
-      setup.cfg | tox.ini) grep -Eq '^\[(tool:)?pytest\]' "$f" 2> /dev/null && found="$found ${f#"$root"/}" ;;
+      package.json) file_has '"test(:[^"]*)?"[[:space:]]*:' "$f" && found="$found ${f#"$root"/}" ;;
+      pyproject.toml) file_has '^\[tool\.pytest' "$f" && found="$found ${f#"$root"/}" ;;
+      setup.cfg | tox.ini) file_has '^\[(tool:)?pytest\]' "$f" && found="$found ${f#"$root"/}" ;;
       *) found="$found ${f#"$root"/}" ;;
     esac
   done < <(find "$root" \( "${prune_args[@]}" \) -prune -o -type f \( -name package.json -o -name 'vitest.config.*' -o -name 'jest.config.*' -o -name pytest.ini -o -name pyproject.toml -o -name setup.cfg -o -name tox.ini \) -print 2> /dev/null | sort)
@@ -237,7 +254,7 @@ if [ -s "$wd/py.list" ]; then
   py=python3
   [ ! -x "$root/.venv/bin/python3" ] || py="$root/.venv/bin/python3"
   command -v "$py" > /dev/null 2>&1 || die "python3 is missing but the project has Python test files: install Python 3 and run again"
-  "$py" "$HERE/duplicate_tests_py.py" "$root" "$wd/py.list" >> "$wd/records" || die "the Python scan failed (see above); fix that first"
+  "$py" -I "$HERE/duplicate_tests_py.py" "$root" "$wd/py.list" >> "$wd/records" || die "the Python scan failed (see above); fix that first"
 fi
 
 ncases=$(awk 'END { print NR }' "$wd/records")

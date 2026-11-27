@@ -33,7 +33,6 @@ class SecurityHeadersMiddleware:
 class ForwardedHostMiddleware:
     """Rewrites Host from X-Forwarded-Host so request.base_url reflects the public hostname."""
 
-
     def __init__(self, app: ASGIApp, trusted: str = "*") -> None:
         self.app = app
         self.trust_all = trusted.strip() == "*"

@@ -62,6 +62,23 @@ fail() {
   if [ -n "${TF_BUILD:-}" ]; then echo "##vso[task.logissue type=error]$1"; else echo "::error::$1"; fi
   exit 1
 }
+# A gate script must be a regular file with content: a link can point anywhere and an empty script exits 0.
+gate_script() {
+  local grc=0
+  [ ! -L "$1" ] || fail "$1 is a symlink; replace it with the file itself"
+  [ -f "$1" ] || fail "$1 is missing"
+  grep '[^[:space:]]' "$1" >/dev/null || grc=$?
+  [ "$grc" -le 1 ] || fail "cannot read $1 (grep exit $grc)"
+  [ "$grc" -eq 0 ] || fail "$1 holds no content"
+}
+# Matches a variable against grep options without a here-string (it needs a writable TMPDIR) or grep -q in a pipe (SIGPIPE under pipefail): 0 match, 1 none, a grep error fails the gate.
+vgrep() {
+  local text=$1 vrc=0
+  shift
+  printf '%s\n' "$text" | grep "$@" >/dev/null || vrc=$?
+  [ "$vrc" -le 1 ] || fail "grep failed while matching a value (exit $vrc)"
+  return "$vrc"
+}
 bypassed() {
   case " ${LABELS:-} " in *" $1 "*) echo "$1 label present — OK"; return 0 ;; esac
   return 1
@@ -144,7 +161,7 @@ case "$gate" in
       # No sudo: works on hosted and self-hosted Linux x64 agents
       PATH="$tmp:$PATH"
     fi
-    [ -f scripts/scan-secrets.sh ] || fail "scripts/scan-secrets.sh is missing"
+    gate_script scripts/scan-secrets.sh
     if [ -n "$branch" ]; then
       bash scripts/scan-secrets.sh git --log-opts="$base..HEAD" || fail "possible secrets in this PR's commits (file, line and rule above). Remove the value, rotate it if it was ever pushed, and read it from the environment."
     else
@@ -154,8 +171,7 @@ case "$gate" in
   changelog)
     pr_only
     changed=$(git diff --name-only "$base"...HEAD) || fail "cannot diff against $base"
-    # Here-strings, not pipes: under pipefail, grep -q exiting early would SIGPIPE printf and flip the result.
-    if grep -qE '^src/' <<< "$changed" && ! grep -qx 'CHANGELOG.md' <<< "$changed"; then
+    if vgrep "$changed" -E '^src/' && ! vgrep "$changed" -x 'CHANGELOG.md'; then
       bypassed skip-changelog && exit 0
       fail "src/ changed but CHANGELOG.md was not updated. Add an entry or apply the 'skip-changelog' label."
     fi
@@ -173,7 +189,7 @@ case "$gate" in
       [ -f "$f" ] || continue
       while IFS= read -r content; do
         stripped=$(printf '%s' "$content" | sed -E 's@^[[:space:]]*(#|//|\*|"""|/\*\*?)[[:space:]]?@@')
-        if [ -n "$stripped" ] && grep -qEf "$strict_patterns" <<< "$stripped"; then
+        if [ -n "$stripped" ] && vgrep "$stripped" -E -f "$strict_patterns"; then
           flagged="$flagged$nl  - $f: $stripped"
         fi
       done < <(git --literal-pathspecs diff -U0 "$base"...HEAD -- "$f" | grep '^+' | grep -vE '^\+\+\+' | sed 's/^+//' | grep -E '^[[:space:]]*(#|//|\*|"""|/\*\*?)')
@@ -213,7 +229,7 @@ case "$gate" in
       if { printf '%s\n' "$enforced" | sed 's/^/E /'; printf '%s\n' "$findings"; } | awk '/^E / { E[substr($0, 3)] = 1; next } /^(WEAKENED|UNREADABLE) / { p = $0; sub(/^[A-Z]+ /, "", p); for (e in E) if (p == e ":" || substr(p, 1, length(e) + 2) == e ": ") hit = 1 } END { exit !hit }'; then
         fail "the allow-gate-change label cannot waive a change to the files that enforce the gates (listed above); it needs the owner review that branch protection requires."
       fi
-      if [ "$rc" -ne 1 ] || grep -q '^UNREADABLE ' <<< "$findings"; then
+      if [ "$rc" -ne 1 ] || vgrep "$findings" '^UNREADABLE '; then
         fail "the allow-gate-change label cannot waive an unreadable config or a checker failure (output above); fix the cause."
       fi
       if bypassed allow-gate-change; then echo "gate-ratchet: the allow-gate-change label waived every finding printed above"; exit 0; fi
@@ -222,12 +238,13 @@ case "$gate" in
     ;;
   testbudget)
     # ADR-0001: test code may not outgrow source code; the limit lives in scripts/test-budget.sh.
-    [ -f scripts/test-budget.sh ] || fail "scripts/test-budget.sh is missing"
+    gate_script scripts/test-budget.sh
     bash scripts/test-budget.sh || fail "test budget exceeded or unreadable (output above). Consolidate duplicate tests with the test-consolidate skill."
     ;;
   nosonar)
     # Matches a marker inside a comment only, so the ESLint rule that bans the word (terms: ['nosonar']) never trips it.
-    if hits=$(git grep -nIiE '(#|//|/[*]|^[[:space:]]*[*]).*NOSONAR' -- '*.py' '*.pyi' '*.ts' '*.tsx' '*.mts' '*.cts' '*.js' '*.jsx' '*.mjs' '*.cjs' ':(exclude,top).claude' ':(exclude,top)eslint.config.*'); then rc=0; else rc=$?; fi
+    # The comment gate helpers name the marker in their own messages and are protected gate files.
+    if hits=$(git grep -nIiE '(#|//|/[*]|^[[:space:]]*[*]).*NOSONAR' -- '*.py' '*.pyi' '*.ts' '*.tsx' '*.mts' '*.cts' '*.js' '*.jsx' '*.mjs' '*.cjs' ':(exclude,top).claude' ':(exclude,top)eslint.config.*' ':(exclude,top)scripts/check-comments.mjs' ':(exclude,top)scripts/check-comments.py'); then rc=0; else rc=$?; fi
     [ "$rc" -le 1 ] || fail "git grep failed while scanning for NOSONAR markers"
     if [ -n "$hits" ]; then
       printf '%s\n' "$hits" >&2
@@ -282,11 +299,14 @@ case "$gate" in
         line=${line#"${line%%[![:space:]]*}"}
         line=${line%"${line##*[![:space:]]}"}
         case "$line" in ''|'#'*) continue ;; esac
-        if ! grep -qiE '^(GHSA-[A-Za-z0-9-]+|CVE-[0-9]{4}-[0-9]+|PYSEC-[0-9]{4}-[0-9]+)[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[^[:space:]]' <<< "$line"; then
+        if ! vgrep "$line" -iE '^(GHSA-[A-Za-z0-9-]+|CVE-[0-9]{4}-[0-9]+|PYSEC-[0-9]{4}-[0-9]+)[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[^[:space:]]'; then
           echo "malformed allowlist line: $line" >&2
           fail "$allow has a malformed line. Format: <GHSA|CVE|PYSEC id> <YYYY-MM-DD expiry> <reason>"
         fi
-        read -r id expiry _ <<< "$line"
+        id=${line%%[[:space:]]*}
+        expiry=${line#"$id"}
+        expiry=${expiry#"${expiry%%[![:space:]]*}"}
+        expiry=${expiry%%[[:space:]]*}
         y=${expiry%%-*}; md=${expiry#*-}; m=$((10#${md%%-*})); d=$((10#${md#*-}))
         case $m in 1|3|5|7|8|10|12) dim=31 ;; 4|6|9|11) dim=30 ;; 2) dim=28
           if [ $((10#$y % 4)) -eq 0 ] && { [ $((10#$y % 100)) -ne 0 ] || [ $((10#$y % 400)) -eq 0 ]; }; then dim=29; fi ;; *) dim=0 ;; esac
@@ -385,7 +405,7 @@ JS
       covered=0
       for id in $ids; do
         id_upper=$(printf '%s' "$id" | tr '[:lower:]' '[:upper:]')
-        if grep -qxFf "$tmp/allowed" <<< "$id_upper"; then covered=1; break; fi
+        if vgrep "$id_upper" -x -F -f "$tmp/allowed"; then covered=1; break; fi
       done
       [ "$covered" -eq 1 ] || blocked="$blocked${blocked:+$'\n'}  - $pkg: $ids ($sev)"
     done < <(sort -u "$tmp/found")
@@ -397,16 +417,24 @@ JS
     ;;
   workarounds)
     pr_only
-    [ -f scripts/check-workarounds.sh ] || fail "scripts/check-workarounds.sh is missing"
+    gate_script scripts/check-workarounds.sh
     bash scripts/check-workarounds.sh "$base" || fail "this change silences a tool or removes covering tests (output above). Fix the cause; there is no waiver."
     ;;
   diffcover)
     # The CI step runs diff-cover --fail-under=80 and keeps its output in diff-cover.txt; diff-cover exits 0 when the diff has no covered lines, so this gate turns that into a failure whenever measured source changed. Deleted files, files the coverage config leaves out, and files whose added lines are all blank or comment-only have no lines to cover and are skipped.
     pr_only
     changed=$(git diff --name-only --diff-filter=d "$base"...HEAD) || fail "cannot diff against $base"
-    src=$(grep -E '^src/.*[.](py|ts|tsx|js|jsx|mjs|cjs)$' <<< "$changed" | grep -vE '(^|/)(test|tests|__tests__)/|[.](test|spec)[.]|(^|/)test_[^/]*[.]py$|_test[.]py$|[.]d[.]ts$') || src=""
+    if src=$(printf '%s\n' "$changed" | grep -E '^src/.*[.](py|ts|tsx|js|jsx|mjs|cjs)$' | grep -vE '(^|/)(test|tests|__tests__)/|[.](test|spec)[.]|(^|/)test_[^/]*[.]py$|_test[.]py$|[.]d[.]ts$'); then :; else
+      [ "$?" -le 1 ] || fail "grep failed while listing the changed source files"
+      src=""
+    fi
     excl=$(coverage_excludes)
-    if [ -n "$excl" ] && [ -n "$src" ]; then src=$(grep -vE "$excl" <<< "$src") || src=""; fi
+    if [ -n "$excl" ] && [ -n "$src" ]; then
+      if src=$(printf '%s\n' "$src" | grep -vE "$excl"); then :; else
+        [ "$?" -le 1 ] || fail "grep failed while applying the coverage excludes"
+        src=""
+      fi
+    fi
     code=""
     while IFS= read -r f; do
       [ -n "$f" ] || continue
@@ -423,7 +451,7 @@ JS
         code="$code$f
 "
       fi
-    done <<< "$src"
+    done < <(printf '%s\n' "$src")
     src=${code%$'\n'}
     if [ -z "$src" ]; then echo "diffcover: no source file changed that needs coverage (deleted, excluded from coverage, or only comments and blank lines) — skipped"; exit 0; fi
     out=${DIFF_COVER_OUTPUT:-diff-cover.txt}
@@ -434,22 +462,22 @@ JS
     echo "diffcover: the coverage report covers the changed source lines"
     ;;
   supplychain)
-    [ -f scripts/check-supply-chain.sh ] || fail "scripts/check-supply-chain.sh is missing"
+    gate_script scripts/check-supply-chain.sh
     bash scripts/check-supply-chain.sh || fail "supply-chain check failed (output above)."
     ;;
   workflows)
-    [ -f scripts/check-workflows.sh ] || fail "scripts/check-workflows.sh is missing"
+    gate_script scripts/check-workflows.sh
     bash scripts/check-workflows.sh || fail "workflow hardening check failed (output above)."
     ;;
   envexample)
-    [ -f scripts/check-env-example.sh ] || fail "scripts/check-env-example.sh is missing"
+    gate_script scripts/check-env-example.sh
     bash scripts/check-env-example.sh || fail ".env.example drifted from the variables the code reads (output above)."
     ;;
   dockerfile)
     # Bump version and SHA256 together, from the release's checksums.sha256 (hadolint-linux-x86_64)
     HADOLINT_VERSION="2.15.1"
     HADOLINT_SHA256="c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507"
-    [ -f scripts/check-dockerfile.sh ] || fail "scripts/check-dockerfile.sh is missing"
+    gate_script scripts/check-dockerfile.sh
     if ! command -v hadolint >/dev/null 2>&1; then
       if [ "$(uname -s)" != "Linux" ] || [ "$(uname -m)" != "x86_64" ]; then
         fail "hadolint is not installed and this runner is $(uname -s) $(uname -m); the pinned download is Linux x86_64 only. Install hadolint ${HADOLINT_VERSION} on the runner and run again."
@@ -464,33 +492,33 @@ JS
     bash scripts/check-dockerfile.sh || fail "Dockerfile check failed (output above)."
     ;;
   licences)
-    [ -f scripts/check-licences.sh ] || fail "scripts/check-licences.sh is missing"
+    gate_script scripts/check-licences.sh
     bash scripts/check-licences.sh || fail "licence check failed (output above). Install the dependencies first; change .claude/allowed-licences.txt only after a licence review."
     ;;
   commentshape)
     pr_only
-    [ -f scripts/check-comments.sh ] || fail "scripts/check-comments.sh is missing"
+    gate_script scripts/check-comments.sh
     bash scripts/check-comments.sh "$base" || fail "a comment this change adds breaks the comment rules, or the gate could not run (output above). Delete the comment or shorten it to one reason; never add a disable."
     ;;
   duptests)
-    [ -f scripts/check-duplicate-tests.sh ] || fail "scripts/check-duplicate-tests.sh is missing"
+    gate_script scripts/check-duplicate-tests.sh
     bash scripts/check-duplicate-tests.sh || fail "duplicate test cases found, or the gate could not run (output above). Delete the copy or merge the cases into one parameterised test."
     ;;
   exclusions)
-    [ -f scripts/check-exclude-reasons.sh ] || fail "scripts/check-exclude-reasons.sh is missing"
+    gate_script scripts/check-exclude-reasons.sh
     bash scripts/check-exclude-reasons.sh || fail "a coverage, Sonar or mutation exclude has no reason, hides a whole source scope, or could not be read (output above). Write a reason: line above it, or remove the exclude."
     ;;
   sbom)
-    [ -f scripts/generate-sbom.sh ] || fail "scripts/generate-sbom.sh is missing"
+    gate_script scripts/generate-sbom.sh
     bash scripts/generate-sbom.sh || fail "SBOM generation failed (output above). Install the dependencies first."
     ;;
   changesize)
     pr_only
-    [ -f scripts/check-change-size.sh ] || fail "scripts/check-change-size.sh is missing"
+    gate_script scripts/check-change-size.sh
     bash scripts/check-change-size.sh "$base" || fail "this change is over the size budget, or could not be measured (output above). Split it into smaller reviewed changes."
     ;;
   bundle)
-    [ -f scripts/check-bundle-size.sh ] || fail "scripts/check-bundle-size.sh is missing"
+    gate_script scripts/check-bundle-size.sh
     # --build deletes dist and .next in the frontend folder (BUNDLE_DIR, else the current one) and builds there, then measures; a project with no Next.js or Vite config skips with a reason. The pre-push hook runs the same command.
     bash scripts/check-bundle-size.sh --build || fail "bundle size check failed (output above). Lazy-load heavy routes or drop the large dependency; raise .claude/bundle-budget.txt only after a human decision."
     ;;

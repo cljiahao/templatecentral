@@ -46,6 +46,13 @@ die() {
   exit 2
 }
 
+# A helper must be a regular file with content: a link can point anywhere and an empty reader judges nothing.
+need_helper() {
+  [ ! -L "$1" ] || die "$1 is a symlink; restore the file itself"
+  [ -f "$1" ] || die "$1 is missing"
+  grep '[^[:space:]]' "$1" > /dev/null || die "$1 holds no content or cannot be read"
+}
+
 abs_dir() {
   if [ -d "$1" ]; then (cd "$1" && pwd); else return 1; fi
 }
@@ -73,6 +80,7 @@ if [ -n "$ts_from" ]; then ts_from=$(abs_dir "$ts_from") || die "--ts-from folde
 for tool in awk sort mktemp rm find; do
   command -v "$tool" > /dev/null 2>&1 || die "missing tool: $tool"
 done
+for helper in check-comments.mjs check-comments.py check-comments.licences.txt; do need_helper "$here/$helper"; done
 wd=$(mktemp -d "${TMPDIR:-/tmp}/check-comments.XXXXXX") || die "cannot create a temp folder"
 trap 'rm -rf "$wd"' EXIT
 specs=$wd/specs
@@ -171,7 +179,7 @@ else
   git rev-parse --verify -q "$ref^{commit}" > /dev/null 2>&1 || die "base ref not found: $ref. Fix: fetch it (CI needs fetch-depth: 0)."
   mb=$(git merge-base "$ref" HEAD 2> /dev/null) || die "no merge base between $ref and HEAD. Fix: fetch full history (CI needs fetch-depth: 0)."
   head_sha=$(git rev-parse HEAD 2> /dev/null) || die "cannot read HEAD"
-  git -c core.quotePath=false diff --relative --src-prefix=a/ --dst-prefix=b/ --no-color --no-ext-diff -U0 -M --diff-filter=AMR "$mb" -- . > "$wd/diff" 2> "$wd/diff.err" || die "git diff failed: $(head -n 1 "$wd/diff.err")"
+  git -c core.quotePath=false diff --relative --src-prefix=a/ --dst-prefix=b/ --no-color --no-ext-diff --no-textconv --text -U0 -M --diff-filter=AMR "$mb" -- . > "$wd/diff" 2> "$wd/diff.err" || die "git diff failed: $(head -n 1 "$wd/diff.err")"
   awk '
     /^diff --git / { hdr = 1; f = ""; next }
     hdr && /^\+\+\+ / {

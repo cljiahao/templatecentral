@@ -53,7 +53,6 @@ def configure_exceptions(app: FastAPI) -> None:
             content={"detail": str(exc)},
         )
 
-
     @app.exception_handler(RequestValidationError)
     async def validation_handler(
         request: Request, exc: RequestValidationError

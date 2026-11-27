@@ -57,6 +57,14 @@ die() {
   exit 2
 }
 
+# 0 when the file has a line matching the pattern, 1 when none does, and a read error stops the run.
+file_has() {
+  local frc=0
+  grep -aE "$1" "$2" > /dev/null || frc=$?
+  [ "$frc" -le 1 ] || die "cannot read $2"
+  return "$frc"
+}
+
 # Framework default excludes: entries the tools apply themselves. They need no reason. This is the only list; the scanners receive
 # it through TC_EXCLUDE_DEFAULTS. Only test files, test folders, type declarations, root tool config files and root-anchored
 # dependency and build output are here, because none of them can hide hand-written source. Anything else needs a reason.
@@ -168,6 +176,11 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2> /dev/null && pwd) || die "cann
 TARGET=${TARGET:-.}
 [ -d "$TARGET" ] || die "not a folder: $TARGET"
 cd "$TARGET" 2> /dev/null || die "cannot enter $TARGET"
+for helper in check-exclude-rules.sh check-exclude-reasons.awk check-exclude-reasons.mjs check-exclude-reasons.py; do
+  [ ! -L "$here/$helper" ] || die "$here/$helper is a symlink; restore the file itself"
+  [ -f "$here/$helper" ] || die "$here/$helper is missing"
+  grep '[^[:space:]]' "$here/$helper" > /dev/null || die "$here/$helper holds no content or cannot be read"
+done
 for tool in find awk; do
   command -v "$tool" > /dev/null 2>&1 || die "missing tool: $tool"
 done
@@ -266,7 +279,7 @@ while IFS= read -r f; do
   case "$base" in
     *.properties)
       # Any properties file that holds a sonar. key is a Sonar config, whatever its name (.sonarcloud.properties, sonar.properties).
-      if [ -f "$f" ] && ! [ -L "$f" ] && grep -qaE '^[[:space:]]*sonar\.[A-Za-z]' "$f" 2> /dev/null; then add_config "$f" || true; fi
+      if [ -f "$f" ] && ! [ -L "$f" ] && file_has '^[[:space:]]*sonar\.[A-Za-z]' "$f"; then add_config "$f" || true; fi
       ;;
   esac
   case "$base" in
@@ -387,7 +400,7 @@ $out"
     needs=
     for f in "${py_files[@]}"; do
       case "${f##*/}" in .jscpd.json) needs=$f ;; esac
-      if grep -qE 'coverage|mutmut' "$f" 2> /dev/null; then needs=$f; fi
+      if file_has 'coverage|mutmut' "$f"; then needs=$f; fi
     done
     if [ -n "$needs" ]; then bad "$needs cannot be read because python3 is not installed. $SUPPORTED"; fi
   fi
@@ -499,7 +512,7 @@ nconf=$((${#py_files[@]} + ${#prop_files[@]} + ${#link_files[@]} + ${#other_file
 if [ "${#js_files[@]}" -gt 0 ]; then
   for f in "${js_files[@]}"; do
     case "${f##*/}" in
-      package.json) if grep -qE '"(jest|nyc|c8|stryker|jscpd)"' "$f" 2> /dev/null; then nconf=$((nconf + 1)); fi ;;
+      package.json) if file_has '"(jest|nyc|c8|stryker|jscpd)"' "$f"; then nconf=$((nconf + 1)); fi ;;
       *) nconf=$((nconf + 1)) ;;
     esac
   done

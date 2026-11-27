@@ -1445,7 +1445,7 @@ while IFS= read -r path; do
     printf 'WEAKENED %s: new config file competes with a ratcheted one (%s)\n' "$path" "$why"
     weakened=1
   fi
-done <<< "$added"
+done < <(printf '%s\n' "$added")
 
 if [ "$weakened" -eq 1 ]; then
   echo "gate-ratchet: FAIL, a gate is weaker than at the merge base ($checked config files compared)"
