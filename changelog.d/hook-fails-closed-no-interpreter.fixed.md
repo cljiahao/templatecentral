@@ -1,0 +1,1 @@
+- `block-no-verify.sh` now refuses the command with one line naming `node` or `python3` when that interpreter is missing, instead of letting it through. It also reads backslash-escaped tokens (`--no-ver\ify`), judges `xargs -I{} sh -c` text that names a hook bypass, and covers `doas`, `ionice` and `setsid` as wrappers.

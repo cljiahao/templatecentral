@@ -237,8 +237,8 @@ json_has() {
 
 # ── Twin drift ────────────────────────────────────────────────────────────────
 
-# strip_json <file>: the hook without its JSON-extraction statement (one node line in the TS twin, three python3 lines in the FastAPI twin).
-strip_json() { awk '/^(cmd|in_cwd|file)=\$\(printf .%s. "\$input" \| (node -e|python3 -I -c)/ { skip = 1 } skip { if ($0 ~ /2>\/dev\/null\)$/) skip = 0; next } /^  (node -e|python3 -I -c) / { next } { print }' "$1"; }
+# strip_json <file>: the hook without its JSON-extraction statement (one node line in the TS twin, several python3 lines in the FastAPI twin).
+strip_json() { awk '/^(cmd|in_cwd|file|parsed)=\$\(printf .%s. "\$input" \| (node -e|python3 -I -c)/ { skip = 1 } skip { if ($0 ~ /2>\/dev\/null\)( \|\| .*)?$/) skip = 0; next } /^  (node -e|python3 -I -c) / { next } { print }' "$1"; }
 # drift_ok <ts file> <py file>: same text once the JSON extraction is stripped, and the strip kept at least 90% of the lines.
 drift_ok() {
   local a b total kept
@@ -382,6 +382,18 @@ git checkout HEAD .claude
 rm -rf src
 rm -rf ./src/
 rm -fr .claude
+git commit --no-ver\ify -m x
+git commit --no-v\erify -m x
+git -c core.hooks\Path=/dev/null commit -m x
+echo 'git commit --no-verify -m x' | xargs -I{} sh -c '{}'
+echo 'git commit -n -m x' | xargs -I % bash -c '%'
+echo 'git -c core.hooksPath=/dev/null commit -m x' | xargs -I{} sh -c '{}'
+doas git commit --no-verify -m x
+ionice -c3 git commit --no-verify -m x
+setsid git commit --no-verify -m x
+sudo env nice git commit --no-verify -m x
+sudo doas nice ionice setsid nohup git commit -n -m x
+bash -c 'doas setsid git commit -n -m x'
 CASES
 
 while IFS= read -r c; do
@@ -413,12 +425,55 @@ git checkout -b newbranch
 git restore src/app.ts
 git -C sub log -n 5
 echo "LEFTHOOK is cool"
+echo 'git status' | xargs -I{} sh -c '{}'
+doas git status
+sudo env nice git log -n 3
 git merge feat
 git rebase main
 grep -rn "no-verify" docs
 git commit -m "Q"
 node -e "console.log(1)"
 CASES
+
+# The verdict must not depend on the machine: a missing JSON reader blocks, an unwritable TMPDIR does not open the gate, and a 70 KB command is judged whole.
+NVB=$(mktemp -d "$T/nvbin.XXXXXX")
+NVRO=$(mktemp -d "$T/nvro.XXXXXX")
+chmod 555 "$NVRO"
+for tool in cat awk sed grep tr git cut head bash; do ln -s "$(command -v "$tool")" "$NVB/$tool"; done
+BASH_BIN=$(command -v bash)
+# nv_env <hook> <dir> <json> [VAR=value ...]: runs the hook with extra environment, as run_hook does.
+nv_env() {
+  local hook=$1 dir=$2 json=$3
+  shift 3
+  printf '%s' "$json" > "$T/stdin"
+  OUT=$(cd / && env "$@" CLAUDE_PROJECT_DIR="$dir" "$BASH_BIN" "$hook" < "$T/stdin" 2>"$T/err")
+  EC=$?
+}
+for v in ts py; do
+  if [[ $v == ts ]]; then interp=node; else interp=python3; fi
+  json=$(tool_json Bash command 'git status')
+  nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json" PATH="$NVB"
+  check "2 yes" "$EC $(ok_if grep -q "needs $interp" "$T/err")" "block-no-verify.$v blocks with one line naming $interp when it is missing"
+  ln -s "$(command -v "$interp")" "$NVB/$interp"
+  nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json" PATH="$NVB"
+  check 0 "$EC" "block-no-verify.$v passes git status when $interp is on the PATH (control)"
+  rm -f "$NVB/$interp"
+  json=$(tool_json Bash command 'git commit --no-verify -m x')
+  nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json" TMPDIR="$NVRO"
+  check 2 "$EC" "block-no-verify.$v still blocks --no-verify with TMPDIR read-only"
+  nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json" TMPDIR="$T"
+  check 2 "$EC" "block-no-verify.$v blocks --no-verify with TMPDIR writable (control)"
+  json=$(tool_json Bash command 'git status && git log -n 3')
+  nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json" TMPDIR="$NVRO"
+  check 0 "$EC" "block-no-verify.$v passes an ordinary command with TMPDIR read-only"
+  big=$(head -c 70000 /dev/zero | tr '\0' x)
+  json=$(tool_json Bash command "git commit --no-verify -m $big")
+  nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json"
+  check 2 "$EC" "block-no-verify.$v blocks --no-verify in a 70 KB command"
+  json=$(tool_json Bash command "echo $big")
+  nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json"
+  check 0 "$EC" "block-no-verify.$v passes a 70 KB echo (control)"
+done
 
 # Interpreter wrappers and shells fed from sources the hook cannot read (inline code is scanned as text; blind shells are blocked).
 SEC=$(new_repo feat)

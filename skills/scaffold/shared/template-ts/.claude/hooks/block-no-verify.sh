@@ -6,9 +6,10 @@
 # code fed to an interpreter on stdin or from a heredoc (python3 <<EOF, node - <<EOF), argument shapes where the word after git is not the
 # subcommand (os.execvp('git', [...]), ['git'] + [...], Deno {args: [...]}, sh.git.commit(...)), file-by-file removal (os.remove loops,
 # Path.rmdir, os.removedirs), a secret name with no leading dot or slash inside inline code when the file does not exist, a shell reached
-# through a program not known as a wrapper (busybox sh, doas sh, setsid sh, $SHELL, ssh host sh, docker exec -i c sh, kubectl exec), a command that reaches
-# sh -c through an xargs placeholder or a variable (xargs -I{} sh -c '{}', sh -c "$CMD"), runners other than the listed interpreters (npx tsx -e), and a removal target built by a call (path.join(root, 'src')) or an aliased import (from shutil import rmtree as r).
-# Everything else on the list below is judged.
+# through a program not known as a wrapper (busybox sh, $SHELL, ssh host sh, docker exec -i c sh, kubectl exec), a command built at run time from a file or
+# variable (sh ./x.sh, sh -c "$CMD"), an alias or shell function defined earlier, a binary that calls git itself, edits made outside the agent, runners other than the listed interpreters (npx tsx -e), and a removal target built by a call (path.join(root, 'src')) or an aliased import (from shutil import rmtree as r).
+# Everything else on the list below is judged. An unreadable shape (xargs handing a placeholder to sh -c) with a forbidden token anywhere in the command is blocked.
+# Wrappers judged: sudo doas env nice ionice nohup setsid time timeout stdbuf xargs command exec builtin, alone or stacked; quoted and backslash-escaped tokens count as written.
 # A shell in command position that the guard sees fed from a pipe, here-string, heredoc, `-s` or process substitution is blocked outright
 # (even `echo hi | sh`), also behind the wrappers sudo, command, exec, nohup, time, nice, builtin, env, timeout, stdbuf, xargs and uv/poetry/pipenv/pdm run,
 # a leading FOO=1, ( ) or { }, and with a trailing redirect or comment. xargs sh script passes (the shell gets arguments); xargs sh -c with no readable string is blocked.
@@ -18,9 +19,10 @@
 orig_dir=$PWD
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || { echo "BLOCKED: block-no-verify.sh cannot cd to the project root — refusing the command." >&2; exit 2; }
 input=$(cat)
-cmd=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{process.stdout.write(((JSON.parse(b||'{}').tool_input)||{}).command||'')}catch(e){process.stdout.write('')}})" 2>/dev/null)
-# The hook input's cwd is where the command runs, so a bare git commit resolves that worktree's branch.
-in_cwd=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{process.stdout.write(JSON.parse(b||'{}').cwd||'')}catch(e){process.stdout.write('')}})" 2>/dev/null)
+# One interpreter call yields the cwd (first line) and the command; a missing or failing interpreter blocks instead of passing.
+parsed=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{let o={};try{o=JSON.parse(b||'{}')}catch(e){}if(!o||typeof o!=='object')o={};const t=o.tool_input&&typeof o.tool_input==='object'?o.tool_input:{};process.stdout.write(String(o.cwd||'').replace(/[\\r\\n]/g,'')+'\\n'+String(t.command||''))})" 2>/dev/null) || { echo "BLOCKED: block-no-verify.sh needs node to read the hook input and node is missing or failed — refusing the command." >&2; exit 2; }
+in_cwd=${parsed%%$'\n'*}
+cmd=${parsed#*$'\n'}
 [ -n "$in_cwd" ] && orig_dir=$in_cwd
 [ -z "$cmd" ] && exit 0
 # Drop heredoc bodies so commit-message text is not scanned as a command; the opening line is still scanned.
@@ -33,6 +35,8 @@ cmd=$(printf '%s\n' "$cmd" | awk '
 cut200() { S=$1 LC_ALL=C awk 'function ucut(s, n) { if (length(s) <= n) return s; s = substr(s, 1, n); sub(/[\300-\337]$/, "", s); sub(/[\340-\357][\200-\277]?$/, "", s); sub(/[\360-\367]([\200-\277]([\200-\277])?)?$/, "", s); return s } BEGIN { printf "%s", ucut(ENVIRON["S"], 200) }' || printf 'BLOCKED'; }
 # block <message>: message capped at 200 bytes.
 block() { echo "$(cut200 "BLOCKED: $1")" >&2; exit 2; }
+# words <text>: splits on blanks into the array t without a here-string, whose temp file can fail to open and read as empty.
+words() { set -f; t=($1); set +f; }
 protected='main|uat|develop'
 root=$PWD
 # Shell access to secret files: Read deny rules gate the Read tool, not cat. A read is blocked when the named file exists; a write or copy that would create one is blocked outright. Env templates stay usable.
@@ -84,11 +88,11 @@ secret_guard() {
       hits=$(cd "$d" 2>/dev/null && compgen -G "$tok_d")
       while IFS= read -r f; do
         [ -n "$f" ] && is_secret "$f" && secret_block "$f"
-      done <<< "$hits"
+      done < <(printf '%s\n' "$hits")
     done
     if [[ "$tok" != *[*?[]* ]] && is_secret "$tok" && writes_to_secret "$tok"; then secret_block "$tok"; fi
     if [[ "$tok" == *:* ]] && is_secret "${tok#*:}" && [[ "$flat" =~ (^|[[:space:]\;\&\|\(])git[[:space:]]+([^;&|]*[[:space:]])?(show|cat-file|archive|blame|grep|log|diff)[[:space:]] ]]; then secret_block "${tok#*:}"; fi
-  done <<< "$tokens"
+  done < <(printf '%s\n' "$tokens")
 }
 secret_guard
 # Directories a bare commit/push may land on: the cwd plus literal cd targets; anything unresolved adds the project root.
@@ -141,13 +145,14 @@ scan=$(printf '%s' "$cmd" | sed -E \
   -e "s/(^|[[:space:];&|(])(bash|sh|zsh|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+\"([^\"]*)\"/\1 \4 /g" \
   -e "s/(^|[[:space:];&|(])(bash|sh|zsh|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+${sq}([^${sq}]*)${sq}/\1 \4 /g" \
   -e "s/\"([^\"${sq}[:space:]|;\&<>()]+)\"/\1/g" -e "s/\"[^\"]*\"/ Q /g" \
-  -e "s/${sq}([^${sq}[:space:]|;\&<>()]+)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g")
+  -e "s/${sq}([^${sq}[:space:]|;\&<>()]+)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g" \
+  -e 's/\\([A-Za-z0-9_.-])/\1/g')
 
 # Command position: line start, after ; & | ( { or a backtick, or after then/do/else; wrappers that run the next word (sudo, env, xargs, nohup, uv run) may follow.
 cpos='(^|[;&|(`{]|(^|[[:space:]])(then|do|else))[[:space:]]*'
 # Wrapper tokens, defined once. Leading assignments (FOO=1 cmd) may precede a wrapper chain; a wrapper takes flags, a value after a known value flag (sudo -u root, nice -n 5, xargs -I {}, uv run --with x), a duration (timeout 5) or an assignment.
 asg='[A-Za-z_][A-Za-z0-9_]*=([[:space:]]+Q)?[^[:space:]]*'
-wnames='sudo|command|exec|nohup|time|nice|builtin|env|timeout|stdbuf|(uv|poetry|pipenv|pdm)[[:space:]]+run'
+wnames='sudo|doas|command|exec|nohup|time|nice|ionice|setsid|builtin|env|timeout|stdbuf|(uv|poetry|pipenv|pdm)[[:space:]]+run'
 wargs="([[:space:]]+(-[^[:space:]]+|-[uginIPLdsCkUDtEaoe][[:space:]]+[^-[:space:]][^[:space:]]*|--[A-Za-z-]+[[:space:]]+[^-[:space:]][^[:space:]]*|${asg}|[0-9][0-9.]*[smhd]?))*"
 wrap_nx="(${asg}[[:space:]]+)*((/[^[:space:]]*/)?(${wnames})${wargs}[[:space:]]+)*"
 wrap="(${asg}[[:space:]]+)*((/[^[:space:]]*/)?(${wnames}|xargs)${wargs}[[:space:]]+)*"
@@ -166,6 +171,13 @@ blind_shell() {
 }
 if blind_shell; then
   block "a shell fed from a pipe, stdin, here-string, heredoc or process substitution hides its commands from this guard. Run the commands directly."
+fi
+# A shell or interpreter reached through xargs runs text this guard cannot see (xargs -I{} sh -c '{}'); with a forbidden token anywhere in the command that shape is blocked.
+norm=$(printf '%s' "$cmd" | tr -d "\\\\\"'" | tr '[:upper:]' '[:lower:]')
+if [[ "$norm" =~ (^|[^a-z0-9_-])xargs([[:space:]]|$) ]] \
+  && [[ "$norm" =~ (^|[^a-z0-9_-])(bash|sh|zsh|dash|ksh|eval|python[0-9.]*|node|perl|ruby)[[:space:]]+-[a-z]*[cep]([[:space:]]|$) ]] \
+  && printf '%s\n' "$norm" | grep -qE 'no-veri|hookspath|lefthook(_exclude)?=|git[[:space:]]+([^;&|]*[[:space:]])?(commit|push)[^;&|]*[[:space:]]-[a-z]*n'; then
+  block "xargs hands text to a shell or interpreter this guard cannot read, and the command names a hook bypass (--no-verify, -n, core.hooksPath, LEFTHOOK). Run the git command directly."
 fi
 # Inline interpreter code is judged as text: the interpreter must be in command position, so a commit message or grep pattern naming python -c is not code; then quotes and brackets become spaces and the checks below treat it as a command line.
 interp=""
@@ -210,7 +222,7 @@ collect_dirs() {
   local seg p q w d n i
   local -a t
   while IFS= read -r seg; do
-    read -ra t <<< "$seg"
+    words "$seg"
     n=${#t[@]}; i=0
     while [ "$i" -lt "$n" ]; do
       w="${t[$i]#\\}"
@@ -237,7 +249,7 @@ collect_dirs() {
           done ;;
       esac
     done
-  done <<< "$segments"
+  done < <(printf '%s\n' "$segments")
 }
 # `name() { … }` defines a function whose body may cd where this check cannot follow.
 printf '%s' "$scan" | grep -qE '(^|[^A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*\(\)' && redir=1
@@ -257,7 +269,7 @@ chain_dirs() {
   [[ "$chk" == *[\;\|\&\(\)\`]* || "$chk" == *$'\n'* ]] && return 1
   cur=$orig_dir
   while IFS= read -r seg; do
-    read -ra t <<< "$seg"
+    words "$seg"
     [ "${#t[@]}" -eq 0 ] && continue
     first="${t[0]#\\}"
     if [[ "$first" == cd || "$first" == pushd ]]; then
@@ -277,16 +289,16 @@ chain_dirs() {
     else
       for w in "${t[@]}"; do [[ "${w#\\}" == git || "${w#\\}" == */git ]] && return 1; done
     fi
-  done <<< "${scan//&&/$'\n'}"
+  done < <(printf '%s\n' "${scan//&&/$'\n'}")
   [ "$sawgit" -eq 1 ] || return 1
   printf '%s\n' "${out[@]}"
 }
 if [ "$redir" -eq 0 ] && chain_out=$(chain_dirs); then
   cand=()
-  while IFS= read -r d; do cand+=("$d"); done <<< "$chain_out"
+  while IFS= read -r d; do cand+=("$d"); done < <(printf '%s\n' "$chain_out")
 fi
 while IFS= read -r seg; do
-  read -ra t <<< "$seg"
+  words "$seg"
   n=${#t[@]}; i=0
   while [ "$i" -lt "$n" ]; do
     w="${t[$i]#\\}"
@@ -383,7 +395,7 @@ while IFS= read -r seg; do
         block "'git checkout/restore' on a guard-layer file discards enforcement config. Confirm with a human first."
       fi ;;
   esac
-done <<< "$segments"
+done < <(printf '%s\n' "$segments")
 
 # Guarded source directories, defined once for the rm check and the interpreter removal check.
 srcnames='src|app|lib|test|\.claude|\.lefthook|\.git|node_modules'
