@@ -302,6 +302,15 @@ run "$T/rtc4.tsv"
 check 1 "$EC" "a partial type-aware row still needs the rule on where types are available"
 has "is off in nestjs" "$OUT" "type-aware stack must enable the rule"
 
+fresh_root layers_import_known
+run "$T/rtc4.tsv"
+check 0 "$EC" "control: the seeded layers.config.mjs import resolves ($OUT)"
+fresh_root layers_import_other
+edit "$SC/nestjs/template/eslint.config.mjs" "s.replace(\"'./layers.config.mjs'\", \"'./other.mjs'\")"
+run "$T/rtc4.tsv"
+check 1 "$EC" "a layer config imported from any other file is not read"
+has "not a known config preset" "$OUT" "the unknown import is named as unknown"
+
 # --- Sonar metadata: type and title come from the sonar-rules snapshot; a key it lacks must say unverified
 fresh_root meta_name
 { control; row ts typescript:S1481 "code smell" covered sonarjs/no-unused-vars ""; } > "$T/meta1.tsv"

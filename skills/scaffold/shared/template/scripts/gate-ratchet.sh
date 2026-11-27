@@ -61,7 +61,7 @@ fi
 kind_of() {
   case "$1" in
     .jscpd.json | */.jscpd.json) KIND=jscpd ;;
-    eslint.config.* | */eslint.config.*) KIND=eslint ;;
+    eslint.config.* | */eslint.config.* | layers.config.mjs | */layers.config.mjs) KIND=eslint ;;
     vitest.config.* | vite.config.* | vitest.workspace.* | */vitest.config.* | */vite.config.* | */vitest.workspace.*) KIND=vitest ;;
     sonar-project.properties | */sonar-project.properties) KIND=sonar ;;
     package.json | */package.json) KIND=pkgjson ;;

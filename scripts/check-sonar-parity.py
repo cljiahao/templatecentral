@@ -38,6 +38,8 @@ PRESETS = {
         (None, ("@eslint-community/eslint-comments/",)),
     ("eslint-plugin-no-unsanitized", "configs.recommended"): (None, ("no-unsanitized/",)),
     ("eslint-plugin-react-hooks", "configs.recommended.rules"): (None, ("react-hooks/",)),
+    ("eslint-plugin-jsx-a11y", "flatConfigs.recommended.rules"): ("jsx-a11y-recommended", ()),
+    ("./layers.config.mjs", ""): (None, ("no-restricted-imports", "no-restricted-syntax")),
 }
 
 

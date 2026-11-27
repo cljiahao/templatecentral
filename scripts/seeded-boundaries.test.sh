@@ -175,8 +175,9 @@ export const y = z;" "app may import only" layers
   tsc_probe "$D" "$st unchecked index" "export const first = (xs: string[]): number => xs[0].length;" "probe-types.ts" noUncheckedIndexedAccess
   tsc_probe "$D" "$st missing override" "class Base { run(): void {} }
 export class Sub extends Base { run(): void {} }" "TS4114" noImplicitOverride
-  ratchet_probe "$D" "$st a11y preset dropped" "sed -i.bak \"s|rules: jsxA11y.flatConfigs.recommended.rules }|rules: {} }|\" eslint.config.mjs && rm eslint.config.mjs.bak"
-  ratchet_probe "$D" "$st layer blocks dropped" "sed -i.bak 's|^  ...LAYERS.flatMap(layerBlocks),||' eslint.config.mjs && rm eslint.config.mjs.bak"
+  ratchet_probe "$D" "$st a11y preset dropped" "sed -i.bak \"s|rules: { ...jsxA11y.flatConfigs.recommended.rules } }|rules: {} }|\" eslint.config.mjs && rm eslint.config.mjs.bak"
+  ratchet_probe "$D" "$st layer blocks dropped" "sed -i.bak 's|^  ...layers,||' eslint.config.mjs && rm eslint.config.mjs.bak"
+  ratchet_probe "$D" "$st layer rule turned off" "sed -i.bak \"s|'no-restricted-imports': \\['error'|'no-restricted-imports': ['off'|\" layers.config.mjs && rm layers.config.mjs.bak"
   ratchet_probe "$D" "$st path-wide ignore" "sed -i.bak \"s|^const config = \[|const config = [ { ignores: ['src/**'] },|\" eslint.config.mjs && rm eslint.config.mjs.bak"
   ratchet_probe "$D" "$st type flag removed" "sed -i.bak '/noUncheckedIndexedAccess/d' tsconfig.json && rm tsconfig.json.bak"
   ratchet_probe "$D" "$st type flag turned off" "sed -i.bak 's/\"noImplicitOverride\": true/\"noImplicitOverride\": false/' tsconfig.json && rm tsconfig.json.bak"
@@ -203,7 +204,8 @@ export const y = z;" "pages may import only" layers
   tsc_probe "$D" "$st missing override" "class Base { run(): void {} }
 export class Sub extends Base { run(): void {} }" "TS4114" noImplicitOverride
   ratchet_probe "$D" "$st a11y preset dropped" "sed -i.bak 's|^      ...jsxA11y.flatConfigs.recommended.rules,||' eslint.config.mjs && rm eslint.config.mjs.bak"
-  ratchet_probe "$D" "$st layer blocks dropped" "sed -i.bak 's|^  ...LAYERS.flatMap(layerBlocks),||' eslint.config.mjs && rm eslint.config.mjs.bak"
+  ratchet_probe "$D" "$st layer blocks dropped" "sed -i.bak 's|^  ...layers,||' eslint.config.mjs && rm eslint.config.mjs.bak"
+  ratchet_probe "$D" "$st layer rule turned off" "sed -i.bak \"s|'no-restricted-imports': \\['error'|'no-restricted-imports': ['off'|\" layers.config.mjs && rm layers.config.mjs.bak"
   ratchet_probe "$D" "$st type flag turned off" "sed -i.bak 's/\"noImplicitOverride\": true/\"noImplicitOverride\": false/' tsconfig.json && rm tsconfig.json.bak"
   workaround_probe "$D" "$st inline a11y disable" src/probe-disable.tsx "export const A = () => <img src=\"/a.png\" />; // eslint-disable-line jsx-a11y/alt-text"
 fi
@@ -226,7 +228,8 @@ export const y = ExampleRepository;" "module may import only common, config" lay
 export class Sub extends Base { run(): void {} }" "TS4114" noImplicitOverride
   tsc_probe "$D" "$st index-signature dot access" "const m: Record<string, string> = {};
 export const v = m.key;" "TS4111" noPropertyAccessFromIndexSignature
-  ratchet_probe "$D" "$st layer blocks dropped" "sed -i.bak 's|^  ...LAYERS.flatMap(layerBlocks),||' eslint.config.mjs && rm eslint.config.mjs.bak"
+  ratchet_probe "$D" "$st layer blocks dropped" "sed -i.bak 's|^  ...layers,||' eslint.config.mjs && rm eslint.config.mjs.bak"
+  ratchet_probe "$D" "$st layer rule turned off" "sed -i.bak \"s|'no-restricted-imports': \\['error'|'no-restricted-imports': ['off'|\" layers.config.mjs && rm layers.config.mjs.bak"
   ratchet_probe "$D" "$st type flag removed" "sed -i.bak '/noUncheckedIndexedAccess/d' tsconfig.json && rm tsconfig.json.bak"
   workaround_probe "$D" "$st inline layer-rule disable" src/probe-disable.ts "import { x } from './modules/example/example.service'; // eslint-disable-line no-restricted-imports"
 fi

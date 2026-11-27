@@ -1,0 +1,1 @@
+- The seeded eslint config reads layer rules from a separate `layers.config.mjs`, spreads the jsx-a11y recommended rules, and the Sonar parity check knows both as read presets.

@@ -6,59 +6,9 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import sonarjs from 'eslint-plugin-sonarjs';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import layers from './layers.config.mjs';
 
 const sonarjsPlugin = sonarjs.configs.recommended.plugins.sonarjs;
-
-// Layer allow-list for docs/architecture.md: one entry per layer, naming every `@/` layer it may import.
-const MAX_DEPTH = 5;
-const SLASH = String.raw`\x2f`;
-const LAYERS = [
-  { name: 'pages', unit: 'src/pages', allow: 'pages|components|lib', features: true },
-  { name: 'feature', unit: 'src/features/*', allow: 'components|lib', features: true },
-  { name: 'components', unit: 'src/components/*', allow: 'components|lib' },
-  { name: 'app shell', unit: 'src/components/layout', allow: 'components|lib', features: true },
-  { name: 'lib', unit: 'src/lib', allow: 'lib' },
-  { name: 'hooks', unit: 'src/hooks', allow: 'hooks|lib' },
-  {
-    name: 'src root',
-    unit: 'src',
-    allow: 'app|router|pages|components|lib|styles',
-    features: true,
-    depth: 0,
-  },
-];
-
-// One block per file depth, so a relative import may climb only as far as its own layer folder.
-// no-restricted-imports skips import(), so the same two regexes also feed a no-restricted-syntax selector (`\x2f` is `/`, which esquery cannot hold).
-const layerBlocks = ({ name, unit, allow, features, depth = MAX_DEPTH }) =>
-  Array.from({ length: depth + 1 }, (_, d) => {
-    const index = features ? '|features/[^/]+$' : '';
-    const viaIndex = features ? ' and a feature through its index (@/features/<name>)' : '';
-    const named = allow.split('|').join(', @/');
-    const rules = [
-      {
-        regex: `^@/(?!(?:${allow})(?:/|$)${index})`,
-        message: `Layer rule (docs/architecture.md): ${name} may import only @/${named}${viaIndex}.`,
-      },
-      {
-        regex: `^(?:\\.\\./){${d + 1}}`,
-        message: `Layer rule (docs/architecture.md): a relative import may not leave its ${name} folder; reach another layer through the @/ alias.`,
-      },
-    ];
-    return {
-      files: [`${unit}/${'*/'.repeat(d)}${d === MAX_DEPTH ? '**/' : ''}*.{ts,tsx}`],
-      rules: {
-        'no-restricted-imports': ['error', { patterns: rules }],
-        'no-restricted-syntax': [
-          'error',
-          ...rules.map(({ regex, message }) => ({
-            selector: `ImportExpression[source.value=/${regex.replaceAll('/', SLASH)}/]`,
-            message,
-          })),
-        ],
-      },
-    };
-  });
 
 export default tseslint.config(
   // The seeded gate helpers are guarded harness files that nobody may edit, so lint cannot be satisfied.
@@ -77,7 +27,7 @@ export default tseslint.config(
     },
   },
   eslintComments.recommended,
-  ...LAYERS.flatMap(layerBlocks),
+  ...layers,
   // innerHTML, outerHTML, insertAdjacentHTML and document.write take only DOMPurify or Trusted Types sanitized input.
   noUnsanitized.configs.recommended,
   {
@@ -140,7 +90,7 @@ export default tseslint.config(
     rules: { 'no-restricted-exports': ['error', { restrictDefaultExports: { direct: true } }] },
   },
   {
-    // shadcn/ui primitives are generated; these rules cannot be fixed without diverging from shadcn add output (input-group).
+    // shadcn/ui primitives are generated and cannot follow these rules without diverging from shadcn add output.
     files: ['src/components/ui/**/*.tsx'],
     plugins: { sonarjs: sonarjsPlugin },
     rules: {

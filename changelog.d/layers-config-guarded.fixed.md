@@ -1,0 +1,1 @@
+- The seeded ratchet and protect-files hook guard `layers.config.mjs` like the eslint config, so turning a layer rule off or editing the file is refused.
