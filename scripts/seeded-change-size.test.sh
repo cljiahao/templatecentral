@@ -677,6 +677,24 @@ has "ok (52 lines in 2 files" "$OUT" "subfolder run counts the root and the subf
 run "$D/pkg" BASE_REF=main CHANGE_SIZE_MAX_LINES=10
 check 1 "$EC" "a subfolder run honours a budget override ($OUT)"
 
+# git settings that rewrite diff output (color, external diff) must not change the count.
+repo diffcfg
+lines 10 "$D/a.txt"
+base_commit
+lines 14 "$D/a.txt"
+commit_all
+run "$D" BASE_REF=main
+plain_out=$OUT
+cat > "$T/extdiff.sh" << 'EOS'
+#!/bin/sh
+echo external
+EOS
+chmod +x "$T/extdiff.sh"
+for cfg in color.diff=always color.ui=always "diff.external=$T/extdiff.sh"; do
+  run "$D" BASE_REF=main GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="${cfg%%=*}" GIT_CONFIG_VALUE_0="${cfg#*=}"
+  check "$plain_out" "$OUT" "git setting ${cfg%%=*} does not change the weight"
+done
+
 # Real run: a freshly scaffolded nextjs project, committed as the base, then one real edit.
 D="$T/real"
 mkdir -p "$D"
