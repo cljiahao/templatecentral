@@ -447,16 +447,26 @@ report_fails() {
   done < "$1"
 }
 
+# Sets CHILD_CPU to the whole CPU seconds, rounded up, that this shell's finished children have used. It runs in this shell: a pipe or command substitution forks and sees no children.
+children_cpu() {
+  times > "$tmp/times.txt"
+  CHILD_CPU=$(awk 'NR == 2 { for (i = 1; i <= NF; i++) { split($i, p, /[ms]/); t += p[1] * 60 + p[2] } printf "%d", (t == int(t)) ? t : int(t) + 1 }' "$tmp/times.txt")
+}
+
 # Runs the tool command in $1 (a root) with the cpu cap; the rest are the command and its arguments. Sets TOOL_EC.
 run_capped() {
-  local root=$1
+  local root=$1 before
   shift
+  children_cpu
+  before=$CHILD_CPU
   (
     cd "$root" || exit 126
     ulimit -t "$cap" || exit 126
     PATH="$PWD/node_modules/.bin:$PWD/.venv/bin:$PATH" exec "$@"
   ) > "$tmp/tool.out" 2>&1
   TOOL_EC=$?
+  children_cpu
+  TOOL_CPU=$((CHILD_CPU - before))
 }
 
 # Prints the last lines of the tool output.
@@ -472,12 +482,13 @@ tool_present() {
   )
 }
 
-# Exit code of a process the cpu cap ended (SIGXCPU is signal 24).
+# Exit code of a process the cap ended: SIGXCPU is signal 24 (macOS), and Linux sends SIGKILL (137) when soft and hard limits are equal.
 CAP_EC=152
+KILL_EC=137
 
 # Prints the reason and fails when the cap ended the run; returns 0 then.
 cap_ended() {
-  if [ "$TOOL_EC" -eq "$CAP_EC" ]; then
+  if [ "$TOOL_EC" -eq "$CAP_EC" ] || { [ "$TOOL_EC" -eq "$KILL_EC" ] && [ "$TOOL_CPU" -ge "$cap" ]; }; then
     fail "$1: the mutation run used more than $cap CPU seconds (MUTATION_DIFF_CPU_SECONDS) and was stopped. The result is unknown, so this is a failure, not a pass. Split the change into smaller pull requests."
     return 0
   fi
