@@ -17,6 +17,8 @@
 # In CI on a push to the target branch HEAD is the base, so there is nothing to compare: the gate says so, exits 0 and judges pull requests only.
 # When a change touches no judged file the gate prints "nothing checked" and the reason instead of ok and exits 0. --all with no source file under its paths, or a missing path, exits 2.
 # Exit 0 clean, 1 findings, 2 cannot run (missing runtime or package, no base, unreadable file), always with one line naming the cause.
+# Not caught: a developer editing outside git or hooks on their own machine and never opening a pull request; git commit --no-verify locally; a hand-made push to a host with no CI; files in a language this gate does not list.
+# A Python project needs TypeScript (its node_modules or --ts-from) to judge the seeded .mjs helpers, so the gate exits 2 there without it rather than skipping them.
 set -uo pipefail
 
 MAX_COMMENT_LINES=3

@@ -41,13 +41,14 @@ SUPPRESSORS = [
     (re.compile(r"^NOSONAR\b"), "# NOSONAR -- reason"),
     (re.compile(r"^gitleaks:allow"), "# gitleaks:allow -- reason"),
 ]
-YEAR = r"[0-9]{4}(?:[ \t]*[-\u2013][ \t]*[0-9]{4})?"
+YEAR = r"[0-9]{4}(?:[ \t]*[-\u2013][ \t]*(?:[0-9]{4}|present))?"
 YEARS = YEAR + r"(?:[ \t]*,[ \t]*" + YEAR + r")*"
 COPYRIGHT = re.compile(r"(?:copyright(?:[ \t]*(?:\(c\)|\u00a9))?|\(c\)|\u00a9)[ \t]*" + YEARS + r",?(?:[ \t]+(.*))?", re.I | re.A)
 RESERVED = re.compile(r"[ \t]*all rights reserved\.?[ \t]*$", re.I | re.A)
 ALL_RIGHTS = re.compile(r"all rights reserved\.?", re.I | re.A)
 HOLDER_PUNCT = ".,&'-"
-HOLDER_LINK = re.compile(r"<[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+>|https?://[A-Za-z0-9._~:/?#@!$&'*+,;=%-]+")
+HOLDER_LINK = re.compile(r"<[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+>|<https?://[A-Za-z0-9._~:/?#@!$&'*+,;=%-]+>|https?://[A-Za-z0-9._~:/?#@!$&'*+,;=%-]+")
+LICENCE_REF = re.compile(r"LicenseRef-[A-Za-z0-9.-]+")
 SPDX_PREFIX = "SPDX-License-Identifier:"
 SPDX_BODY = re.compile(r"(?: *(?:\(|\)|[A-Za-z0-9.+-]+))* *")
 SPDX_TOKEN = re.compile(r"\(|\)|[A-Za-z0-9.+-]+")
@@ -566,7 +567,7 @@ def spdx_parse(tokens):
             pos[0] += 1
             return True
         base = tok[:-1] if tok.endswith("+") else tok
-        if base not in LICENCE_IDS or base in seen:
+        if (base not in LICENCE_IDS and LICENCE_REF.fullmatch(base) is None) or base in seen:
             return False
         seen.add(base)
         if peek() == "WITH":

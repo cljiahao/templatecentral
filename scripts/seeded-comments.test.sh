@@ -314,6 +314,19 @@ for spec in "MIT_TEXT:MIT" "APACHE_TEXT:Apache" "BSD3_TEXT:BSD3"; do
 done
 inline_clean a.ts "$(wrap_style slash 200 'SPDX-License-Identifier: MIT')${NL}export const a = 1;\n"
 inline_clean a.py "$(wrap_style hash 200 'Copyright 2024 Example Corp. All rights reserved.')${NL}A = 1\n"
+# a header form is exempt from the line count, so one more comment line than the limit passes only when the form is read as a header
+inline_clean a.ts '// note one about it\n// note two about it\n// note three about it\n// Copyright 2020-present Example Corp.\nexport const a = 1;\n'
+inline_fails a.ts length '// note one about it\n// note two about it\n// note three about it\n// Copyright 2020-presently Example Corp.\nexport const a = 1;\n'
+inline_clean a.py '# note one about it\n# note two about it\n# note three about it\n# Copyright 2020-present Example Corp.\nA = 1\n'
+inline_fails a.py length '# note one about it\n# note two about it\n# note three about it\n# Copyright 2020-presently Example Corp.\nA = 1\n'
+inline_clean a.ts '// note one about it\n// note two about it\n// note three about it\n// Copyright 2024 Example Corp. <https://example.com/about>\nexport const a = 1;\n'
+inline_fails a.ts length '// note one about it\n// note two about it\n// note three about it\n// Copyright 2024 Example Corp. <https://example.com/about\nexport const a = 1;\n'
+inline_clean a.py '# note one about it\n# note two about it\n# note three about it\n# Copyright 2024 Example Corp. <https://example.com/about>\nA = 1\n'
+inline_fails a.py length '# note one about it\n# note two about it\n# note three about it\n# Copyright 2024 Example Corp. <https://example.com/about\nA = 1\n'
+inline_clean a.ts '// note one about it\n// note two about it\n// note three about it\n// SPDX-License-Identifier: LicenseRef-Example-Terms\nexport const a = 1;\n'
+inline_fails a.ts length '// note one about it\n// note two about it\n// note three about it\n// SPDX-License-Identifier: LicenseRef-\nexport const a = 1;\n'
+inline_clean a.py '# note one about it\n# note two about it\n# note three about it\n# SPDX-License-Identifier: MIT OR LicenseRef-Example-Terms\nA = 1\n'
+inline_fails a.py length '# note one about it\n# note two about it\n# note three about it\n# SPDX-License-Identifier: LicenseRef-Example-Terms AND\nA = 1\n'
 # keyword-stuffed prose is not a licence
 inline_fails a.ts length '// Copyright 2024\n// Permission is needed from the basis owner.\n// See https://x.y for the Warranty terms.\n// Our liability is limited here.\n// Redistribution is not allowed.\nexport const a = 1;\n'
 inline_fails a.py length '# Copyright 2024\n# Permission is needed from the basis owner.\n# See https://x.y for the Warranty terms.\n# Our liability is limited here.\n# Redistribution is not allowed.\nA = 1\n'

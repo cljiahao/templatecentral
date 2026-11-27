@@ -74,14 +74,15 @@ const SUPPRESSORS = [
   [/^gitleaks:allow/, '// gitleaks:allow -- reason'],
   [/^pragma:\s*no\s+(?:cover|branch)\b/, '// pragma: no cover -- reason'],
 ];
-const YEAR = '[0-9]{4}(?:[ \\t]*[-\u2013][ \\t]*[0-9]{4})?';
+const YEAR = '[0-9]{4}(?:[ \\t]*[-\u2013][ \\t]*(?:[0-9]{4}|present))?';
 const YEARS = `${YEAR}(?:[ \\t]*,[ \\t]*${YEAR})*`;
 const COPYRIGHT = new RegExp(`^(?:copyright(?:[ \\t]*(?:\\(c\\)|\u00a9))?|\\(c\\)|\u00a9)[ \\t]*${YEARS},?(?:[ \\t]+(.*))?$`, 'i');
 const RESERVED = /[ \t]*all rights reserved\.?[ \t]*$/i;
 const ALL_RIGHTS = /^all rights reserved\.?$/i;
 const HOLDER_PUNCT = ".,&'-";
-const HOLDER_LINK = /^(?:<[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+>|https?:\/\/[A-Za-z0-9._~:/?#@!$&'*+,;=%-]+)$/;
+const HOLDER_LINK = /^(?:<[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+>|<https?:\/\/[A-Za-z0-9._~:/?#@!$&'*+,;=%-]+>|https?:\/\/[A-Za-z0-9._~:/?#@!$&'*+,;=%-]+)$/;
 const HOLDER_CHAR = /^[\p{L}\p{M}]$/u;
+const LICENCE_REF = /^LicenseRef-[A-Za-z0-9.-]+$/;
 const SPDX_PREFIX = 'SPDX-License-Identifier:';
 const SPDX_BODY = /^(?: *(?:\(|\)|[A-Za-z0-9.+-]+))* *$/;
 const SPDX_TOKEN = /\(|\)|[A-Za-z0-9.+-]+/g;
@@ -286,7 +287,7 @@ function spdxParse(tokens) {
       return true;
     }
     const base = tok.endsWith('+') ? tok.slice(0, -1) : tok;
-    if (!LICENCE_IDS.has(base) || seen.has(base)) return false;
+    if (!(LICENCE_IDS.has(base) || LICENCE_REF.test(base)) || seen.has(base)) return false;
     seen.add(base);
     if (peek() === 'WITH') {
       pos += 1;

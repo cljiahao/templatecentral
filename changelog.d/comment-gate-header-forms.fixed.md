@@ -1,0 +1,1 @@
+- The comment gate accepts a copyright line whose year range ends in `present`, a holder written as `<https://...>`, and an SPDX line that names a `LicenseRef-` licence.
