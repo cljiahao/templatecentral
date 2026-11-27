@@ -590,7 +590,7 @@ ERRF=; LRC=
 PYN='  app/m.py:3:1 - error: Old type problem (reportGeneralTypeIssues)
 1 error, 0 warnings, 0 informations'
 PYW='WARNING: there is a new pyright version available (v1.1.400 -> v1.1.410).
-Please install the new version or set PYRIGHT_PYTHON_FORCE_VERSION to `latest`'
+Please install the new version or set PYRIGHT_PYTHON_FORCE_VERSION to latest'
 PY=$(newproj pynotice)
 printf '%s\n' "$PYN" | gb "$PY" record types pyright --tool pyright >/dev/null
 out=$(printf '%s\n%s\n' "$PYN" "$PYW" | gb "$PY" check types pyright --tool pyright --rc 1); check "pyright: a version notice at exit 1 passes" 0 $?

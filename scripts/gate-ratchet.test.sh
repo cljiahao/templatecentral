@@ -1668,7 +1668,7 @@ git_ commit -q -m sub
 edit sub/.claude/gate-baseline.txt "src/a.ts${TAB}1${TAB}msg one" "src/a.ts${TAB}2${TAB}msg one"
 expect 1 "baseline: an app folder grows" "sub/.claude/gate-baseline.txt" "the baseline grew"
 # Revert proof: with the growth check skipped, the raised count passes.
-sed 's|bash "\$wd/gb.sh" -C . growth "\$mb" HEAD|true|' "$RATCHET" > "$T/ratchet-nogrowth.sh"
+sed "s|bash \"\$wd/gb.sh\" -C . growth \"\$mb\" HEAD|true|" "$RATCHET" > "$T/ratchet-nogrowth.sh"
 cmp -s "$RATCHET" "$T/ratchet-nogrowth.sh" && check 0 1 "baseline revert proof: the mutation applied"
 RATCHET_REAL=$RATCHET
 RATCHET="$T/ratchet-nogrowth.sh"
