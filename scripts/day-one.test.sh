@@ -81,6 +81,8 @@ $dc diffcover-gate
 dist/x bundle-gate-build-and-sbom
 .claude/gate-times.tsv gate-budget-record
 .claude/gate-times.AbC123 gate-budget-temp-file
+.claude/gate-budget.seen gate-budget-seen-marker
+.claude/skill-usage.log skill-usage-log-hook
 .claude/review/current.diff record-review-prepare"
   case $ST in
     fastapi) rows="$rows
