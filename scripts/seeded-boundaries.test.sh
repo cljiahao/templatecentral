@@ -99,18 +99,34 @@ lint_probe() { # lint_probe <dir> <name> <file> <content> <want> <revert>: fails
 tsc_probe() { # tsc_probe <dir> <name> <content> <want-code> <flag>: fails with <want-code> in the probe file, passes with --<flag> false
   local dir=$1 name=$2 content=$3 want=$4 flag=$5 out
   printf '%s\n' "$content" > "$dir/src/probe-types.ts"
-  out=$(cd "$dir" && node_modules/.bin/tsc --noEmit -p tsconfig.json 2>&1 | grep 'probe-types' || true)
+  out=$(tsc_in "$dir")
+  out=$(printf '%s\n' "$out" | grep 'probe-types' || true)
   has "$want" "$out" "$name fails typecheck"
-  out=$(cd "$dir" && node_modules/.bin/tsc --noEmit -p tsconfig.json "--$flag" false 2>&1 | grep 'probe-types' || true)
+  out=$(tsc_in "$dir" "--$flag" false)
+  out=$(printf '%s\n' "$out" | grep 'probe-types' || true)
   check "" "$out" "$name passes once --$flag is false"
   rm -f "$dir/src/probe-types.ts"
 }
 
+tsc_in() { # tsc_in <dir> [tsc flags]: the project typecheck output, stderr included
+  local dir=$1
+  shift
+  cd "$dir" || return 1
+  node_modules/.bin/tsc --noEmit -p tsconfig.json "$@" 2>&1
+}
+
 control() { # control <dir> <name>: lint of the whole project and typecheck, apart from files shadcn generates, pass
-  local dir=$1 name=$2 out
+  local dir=$1 name=$2 out rc
   out=$(cd "$dir" && node_modules/.bin/eslint "${3:-.}" 2>&1)
   check 0 "$?" "$name clean control passes lint [$(echo "$out" | tail -n 3)]"
-  out=$(cd "$dir" && node_modules/.bin/tsc --noEmit -p tsconfig.json 2>&1 | grep 'error TS' | grep -v "TS2307.*components/ui" || true)
+  out=$(tsc_in "$dir")
+  rc=$?
+  # tsc exiting non-zero without any error line means it crashed, so nothing was checked
+  case $out in
+    *"error TS"*) ;;
+    *) check 0 "$rc" "$name typecheck ran [$out]" ;;
+  esac
+  out=$(printf '%s\n' "$out" | grep 'error TS' | grep -v "TS2307.*components/ui" || true)
   check "" "$out" "$name clean control passes typecheck"
 }
 
