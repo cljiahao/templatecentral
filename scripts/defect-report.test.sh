@@ -73,6 +73,13 @@ NCHECKS=0
 for def in "$DEFECTS"/*.sh; do NCHECKS=$((NCHECKS + 1)); done
 SUMMARY_TAIL="This is a list of known older template patterns, not an audit."
 
+# A fixture folder with no check file is never read by any run below, so it fails here.
+for fx in "$FIXTURES"/*/; do
+  [[ -d "$fx" ]] || continue
+  fid=$(basename "$fx")
+  check 1 "$(truth test -f "$DEFECTS/$fid.sh")" "fixture $fid has a check file in defects/"
+done
+
 # ── every check: old fixture is flagged, current template is clean ───────────
 
 for def in "$DEFECTS"/*.sh; do
