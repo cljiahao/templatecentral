@@ -1,0 +1,1 @@
+- The `block-no-verify.sh` header names two shapes it still cannot see: an `xargs -I{} sh -c '{}'` placeholder with no bypass token in the command, and `sh -c "$CMD"` with the token held in a variable.
