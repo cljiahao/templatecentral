@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { createElement, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FormProvider, useForm } from 'react-hook-form';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,7 +8,7 @@ import Home from '@/app/(public)/page';
 import DashboardPage from '@/app/dashboard/(overview)/page';
 import DashboardLayout from '@/app/dashboard/layout';
 import NotFound from '@/app/not-found';
-import { Navbar, Providers, SiteFooter, ThemeProvider } from '@/components/layout';
+import { Navbar, Providers, SiteFooter } from '@/components/layout';
 import {
   BrandLogo,
   CustomCard,
@@ -45,48 +45,69 @@ function FieldHarness() {
 }
 
 describe('components', () => {
-  it('render their content and wire accessibility attributes', () => {
-    const out = html(
-      <>
-        <BrandLogo />
-        <FloatingShape />
-        <Pill variant="solid">Tag</Pill>
-        <CustomCard header="Head" description="Desc">
-          Body
-        </CustomCard>
-        <ThemeToggleButton />
-        <CustomDialog title="Title" description="Why" trigger={<button>Open</button>}>
-          Inside
-        </CustomDialog>
-        <MediaCard title="T" mediaPosition="left">
-          media
-        </MediaCard>
-        <MediaCard title="Only title" description="D" />
-        <LinkList
-          links={[
-            { label: 'Docs', href: '/docs' },
-            { label: 'Ext', href: 'https://x.test', target: '_blank' },
-          ]}
-        />
-        <FieldHarness />
-        <SiteFooter />
-        <SiteFooter creditText="Credit" links={[{ label: 'L', href: '/l' }]} />
-        <ThemeProvider attribute="class">
-          <Providers>
-            <p>child</p>
-          </Providers>
-        </ThemeProvider>
-      </>
-    );
-    const expected = [
-      'Head',
-      'Only title',
-      'noopener noreferrer',
-      'name-description',
-      'Credit',
-      'child',
-    ];
-    expected.forEach((text) => expect(out).toContain(text));
+  const links = [
+    { label: 'Docs', href: '/docs' },
+    { label: 'Ext', href: 'https://x.test', target: '_blank' },
+  ];
+  // Each row renders alone: [name, element, strings it must contain, strings it must not].
+  const cases: [string, ReactElement, string[], string[]?][] = [
+    ['BrandLogo', <BrandLogo />, ['alt="Logo"']],
+    ['FloatingShape', <FloatingShape />, ['aria-hidden="true"']],
+    ['Pill solid', <Pill variant="solid">Tag</Pill>, ['Tag', 'text-background'], ['bg-card']],
+    ['Pill outline', <Pill>Tag</Pill>, ['bg-card'], ['text-background']],
+    [
+      'CustomCard',
+      createElement(CustomCard, { header: 'Head', description: 'Desc' }, 'Body'),
+      ['Head', 'Desc', 'Body'],
+    ],
+    ['ThemeToggleButton', <ThemeToggleButton />, ['aria-label="Toggle dark mode"']],
+    [
+      'CustomDialog',
+      createElement(CustomDialog, { title: 'T', trigger: <b>Open</b> }, 'x'),
+      ['Open'],
+    ],
+    [
+      'MediaCard left',
+      createElement(MediaCard, { title: 'T', mediaPosition: 'left' }, 'media'),
+      ['media', 'flex-row'],
+    ],
+    [
+      'MediaCard bare',
+      <MediaCard title="Only title" description="D" />,
+      ['Only title', '>D<'],
+      ['media'],
+    ],
+    [
+      'LinkList external',
+      <LinkList links={links} />,
+      ['href="/docs"', 'target="_blank" rel="noopener noreferrer"'],
+    ],
+    ['LinkList internal', <LinkList links={links.slice(0, 1)} />, ['href="/docs"'], ['rel=']],
+    [
+      'CustomFormField',
+      <FieldHarness />,
+      ['aria-describedby="name-description"', 'id="name-description"', 'for="name"', 'id="name"'],
+    ],
+    ['SiteFooter default', <SiteFooter />, ['Built with templateCentral'], ['<nav']],
+    [
+      'SiteFooter custom',
+      <SiteFooter creditText="Credit" links={[{ label: 'L', href: '/l' }]} />,
+      ['Credit', 'href="/l"', 'aria-label="Footer"'],
+      ['Built with templateCentral'],
+    ],
+    [
+      'Providers',
+      <Providers>
+        <p>child</p>
+      </Providers>,
+      ['<p>child</p>'],
+    ],
+  ];
+
+  it.each(cases)('%s renders its own content and attributes', (_name, element, has, lacks = []) => {
+    const out = html(element);
+    has.forEach((text) => expect(out).toContain(text));
+    lacks.forEach((text) => expect(out).not.toContain(text));
   });
 
   it.each([
