@@ -1,0 +1,6 @@
+[tool.mutmut]
+# reason: constants hold no logic worth mutating
+do_not_mutate = ["app/constants/*"]
+
+[tool.coverage.report]
+fail_under = 80

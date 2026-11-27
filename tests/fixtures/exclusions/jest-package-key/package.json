@@ -1,0 +1,6 @@
+{
+  "name": "demo",
+  "jest": {
+    "coveragePathIgnorePatterns": ["<rootDir>/src/gen/"]
+  }
+}

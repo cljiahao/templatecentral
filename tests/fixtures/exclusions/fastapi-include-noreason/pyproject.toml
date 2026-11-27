@@ -1,0 +1,5 @@
+[tool.coverage.run]
+include = ["app/api/*"]
+
+[tool.coverage.report]
+fail_under = 80

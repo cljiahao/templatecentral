@@ -1,0 +1,4 @@
+{
+  "name": "demo",
+  "scripts": { "sonar": "sonar-scanner -Dsonar.exclusions=src/gen/**" }
+}

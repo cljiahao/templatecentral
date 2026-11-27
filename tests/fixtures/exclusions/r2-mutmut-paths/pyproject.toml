@@ -1,0 +1,2 @@
+[tool.mutmut]
+paths_to_mutate = ["app/core/"]

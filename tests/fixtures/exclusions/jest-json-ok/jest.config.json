@@ -1,0 +1,6 @@
+{
+  "coveragePathIgnorePatterns": [
+    // reason: generated client code is not hand written
+    "<rootDir>/src/gen/"
+  ]
+}

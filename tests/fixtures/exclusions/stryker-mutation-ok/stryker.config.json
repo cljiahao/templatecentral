@@ -1,0 +1,8 @@
+{
+  "mutator": {
+    "excludedMutations": [
+      // reason: string literal mutants only change log text
+      "StringLiteral"
+    ]
+  }
+}
