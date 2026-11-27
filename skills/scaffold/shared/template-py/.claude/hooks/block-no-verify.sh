@@ -9,6 +9,9 @@
 # through a program not known as a wrapper ($SHELL, ssh host sh, docker exec -i c sh, kubectl exec), a command built at run time from a file or
 # variable (sh ./x.sh, sh -c "$CMD" with the bypass token held in a variable), an xargs -I{} sh -c '{}' placeholder with no bypass token visible in the command, an alias or shell function defined earlier, a binary that calls git itself, edits made outside the agent, runners other than the listed interpreters (npx tsx -e), and a removal target built by a call (path.join(root, 'src')) or an aliased import (from shutil import rmtree as r).
 # Everything else on the list below is judged. An unreadable shape (xargs handing a placeholder to sh -c) with a forbidden token anywhere in the command is blocked.
+# Wrapper rule: a shell (sh bash zsh dash ksh ash, any path prefix) followed later by a -c option, or eval, makes the command a wrapper; wrappers are flattened (quotes and backslashes deleted, each wrapper word a command separator), not parsed, so any nesting depth is judged.
+# Over-blocking inside a wrapper is by design: bash -c 'echo "git commit -n"' is blocked as text. Outside a wrapper, quoted text stays text.
+# Size bound: a wrapper command over 1500 bytes is blocked as too long to judge (about 0.6 CPU seconds at the bound on bash 3.2); a long command with no wrapper is judged as before.
 # Shells judged: sh bash zsh dash ksh ash busybox sh. Wrappers judged: sudo doas env nice ionice nohup setsid time timeout stdbuf xargs command exec builtin, alone or stacked; quoted and backslash-escaped tokens count as written.
 # A shell in command position that the guard sees fed from a pipe, here-string, heredoc, `-s` or process substitution is blocked outright
 # (even `echo hi | sh`), also behind the wrappers sudo, command, exec, nohup, time, nice, builtin, env, timeout, stdbuf, xargs and uv/poetry/pipenv/pdm run,
@@ -31,6 +34,10 @@ in_cwd=${parsed%%$'\n'*}
 cmd=${parsed#*$'\n'}
 [ -n "$in_cwd" ] && orig_dir=$in_cwd
 [ -z "$cmd" ] && exit 0
+# Size gate first: the later steps are quadratic in bash 3.2, so a shell or eval wrapper in a command over 1500 bytes is refused before any of them runs.
+if [ "${#cmd}" -gt 1500 ] && { [[ $cmd =~ (^|[^A-Za-z0-9_.+-])(sh|bash|zsh|dash|ksh|ash)([^A-Za-z0-9_.+/-]|$) ]] || [[ $cmd =~ (^|[^A-Za-z0-9_.+-])eval([^A-Za-z0-9_.+/-]|$) ]]; }; then
+  echo "BLOCKED: a shell or eval wrapper in a command over 1500 bytes is too long for this guard to judge. Split it or run the commands directly." >&2; exit 2
+fi
 # Drop heredoc bodies so commit-message text is not scanned as a command; the opening line is still scanned. Text without << has none, so awk is skipped.
 case $cmd in *'<<'*) cmd=$(printf '%s\n' "$cmd" | awk '
   inh { t = $0; if (tabs) sub(/^\t+/, "", t); if (t == w) inh = 0; next }
@@ -149,26 +156,28 @@ protected_branch() {
   [[ "$b" =~ ^($protected)$ ]] && echo "$b"
 }
 
-# Empty quote pairs glued to a word vanish in the shell (--no-ver""ify, -""n), so they go first; a lone empty argument stays.
-# Then a quoted bash -c/eval string is unwrapped, one layer per pass, for every POSIX-style shell on the allow-list with or without a path (/bin/sh); more than 8 layers is blocked.
-sq="'"
-sh_re='(^|[[:space:];&|(])(/[^[:space:]]*/)?(bash|sh|zsh|dash|ksh|ash|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+'
-scan=$(printf '%s' "$cmd" | sed -E \
-  -e "s/([^[:space:]])\"\"/\1/g" -e "s/\"\"([^[:space:]])/\1/g" -e "s/([^[:space:]])${sq}${sq}/\1/g" -e "s/${sq}${sq}([^[:space:]])/\1/g")
-layers=0
-while rx "${sh_re}(\"[^\"]*\"|${sq}[^${sq}]*${sq})" "$scan"; do
-  layers=$((layers + 1))
-  [ "$layers" -gt 8 ] && block "shell wrappers nested more than 8 deep hide their commands from this guard. Run the commands directly."
-  scan=$(printf '%s' "$scan" | sed -E \
-    -e "s#${sh_re}\"([^\"]*)\"#\1 \5 #g" \
-    -e "s#${sh_re}${sq}([^${sq}]*)${sq}#\1 \5 #g")
-done
-# Single words are unquoted, other quoted text is masked as Q; double quotes first so an apostrophe cannot swallow flags.
+# Wrappers are flattened, not parsed: with a shell (sh bash zsh dash ksh ash, any path) followed later by a -c option, or eval, anywhere in the command, every quote and backslash is deleted and each wrapper word with its flags becomes a command separator, so the whole text is judged as plain commands at any depth.
+# The test over-matches on purpose: a quoted bypass inside a wrapper blocks even as text (bash -c 'echo "git commit -n"'). A wrapper command over 1500 bytes is blocked as too long to judge.
+cmd_raw=$cmd
+wrapper=0
+shw='(^|[^A-Za-z0-9_.+-])(sh|bash|zsh|dash|ksh|ash)([^A-Za-z0-9_.+/-]|$)'
+if [[ $cmd =~ ${shw}(.*[^A-Za-z0-9_-])?-[A-Za-z]*c([^A-Za-z0-9_-]|$) ]] || [[ $cmd =~ (^|[^A-Za-z0-9_.+-])eval([^A-Za-z0-9_.+/-]|$) ]]; then
+  wrapper=1
+  cmd=$(printf '%s' "$cmd" | tr -d "\\\\\"'" | sed -E -e 's/[[:space:]]/&&/g' -e 's#(^|[^A-Za-z0-9_.+-])([^[:space:];&|()]*/)?(sh|bash|zsh|dash|ksh|ash|eval)([[:space:]]+-[A-Za-z]+)*([[:space:]]|$)#\1 ; #g')
+fi
+# mkscan <text>: empty quote pairs glued to a word vanish in the shell (--no-ver""ify, -""n), so they go first; a lone empty argument stays; single words are unquoted and other quoted text is masked as Q, double quotes first so an apostrophe cannot swallow flags.
 # A quoted word holding a shell operator stays masked: its pipe, semicolon or redirect is text, not syntax ('x|sh', "a|bash").
-scan=$(printf '%s' "$scan" | sed -E \
-  -e "s/\"([^\"${sq}[:space:]|;\&<>()]+)\"/\1/g" -e "s/\"[^\"]*\"/ Q /g" \
-  -e "s/${sq}([^${sq}[:space:]|;\&<>()]+)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g" \
-  -e 's/\\([A-Za-z0-9_.-])/\1/g')
+sq="'"
+mkscan() {
+  printf '%s' "$1" | sed -E \
+    -e "s/([^[:space:]])\"\"/\1/g" -e "s/\"\"([^[:space:]])/\1/g" -e "s/([^[:space:]])${sq}${sq}/\1/g" -e "s/${sq}${sq}([^[:space:]])/\1/g" \
+    -e "s/\"([^\"${sq}[:space:]|;\&<>()]+)\"/\1/g" -e "s/\"[^\"]*\"/ Q /g" \
+    -e "s/${sq}([^${sq}[:space:]|;\&<>()]+)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g" \
+    -e 's/\\([A-Za-z0-9_.-])/\1/g'
+}
+scan=$(mkscan "$cmd")
+# Every later raw-text check (inline code, rm, lowercase scan) reads the command as written; only the scan carries the flattened text.
+cmd=$cmd_raw
 
 # Command position: line start, after ; & | ( { or a backtick, or after then/do/else; wrappers that run the next word (sudo, env, xargs, nohup, uv run) may follow.
 cpos='(^|[;&|(`{]|(^|[[:space:]])(then|do|else))[[:space:]]*'
@@ -195,11 +204,18 @@ blind_shell() {
     rx "${cpos}${wrap}${w}${f}[[:space:]]+(-[A-Za-z]*s[A-Za-z]*|-)([[:space:]]|\$)" "$joined" ||
     rx "${cpos}(source|\\.)[[:space:]]+<\\(" "$joined"
 }
+# With a wrapper the unflattened text is judged too: xargs sh -c with no readable string is only visible there.
+if [ "$wrapper" -eq 1 ]; then
+  scan_flat=$scan
+  scan=$(mkscan "$cmd_raw")
+  blind_shell && block "a shell fed from a pipe, stdin, here-string, heredoc or process substitution hides its commands from this guard. Run the commands directly."
+  scan=$scan_flat
+fi
 if blind_shell; then
   block "a shell fed from a pipe, stdin, here-string, heredoc or process substitution hides its commands from this guard. Run the commands directly."
 fi
 # A shell or interpreter reached through xargs runs text this guard cannot see (xargs -I{} sh -c '{}'); with a forbidden token anywhere in the command that shape is blocked.
-norm=$(printf '%s' "$cmd" | tr -d "\\\\\"'" | tr '[:upper:]' '[:lower:]')
+norm=$(printf '%s' "$cmd_raw" | tr -d "\\\\\"'" | tr '[:upper:]' '[:lower:]')
 if [[ "$norm" =~ (^|[^a-z0-9_-])xargs([[:space:]]|$) ]] \
   && [[ "$norm" =~ (^|[^a-z0-9_-])(bash|sh|zsh|dash|ksh|ash|eval|python[0-9.]*|node|perl|ruby)[[:space:]]+-[a-z]*[cep]([[:space:]]|$) ]] \
   && rx 'no-veri|hookspath|lefthook(_exclude)?=|git[[:space:]]+([^;&|]*[[:space:]])?(commit|push)[^;&|]*[[:space:]]-[a-z]*n' "$norm"; then

@@ -427,6 +427,45 @@ echo hi | ash
 echo hi | busybox sh
 CASES
 
+# Wrapper shapes the hook flattens instead of parsing: every path form of a shell, every nesting depth and style, with each forbidden command.
+# shq <text>: the text in single quotes the way a shell writes it (each ' becomes '"'"'); dq <text>: the text in double quotes with \ and " escaped.
+shq() { local t=$1 q="'"; printf '%s' "'${t//$q/$q\"$q\"$q}'"; }
+dq() { local t=$1; t=${t//\\/\\\\}; t=${t//\"/\\\"}; printf '"%s"' "$t"; }
+# nest <shq|dq> <depth> <shell> <command>: the command wrapped depth times in <shell> -c.
+nest() {
+  local f=$1 d=$2 sh=$3 c=$4
+  while [[ $d -gt 0 ]]; do c="$sh -c $($f "$c")"; d=$((d - 1)); done
+  printf '%s' "$c"
+}
+tilde='~'
+for forbidden in 'git commit -n' 'git commit --no-verify -m x' 'git push --force origin main'; do
+  for sh in sh bash /bin/sh; do
+    for d in 3 4 7 9; do expect_bash 2 "$(nest shq "$d" "$sh" "$forbidden")"; done
+    for d in 3 5 9; do expect_bash 2 "$(nest dq "$d" "$sh" "$forbidden")"; done
+  done
+  for sh in ./sh ./bin/sh ../bin/sh bin/sh "$tilde/bin/sh" /bin/sh /usr/bin/ksh 'env sh' '/usr/bin/env bash' 'bash -l' 'bash -e' '/opt/my\ tools/sh' "'/opt/my tools/sh'"; do
+    expect_bash 2 "$sh -c $(shq "$forbidden")"
+  done
+  expect_bash 2 "bash -lc $(shq "$forbidden")"
+  expect_bash 2 "bash -ec $(shq "$forbidden")"
+  expect_bash 2 "eval $(dq "$forbidden")"
+  expect_bash 2 "eval $(shq "$forbidden")"
+done
+# A wrapper command over the size bound is refused rather than judged; the same text without a wrapper is judged as before.
+expect_bash 2 "$(nest shq 9 sh 'git status')"
+expect_bash 2 "$(nest shq 9 sh "echo $(printf 'x%.0s' $(seq 1 200))")"
+expect_bash 0 "echo $(printf 'x%.0s' $(seq 1 2000))"
+# CPU bound: a 13 KB nested wrapper is answered in under one CPU second (a wall clock would flake on a busy machine).
+cpu_cs() {
+  times | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub("s", "", a[2]); t += a[1] * 60 + a[2] } printf "%d", t * 100 }'
+}
+big=$(nest shq 8 sh 'git commit -n')
+cpu_start=$(cpu_cs)
+expect_bash 2 "$big$(printf ' x%.0s' $(seq 1 3000))"
+cpu_took=$(($(cpu_cs) - cpu_start))
+if [[ $cpu_took -le 200 ]]; then cpu_ok=1; else cpu_ok=0; fi
+check 1 "$cpu_ok" "a 13 KB nested wrapper is answered by both hooks in at most 2 s of CPU (took ${cpu_took} cs)"
+
 while IFS= read -r c; do
   [[ -n "$c" ]] && expect_bash 0 "$c"
 done <<'CASES'
@@ -484,6 +523,16 @@ dash -c 'git status'
 /bin/sh script.sh
 /usr/bin/env bash script.sh
 bash -c 'echo ok'
+cat /bin/sh
+which sh
+brew install dash
+ssh host
+npm run push
+git stash
+echo --no-verify
+git log -n 5
+bash scripts/run.sh -c config
+bash -c 'git log -n 5'
 git merge feat
 git rebase main
 grep -rn "no-verify" docs
