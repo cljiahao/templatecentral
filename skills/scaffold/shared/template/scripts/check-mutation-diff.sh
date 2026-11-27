@@ -365,6 +365,8 @@ try:
             if mod is None:
                 out("FAIL", "unrecognised mutant name in the mutmut results: " + name)
                 continue
+            if mod not in files_of:
+                continue
             seen.setdefault(mod, [0, 0])
             seen[mod][1] += 1
             if status in ("killed", "timeout"):

@@ -116,6 +116,7 @@ count_fixed() {
 
 while IFS= read -r -d '' p; do
   case "$p" in *$'\n'*) die "a file name holds a line break: refusing to read it" ;; esac
+  case "$p" in .claude/.harness-base/* | */.claude/.harness-base/*) continue ;; esac
   d=$(dirname "$p")
   b=${p##*/}
   case "$b" in

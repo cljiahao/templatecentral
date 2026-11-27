@@ -81,6 +81,18 @@ for stack in fastapi nestjs; do
   check 1 "$EC" "$stack: a mismatch fails in CI"
 done
 
+# --- the seeded mirror in .claude/.harness-base is not an app
+for stack in fastapi nestjs; do
+  new_app "mirror-$stack" "$stack"
+  mkdir -p "$D/.claude/.harness-base/scripts"
+  cp "$A/scripts/"export-openapi.* "$D/.claude/.harness-base/scripts/"
+  git -C "$D" add -A
+  git -C "$D" commit -q -m mirror
+  run "$D"
+  check 0 "$EC" "$stack: the harness mirror's generator is not judged as an app ($OUT)"
+  has "ok (1 contract(s) match the code)" "$OUT" "$stack: only the real app is checked beside the mirror"
+done
+
 # --- diff is capped at 40 lines
 new_app cap fastapi
 python3 -I - "$T/big.json" << 'PY' || exit 2

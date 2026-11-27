@@ -1,0 +1,1 @@
+- The seeded mutation gate no longer fails on mutmut mutants of modules the change did not touch: `mutmut results` lists every module it has mutated, and only the modules the change touched are judged.
