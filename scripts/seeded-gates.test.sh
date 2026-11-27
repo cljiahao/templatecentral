@@ -752,7 +752,7 @@ if [ "$parsed" -ge 40 ]; then ok; else bad "bash parse check found only $parsed 
 # ---- bash 3.2 (macOS /bin/bash) cannot parse a case statement opened inside $( ... ) unless its patterns start with "(";
 # bash -n on a newer bash accepts it, so this static guard is what fails on Linux. Line numbers of offenders are printed.
 cat > "$T/case-in-subst.awk" <<'AWKEOF'
-# A substitution open at the end of a line is kept only when the line ends with its "$(".
+# Substitution depth is kept across lines until the matching ")"; a ")" that closes a case pattern is not a closer.
 # Prints the line of every `case ... in` opened inside $( ... ) whose first pattern has no leading "(": bash 3.2 cannot parse that.
 function judge(rest) {
   if (rest ~ /^[ \t]*\(/) return
@@ -760,10 +760,14 @@ function judge(rest) {
   print NR
 }
 {
+  if (heredoc != "") { t = $0; sub(/^\t+/, "", t); if (t == heredoc) heredoc = ""; next }
   if (pending && $0 !~ /^[ \t]*$/) { if ($0 !~ /^[ \t]*\(/) print pending; pending = 0 }
   line = $0
-  if (line ~ /^[ \t]*#/) next
-  n = length(line); sq = 0; dq = 0
+  if (!sq && !dq && line ~ /^[ \t]*#/) next
+  if (!sq && !dq && match(line, /<<-?[ \t]*["']?[A-Za-z_][A-Za-z0-9_]*["']?/)) {
+    heredoc = substr(line, RSTART, RLENGTH); sub(/^<<-?[ \t]*["']?/, "", heredoc); sub(/["']$/, "", heredoc)
+  }
+  n = length(line)
   for (i = 1; i <= n; i++) {
     c = substr(line, i, 1)
     if (c == "\\" && !sq) { i++; continue }
@@ -772,14 +776,21 @@ function judge(rest) {
     if (c == "\"") { dq = !dq; continue }
     if (c == "$" && substr(line, i + 1, 1) == "(" && substr(line, i + 2, 1) != "(") { depth++; saved[depth] = dq; dq = 0; kind[depth] = 1; i++; continue }
     if (dq) continue
-    if (depth > 0 && c == "(") { depth++; kind[depth] = 0; saved[depth] = 0; continue }
-    if (depth > 0 && c == ")") { dq = saved[depth]; depth--; continue }
+    if (depth > 0 && c == "(") {
+      if (incase > 0 && substr(line, 1, i - 1) ~ /(^|;;|;&|[ \t]in)[ \t]*$/) continue
+      depth++; kind[depth] = 0; saved[depth] = 0; continue
+    }
+    if (depth > 0 && c == ")") {
+      pre = substr(line, 1, i - 1)
+      if (incase > 0 && pre ~ /(^|;;|;&|[ \t]in)[ \t]*\(?[^ \t();]+$/) continue
+      dq = saved[depth]; depth--; continue
+    }
+    if (depth > 0 && incase > 0 && c == "e" && substr(line, i, 4) == "esac" && (i == 1 || substr(line, i - 1, 1) !~ /[A-Za-z0-9_-]/) && substr(line, i + 4, 1) !~ /[A-Za-z0-9_]/) { incase--; i += 3; continue }
     if (depth > 0 && c == "c" && (i == 1 || substr(line, i - 1, 1) !~ /[A-Za-z0-9_-]/)) {
       rest = substr(line, i)
-      if (match(rest, /^case +[^ ]+ +in( |$)/)) { judge(substr(rest, RLENGTH + 1)); break }
+      if (match(rest, /^case +[^ ]+ +in( |$)/)) { incase++; judge(substr(rest, RLENGTH + 1)); i += RLENGTH - 1; continue }
     }
   }
-  if (depth > 0 && line !~ /\$\([ \t]*$/) depth = 0
 }
 AWKEOF
 case_in_subst() { awk -f "$T/case-in-subst.awk" "$1"; }
@@ -802,11 +813,20 @@ v=$(
   esac
 )
 PLANT
+cat > "$T/plant-bad-later.sh" <<'PLANT'
+v=$(
+  cd x
+  case "$f" in
+    *.py) echo a ;;
+  esac
+)
+PLANT
 cat > "$T/plant-main.sh" <<'PLANT'
 if git diff -U0 "$base"...HEAD -- "$f" | awk -v py="$(case "$f" in *.py) echo 1 ;; *) echo 0 ;; esac)" '{ print }'; then :; fi
 PLANT
 check "1" "$(case_in_subst "$T/plant-bad.sh")" "case-in-substitution guard flags a case opened inside \$( ... )"
 check "2" "$(case_in_subst "$T/plant-bad-multiline.sh")" "case-in-substitution guard flags a case with unparenthesised patterns on the next line"
+check "3" "$(case_in_subst "$T/plant-bad-later.sh")" "case-in-substitution guard flags a case on a later line of a multi-line substitution"
 check "" "$(case_in_subst "$T/plant-ok.sh")" "case-in-substitution guard passes parenthesised patterns and a top-level case"
 offenders=
 while IFS= read -r f; do
