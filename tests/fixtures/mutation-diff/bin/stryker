@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
-# Stub of StrykerJS 9.x for the seeded mutation-diff test: writes a report in its json reporter format (mutation-testing-report-schema, schemaVersion "1").
+# Stub of StrykerJS 10.1.1 for the seeded mutation-diff test: writes the report where the config's jsonReporter.fileName says (default reports/mutation/mutation.json), in the structure of tests/fixtures/mutation-diff/real/stryker-10.1.1.report.json. Like the real CLI it rejects --jsonReporter.* options.
 # Env: STUB_STATUS mutant status (default Killed), STUB_COUNT mutants per file (default 2), STUB_RAW a file copied as the report, STUB_OMIT=1 leaves the files out, STUB_EXIT exit code, STUB_SPIN=1 burns CPU, STUB_ARGS_LOG logs the arguments.
 set -u
 [ -n "${STUB_ARGS_LOG:-}" ] && printf '%s\n' "$*" >> "$STUB_ARGS_LOG"
 [ "${STUB_SPIN:-}" = 1 ] && while :; do :; done
 mutate=
-report=
 while [ $# -gt 0 ]; do
   case "$1" in
+    run) ;;
     --mutate) mutate=$2; shift ;;
-    --jsonReporter.fileName) report=$2; shift ;;
+    --reporters) shift ;;
+    *) echo "error: unknown option '$1'" >&2; exit 1 ;;
   esac
   shift
 done
+report=reports/mutation/mutation.json
+if [ -f stryker.config.mjs ]; then
+  name=$(sed -n 's/.*jsonReporter:.*fileName:[[:space:]]*"\([^"]*\)".*/\1/p' stryker.config.mjs | head -n 1)
+  [ -n "$name" ] && report=$name
+fi
+mkdir -p "$(dirname "$report")"
 if [ -n "${STUB_RAW:-}" ]; then
   cp "$STUB_RAW" "$report"
   exit "${STUB_EXIT:-0}"
@@ -20,7 +27,7 @@ fi
 status=${STUB_STATUS:-Killed}
 count=${STUB_COUNT:-2}
 {
-  printf '{"schemaVersion":"1","thresholds":{"high":80,"low":60},"files":{'
+  printf '{"files":{'
   if [ "${STUB_OMIT:-}" != 1 ]; then
     first=1
     old=$IFS
@@ -28,17 +35,17 @@ count=${STUB_COUNT:-2}
     for f in $mutate; do
       [ $first = 1 ] || printf ','
       first=0
-      printf '"%s":{"language":"typescript","source":"","mutants":[' "$f"
+      printf '"%s":{"language":"typescript","mutants":[' "$f"
       i=0
       while [ "$i" -lt "$count" ]; do
         [ "$i" = 0 ] || printf ','
-        printf '{"id":"%s","mutatorName":"ConditionalExpression","replacement":"true","location":{"start":{"line":3,"column":9},"end":{"line":3,"column":14}},"status":"%s"}' "$i" "$status"
+        printf '{"id":"%s","mutatorName":"EqualityOperator","replacement":">=","status":"%s","static":false,"coveredBy":["0"],"location":{"end":{"column":14,"line":3},"start":{"column":9,"line":3}}}' "$i" "$status"
         i=$((i + 1))
       done
-      printf ']}'
+      printf '],"source":""}'
     done
     IFS=$old
   fi
-  printf '}}\n'
+  printf '},"schemaVersion":"1.0","thresholds":{"high":80,"low":60},"testFiles":{},"projectRoot":"/project"}\n'
 } > "$report"
 exit "${STUB_EXIT:-0}"

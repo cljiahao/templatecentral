@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Stub of mutmut 3.x for the seeded mutation-diff test: prints what `mutmut run`, `mutmut results --all true` and `mutmut show <name>` print.
-# Env: STUB_MODULES space-separated module names, STUB_STATUS status for each mutant (default killed), STUB_COUNT mutants per module (default 2), STUB_EXIT exit code of run, STUB_SPIN=1 burns CPU, STUB_ARGS_LOG logs the arguments.
+# Stub of mutmut 3.8.1 for the seeded mutation-diff test: prints what `mutmut run`, `mutmut results --all true` and `mutmut show <name>` print, in the format of tests/fixtures/mutation-diff/real/mutmut-3.8.1.*.txt.
+# Env: STUB_RESULTS a file printed as the results, STUB_SHOW a file printed as the diff, STUB_MODULES space-separated module names, STUB_STATUS status for each mutant (default killed), STUB_COUNT mutants per module (default 2), STUB_EXIT exit code of run, STUB_SPIN=1 burns CPU, STUB_ARGS_LOG logs the arguments.
 set -u
 [ -n "${STUB_ARGS_LOG:-}" ] && printf '%s\n' "$*" >> "$STUB_ARGS_LOG"
 case "${1:-}" in
@@ -10,7 +10,7 @@ case "${1:-}" in
     exit "${STUB_EXIT:-0}"
     ;;
   results)
-    echo "Results"
+    if [ -n "${STUB_RESULTS:-}" ]; then cat "$STUB_RESULTS"; exit 0; fi
     for m in ${STUB_MODULES:-}; do
       i=1
       while [ "$i" -le "${STUB_COUNT:-2}" ]; do
@@ -20,10 +20,12 @@ case "${1:-}" in
     done
     ;;
   show)
+    if [ -n "${STUB_SHOW:-}" ]; then cat "$STUB_SHOW"; exit 0; fi
     cat <<DIFF
+# ${2:-app.x_handler__mutmut_1}: survived
 --- src/app.py
 +++ src/app.py
-@@ -2,5 +2,5 @@
+@@ -1,4 +1,4 @@
  def handler(x):
      y = x
 -    return y > 0

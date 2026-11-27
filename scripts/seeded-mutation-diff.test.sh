@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # scripts/seeded-mutation-diff.test.sh — the seeded check-mutation-diff gate: each rule blocks a bad change and a clean control passes.
-# The real mutation tools are never installed or run. The fixtures hold stub tools (tests/fixtures/mutation-diff/bin) that print the report formats of StrykerJS 9.x
-# (json reporter, mutation-testing-report-schema schemaVersion "1") and of mutmut 3.8.x (`mutmut results --all true` lines "    <module>.x_<name>__mutmut_<n>: <status>" and the unified diff of `mutmut show`).
-# The mutmut format is copied from the tool's documented output and is not run against the real tool here.
+# The tests run stub tools (tests/fixtures/mutation-diff/bin) whose output copies the structure of two real runs, saved under tests/fixtures/mutation-diff/real:
+# StrykerJS 10.1.1 (@stryker-mutator/core and vitest-runner 10.1.1, vitest 5.1.2; json reporter, schemaVersion "1.0") and mutmut 3.8.1 (pytest 9.2.0, python 3.14; `mutmut results --all true` and `mutmut show`).
+# Each ran on a three-file toy project with the seeded config. The real-format cases at the end feed those saved files to the gate unchanged.
 # CPU time is measured with the shell's times builtin, never wall time. Every local-run case clears CI, GITHUB_ACTIONS and TF_BUILD; each CI case sets them.
 # Usage: bash scripts/seeded-mutation-diff.test.sh
 set -uo pipefail
@@ -93,7 +93,7 @@ hasnt "src/a.test.ts" "$(cat "$ARGS")" "the unchanged test file is not mutated"
 
 run "$D" STUB_STATUS=Survived
 check 1 "$EC" "a surviving mutant fails"
-has "src/a.ts line 3, mutator ConditionalExpression (Survived)" "$OUT" "the survivor message names file, line and mutator"
+has "src/a.ts line 3, mutator EqualityOperator (Survived)" "$OUT" "the survivor message names file, line and mutator"
 run "$D" STUB_STATUS=NoCoverage
 check 1 "$EC" "an uncovered mutant fails"
 has "NoCoverage" "$OUT" "the uncovered message names its status"
@@ -327,6 +327,17 @@ printf 'export const U = (x: number) => x > 1;\n' > "$D/src/new.ts"
 run "$D" STUB_STATUS=Survived
 check 1 "$EC" "an untracked source file is judged ($OUT)"
 
+# --- real saved reports
+new_repo realts
+touch_src src/a.ts
+printf 'export const b = 1;\n' > "$D/src/b.ts"
+printf 'export const c = 1;\n' > "$D/src/c.ts"
+run "$D" STUB_RAW="$FIX/real/stryker-10.1.1.report.json"
+check 1 "$EC" "the real Stryker 10.1.1 report with survivors fails ($OUT)"
+has "src/b.ts line 2, mutator EqualityOperator (Survived)" "$OUT" "the real report names the survivor in b.ts"
+has "src/c.ts line 1, mutator BlockStatement (NoCoverage)" "$OUT" "the real report names the uncovered mutant in c.ts"
+hasnt "src/a.ts line" "$OUT" "the real report's killed file a.ts is not named"
+
 # --- mutmut (fastapi)
 # new_py <name>: a repository with the seeded mutmut table and src/app.py, committed on main; sets D.
 new_py() {
@@ -342,49 +353,58 @@ new_py() {
   printf '# changed\n' >> "$D/src/app.py"
 }
 new_py py1
-run "$D" STUB_MODULES=src.app
+printf 'def clamp(n, mx):\n    return n\n' > "$D/src/b.py"
+printf 'def untested(a):\n    return a\n' > "$D/src/c.py"
+printf 'def is_positive(n):\n    return n > 0\n' > "$D/src/a.py"
+run "$D" STUB_RESULTS="$FIX/real/mutmut-3.8.1.results.txt" STUB_SHOW="$FIX/real/mutmut-3.8.1.show.txt"
+check 1 "$EC" "the real mutmut 3.8.1 results with survivors fail ($OUT)"
+has "b.x_clamp__mutmut_1 (survived) in src/b.py line 2, changed source if n > mx: -> if n >= mx:" "$OUT" "the real results name the survivor in b.py"
+has "c.x_untested__mutmut_1 (no tests) in src/c.py" "$OUT" "the real results name the uncovered mutant in c.py"
+hasnt "a.x_is_positive" "$OUT" "the real results' killed module a is not named"
+rm -f "$D/src/b.py" "$D/src/c.py" "$D/src/a.py"
+run "$D" STUB_MODULES=app
 check 0 "$EC" "mutmut control: all mutants killed passes ($OUT)"
 : > "$ARGS"
-run "$D" STUB_MODULES=src.app STUB_ARGS_LOG="$ARGS"
-has "run src.app*" "$(cat "$ARGS")" "mutmut is run on the changed module only"
-run "$D" STUB_MODULES=src.app STUB_STATUS=survived
+run "$D" STUB_MODULES=app STUB_ARGS_LOG="$ARGS"
+has "run app*" "$(cat "$ARGS")" "mutmut is run on the changed module only"
+run "$D" STUB_MODULES=app STUB_STATUS=survived
 check 1 "$EC" "a surviving mutmut mutant fails ($OUT)"
-has "src.app.x_handler__mutmut_1 (survived) in src/app.py line 4, changed source return y > 0 -> return y >= 0" "$OUT" "the mutmut survivor names file, line and the changed source"
-run "$D" STUB_MODULES=src.app STUB_STATUS="no tests"
+has "app.x_handler__mutmut_1 (survived) in src/app.py line 3, changed source return y > 0 -> return y >= 0" "$OUT" "the mutmut survivor names file, line and the changed source"
+run "$D" STUB_MODULES=app STUB_STATUS="no tests"
 check 1 "$EC" "a mutmut mutant with no tests fails"
-run "$D" STUB_MODULES=src.app STUB_COUNT=0
+run "$D" STUB_MODULES=app STUB_COUNT=0
 check 1 "$EC" "mutmut listing no mutant for a file with code fails"
 has "was not mutated" "$OUT" "the zero-mutant failure says so"
-run "$D" STUB_MODULES=src.app STUB_EXIT=1
+run "$D" STUB_MODULES=app STUB_EXIT=1
 check 1 "$EC" "mutmut run failing fails"
-run "$D" STUB_MODULES=src.app STUB_SPIN=1 MUTATION_DIFF_CPU_SECONDS=1
+run "$D" STUB_MODULES=app STUB_SPIN=1 MUTATION_DIFF_CPU_SECONDS=1
 check 1 "$EC" "mutmut cpu cap fails ($OUT)"
 has "used more than 1 CPU seconds" "$OUT" "the mutmut cap failure has its own message"
 printf 'import os\n"""doc"""\n' > "$D/src/app.py"
-run "$D" STUB_MODULES=src.app STUB_COUNT=0
+run "$D" STUB_MODULES=app STUB_COUNT=0
 check 0 "$EC" "mutmut control: an imports-and-docstring file with no mutant passes ($OUT)"
 
 mkdir "$T/evilpy"
 printf 'raise ImportError("evil tomllib")\n' > "$T/evilpy/tomllib.py"
-run "$D" STUB_MODULES=src.app PYTHONPATH="$T/evilpy"
+run "$D" STUB_MODULES=app PYTHONPATH="$T/evilpy"
 check 0 "$EC" "python runs isolated: a PYTHONPATH module cannot replace tomllib ($OUT)"
 
 new_py py2
 printf 'do_not_mutate = ["src/app.py"]\n' >> "$D/pyproject.toml"
-run "$D" STUB_MODULES=src.app
+run "$D" STUB_MODULES=app
 check 1 "$EC" "a new do_not_mutate entry in the same change fails ($OUT)"
 has "do_not_mutate gained an entry" "$OUT" "the do_not_mutate failure says so"
 new_py py3
 printf '[tool.mutmut]\nsource_paths = ["lib/"]\n' > "$D/pyproject.toml"
-run "$D" STUB_MODULES=src.app
+run "$D" STUB_MODULES=app
 check 1 "$EC" "a removed source_paths entry fails ($OUT)"
 new_py py4
 printf 'x = 1  # pragma: no mutate\n' >> "$D/src/app.py"
-run "$D" STUB_MODULES=src.app
+run "$D" STUB_MODULES=app
 check 1 "$EC" "a new pragma: no mutate comment fails ($OUT)"
 new_py py5
 printf '[project]\nname = "x"\n' > "$D/pyproject.toml"
-run "$D" STUB_MODULES=src.app
+run "$D" STUB_MODULES=app
 check 1 "$EC" "a removed [tool.mutmut] table fails ($OUT)"
 new_py py6
 D="$T/py6"
@@ -400,12 +420,12 @@ git -C "$D" mv src backend/src
 git -C "$D" mv test backend/test
 git -C "$D" commit -q -m move
 printf '# again\n' >> "$D/backend/src/app.py"
-run "$D" STUB_MODULES=src.app STUB_STATUS=survived
+run "$D" STUB_MODULES=app STUB_STATUS=survived
 check 1 "$EC" "a fastapi app in backend/ is found and judged ($OUT)"
 has "backend/src/app.py" "$OUT" "the backend survivor names the full path"
 new_py py8
 OLDPY=$PYBIN
-OUT=$(cd "$D" && env -u CI -u GITHUB_ACTIONS -u TF_BUILD PATH="$NONODE:$FIX/bin" STUB_MODULES=src.app "$(command -v bash)" "$GATE" main 2>&1)
+OUT=$(cd "$D" && env -u CI -u GITHUB_ACTIONS -u TF_BUILD PATH="$NONODE:$FIX/bin" STUB_MODULES=app "$(command -v bash)" "$GATE" main 2>&1)
 check 1 "$?" "a missing python3 fails ($OUT)"
 has "python3 is not installed" "$OUT" "the missing python3 line says so"
 PYBIN=$OLDPY

@@ -217,6 +217,13 @@ try {
       if (disables(now) > disables(gitShow(mb, prefix + f))) { out("FAIL", f + " gains a 'Stryker disable' comment, which hides mutants from the gate."); continue; }
       out("RUN", f, hasCode(now) ? "code" : "nocode");
     }
+  } else if (cmd === "reportpath") {
+    // reportpath <config>: where the json reporter writes, relative to the project root
+    const mod = await import(pathToFileURL(a[0]).href);
+    const jr = mod.default && mod.default.jsonReporter;
+    const fn = jr && "fileName" in jr ? jr.fileName : "reports/mutation/mutation.json";
+    if (typeof fn !== "string" || fn === "" || fn.startsWith("/") || fn.split("/").includes("..")) out("FAIL", "jsonReporter.fileName must be a relative path inside the project, got " + JSON.stringify(fn));
+    else out("PATH", fn);
   } else if (cmd === "report") {
     // report <report.json> <run list: file<TAB>code|nocode per line>
     const [repF, runF] = a;
@@ -338,12 +345,17 @@ try:
             if pragmas(now) > pragmas(git_show(mb, prefix + f)):
                 out("FAIL", f + " gains a 'pragma: no mutate' comment, which hides mutants from the gate.")
                 continue
-            module = f[:-3].replace("/", ".")
+            root_p = max((p for p in use_paths if f.startswith(p)), key=len)
+            module = f[len(root_p):-3].replace("/", ".")
             out("RUN", f, module, "code" if has_code(now) else "nocode")
     elif cmd == "results":
         res_f, run_f = sys.argv[2:4]
         ok = {"killed", "timeout", "skipped"}
         seen = {}
+        files_of = {}
+        for ln in open(run_f, encoding="utf-8").read().splitlines():
+            f, module, code = ln.split("\t")
+            files_of[module] = f
         for ln in open(res_f, encoding="utf-8").read().splitlines():
             m = re.fullmatch(r"\s+(\S+): (.+?)\s*", ln)
             if not m:
@@ -358,7 +370,7 @@ try:
             if status in ("killed", "timeout"):
                 seen[mod][0] += 1
             if status not in ok:
-                out("SURVIVOR", mod, name, status)
+                out("SURVIVOR", files_of.get(mod, mod), name, status)
         for ln in open(run_f, encoding="utf-8").read().splitlines():
             f, module, code = ln.split("\t")
             k, n = seen.get(module, [0, 0])
@@ -516,9 +528,15 @@ judge_root() {
     cut -f2- "$tmp/runs.txt" > "$tmp/run.txt"
     local list
     list=$(cut -f2 "$tmp/runs.txt" | tr '\n' ',' | sed 's/,$//')
-    rm -f "$tmp/report.json"
-    run_capped "$root" stryker run --mutate "$list" --reporters json --jsonReporter.fileName "$tmp/report.json"
+    (cd "$root" && node "$tmp/helper.mjs" reportpath "$PWD/stryker.config.mjs") > "$tmp/rp.txt" 2> "$tmp/err.txt" || { fail "$label: the node helper stopped: $(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"; return; }
+    report_fails "$tmp/rp.txt" "$label"
+    local rpk rpath
+    IFS="$(printf '\t')" read -r rpk rpath < "$tmp/rp.txt"
+    if [ "$rpk" != PATH ]; then return; fi
+    rm -f "$root/$rpath"
+    run_capped "$root" stryker run --mutate "$list" --reporters json
     if cap_ended "$label"; then return; fi
+    cp "$root/$rpath" "$tmp/report.json" 2> /dev/null
     if [ ! -s "$tmp/report.json" ]; then
       fail "$label: stryker exited $TOOL_EC and wrote no report, so nothing was judged."
       tool_tail
@@ -565,7 +583,7 @@ judge_root() {
         cp "$tmp/tool.out" "$tmp/show.txt" || die "cannot save the mutant diff"
         "$py" -I "$tmp/helper.py" diff "$tmp/show.txt" > "$tmp/line.txt" 2> /dev/null || true
         IFS="$(printf '\t')" read -r ln desc < "$tmp/line.txt"
-        fail "$label: surviving mutant $b ($c) in ${prefix}$(printf '%s' "$a" | tr . /).py line ${ln:-?}, changed source ${desc:-unknown}. Add or strengthen a test that fails when this change is made."
+        fail "$label: surviving mutant $b ($c) in ${prefix}$a line ${ln:-?}, changed source ${desc:-unknown}. Add or strengthen a test that fails when this change is made."
         survivors=$((survivors + 1))
       fi
     done < "$tmp/res.txt"
