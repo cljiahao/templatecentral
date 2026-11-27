@@ -16,6 +16,8 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    // exactOptionalPropertyTypes stays off: shadcn's generated sonner.tsx and the fetch, Response and vitest option bags pass undefined (4 errors).
     "paths": {
       "@/*": ["./src/*"]
     },

@@ -1,0 +1,1 @@
+- Seeded nestjs `tsconfig.json` turns on `exactOptionalPropertyTypes` and seeded vite-react turns on `noPropertyAccessFromIndexSignature`; each flag that stays off (nextjs both, vite-react `exactOptionalPropertyTypes`) now carries its error count and cause in the `tsconfig.json`.

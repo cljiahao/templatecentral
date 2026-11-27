@@ -16,10 +16,10 @@ import { appConfig } from './config';
           paths: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
           remove: true,
         },
-        transport:
-          appConfig.ENVIRONMENT !== 'prod' && appConfig.ENVIRONMENT !== 'uat'
-            ? { target: 'pino-pretty', options: { singleLine: true } }
-            : undefined,
+        ...(appConfig.ENVIRONMENT !== 'prod' &&
+          appConfig.ENVIRONMENT !== 'uat' && {
+            transport: { target: 'pino-pretty', options: { singleLine: true } },
+          }),
       },
     }),
     BaseModule,
