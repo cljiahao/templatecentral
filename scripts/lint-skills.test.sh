@@ -1671,7 +1671,7 @@ run_pfd() {
 pool_serial_point
 
 # ── check_seeded_here_strings: the scanner alone on fixture files, plus the wiring ──
-# hsd <name> <file body> <"LINE" | clean>: one fixture per case; the scanner runs once over all of them.
+# hsd <name> <file body> <LINE | clean>: one fixture per case; the scanner runs once over all of them.
 H_HS="Seeded pipefail scripts and hooks use no here-string"
 HSD_NAMES=()
 HSD_FILES=()
@@ -1687,40 +1687,32 @@ hsd here_string_inside_quoted_substitution "${HS_PF}"$'v="$(grep x <<< "$y")"\n'
 hsd here_string_after_quoted_text "${HS_PF}"$'echo "a" \'b\' && grep -q x <<< "$v"\n' "3"
 hsd here_string_fed_to_command_stdin "${HS_PF}"$'out=$(bash h.sh <<<"$2")\n' "3"
 hsd here_string_in_hook_without_pipefail $'#!/usr/bin/env bash\ngrep -q x <<< "$v"\n' "2"
-hsd printf_pipe_is_clean "${HS_PF}"$'printf \'%s\\n\' "$v" | grep x >/dev/null\n' clean
-hsd process_substitution_is_clean "${HS_PF}"$'while read -r l; do :; done < <(printf \'%s\\n\' "$x")\n' clean
-hsd here_string_in_comment_is_clean "${HS_PF}"$'# grep -q x <<< "$v"\n' clean
-hsd here_string_in_single_quotes_is_clean "${HS_PF}"$'awk \'{ gsub(/<<</, ""); print }\' f\n' clean
-hsd here_string_in_multiline_awk_is_clean "${HS_PF}"$'x=$(printf a | awk \'\n  { l = $0; gsub(/<<</, "", l) }\n  END { print l }\')\n' clean
-hsd here_string_in_double_quotes_is_clean "${HS_PF}"$'echo "use <<< never"\n' clean
-hsd here_string_in_heredoc_body_is_clean "${HS_PF}"$'cat <<EOF\ngrep -q x <<< "$v"\nEOF\n' clean
-hsd arithmetic_shift_is_clean "${HS_PF}"$'(( x = 1 << 2 ))\n' clean
-hsd script_without_pipefail_is_clean $'#!/usr/bin/env bash\nset -u\ngrep -q x <<< "$v"\n' clean
-hsd shift_by_variable_keeps_scanning "${HS_PF}"$'x=$((1 << n))\nif grep -q a <<< "$y"; then :; fi\n' "4"
-hsd shift_by_digit_keeps_scanning "${HS_PF}"$'x=$((1 << 3))\ngrep -q a <<< "$y"\n' "4"
-hsd shift_assignment_keeps_scanning "${HS_PF}"$'(( x <<= n ))\ngrep -q a <<< "$y"\n' "4"
-hsd shift_in_double_parens_keeps_scanning "${HS_PF}"$'(( y = 1 << n ))\ngrep -q a <<< "$y"\n' "4"
-hsd shift_in_nested_arithmetic_keeps_scanning "${HS_PF}"$'x=$(( (1 << n) + 2 ))\ngrep -q a <<< "$y"\n' "4"
-hsd real_heredoc_then_here_string "${HS_PF}"$'cat <<EOF\nbody\nEOF\ngrep -q a <<< "$y"\n' "6"
-hsd unterminated_heredoc_fails_closed "${HS_PF}"$'cat <<EOF\nbody\n' "3h"
-hsd unterminated_heredoc_without_newline_fails_closed "${HS_PF}"$'cat <<EOF' "3h"
-hsd shift_with_no_here_string_is_clean "${HS_PF}"$'x=$((1 << n))\necho "$x"\n' clean
 hsd here_string_in_substitution_in_arithmetic "${HS_PF}"$'x=$(( $(grep -c a <<< "$v") + 1 ))\n' "3"
 hsd here_string_in_substitution_in_command_arithmetic "${HS_PF}"$'(( n = $(wc -l <<< "$x") ))\n' "3"
 hsd here_string_in_doubly_nested_arithmetic "${HS_PF}"$'echo $(( $(( $(grep a <<< b) )) ))\n' "3"
 hsd here_string_in_quoted_substitution_in_arithmetic "${HS_PF}"$'x=$(( "$(grep a <<< b)" ))\n' "3"
-hsd backslash_quoted_heredoc_word_ends_at_its_terminator "${HS_PF}"$'cat <<\\EOF\nit\'s\nEOF\ngrep a <<< "$y"\n' "6"
-hsd heredoc_word_with_escaped_character_ends_at_its_terminator "${HS_PF}"$'cat <<E\\OF\nit\'s\nEOF\ngrep a <<< "$y"\n' "6"
-hsd double_quoted_heredoc_word_then_here_string "${HS_PF}"$'cat <<"EOF"\nit\'s\nEOF\ngrep a <<< "$y"\n' "6"
-hsd shift_inside_double_quotes_is_clean "${HS_PF}"$'echo "$(( 1 << n ))"\n' clean
-hsd shift_inside_double_quotes_keeps_scanning "${HS_PF}"$'echo "$(( 1 << n ))"\ngrep a <<< "$y"\n' "4"
-hsd let_shift_keeps_scanning "${HS_PF}"$'let x=1<<n\ngrep a <<< "$y"\n' "4"
-hsd bracket_arithmetic_shift_keeps_scanning "${HS_PF}"$'x=$[1<<n]\ngrep a <<< "$y"\n' "4"
-hsd double_paren_after_word_shift_keeps_scanning "${HS_PF}"$'echo foo((1<<n))\ngrep a <<< "$y"\n' "4"
-hsd unterminated_arithmetic_fails_closed_naming_arithmetic "${HS_PF}"$'x=$(( 1 << n\n' "3a"
-hsd arithmetic_forms_are_clean "${HS_PF}"$'x=$((1 << n))\nlet y=2<<3\nz=$[1<<2]\ncat <<\\E\nit\'s\nE\n' clean
+hsd here_string_after_shift "${HS_PF}"$'x=$((1 << n))\nif grep -q a <<< "$y"; then :; fi\n' "4"
+hsd here_string_after_real_heredoc "${HS_PF}"$'cat <<EOF\nbody\nEOF\ngrep -q a <<< "$y"\n' "6"
+hsd here_string_after_backslash_heredoc_with_apostrophe "${HS_PF}"$'cat <<\\EOF\nit\'s\nEOF\ngrep a <<< "$y"\n' "6"
+hsd here_string_after_let_argument_and_apostrophe "${HS_PF}"$'echo let x <<EOF\nit\'s\nEOF\ngrep a <<< "$y"\n' "6"
+hsd here_string_in_unquoted_heredoc_body "${HS_PF}"$'cat <<EOF\n$(grep a <<< b)\nEOF\n' "4"
+hsd here_string_after_ansi_c_quote "${HS_PF}"$'echo $\'a\\\'b\'\ngrep a <<< "$y"\n' "4"
+hsd here_string_in_parameter_expansion_text "${HS_PF}"$'echo "${x:1<<2}" <<< "$y"\n' "3"
+hsd here_string_in_single_quotes_is_a_hit "${HS_PF}"$'awk \'{ gsub(/<<</, ""); print }\' f\n' "3"
+hsd here_string_in_double_quotes_is_a_hit "${HS_PF}"$'echo "use <<< never"\n' "3"
+hsd printf_pipe_is_clean "${HS_PF}"$'printf \'%s\\n\' "$v" | grep x >/dev/null\n' clean
+hsd process_substitution_is_clean "${HS_PF}"$'while read -r l; do :; done < <(printf \'%s\\n\' "$x")\n' clean
+hsd full_line_comment_is_clean "${HS_PF}"$'# grep -q x <<< "$v"\n' clean
+hsd indented_full_line_comment_is_clean "${HS_PF}"$'  \t# grep -q x <<< "$v"\n' clean
+hsd script_without_pipefail_is_clean $'#!/usr/bin/env bash\nset -u\ngrep -q x <<< "$v"\n' clean
+hsd arithmetic_shift_is_clean "${HS_PF}"$'(( x = 1 << 2 ))\nx=$((1 << n))\nlet y=2<<3\nz=$[1<<2]\n' clean
+hsd shift_in_expansion_and_index_is_clean "${HS_PF}"$'echo "${x:1<<2}"\na[1<<n]=5\n' clean
+hsd real_heredoc_is_clean "${HS_PF}"$'cat <<EOF\nbody\nEOF\ncat <<-\'E\'\n\tx\n\tE\n' clean
+hsd allow_listed_line_is_clean "${HS_PF}"$'echo a <<< b\n' clean
+hsd allow_listed_text_with_other_spacing_is_a_hit "${HS_PF}"$'echo a  <<< b\n' "3"
+hsd stale_allow_row_file_is_clean "${HS_PF}"$'x=1\n' clean
 run_hsd() {
-  local d="$T/hsd" py i f out want kind line got
+  local d="$T/hsd" py i f out want got
   py=$(awk '/^check_seeded_here_strings\(\)/ { f = 1 } f && /read -r -d .. py <<.PY. \|\| true/ { on = 1; next } on && /^PY$/ { exit } on { print }' "$LINT")
   [[ -n "$py" ]] || { FAIL=$((FAIL + 1)); echo "FAIL: hsd — could not extract the scanner from $LINT"; return 0; }
   rm -rf "$d"; mkdir -p "$d/hooks"
@@ -1729,7 +1721,7 @@ run_hsd() {
     [[ "${HSD_NAMES[$i]}" == *_hook_* ]] && f="$d/hooks/${HSD_NAMES[$i]}.sh"
     printf '%s' "${HSD_FILES[$i]}" > "$f"
   done
-  out=$(find "$d" -type f | LC_ALL=C sort | xargs python3 -I -c "$py" 2>&1 || true)
+  out=$(find "$d" -type f | LC_ALL=C sort | HS_ROOT="$d" HS_ALLOW=$'allow_listed_line_is_clean.sh\techo a <<< b\nstale_allow_row_file_is_clean.sh\tnever there\nallow_listed_text_with_other_spacing_is_a_hit.sh\techo a <<< b' xargs python3 -I -c "$py" 2>&1 || true)
   check "${#HSD_NAMES[@]}" "$(awk '/^DONE / { n += $2 } END { print n + 0 }' <<<"$out")" "hsd: the scanner finished every fixture"
   for i in "${!HSD_NAMES[@]}"; do
     f="$d/${HSD_NAMES[$i]}.sh"
@@ -1738,25 +1730,26 @@ run_hsd() {
     if [[ "$want" == clean ]]; then
       check "" "$(grep -F "$f:" <<<"$out" || true)" "${HSD_NAMES[$i]} reports nothing"
     else
-      kind="here-string"
-      [[ "$want" == *h ]] && kind="heredoc "
-      [[ "$want" == *a ]] && kind="arithmetic span "
-      line=${want%[ha]}
       got=no
-      if grep -qE "^HIT $f:$line: $kind" <<<"$out"; then got=yes; fi
-      check yes "$got" "${HSD_NAMES[$i]} reports line $line"
+      if grep -qE "^HIT $f:$want: <<< is a here-string" <<<"$out"; then got=yes; fi
+      check yes "$got" "${HSD_NAMES[$i]} reports line $want"
     fi
   done
+  got=no
+  if grep -qE '^HIT stale_allow_row_file_is_clean.sh: HERE_STRING_ALLOW row matches no line' <<<"$out"; then got=yes; fi
+  check yes "$got" "a stale allow row is reported"
 }
 hs_pipefail_fixture() { pf_script 'set -uo pipefail' $'grep -q x <<< "$v"'; }
-fails here_string_in_seeded_pipefail_script_fails_the_lint "$H_HS" hs_pipefail_fixture "zz-pipefail-fixture.sh:3: here-string"
+fails here_string_in_seeded_pipefail_script_fails_the_lint "$H_HS" hs_pipefail_fixture "zz-pipefail-fixture.sh:3: <<< is a here-string"
 hs_mutant_ts() { printf '%s\n' $'grep -q x <<< "$v"' >> "$S/scaffold/shared/template-ts/.claude/hooks/block-no-verify.sh"; }
 hs_mutant_py() { printf '%s\n' $'grep -q x <<< "$v"' >> "$S/scaffold/shared/template-py/.claude/hooks/block-no-verify.sh"; }
 fails here_string_planted_in_the_ts_block_no_verify_hook_fails_the_lint "$H_HS" hs_mutant_ts "template-ts/.claude/hooks/block-no-verify.sh:"
 fails here_string_planted_in_the_py_block_no_verify_hook_fails_the_lint "$H_HS" hs_mutant_py "template-py/.claude/hooks/block-no-verify.sh:"
 passes unchanged_block_no_verify_hooks_pass_the_here_string_lint "$H_HS" true
+hs_stale_row() { local f="$S/scaffold/shared/template-ts/.claude/hooks/block-no-verify.sh"; awk '!/gsub\(\/<<<\//' "$f" > "$f.new" && cat "$f.new" > "$f" && rm "$f.new"; }
+fails stale_allow_row_for_a_removed_line_fails_the_lint "$H_HS" hs_stale_row "HERE_STRING_ALLOW row matches no line"
 hs_hook_fixture() { printf '%s\n' '#!/usr/bin/env bash' $'grep -q x <<< "$v"' > "$S/scaffold/shared/template-ts/.claude/hooks/zz-fixture.sh"; }
-fails here_string_in_a_hook_fails_the_lint "$H_HS" hs_hook_fixture "hooks/zz-fixture.sh:2: here-string"
+fails here_string_in_a_hook_fails_the_lint "$H_HS" hs_hook_fixture "hooks/zz-fixture.sh:2: <<< is a here-string"
 
 # ── file line budget: the check alone, on a scratch tree (a full lint per probe is too slow) ──
 # lb_probe builds a tree that passes (the clean control), applies one mutation and expects the

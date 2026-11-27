@@ -2508,257 +2508,67 @@ PY
     "No seeded pipefail script pipes into an early-exit reader"
 }
 
+# Lines that hold the characters <<< but are not a here-string: "path<TAB>exact line", path relative to the skills folder.
+HERE_STRING_ALLOW=(
+  $'scaffold/shared/template-ts/.claude/hooks/block-no-verify.sh\t  { print; l = $0; gsub(/<<</, "", l)'
+  $'scaffold/shared/template-py/.claude/hooks/block-no-verify.sh\t  { print; l = $0; gsub(/<<</, "", l)'
+)
+
 check_seeded_here_strings() {
   # A here-string is written to a temp file before the command starts. When the temp folder is
   # unwritable or full, bash prints one error and the command reads nothing: a grep match test reads as
-  # no match, a read leaves its variable empty, a loop runs no turns. A gate then passes unchecked. No
-  # seeded script that sets pipefail, and no hook, may use <<<; use printf piped into a reader that
-  # reads to the end (grep without -q, with >/dev/null), a case match, a parameter-expansion loop or a
-  # process substitution. No waiver comment exists. Quoted text, comments, heredoc bodies and awk or
-  # python programs inside quotes are not code and are skipped. A file the scanner cannot read fails,
-  # and the scanner must report every file it was given. Will not catch, a closed list: a here-string
-  # built by eval or inside a quoted sh -c string, and scripts that neither set pipefail nor sit under
-  # a hooks folder. TIMELESS.
+  # no match, a read leaves its variable empty, a loop runs no turns. A gate then passes unchecked. So
+  # the lint does not parse bash: a seeded script that sets pipefail, and every hook, may not hold the
+  # three characters <<< on any line, except a full-line comment and the exact lines in
+  # HERE_STRING_ALLOW (text that is not a here-string, such as an awk pattern). An allow row that
+  # matches no line fails, so a stale row cannot hide a later hit. A file that cannot be read fails and
+  # the scanner must report every file it was given. Use printf piped into a reader that reads to the
+  # end, a redirect, a case match or a process substitution instead. TIMELESS.
   header "Seeded pipefail scripts and hooks use no here-string"
   if ! have_python; then
     fail "python3 is required for this check"
     return
   fi
-  local py out hits scan_list expected scanned
+  local py out hits scan_list expected scanned allow
   read -r -d '' py <<'PY' || true
-import re, sys
+import os, sys
 
-HEREDOC = re.compile(r"<<(-?)[ \t]*")
-
-
-def scan(t):
-    n = len(t)
-    hits, pend, bad = [], [], []
-
-    def line(i):
-        return t.count("\n", 0, i) + 1
-
-    def skip_quote(i, q):
-        j = t.find(q, i)
-        return n if j < 0 else j + 1
-
-    def backtick(i):
-        j = i
-        while j < n and t[j] != "`":
-            j += 2 if t[j] == "\\" else 1
-        k = t.find("<<<", i, j)
-        while k >= 0:
-            hits.append(line(k))
-            k = t.find("<<<", k + 3, j)
-        return j + 1
-
-    def skip_dq(i):
-        while i < n:
-            c = t[i]
-            if c == "\\":
-                i += 2
-            elif c == '"':
-                return i + 1
-            elif c == "$" and t[i + 1:i + 2] in ("(", "["):
-                i = dollar(i)
-            elif c == "`":
-                i = backtick(i + 1)
-            else:
-                i += 1
-        return n
-
-    def word(i):
-        out, j = [], i
-        while j < n:
-            c = t[j]
-            if c == "\\" and j + 1 < n and t[j + 1] != "\n":
-                out.append(t[j + 1])
-                j += 2
-            elif c in "'\"":
-                k = t.find(c, j + 1)
-                if k < 0 or "\n" in t[j + 1:k]:
-                    return None
-                out.append(t[j + 1:k])
-                j = k + 1
-            elif c in " \t\n;&|<>()`":
-                break
-            else:
-                out.append(c)
-                j += 1
-        return ("".join(out), j) if j > i else None
-
-    def heredocs(i):
-        while pend:
-            dash, w, ln = pend.pop(0)
-            found = False
-            while i < n:
-                j = t.find("\n", i)
-                j = n if j < 0 else j
-                row = t[i:j]
-                i = min(j + 1, n)
-                if (row.lstrip("\t") if dash else row) == w:
-                    found = True
-                    break
-            if not found:
-                bad.append((ln, "heredoc <<%s never ends" % w))
-        return i
-
-    def pre(i):
-        depth = 2
-        while i < n:
-            c = t[i]
-            if c == "\\":
-                i += 2
-                continue
-            if c == "'":
-                k = t.find("'", i + 1)
-                i = n if k < 0 else k + 1
-                continue
-            if c == '"':
-                k = i + 1
-                while k < n and t[k] != '"':
-                    k += 2 if t[k] == "\\" else 1
-                i = k + 1
-                continue
-            if c == "(":
-                depth += 1
-            elif c == ")":
-                depth -= 1
-                if depth == 1 and t[i + 1:i + 2] != ")":
-                    return "sub"
-                if depth == 0:
-                    return "arith"
-            i += 1
-        return "eof"
-
-    def arith(i, closer):
-        start, depth = i, 0
-        while i < n:
-            c = t[i]
-            if c == "\\":
-                i += 2
-            elif c == "'":
-                i = skip_quote(i + 1, "'")
-            elif c == '"':
-                i = skip_dq(i + 1)
-            elif c == "$" and t[i + 1:i + 2] in ("(", "["):
-                i = dollar(i)
-            elif c == "`":
-                i = backtick(i + 1)
-            elif t.startswith("<<<", i):
-                hits.append(line(i))
-                i += 3
-            elif t.startswith("<<", i):
-                i += 2
-            elif closer == "]":
-                if c == "[":
-                    depth += 1
-                elif c == "]":
-                    if depth == 0:
-                        return i + 1
-                    depth -= 1
-                i += 1
-            else:
-                if c == "(":
-                    depth += 1
-                elif c == ")":
-                    if depth > 0:
-                        depth -= 1
-                    elif t[i + 1:i + 2] == ")":
-                        return i + 2
-                    else:
-                        return i + 1
-                i += 1
-        bad.append((line(start), "arithmetic span never ends"))
-        return n
-
-    def dollar(i):
-        if t.startswith("$((", i):
-            kind = pre(i + 3)
-            if kind == "arith":
-                return arith(i + 3, "))")
-            if kind == "eof":
-                bad.append((line(i), "arithmetic span never ends"))
-                return n
-            return code(i + 2, True)
-        if t.startswith("$[", i):
-            return arith(i + 2, "]")
-        return code(i + 2, True)
-
-    def code(i, sub):
-        depth, let = 0, False
-        while i < n:
-            c = t[i]
-            if let and (c in "\n;&|" or (sub and c == ")")):
-                let = False
-            if c == "\\":
-                i += 2
-            elif c == "'":
-                i = skip_quote(i + 1, "'")
-            elif c == '"':
-                i = skip_dq(i + 1)
-            elif c == "#" and (i == 0 or t[i - 1] in " \t\n;&|("):
-                j = t.find("\n", i)
-                i = n if j < 0 else j
-            elif c == "$" and t[i + 1:i + 2] == "'":
-                i = skip_quote(i + 2, "'")
-            elif c == "$" and t[i + 1:i + 2] in ("(", "["):
-                i = dollar(i)
-            elif t.startswith("((", i) and pre(i + 2) == "arith":
-                i = arith(i + 2, "))")
-            elif c == "l" and t.startswith("let", i) and (i == 0 or t[i - 1] in " \t\n;&|(") and t[i + 3:i + 4] in (" ", "\t"):
-                let = True
-                i += 3
-            elif sub and c == "(":
-                depth += 1
-                i += 1
-            elif sub and c == ")":
-                if depth == 0:
-                    return i + 1
-                depth -= 1
-                i += 1
-            elif t.startswith("<<<", i):
-                hits.append(line(i))
-                i += 3
-            elif t.startswith("<<", i):
-                m = HEREDOC.match(t, i)
-                w = None if let else word(m.end())
-                if w:
-                    pend.append((m.group(1) == "-", w[0], line(i)))
-                    i = w[1]
-                else:
-                    i = m.end() if let else i + 2
-            elif c == "\n" and pend:
-                i = heredocs(i + 1)
-            else:
-                i += 1
-        return n
-
-    code(0, False)
-    heredocs(n)
-    return hits, bad
+root = os.environ["HS_ROOT"].rstrip("/") + "/"
+allow = {}
+for row in os.environ.get("HS_ALLOW", "").split("\n"):
+    if row:
+        path, _, text = row.partition("\t")
+        allow[(path, text)] = False
 
 
-def sets_pipefail(text):
-    return any("pipefail" in r and not r.lstrip().startswith("#") for r in text.splitlines())
+def sets_pipefail(lines):
+    return any("pipefail" in r and not r.lstrip().startswith("#") for r in lines)
 
 
 for path in sys.argv[1:]:
     with open(path, encoding="utf-8", errors="replace") as fh:
-        text = fh.read()
-    if sets_pipefail(text) or "/hooks/" in path:
-        found, bad = scan(text)
-        for ln in found:
-            print("HIT %s:%d: here-string" % (path, ln))
-        for ln, msg in bad:
-            print("HIT %s:%d: %s, so the scanner cannot tell code from text after it" % (path, ln, msg))
+        lines = fh.read().split("\n")
+    rel = path[len(root):] if path.startswith(root) else path
+    if not (sets_pipefail(lines) or "/hooks/" in path):
+        continue
+    for n, text in enumerate(lines, 1):
+        if "<<<" not in text or text.lstrip().startswith("#"):
+            continue
+        if (rel, text) in allow:
+            allow[(rel, text)] = True
+            continue
+        print("HIT %s:%d: <<< is a here-string; use a pipe or a redirect, or add a HERE_STRING_ALLOW row with a reason if it is not one" % (path, n))
+for (rel, text), used in allow.items():
+    if not used:
+        print("HIT %s: HERE_STRING_ALLOW row matches no line: %s" % (rel, text))
 print("DONE %d" % len(sys.argv[1:]))
 PY
   scan_list=$({
     template_files
     { (cd "$SKILLS_DIR" 2>/dev/null && find migrate/general -type f -name '*.sh') || true; } | sed "s|^|$SKILLS_DIR/|"
   } | grep -E '\.(sh|envsh)$' | LC_ALL=C sort -u)
-  out=$(printf '%s\n' "$scan_list" | xargs python3 -I -c "$py" || true)
+  allow=$(printf '%s\n' "${HERE_STRING_ALLOW[@]}")
+  out=$(printf '%s\n' "$scan_list" | HS_ROOT="$SKILLS_DIR" HS_ALLOW="$allow" xargs python3 -I -c "$py" || true)
   hits=$(printf '%s\n' "$out" | grep -E '^HIT ' | sed -E 's/^HIT //' || true)
   expected=$(printf '%s\n' "$scan_list" | grep -c . || true)
   scanned=$(printf '%s\n' "$out" | awk '/^DONE / { n += $2 } END { print n + 0 }')
@@ -2766,8 +2576,8 @@ PY
     hits="${hits:+$hits$'\n'}the scanner stopped early: it finished $scanned of $expected files, so the files after it were not checked"
   fi
   report "$hits" \
-    "A seeded pipefail script or hook uses a here-string — its temp file can fail to open and the command then reads nothing; pipe printf into a reader that reads to the end, or use a case match" \
-    "No seeded pipefail script or hook uses a here-string"
+    "A seeded pipefail script or hook holds <<< — a here-string's temp file can fail to open and the command then reads nothing; pipe printf into a reader that reads to the end, use a redirect or a case match" \
+    "No seeded pipefail script or hook holds <<<"
 }
 
 # ── RUN ALL CHECKS ─────────────────────────────────────────────────────────────
