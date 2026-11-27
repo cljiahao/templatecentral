@@ -152,7 +152,7 @@ while IFS="$(printf '\t')" read -r path origin; do
   if [ "$hash_ok" -eq 0 ]; then differs=$((differs + 1)); fi
   if [ "$hash_ok" -ne 1 ]; then
     if [ "$hash_ok" -eq 0 ]; then why="content differs from what was seeded"; else why="no seeded hash recorded, so unchanged content cannot be proved"; fi
-    if grep -Fxq -- "$path" <<<"$force"; then
+    if printf '%s\n' "$force" | grep -Fx -- "$path" >/dev/null; then
       printf 'remove-harness: %s %s (forced; %s).\n' "$verb" "$path" "$why"
     else
       printf 'remove-harness: KEEP %s: %s. To remove it anyway: --apply --force %s\n' "$path" "$why" "$path"

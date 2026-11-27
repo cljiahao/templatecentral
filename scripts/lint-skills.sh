@@ -1986,8 +1986,8 @@ check_seeded_pipefail_readers() {
   # A seeded script that sets pipefail must not pipe into a reader that can quit before the writer
   # finishes: grep -q (any flag spelling, also -m, -l, -L), head, sed with q, awk with an exit outside
   # END, or read. Past 64 KB the writer is killed (EPIPE), the pipeline returns non-zero, and a real
-  # match reads as no match, so a gate is skipped. Use a here-string, a temp file, a case match or a
-  # reader that reads to the end. No waiver comment exists. The scan covers every .sh, .envsh, .yml
+  # match reads as no match, so a gate is skipped. Use printf piped into a reader that reads to the end,
+  # a case match or a temp file you check. No waiver comment exists. The scan covers every .sh, .envsh, .yml
   # and .yaml file in a template tree and under migrate/general that sets pipefail, and the inline
   # run/script blocks of the CI yaml. Heredoc bodies and backtick bodies are skipped. A file the
   # tokenizer cannot finish also fails, the scanner must report every file it was given (a crash
@@ -2010,7 +2010,7 @@ check_seeded_pipefail_readers() {
 import json, os, re, sys
 
 
-WHY = "the reader can exit before the writer finishes, so under pipefail a real match reads as no match; use a here-string, a temp file, a case match or a reader that reads to the end"
+WHY = "the reader can exit before the writer finishes, so under pipefail a real match reads as no match; use printf piped into a reader that reads to the end (grep without -q, with >/dev/null), a case match or a temp file you check"
 PREFIX = ("command", "builtin", "env", "exec", "time", "nice", "!", "{", "(", "if", "then", "do", "else", "while", "until")
 WRAPPERS = ("xargs", "timeout", "sudo", "stdbuf", "nice", "ionice", "nohup")
 READERS = ("grep", "egrep", "fgrep", "ggrep", "head", "ghead", "sed", "gsed", "awk", "gawk", "mawk", "nawk", "read")
@@ -2553,8 +2553,143 @@ PY
     hits="${hits:+$hits$'\n'}anchor script missing or no longer sets pipefail: $missing"
   fi
   report "$hits" \
-    "A seeded pipefail script pipes into an early-exit reader (or cannot be parsed) — use a here-string, a temp file, a case match or a reader that reads to the end" \
+    "A seeded pipefail script pipes into an early-exit reader (or cannot be parsed) — pipe printf into a reader that reads to the end (grep without -q, with >/dev/null), use a case match or a temp file you check" \
     "No seeded pipefail script pipes into an early-exit reader"
+}
+
+check_seeded_here_strings() {
+  # A here-string is written to a temp file before the command starts. When the temp folder is
+  # unwritable or full, bash prints one error and the command reads nothing: a grep match test reads as
+  # no match, a read leaves its variable empty, a loop runs no turns. A gate then passes unchecked. No
+  # seeded script that sets pipefail, and no hook, may use <<<; use printf piped into a reader that
+  # reads to the end (grep without -q, with >/dev/null), a case match, a parameter-expansion loop or a
+  # process substitution. No waiver comment exists. Quoted text, comments, heredoc bodies and awk or
+  # python programs inside quotes are not code and are skipped. A file the scanner cannot read fails,
+  # and the scanner must report every file it was given. Will not catch, a closed list: a here-string
+  # built by eval or inside a quoted sh -c string, and scripts that neither set pipefail nor sit under
+  # a hooks folder. TIMELESS.
+  header "Seeded pipefail scripts and hooks use no here-string"
+  if ! have_python; then
+    fail "python3 is required for this check"
+    return
+  fi
+  local py out hits scan_list expected scanned
+  read -r -d '' py <<'PY' || true
+import re, sys
+
+HERE = re.compile(r"<<(-?)[ \t]*([\"']?)([A-Za-z_][A-Za-z0-9_]*)\2")
+
+
+def scan(t):
+    n = len(t)
+    hits, pend = [], []
+
+    def skip_quote(i, q):
+        j = t.find(q, i)
+        return n if j < 0 else j + 1
+
+    def skip_dq(i):
+        while i < n:
+            c = t[i]
+            if c == "\\":
+                i += 2
+            elif c == '"':
+                return i + 1
+            elif c == "$" and t[i + 1:i + 2] == "(":
+                i = code(i + 2, True)
+            elif c == "`":
+                j = i + 1
+                while j < n and t[j] != "`":
+                    j += 2 if t[j] == "\\" else 1
+                i = j + 1
+            else:
+                i += 1
+        return n
+
+    def heredocs(i):
+        while pend and i < n:
+            dash, word = pend.pop(0)
+            while i < n:
+                j = t.find("\n", i)
+                j = n if j < 0 else j
+                row = t[i:j]
+                i = min(j + 1, n)
+                if (row.lstrip("\t") if dash else row) == word:
+                    break
+        pend.clear()
+        return i
+
+    def code(i, sub):
+        depth = 0
+        while i < n:
+            c = t[i]
+            if c == "\\":
+                i += 2
+            elif c == "'":
+                i = skip_quote(i + 1, "'")
+            elif c == '"':
+                i = skip_dq(i + 1)
+            elif c == "#" and (i == 0 or t[i - 1] in " \t\n;&|("):
+                j = t.find("\n", i)
+                i = n if j < 0 else j
+            elif c == "$" and t[i + 1:i + 2] == "'":
+                i = skip_quote(i + 2, "'")
+            elif c == "$" and t[i + 1:i + 2] == "(":
+                i = code(i + 2, True)
+            elif sub and c == "(":
+                depth += 1
+                i += 1
+            elif sub and c == ")":
+                if depth == 0:
+                    return i + 1
+                depth -= 1
+                i += 1
+            elif t.startswith("<<<", i):
+                hits.append(t.count("\n", 0, i) + 1)
+                i += 3
+            elif t.startswith("<<", i):
+                m = HERE.match(t, i)
+                if m:
+                    pend.append((m.group(1) == "-", m.group(3)))
+                    i = m.end()
+                else:
+                    i += 2
+            elif c == "\n" and pend:
+                i = heredocs(i + 1)
+            else:
+                i += 1
+        return n
+
+    code(0, False)
+    return hits
+
+
+def sets_pipefail(text):
+    return any("pipefail" in r and not r.lstrip().startswith("#") for r in text.splitlines())
+
+
+for path in sys.argv[1:]:
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    if sets_pipefail(text) or "/hooks/" in path:
+        for line in scan(text):
+            print("HIT %s:%d: here-string" % (path, line))
+print("DONE %d" % len(sys.argv[1:]))
+PY
+  scan_list=$({
+    template_files
+    { (cd "$SKILLS_DIR" 2>/dev/null && find migrate/general -type f -name '*.sh') || true; } | sed "s|^|$SKILLS_DIR/|"
+  } | grep -E '\.(sh|envsh)$' | LC_ALL=C sort -u)
+  out=$(printf '%s\n' "$scan_list" | xargs python3 -I -c "$py" || true)
+  hits=$(printf '%s\n' "$out" | grep -E '^HIT ' | sed -E 's/^HIT //' || true)
+  expected=$(printf '%s\n' "$scan_list" | grep -c . || true)
+  scanned=$(printf '%s\n' "$out" | awk '/^DONE / { n += $2 } END { print n + 0 }')
+  if [[ "$scanned" != "$expected" ]]; then
+    hits="${hits:+$hits$'\n'}the scanner stopped early: it finished $scanned of $expected files, so the files after it were not checked"
+  fi
+  report "$hits" \
+    "A seeded pipefail script or hook uses a here-string — its temp file can fail to open and the command then reads nothing; pipe printf into a reader that reads to the end, or use a case match" \
+    "No seeded pipefail script or hook uses a here-string"
 }
 
 # ── RUN ALL CHECKS ─────────────────────────────────────────────────────────────
@@ -2584,6 +2719,7 @@ check_template_trees_complete
 check_no_template_skill_md
 check_copy_script_single
 check_seeded_pipefail_readers
+check_seeded_here_strings
 check_step0_before_install
 check_migrate_hook_inventory_matches_kit
 check_duplicated_iam_blocks_match

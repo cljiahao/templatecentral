@@ -4,12 +4,12 @@ set -euo pipefail
 msg=$(head -1 "$1")
 
 # Allow git-generated subjects (merge, revert, autosquash) and release commits.
-if grep -qE '^(Merge |Revert |fixup! |squash! |amend! )' <<< "$msg" || [[ "$msg" == "chore(release):"* ]]; then
+if printf '%s\n' "$msg" | grep -E '^(Merge |Revert |fixup! |squash! |amend! )' >/dev/null || [[ "$msg" == "chore(release):"* ]]; then
   exit 0
 fi
 
 pattern='^(feat|fix|chore|docs|style|refactor|test|ci|perf|build|revert)(\([a-z0-9/._-]+\))?!?: .{1,100}$'
-if ! grep -qE "$pattern" <<< "$msg"; then
+if ! printf '%s\n' "$msg" | grep -E "$pattern" >/dev/null; then
   {
     echo "❌ Commit message must follow Conventional Commits:"
     echo "   <type>(<scope>)!: <description>   e.g.  feat(auth): add OAuth2 sign-in   (! marks a breaking change)"

@@ -1,0 +1,1 @@
+- Seeded pipefail scripts and hooks no longer test a match through a here-string, which reads nothing when `TMPDIR` is unwritable or full; `lint-skills.sh` now fails on one.

@@ -1457,7 +1457,7 @@ PF_YAML="scaffold/shared/template-ci/github-ts/.github/workflows/zz-pipefail-fix
 # pf_script <pipefail line> <command>: writes a seeded fixture script whose command sits on line 3.
 pf_script() { printf '#!/usr/bin/env bash\n%s\n%s\n' "$1" "$2" > "$S/$PF_FIXTURE"; }
 pf_grep_q() { pf_script 'set -uo pipefail' 'printf x | grep -q x'; }
-pf_here_string() { pf_script 'set -uo pipefail' "grep -q x <<< \"\$v\""; }
+pf_here_string() { pf_script 'set -uo pipefail' "printf '%s\\n' \"\$v\" | grep x >/dev/null"; }
 pf_no_pipefail() { pf_script 'set -u' 'printf x | grep -q x'; }
 pf_grep_Eq() { pf_script 'set -uo pipefail' 'printf x | grep -Eq x'; }
 pf_grep_iqE() { pf_script 'set -uo pipefail' 'if printf x | grep -iqE x; then :; fi'; }
@@ -1481,7 +1481,7 @@ pf_heredoc_body() { printf '#!/usr/bin/env bash\nset -uo pipefail\ncat <<EOF\npr
 pf_comment() { pf_script 'set -uo pipefail' '# printf x | grep -q x'; }
 pf_unclosed_quote() { pf_script 'set -uo pipefail' "echo 'never closed"; }
 pf_yaml_run() { printf 'steps:\n  - run: |\n      set -o pipefail\n      printf x | grep -q x\n' > "$S/$PF_YAML"; }
-pf_yaml_clean() { printf 'steps:\n  - run: |\n      set -o pipefail\n      grep -q x <<< "%s"\n' "\$v" > "$S/$PF_YAML"; }
+pf_yaml_clean() { printf 'steps:\n  - run: |\n      set -o pipefail\n      printf "%%s\\n" "$v" | grep x >/dev/null\n' > "$S/$PF_YAML"; }
 pf_yaml_other_key() { printf 'steps:\n  - name: printf x | grep -q x\n    run: |\n      set -o pipefail\n      echo ok\n' > "$S/$PF_YAML"; }
 pf_yaml_plain_cont() { printf 'steps:\n  - run:\n      set -o pipefail; printf x | grep -q x\n' > "$S/$PF_YAML"; }
 pf_yaml_plain_cont_clean() { printf 'steps:\n  - run:\n      set -o pipefail; grep -q x file\n' > "$S/$PF_YAML"; }
@@ -1511,7 +1511,7 @@ fails pipefail_reader_grep_q "$H_PF" pf_grep_q "zz-pipefail-fixture.sh:3: pipe i
 fails pipefail_reader_in_yaml_run_block "$H_PF" pf_yaml_run "zz-pipefail-fixture.yml:4: pipe into grep"
 fails pipefail_reader_fails_when_anchor_pipefail_dropped "$H_PF" pf_drop_anchor_pipefail "anchor script missing or no longer sets pipefail"
 fails pipefail_reader_fails_when_anchor_deleted "$H_PF" pf_delete_anchor "anchor script missing or no longer sets pipefail"
-passes pipefail_reader_here_string "$H_PF" pf_here_string
+passes pipefail_reader_printf_pipe_reads_to_end "$H_PF" pf_here_string
 
 pf_crash() { pf_script 'set -uo pipefail' "echo $(printf '%.0s\044(' {1..800})"; }
 pf_xargs() { pf_script 'set -uo pipefail' 'printf x | xargs grep -q x'; }
@@ -1540,7 +1540,7 @@ pf_pipe_amp_clean() { pf_script 'set -uo pipefail' 'printf x |& cat'; }
 pf_qF() { pf_script 'set -uo pipefail' 'printf x | grep -qF x'; }
 pf_qF_clean() { pf_script 'set -uo pipefail' 'printf x | grep -F x'; }
 pf_if_not() { pf_script 'set -uo pipefail' 'if ! printf x | grep -q x; then :; fi'; }
-pf_if_not_clean() { pf_script 'set -uo pipefail' "if ! grep -q x <<< \"\$v\"; then :; fi"; }
+pf_if_not_clean() { pf_script 'set -uo pipefail' "if ! printf '%s\\n' \"\$v\" | grep x >/dev/null; then :; fi"; }
 pf_awk_string() { pf_script 'set -uo pipefail' "printf x | awk '\$1 == \"exit\" { print }'"; }
 pf_awk_regex() { pf_script 'set -uo pipefail' "printf x | awk '/exit/ { print }'"; }
 pf_awk_real_exit() { pf_script 'set -uo pipefail' "printf x | awk '\$1 == \"exit\" { exit }'"; }
@@ -1636,7 +1636,7 @@ pfd pipefail_reader_loop_reading_a_file pf_loop_not_piped clean
 pfd pipefail_reader_abbreviation_clean pf_abbrev_clean clean
 pfd pipefail_reader_pipe_ampersand_clean pf_pipe_amp_clean clean
 pfd pipefail_reader_cluster_F_clean pf_qF_clean clean
-pfd pipefail_reader_if_not_here_string pf_if_not_clean clean
+pfd pipefail_reader_if_not_printf_pipe pf_if_not_clean clean
 pfd pipefail_reader_awk_exit_in_string pf_awk_string clean
 pfd pipefail_reader_awk_exit_in_regex pf_awk_regex clean
 pfd pipefail_reader_arithmetic_shift_is_not_a_heredoc pf_arith_clean clean
@@ -1677,6 +1677,60 @@ run_pfd() {
 }
 
 pool_serial_point
+
+# ── check_seeded_here_strings: the scanner alone on fixture files, plus the wiring ──
+# hsd <name> <file body> <"LINE" | clean>: one fixture per case; the scanner runs once over all of them.
+H_HS="Seeded pipefail scripts and hooks use no here-string"
+HSD_NAMES=()
+HSD_FILES=()
+HSD_WANT=()
+hsd() { HSD_NAMES+=("$1"); HSD_FILES+=("$2"); HSD_WANT+=("$3"); }
+HS_PF=$'#!/usr/bin/env bash\nset -uo pipefail\n'
+hsd here_string_match_test "${HS_PF}"'if grep -q x <<< "$v"; then :; fi'$'\n' "3"
+hsd here_string_read_array "${HS_PF}"'read -ra t <<< "$seg"'$'\n' "3"
+hsd here_string_loop_feed "${HS_PF}"$'while read -r l; do :; done <<< "$x"\n' "3"
+hsd here_string_no_space "${HS_PF}"'grep -q x <<<"$v"'$'\n' "3"
+hsd here_string_inside_command_substitution "${HS_PF}"'v=$(grep x <<< "$y")'$'\n' "3"
+hsd here_string_inside_quoted_substitution "${HS_PF}"'v="$(grep x <<< "$y")"'$'\n' "3"
+hsd here_string_after_quoted_text "${HS_PF}"'echo "a" '"'b'"' && grep -q x <<< "$v"'$'\n' "3"
+hsd here_string_fed_to_command_stdin "${HS_PF}"'out=$(bash h.sh <<<"$2")'$'\n' "3"
+hsd here_string_in_hook_without_pipefail $'#!/usr/bin/env bash\ngrep -q x <<< "$v"\n' "2"
+hsd printf_pipe_is_clean "${HS_PF}"$'printf \'%s\\n\' "$v" | grep x >/dev/null\n' clean
+hsd process_substitution_is_clean "${HS_PF}"$'while read -r l; do :; done < <(printf \'%s\\n\' "$x")\n' clean
+hsd here_string_in_comment_is_clean "${HS_PF}"$'# grep -q x <<< "$v"\n' clean
+hsd here_string_in_single_quotes_is_clean "${HS_PF}"$'awk \'{ gsub(/<<</, ""); print }\' f\n' clean
+hsd here_string_in_multiline_awk_is_clean "${HS_PF}"$'x=$(printf a | awk \'\n  { l = $0; gsub(/<<</, "", l) }\n  END { print l }\')\n' clean
+hsd here_string_in_double_quotes_is_clean "${HS_PF}"$'echo "use <<< never"\n' clean
+hsd here_string_in_heredoc_body_is_clean "${HS_PF}"$'cat <<EOF\ngrep -q x <<< "$v"\nEOF\n' clean
+hsd arithmetic_shift_is_clean "${HS_PF}"$'(( x = 1 << 2 ))\n' clean
+hsd script_without_pipefail_is_clean $'#!/usr/bin/env bash\nset -u\ngrep -q x <<< "$v"\n' clean
+run_hsd() {
+  local d="$T/hsd" py i f out want
+  py=$(awk '/^check_seeded_here_strings\(\)/ { f = 1 } f && /read -r -d .. py <<.PY. \|\| true/ { on = 1; next } on && /^PY$/ { exit } on { print }' "$LINT")
+  [[ -n "$py" ]] || { FAIL=$((FAIL + 1)); echo "FAIL: hsd — could not extract the scanner from $LINT"; return 0; }
+  rm -rf "$d"; mkdir -p "$d/hooks"
+  for i in "${!HSD_NAMES[@]}"; do
+    f="$d/${HSD_NAMES[$i]}.sh"
+    [[ "${HSD_NAMES[$i]}" == *_hook_* ]] && f="$d/hooks/${HSD_NAMES[$i]}.sh"
+    printf '%s' "${HSD_FILES[$i]}" > "$f"
+  done
+  out=$(find "$d" -type f | LC_ALL=C sort | xargs python3 -I -c "$py" 2>&1 || true)
+  check "${#HSD_NAMES[@]}" "$(awk '/^DONE / { n += $2 } END { print n + 0 }' <<<"$out")" "hsd: the scanner finished every fixture"
+  for i in "${!HSD_NAMES[@]}"; do
+    f="$d/${HSD_NAMES[$i]}.sh"
+    [[ "${HSD_NAMES[$i]}" == *_hook_* ]] && f="$d/hooks/${HSD_NAMES[$i]}.sh"
+    want=${HSD_WANT[$i]}
+    if [[ "$want" == clean ]]; then
+      check "" "$(grep -F "$f:" <<<"$out" || true)" "${HSD_NAMES[$i]} reports nothing"
+    else
+      check yes "$(grep -qE "^HIT $f:$want: here-string" <<<"$out" && echo yes || echo no)" "${HSD_NAMES[$i]} reports line $want"
+    fi
+  done
+}
+hs_pipefail_fixture() { pf_script 'set -uo pipefail' 'grep -q x <<< "$v"'; }
+fails here_string_in_seeded_pipefail_script_fails_the_lint "$H_HS" hs_pipefail_fixture "zz-pipefail-fixture.sh:3: here-string"
+hs_hook_fixture() { printf '#!/usr/bin/env bash\ngrep -q x <<< "$v"\n' > "$S/scaffold/shared/template-ts/.claude/hooks/zz-fixture.sh"; }
+fails here_string_in_a_hook_fails_the_lint "$H_HS" hs_hook_fixture "hooks/zz-fixture.sh:2: here-string"
 
 # ── file line budget: the check alone, on a scratch tree (a full lint per probe is too slow) ──
 # lb_probe builds a tree that passes (the clean control), applies one mutation and expects the
@@ -1892,6 +1946,7 @@ lb_slash_agrees
 fails line_budget_is_wired_into_the_lint "file line budget" lb_over_other_full "zz/y.md: 151 lines, limit 150"
 
 run_pfd
+run_hsd
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
