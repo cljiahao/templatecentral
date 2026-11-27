@@ -142,8 +142,9 @@ case "$gate" in
   list)
     manifest="$(dirname "$0")/gates.txt"
     [ -f "$manifest" ] || fail "$manifest is missing — the gate manifest is the authority for which gates exist"
-    listed=$(grep -vE '^[[:space:]]*(#|$)' "$manifest" | cut -d'|' -f1)
-    [ -n "$listed" ] || fail "$manifest lists no gate"
+    # Only gates this script runs: harness, docs and review are run by their own scripts (their CI field names those, not ci-gates.sh).
+    listed=$(grep -vE '^[[:space:]]*(#|$)' "$manifest" | awk -F'|' '$3 == "ci-gates.sh " $1 { print $1 }')
+    [ -n "$listed" ] || fail "$manifest lists no gate this script runs"
     printf '%s\n' "$listed"
     exit 0
     ;;
