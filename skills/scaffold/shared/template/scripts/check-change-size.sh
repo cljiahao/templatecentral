@@ -61,6 +61,10 @@ for v in "$MAX_CHANGED_LINES" "$MAX_CHANGED_FILES"; do
   esac
 done
 git rev-parse --git-dir > /dev/null 2>&1 || die "not a git repository"
+# Every path below is relative to the top of the repository, so work from there whatever folder the run started in; an exclude-file override is made absolute first.
+case "${CHANGE_SIZE_EXCLUDE_FILE:-}" in '' | /*) ;; *) CHANGE_SIZE_EXCLUDE_FILE=$PWD/$CHANGE_SIZE_EXCLUDE_FILE ;; esac
+top=$(git rev-parse --show-toplevel 2> /dev/null) || die "cannot find the top of the repository (a bare repository has none)"
+cd "$top" || die "cannot enter the top of the repository $top"
 git rev-parse --verify --quiet "${base}^{commit}" > /dev/null || die "base ref '$base' not found, so the change size cannot be measured. Fetch it (git fetch origin main), or pass another base ref as the first argument."
 mb=$(git merge-base "$base" HEAD 2> /dev/null) || die "no merge base between '$base' and HEAD (shallow clone?). Fetch full history (git fetch --unshallow), or pass another base ref."
 
@@ -112,7 +116,7 @@ while IFS= read -r -d '' rec; do
   case "$added" in *[!0-9]*) added=0 ;; esac
   case "$deleted" in *[!0-9]*) deleted=0 ;; esac
   w=$((added + deleted))
-  git --attr-source="$mb" -c core.attributesFile=/dev/null -c core.quotepath=false diff --no-textconv --no-renames -U0 "$mb" -- "$path" > "$tmp/one.diff" 2> "$tmp/err.txt" || die "git diff failed for $path: $(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"
+  git --attr-source="$mb" -c core.attributesFile=/dev/null -c core.quotepath=false diff --no-color --no-ext-diff --no-textconv --no-renames -U0 "$mb" -- "$path" > "$tmp/one.diff" 2> "$tmp/err.txt" || die "git diff failed for $path: $(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"
   # Fail closed: git reported changed lines for this path, so its own diff must hold a hunk. A diff with none means the path was not read as this file.
   if [ "$w" -gt 0 ] && ! grep -a -q -e '^@@' -- "$tmp/one.diff"; then die "git reported $w changed lines in $path but its diff has no hunk, so the file cannot be weighed"; fi
   cbytes=$(LC_ALL=C awk 'hdr == 0 && /^@@/ { hdr = 1 } hdr == 1 && /^[-+]/ { n += length($0) + 1 } END { print n + 0 }' "$tmp/one.diff") || die "cannot measure the changed bytes of $path"

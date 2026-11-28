@@ -1,0 +1,1 @@
+- The seeded `block-no-verify.sh` hook runs about 40% less CPU per call: it matches in bash instead of forking `grep` and skips `awk` for text without a heredoc or line join. Probes now cover every wrapper name in its list.

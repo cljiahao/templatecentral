@@ -7,9 +7,16 @@
 # code fed to an interpreter on stdin or from a heredoc (python3 <<EOF, node - <<EOF), argument shapes where the word after git is not the
 # subcommand (os.execvp('git', [...]), ['git'] + [...], Deno {args: [...]}, sh.git.commit(...)), file-by-file removal (os.remove loops,
 # Path.rmdir, os.removedirs), a secret name with no leading dot or slash inside inline code when the file does not exist, a shell reached
-# through a program not known as a wrapper (busybox sh, doas sh, setsid sh, $SHELL, ssh host sh, docker exec -i c sh, kubectl exec), a command that reaches
-# sh -c through an xargs placeholder or a variable (xargs -I{} sh -c '{}', sh -c "$CMD"), runners other than the listed interpreters (npx tsx -e), and a removal target built by a call (path.join(root, 'src')) or an aliased import (from shutil import rmtree as r).
-# Everything else on the list below is judged.
+# through a program not known as a wrapper ($SHELL, ssh host sh, docker exec -i c sh, kubectl exec), a command built at run time from a file or
+# variable (sh ./x.sh, sh -c "$CMD" with the bypass token held in a variable), an xargs -I{} sh -c '{}' placeholder with no bypass token visible in the command, an alias or shell function defined earlier, a binary that calls git itself, edits made outside the agent, runners other than the listed interpreters (npx tsx -e), and a removal target built by a call (path.join(root, 'src')) or an aliased import (from shutil import rmtree as r).
+# Also not caught: ANSI-C escapes inside a wrapper ($'git commit\x20-n', $'git\tcommit -n', $'git commit \055n'), shells not in the list (fish, csh, tcsh, versioned names like bash5), su -c and script -c.
+# Everything else on the list below is judged. An unreadable shape (xargs handing a placeholder to sh -c) with a forbidden token anywhere in the command is blocked.
+# Wrapper rule: a shell (sh bash zsh dash ksh ash, any path prefix) followed later by a -c option, or eval, makes the command a wrapper; wrappers are flattened (quotes and backslashes deleted, each wrapper word a command separator), not parsed, so any nesting depth is judged.
+# Over-blocking inside a wrapper is by design: bash -c 'echo "git commit -n"' is blocked as text. Outside a wrapper, quoted text stays text.
+# Union rule: the verdict is the union of two scans and the hook blocks when either blocks. The raw scan judges the command as written and always runs. The wrapper scan runs only when the wrapper test matches, judges the flattened text, and can only add blocks.
+# Size gate: only a wrapper command over 4000 bytes is blocked as too long to judge (the worst 3.8 KB wrapper measures about 0.52 CPU seconds on bash 3.2); a command with no wrapper has no size gate, so prose that names a shell (a commit message, a heredoc, a PR body) passes.
+# General cap: none needed. Long commands with no wrapper stay linear (measured on bash 3.2: about 0.15 CPU seconds at 17 KB, 0.36 at 68 KB).
+# Shells judged: sh bash zsh dash ksh ash busybox sh. Wrappers judged: sudo doas env nice ionice nohup setsid time timeout stdbuf xargs command exec builtin, alone or stacked; quoted and backslash-escaped tokens count as written.
 # A shell in command position that the guard sees fed from a pipe, here-string, heredoc, `-s` or process substitution is blocked outright
 # (even `echo hi | sh`), also behind the wrappers sudo, command, exec, nohup, time, nice, builtin, env, timeout, stdbuf, xargs and uv/poetry/pipenv/pdm run,
 # a leading FOO=1, ( ) or { }, and with a trailing redirect or comment. xargs sh script passes (the shell gets arguments); xargs sh -c with no readable string is blocked.
@@ -19,25 +26,53 @@
 orig_dir=$PWD
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || { echo "BLOCKED: block-no-verify.sh cannot cd to the project root — refusing the command." >&2; exit 2; }
 input=$(cat)
-cmd=$(printf '%s' "$input" | python3 -I -c "import json,sys
-try: print(json.load(sys.stdin).get('tool_input',{}).get('command',''))
-except Exception: print('')" 2>/dev/null)
-# The hook input's cwd is where the command runs, so a bare git commit resolves that worktree's branch.
-in_cwd=$(printf '%s' "$input" | python3 -I -c "import json,sys
-try: print(json.load(sys.stdin).get('cwd') or '')
-except Exception: print('')" 2>/dev/null)
+# One interpreter call yields the cwd (first line) and the command; a missing or failing interpreter blocks instead of passing.
+parsed=$(printf '%s' "$input" | python3 -I -c "import json,sys
+try: o=json.load(sys.stdin)
+except Exception: o={}
+o=o if isinstance(o,dict) else {}
+t=o.get('tool_input')
+t=t if isinstance(t,dict) else {}
+sys.stdout.write(str(o.get('cwd') or '').replace('\\r','').replace('\\n','')+'\\n'+str(t.get('command') or ''))" 2>/dev/null) || { echo "BLOCKED: block-no-verify.sh needs python3 to read the hook input and python3 is missing or failed — refusing the command." >&2; exit 2; }
+in_cwd=${parsed%%$'\n'*}
+cmd=${parsed#*$'\n'}
 [ -n "$in_cwd" ] && orig_dir=$in_cwd
 [ -z "$cmd" ] && exit 0
-# Drop heredoc bodies so commit-message text is not scanned as a command; the opening line is still scanned.
-cmd=$(printf '%s\n' "$cmd" | awk '
+# Drop heredoc bodies so commit-message text is not scanned as a command; the opening line is still scanned. Text without << has none, so awk is skipped.
+case $cmd in *'<<'*) cmd=$(printf '%s\n' "$cmd" | awk '
   inh { t = $0; if (tabs) sub(/^\t+/, "", t); if (t == w) inh = 0; next }
   { print; l = $0; gsub(/<<</, "", l)
     if (match(l, /<<-?[[:space:]]*["\047]?[A-Za-z_][A-Za-z0-9_]*/)) {
-      w = substr(l, RSTART, RLENGTH); tabs = (w ~ /^<<-/); sub(/^<<-?[[:space:]]*["\047]?/, "", w); inh = 1 } }')
+      w = substr(l, RSTART, RLENGTH); tabs = (w ~ /^<<-/); sub(/^<<-?[[:space:]]*["\047]?/, "", w); inh = 1 } }') ;;
+esac
+# A backslash-newline continues the command line, so a flag on the next line is part of it. One awk pass: bash 3.2 substitution is quadratic in the match count.
+case $cmd in *\\$'\n'*) cmd=$(printf '%s' "$cmd" | LC_ALL=C awk 'NR > 1 { if (p ~ /\\$/) { sub(/\\$/, "", p); printf "%s", p } else print p } { p = $0 } END { printf "%s", p }') ;; esac
+# Wrapper test, on the text as written (heredoc bodies already dropped): a shell word (sh bash zsh dash ksh ash, any path prefix, quoted or not; busybox sh ends in sh)
+# with a later option word that holds the letter c (-c -lc -ec -cx, also glued to a quote: -c'..'), or eval in command position or after a wrapper.
+# Only the first shell word is tested: a later one with an option after it has the same option after the first. Not a wrapper: bash script.sh, /bin/sh x.sh, grep -c sh f, git commit -m eval, deno eval.
+nl=$'\n'
+wrapper=0
+case $cmd in
+  *sh*)
+    if [[ $cmd =~ (^|[^A-Za-z0-9_.+-])(sh|bash|zsh|dash|ksh|ash)([^A-Za-z0-9_.+/-]|$) ]]; then
+      rest=${cmd#*"${BASH_REMATCH[0]}"}
+      [[ $rest =~ (^|[[:space:]])-[A-Za-z]*c[A-Za-z]*([^A-Za-z]|$) ]] && wrapper=1
+    fi ;;
+esac
+evre="(^|[;&|(\`{${nl}]|(then|do|else)[[:space:]])[[:space:]]*(((/[^[:space:]]*)?/)?(sudo|doas|command|exec|nohup|time|nice|ionice|setsid|builtin|env|timeout|stdbuf|xargs)([[:space:]]+(-[^[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|[0-9][0-9.]*[smhd]?))*[[:space:]]+)*[\\\\'\"]*eval([^A-Za-z0-9_.+/-]|\$)"
+case $cmd in *eval*) [[ $cmd =~ $evre ]] && wrapper=1 ;; esac
+# Size gate: only a wrapper command is refused for length. Its second scan costs about as much as the first, so the bound keeps the worst case under one CPU second on bash 3.2.
+if [ "$wrapper" -eq 1 ] && [ "${#cmd}" -gt 4000 ]; then
+  echo "BLOCKED: a shell or eval wrapper in a command over 4000 bytes is too long for this guard to judge. Split it or run the commands directly." >&2; exit 2
+fi
 # cut200 <text>: at most 200 bytes, never inside a UTF-8 sequence, in any locale and with any awk (same ucut as every other hook cap).
 cut200() { S=$1 LC_ALL=C awk 'function ucut(s, n) { if (length(s) <= n) return s; s = substr(s, 1, n); sub(/[\300-\337]$/, "", s); sub(/[\340-\357][\200-\277]?$/, "", s); sub(/[\360-\367]([\200-\277]([\200-\277])?)?$/, "", s); return s } BEGIN { printf "%s", ucut(ENVIRON["S"], 200) }' || printf 'BLOCKED'; }
 # block <message>: message capped at 200 bytes.
 block() { echo "$(cut200 "BLOCKED: $1")" >&2; exit 2; }
+# rx <ere> <text>: grep -qE on one line without a fork; text with a newline still goes through grep, which matches per line.
+rx() { case $2 in *$'\n'*) printf '%s\n' "$2" | grep -qE -- "$1" ;; *) [[ $2 =~ $1 ]] ;; esac; }
+# words <text>: splits on blanks into the array tw with no fork (a process substitution per segment cost seconds on long commands) and no here-string, whose temp file can fail to open and read as empty. Globbing is off during the split.
+words() { local IFS=$' \t\n'; set -f; set -- $1; set +f; tw=("$@"); }
 protected='main|uat|develop'
 root=$PWD
 # Shell access to secret files: Read deny rules gate the Read tool, not cat. A read is blocked when the named file exists; a write or copy that would create one is blocked outright. Env templates stay usable.
@@ -64,8 +99,7 @@ writes_to_secret() {
 secret_guard() {
   local delim tokens tok d f p b cdt tok_d hits
   local -a sdirs
-  flat="${cmd//\\/}"
-  flat="${flat//[\"\']/}"
+  flat=$(printf '%s' "$cmd" | tr -d "\\\\\"'")
   delim="[:space:]\"'\`;|&<>()="
   tokens=$(printf '%s' "$flat" | grep -oiE "[^$delim]*(\\.env|\\.pem|\\.key|\\.p12|\\.pfx|credentials\\.json|\\.netrc|secrets|[*?[])[^$delim]*" || true)
   [ -n "$tokens" ] || return 0
@@ -89,15 +123,17 @@ secret_guard() {
       hits=$(cd "$d" 2>/dev/null && compgen -G "$tok_d")
       while IFS= read -r f; do
         [ -n "$f" ] && is_secret "$f" && secret_block "$f"
-      done <<< "$hits"
+      done < <(printf '%s\n' "$hits")
     done
     if [[ "$tok" != *[*?[]* ]] && is_secret "$tok" && writes_to_secret "$tok"; then secret_block "$tok"; fi
     if [[ "$tok" == *:* ]] && is_secret "${tok#*:}" && [[ "$flat" =~ (^|[[:space:]\;\&\|\(])git[[:space:]]+([^;&|]*[[:space:]])?(show|cat-file|archive|blame|grep|log|diff)[[:space:]] ]]; then secret_block "${tok#*:}"; fi
-  done <<< "$tokens"
+  done < <(printf '%s\n' "$tokens")
 }
-secret_guard
 # Directories a bare commit/push may land on: the cwd plus literal cd targets; anything unresolved adds the project root.
 cand=("$orig_dir")
+# memo and bmemo cache directory resolution and the branch per directory: a fork per segment cost seconds on a command with a thousand of them.
+memo=""
+bmemo=""
 redir=0
 unresolved() { [[ -z "$1" || "$1" == - || "$1" == Q || "$1" == *[\$\`~]* ]]; }
 add_target() {
@@ -111,16 +147,32 @@ add_target() {
     if [[ "$d" == /* ]]; then c=$d; else c="$c/$d"; fi
     [ -d "$c" ] || continue
     n=1
-    c=$(cd "$c" 2>/dev/null && pwd -P) || continue
+    case "$memo" in
+      *$'\n'"$c"$'\t'*) r=${memo#*$'\n'"$c"$'\t'}; c=${r%%$'\n'*} ;;
+      *) r=$(cd "$c" 2>/dev/null && pwd -P) || continue; memo="$memo"$'\n'"$c"$'\t'"$r"; c=$r ;;
+    esac
     # Already a candidate: nothing new, so the repeat passes settle.
     [[ " ${cand[*]} ${new[*]} " == *" $c "* ]] || new+=("$c")
   done
   if [ "$n" -eq 1 ]; then cand+=("${new[@]}"); else redir=1; fi
 }
-# Prints the first protected branch a bare commit/push may land on, or nothing.
+# branch_of <dir>: sets BRANCH to the checked-out branch of that directory (cached; the branch cannot change while the command is judged); returns 1 outside a repo.
+branch_of() {
+  local r
+  case "$bmemo" in
+    *$'\n'"$1"$'\t'*) r=${bmemo#*$'\n'"$1"$'\t'}; r=${r%%$'\n'*} ;;
+    *)
+      if r=$(git -C "$1" rev-parse --abbrev-ref HEAD 2>/dev/null); then r="+$r"; else r=-; fi
+      bmemo="$bmemo"$'\n'"$1"$'\t'"$r" ;;
+  esac
+  BRANCH=${r#+}
+  [ "$r" != - ]
+}
+# Sets PB to the first protected branch a bare commit/push may land on, or to nothing.
 protected_branch() {
-  local d b found=0 cd_ok=0
+  local d found=0 cd_ok=0
   local -a dirs=("${cand[@]}")
+  PB=""
   [ "$redir" -eq 1 ] && dirs+=("$root")
   if [ -n "$cdir" ]; then
     if unresolved "$cdir"; then dirs+=("$root"); else cd_ok=1; fi
@@ -129,48 +181,80 @@ protected_branch() {
     if [ "$cd_ok" -eq 1 ]; then
       if [[ "$cdir" == /* ]]; then d=$cdir; else d="$d/$cdir"; fi
     fi
-    b=$(git -C "$d" rev-parse --abbrev-ref HEAD 2>/dev/null) || continue
+    branch_of "$d" || continue
     found=1
-    [[ "$b" =~ ^($protected)$ ]] && { echo "$b"; return; }
+    [[ "$BRANCH" =~ ^($protected)$ ]] && { PB=$BRANCH; return; }
   done
   [ "$found" -eq 1 ] && return
   # No candidate is inside a git repo: judge the project root, as before.
-  if [ "$cd_ok" -eq 1 ]; then b=$(git -C "$cdir" rev-parse --abbrev-ref HEAD 2>/dev/null); else b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); fi
-  [[ "$b" =~ ^($protected)$ ]] && echo "$b"
+  if [ "$cd_ok" -eq 1 ]; then branch_of "$cdir"; else branch_of .; fi
+  [[ "$BRANCH" =~ ^($protected)$ ]] && PB=$BRANCH
 }
 
-# Unwrap bash -c/eval, unquote single words, mask other quoted text as Q; double quotes first so an apostrophe cannot swallow flags.
+# mkscan <text> [unwrap]: empty quote pairs glued to a word vanish in the shell (--no-ver""ify, -""n), so they go first; a lone empty argument stays; with "unwrap" a quoted bash -c/eval string is unwrapped one layer (the raw scan); single words are unquoted and other quoted text is masked as Q, double quotes first so an apostrophe cannot swallow flags.
 # A quoted word holding a shell operator stays masked: its pipe, semicolon or redirect is text, not syntax ('x|sh', "a|bash").
 sq="'"
-scan=$(printf '%s' "$cmd" | sed -E \
-  -e "s/(^|[[:space:];&|(])(bash|sh|zsh|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+\"([^\"]*)\"/\1 \4 /g" \
-  -e "s/(^|[[:space:];&|(])(bash|sh|zsh|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+${sq}([^${sq}]*)${sq}/\1 \4 /g" \
-  -e "s/\"([^\"${sq}[:space:]|;\&<>()]+)\"/\1/g" -e "s/\"[^\"]*\"/ Q /g" \
-  -e "s/${sq}([^${sq}[:space:]|;\&<>()]+)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g")
+dq='"'
+mkscan() {
+  local -a un=()
+  if [ "${2:-}" = unwrap ]; then
+    un=(-e "s/(^|[[:space:];&|(])(bash|sh|zsh|dash|ksh|ash|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+\"([^\"]*)\"/\1 \4 /g"
+      -e "s/(^|[[:space:];&|(])(bash|sh|zsh|dash|ksh|ash|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+${sq}([^${sq}]*)${sq}/\1 \4 /g")
+  fi
+  printf '%s' "$1" | sed -E \
+    -e "s/([^[:space:]])\"\"/\1/g" -e "s/\"\"([^[:space:]])/\1/g" -e "s/([^[:space:]])${sq}${sq}/\1/g" -e "s/${sq}${sq}([^[:space:]])/\1/g" \
+    "${un[@]}" \
+    -e "s/\"([^\"${sq}[:space:]|;\&<>()]+)\"/\1/g" -e "s/\"[^\"]*\"/ Q /g" \
+    -e "s/${sq}([^${sq}[:space:]|;\&<>()]+)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g" \
+    -e 's/\\([A-Za-z0-9_.-])/\1/g'
+}
+# flatten <text> [join]: the wrapper scan's text. A glued option is split from its quote (-c'..'), a $ before a quote goes (ANSI-C $'..'), quotes and backslashes go, and every shell word or eval with its option words becomes a command separator, so the wrapped text starts a new segment at any nesting depth. With "join" lines become blanks.
+flatten() {
+  local f
+  f=$(printf '%s' "$1" | sed -E -e 's/(^|[[:space:]])(-[A-Za-z]*c[A-Za-z]*)(\$?['"$dq$sq"'])/\1\2 \3/g' -e 's/\$(['"$dq$sq"'])/\1/g' | tr -d "\\\\$dq$sq")
+  [ "${2:-}" = join ] && f=$(printf '%s' "$f" | tr '\n' ' ')
+  printf '%s' "$f" | sed -E -e 's/[[:space:]]/&&/g' -e 's#(^|[^A-Za-z0-9_.+-])([^[:space:];&|()]*/)?(sh|bash|zsh|dash|ksh|ash|eval)([[:space:]]+-[A-Za-z]+)*([[:space:]]|$)#\1 ; #g'
+}
+# judge <text> <unwrap|flat>: every check below on one reading of the command; a block exits the calling subshell with 2.
+judge() {
+cmd=$1
+secret_guard
+scan=$(mkscan "$cmd" "$2")
 
 # Command position: line start, after ; & | ( { or a backtick, or after then/do/else; wrappers that run the next word (sudo, env, xargs, nohup, uv run) may follow.
 cpos='(^|[;&|(`{]|(^|[[:space:]])(then|do|else))[[:space:]]*'
 # Wrapper tokens, defined once. Leading assignments (FOO=1 cmd) may precede a wrapper chain; a wrapper takes flags, a value after a known value flag (sudo -u root, nice -n 5, xargs -I {}, uv run --with x), a duration (timeout 5) or an assignment.
 asg='[A-Za-z_][A-Za-z0-9_]*=([[:space:]]+Q)?[^[:space:]]*'
-wnames='sudo|command|exec|nohup|time|nice|builtin|env|timeout|stdbuf|(uv|poetry|pipenv|pdm)[[:space:]]+run'
+wnames='sudo|doas|command|exec|nohup|time|nice|ionice|setsid|builtin|env|timeout|stdbuf|(uv|poetry|pipenv|pdm)[[:space:]]+run'
 wargs="([[:space:]]+(-[^[:space:]]+|-[uginIPLdsCkUDtEaoe][[:space:]]+[^-[:space:]][^[:space:]]*|--[A-Za-z-]+[[:space:]]+[^-[:space:]][^[:space:]]*|${asg}|[0-9][0-9.]*[smhd]?))*"
 wrap_nx="(${asg}[[:space:]]+)*((/[^[:space:]]*/)?(${wnames})${wargs}[[:space:]]+)*"
 wrap="(${asg}[[:space:]]+)*((/[^[:space:]]*/)?(${wnames}|xargs)${wargs}[[:space:]]+)*"
 # Shells fed from a pipe, stdin, here-string, heredoc or process substitution hide their commands from this guard; the shell must be the command word, not an argument (grep sh < f).
 # Runs on the scan, where quoted text cannot contribute operators; a trailing backslash or pipe joins the next line. Behind a pipe the shell may be followed by flags, redirects or a comment; xargs hands the shell its arguments, not stdin, so only xargs sh -c with no readable string is judged.
 blind_shell() {
-  local w='\\?(/[^[:space:]]*/)?(bash|sh|zsh|dash|ksh)' f='([[:space:]]+-[^[:space:]]+)*' joined tl xa
+  local w='\\?(/[^[:space:]]*/)?(bash|sh|zsh|dash|ksh|ash|busybox[[:space:]]+sh)' f='([[:space:]]+-[^[:space:]]+)*' joined tl xa
   tl='([[:space:]]+#.*|[[:space:]]*([0-9]*>>?[[:space:]]*[^[:space:]]*|[0-9]*>&[0-9-]*|&>[^[:space:]]*))*[[:space:]]*($|[;&|)}])'
   xa="(/[^[:space:]]*/)?xargs${wargs}[[:space:]]+"
-  joined=$(printf '%s\n' "$scan" | awk '{ if (buf != "") $0 = buf " " $0; if ($0 ~ /\\$/) { sub(/\\$/, ""); buf = $0; next } if ($0 ~ /\|[ \t]*$/) { buf = $0; next } print; buf = "" } END { if (buf != "") print buf }')
-  printf '%s\n' "$joined" | grep -qE "\\|[[:space:]]*([({][[:space:]]*)?${wrap_nx}${w}${f}${tl}" ||
-    printf '%s\n' "$joined" | grep -qE "\\|[[:space:]]*([({][[:space:]]*)?${wrap_nx}${xa}${w}${f}[[:space:]]+-[A-Za-z]*c${tl}" ||
-    printf '%s\n' "$joined" | grep -qE "${cpos}${wrap}${w}${f}[[:space:]]*<" ||
-    printf '%s\n' "$joined" | grep -qE "${cpos}${wrap}${w}${f}[[:space:]]+(-[A-Za-z]*s[A-Za-z]*|-)([[:space:]]|\$)" ||
-    printf '%s\n' "$joined" | grep -qE "${cpos}(source|\\.)[[:space:]]+<\\("
+  # Only a newline or a trailing backslash changes the text; the awk is skipped for a plain single line.
+  case $scan in
+    *$'\n'*|*\\) joined=$(printf '%s\n' "$scan" | awk '{ if (buf != "") $0 = buf " " $0; if ($0 ~ /\\$/) { sub(/\\$/, ""); buf = $0; next } if ($0 ~ /\|[ \t]*$/) { buf = $0; next } print; buf = "" } END { if (buf != "") print buf }') ;;
+    *) joined=$scan ;;
+  esac
+  rx "\\|[[:space:]]*([({][[:space:]]*)?${wrap_nx}${w}${f}${tl}" "$joined" ||
+    rx "\\|[[:space:]]*([({][[:space:]]*)?${wrap_nx}${xa}${w}${f}[[:space:]]+-[A-Za-z]*c${tl}" "$joined" ||
+    rx "${cpos}${wrap}${w}${f}[[:space:]]*<" "$joined" ||
+    rx "${cpos}${wrap}${w}${f}[[:space:]]+(-[A-Za-z]*s[A-Za-z]*|-)([[:space:]]|\$)" "$joined" ||
+    rx "${cpos}(source|\\.)[[:space:]]+<\\(" "$joined"
 }
 if blind_shell; then
   block "a shell fed from a pipe, stdin, here-string, heredoc or process substitution hides its commands from this guard. Run the commands directly."
+fi
+# A shell or interpreter reached through xargs runs text this guard cannot see (xargs -I{} sh -c '{}'); with a forbidden token anywhere in the command that shape is blocked.
+norm=$(printf '%s' "$cmd" | tr -d "\\\\\"'" | tr '[:upper:]' '[:lower:]')
+if [[ "$norm" =~ (^|[^a-z0-9_-])xargs([[:space:]]|$) ]] \
+  && [[ "$norm" =~ (^|[^a-z0-9_-])(bash|sh|zsh|dash|ksh|ash|eval|python[0-9.]*|node|perl|ruby)[[:space:]]+-[a-z]*[cep]([[:space:]]|$) ]] \
+  && rx 'no-veri|hookspath|lefthook(_exclude)?=|git[[:space:]]+([^;&|]*[[:space:]])?(commit|push)[^;&|]*[[:space:]]-[a-z]*n' "$norm"; then
+  block "xargs hands text to a shell or interpreter this guard cannot read, and the command names a hook bypass (--no-verify, -n, core.hooksPath, LEFTHOOK). Run the git command directly."
 fi
 # Inline interpreter code is judged as text: the interpreter must be in command position, so a commit message or grep pattern naming python -c is not code; then quotes and brackets become spaces and the checks below treat it as a command line.
 interp=""
@@ -198,13 +282,13 @@ interp_secret() {
 # Hook-layer bypass via environment or a persisted alias/config (whole-command checks).
 lower_cmd=$(printf '%s' "$cmd" | tr '[:upper:]' '[:lower:]')
 lh='(^|[^A-Za-z0-9_])LEFTHOOK(_EXCLUDE)?'
-if { printf '%s' "$scan" | grep -qE "${lh}=" || printf '%s' "$interp" | grep -qE "$lh"; } && printf '%s' "$scan" | grep -qE '(^|[^A-Za-z0-9_-])git([[:space:]]|$)'; then
+if { rx "${lh}=" "$scan" || rx "$lh" "$interp"; } && rx '(^|[^A-Za-z0-9_-])git([[:space:]]|$)' "$scan"; then
   block "LEFTHOOK=0 / LEFTHOOK_EXCLUDE disables the pre-commit hook layer — the same bypass as --no-verify. Fix the failure instead."
 fi
-if printf '%s' "$lower_cmd" | grep -qE 'git_config_(parameters|key_[0-9]+)' && printf '%s' "$lower_cmd" | grep -q 'hookspath'; then
+if rx 'git_config_(parameters|key_[0-9]+)' "$lower_cmd" && rx 'hookspath' "$lower_cmd"; then
   block "GIT_CONFIG_* overriding core.hooksPath disables the git-hook layer. Fix the failure instead."
 fi
-if printf '%s' "$lower_cmd" | grep -q 'alias\.' && printf '%s' "$lower_cmd" | grep -q 'no-verify'; then
+if rx 'alias\.' "$lower_cmd" && rx 'no-verify' "$lower_cmd"; then
   block "a git alias wrapping --no-verify is the same bypass as --no-verify. Fix the failure instead."
 fi
 
@@ -215,37 +299,37 @@ collect_dirs() {
   local seg p q w d n i
   local -a t
   while IFS= read -r seg; do
-    read -ra t <<< "$seg"
-    n=${#t[@]}; i=0
+    words "$seg"
+    n=${#tw[@]}; i=0
     while [ "$i" -lt "$n" ]; do
-      w="${t[$i]#\\}"
+      w="${tw[$i]#\\}"
       [[ "$w" == git || "$w" == */git ]] && break
       i=$((i + 1))
     done
     for ((p = 0; p < i; p++)); do
-      w="${t[$p]#\\}"
+      w="${tw[$p]#\\}"
       case "$w" in
         cd|pushd)
           d=""
-          for ((q = p + 1; q < i; q++)); do [[ "${t[$q]}" == -?* ]] && continue; d=${t[$q]}; break; done
+          for ((q = p + 1; q < i; q++)); do [[ "${tw[$q]}" == -?* ]] && continue; d=${tw[$q]}; break; done
           add_target "$d" ;;
         popd|eval|source|function|CDPATH=*|GIT_DIR=*|GIT_WORK_TREE=*) redir=1 ;;
         # `.` sources a script only in command position; elsewhere it is an ordinary argument (`ls .`).
-        .) [[ "$p" -eq 0 || "${t[$((p - 1))]}" =~ ^(then|do|else|if|while|until|!|[{]|time|command|builtin|exec)$ ]] && redir=1 ;;
+        .) [[ "$p" -eq 0 || "${tw[$((p - 1))]}" =~ ^(then|do|else|if|while|until|!|[{]|time|command|builtin|exec)$ ]] && redir=1 ;;
         env|sudo)
           for ((q = p + 1; q < i; q++)); do
-            case "${t[$q]}" in
-              -C|-D|--chdir) add_target "${t[$((q + 1))]:-}" ;;
-              --chdir=*) add_target "${t[$q]#--chdir=}" ;;
-              -C?*|-D?*) add_target "${t[$q]:2}" ;;
+            case "${tw[$q]}" in
+              -C|-D|--chdir) add_target "${tw[$((q + 1))]:-}" ;;
+              --chdir=*) add_target "${tw[$q]#--chdir=}" ;;
+              -C?*|-D?*) add_target "${tw[$q]:2}" ;;
             esac
           done ;;
       esac
     done
-  done <<< "$segments"
+  done < <(printf '%s\n' "$segments")
 }
 # `name() { … }` defines a function whose body may cd where this check cannot follow.
-printf '%s' "$scan" | grep -qE '(^|[^A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*\(\)' && redir=1
+rx '(^|[^A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*\(\)' "$scan" && redir=1
 settled=0
 for _ in 1 2 3 4; do
   before=${#cand[@]}
@@ -262,54 +346,55 @@ chain_dirs() {
   [[ "$chk" == *[\;\|\&\(\)\`]* || "$chk" == *$'\n'* ]] && return 1
   cur=$orig_dir
   while IFS= read -r seg; do
-    read -ra t <<< "$seg"
-    [ "${#t[@]}" -eq 0 ] && continue
-    first="${t[0]#\\}"
+    words "$seg"
+    [ "${#tw[@]}" -eq 0 ] && continue
+    first="${tw[0]#\\}"
     if [[ "$first" == cd || "$first" == pushd ]]; then
       d=""
-      for w in "${t[@]:1}"; do [[ "$w" == -?* ]] && continue; d=$w; break; done
+      for w in "${tw[@]:1}"; do [[ "$w" == -?* ]] && continue; d=$w; break; done
       unresolved "$d" && return 1
       [[ "$d" == /* ]] || d="$cur/$d"
       cur=$(cd "$d" 2>/dev/null && pwd -P) || return 1
       continue
     fi
-    for w in "${t[@]}"; do
+    for w in "${tw[@]}"; do
       case "${w#\\}" in cd|pushd|popd|env|sudo|command|builtin|exec) return 1 ;; esac
     done
     if [[ "$first" == git || "$first" == */git ]]; then
       sawgit=1
       [[ " ${out[*]} " == *" $cur "* ]] || out+=("$cur")
     else
-      for w in "${t[@]}"; do [[ "${w#\\}" == git || "${w#\\}" == */git ]] && return 1; done
+      for w in "${tw[@]}"; do [[ "${w#\\}" == git || "${w#\\}" == */git ]] && return 1; done
     fi
-  done <<< "${scan//&&/$'\n'}"
+  done < <(printf '%s\n' "$scan" | sed 's/&&/\
+/g')
   [ "$sawgit" -eq 1 ] || return 1
   printf '%s\n' "${out[@]}"
 }
 if [ "$redir" -eq 0 ] && chain_out=$(chain_dirs); then
   cand=()
-  while IFS= read -r d; do cand+=("$d"); done <<< "$chain_out"
+  while IFS= read -r d; do cand+=("$d"); done < <(printf '%s\n' "$chain_out")
 fi
 while IFS= read -r seg; do
-  read -ra t <<< "$seg"
-  n=${#t[@]}; i=0
+  words "$seg"
+  n=${#tw[@]}; i=0
   while [ "$i" -lt "$n" ]; do
-    w="${t[$i]#\\}"
+    w="${tw[$i]#\\}"
     [[ "$w" == git || "$w" == */git ]] && break
     i=$((i + 1))
   done
   [ "$i" -ge "$n" ] && continue
   i=$((i + 1)); cdir=""
-  while [ "$i" -lt "$n" ] && [[ "${t[$i]}" == -* ]]; do
-    o="${t[$i]}"
+  while [ "$i" -lt "$n" ] && [[ "${tw[$i]}" == -* ]]; do
+    o="${tw[$i]}"
     case "$o" in
       -C)
         # git applies every -C in turn, each relative to the one before.
-        x="${t[$((i + 1))]:-}"
+        x="${tw[$((i + 1))]:-}"
         if [ -z "$cdir" ] || [[ "$x" == /* ]]; then cdir=$x; else cdir="$cdir/$x"; fi
         i=$((i + 2)); continue ;;
       -c|--config-env)
-        printf '%s' "${t[$((i + 1))]:-}" | grep -qi 'core\.hookspath' && block "'git -c core.hooksPath=…' disables the git-hook layer, the same bypass as --no-verify. Fix the failure instead."
+        printf '%s' "${tw[$((i + 1))]:-}" | grep -qi 'core\.hookspath' && block "'git -c core.hooksPath=…' disables the git-hook layer, the same bypass as --no-verify. Fix the failure instead."
         i=$((i + 2)); continue ;;
       --git-dir|--work-tree) redir=1; i=$((i + 2)); continue ;;
       --git-dir=*|--work-tree=*) redir=1 ;;
@@ -318,8 +403,8 @@ while IFS= read -r seg; do
     printf '%s' "$o" | grep -qi 'core\.hookspath' && block "overriding core.hooksPath disables the git-hook layer. Fix the failure instead."
     i=$((i + 1))
   done
-  sub="${t[$i]:-}"; i=$((i + 1))
-  args=("${t[@]:$i}")
+  sub="${tw[$i]:-}"; i=$((i + 1))
+  args=("${tw[@]:$i}")
 
   case "$sub" in
     commit|push|merge|am|rebase|cherry-pick|revert|pull)
@@ -348,9 +433,9 @@ while IFS= read -r seg; do
             done ;;
         esac
       done
-      branch=$(protected_branch)
+      protected_branch; branch=$PB
       if [ -n "$branch" ]; then
-        if printf '%s' "$scan" | grep -qE 'git[[:space:]]+(checkout[[:space:]]+(-[bB]|--orphan)|switch[[:space:]]+(-[cC]|--create))'; then
+        if rx 'git[[:space:]]+(checkout[[:space:]]+(-[bB]|--orphan)|switch[[:space:]]+(-[cC]|--create))' "$scan"; then
           block "commit chained after a branch switch while '$branch' is checked out. Run 'git checkout -b <name>' alone first, then run 'git commit' as a separate command."
         fi
         block "direct commit to protected branch '$branch'. Run 'git checkout -b <feature-branch>' first, then commit again."
@@ -371,11 +456,11 @@ while IFS= read -r seg; do
             [[ "$a" == +* || "$a" == :* ]] && force=1
             [[ "$a" =~ ^\+?((refs/heads/)?($protected)|[^:]*:(refs/heads/)?($protected))$ ]] && target=1
             # `HEAD` / `@` (no `:dst`) pushes the current branch to its same-named remote branch
-            if [[ "$a" =~ ^\+?(HEAD|@)$ ]]; then [ -n "$(protected_branch)" ] && target=1; fi ;;
+            if [[ "$a" =~ ^\+?(HEAD|@)$ ]]; then protected_branch; [ -n "$PB" ] && target=1; fi ;;
         esac
       done
       if [ "$explicit" -eq 0 ]; then
-        [ -n "$(protected_branch)" ] && target=1
+        protected_branch; [ -n "$PB" ] && target=1
       fi
       [ "$force" -eq 1 ] && [ "$target" -eq 1 ] && block "force-push/delete on a protected branch (--force, -f, +refspec, HEAD:main). Open a PR instead."
       ;;
@@ -388,21 +473,21 @@ while IFS= read -r seg; do
         block "'git checkout/restore' on a guard-layer file discards enforcement config. Confirm with a human first."
       fi ;;
   esac
-done <<< "$segments"
+done < <(printf '%s\n' "$segments")
 
 # Guarded source directories, defined once for the rm check and the interpreter removal check.
 srcnames='src|app|lib|test|\.claude|\.lefthook|\.git|node_modules'
 srcdirs="(^|[[:space:]/\"])(${srcnames})([[:space:]/\"]|\$)"
 # rm_src <text>: rm -rf on a guarded directory in one text; run on the raw command, on the unwrapped scan (sh -c "rm -rf src") and on each segment of inline code.
 rm_src() {
-  printf '%s\n' "$1" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && printf '%s\n' "$1" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && printf '%s\n' "$1" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && printf '%s\n' "$1" | grep -qE "$srcdirs"
+  rx '(^|[[:space:]])rm([[:space:]]|$)' "$1" && rx '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' "$1" && rx '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' "$1" && rx "$srcdirs" "$1"
 }
 # interp_removes: inline code calls a recursive remover (shutil.rmtree, fs.rmSync with recursive, FileUtils.rm_rf) whose target is a guarded directory.
 interp_removes() {
   local tgt="[[:space:]]+(\\./)?(${srcnames})(/|[[:space:]]|\$)"
-  printf '%s\n' "$interp_norm" | grep -qE "(rmtree|rimraf|rm_rf|rm_r|remove_entry|remove_dir|removeSync|emptyDirSync)${tgt}" && return 0
-  printf '%s\n' "$interp_norm" | grep -q 'recursive' || return 1
-  printf '%s\n' "$interp_norm" | grep -qE "(rmSync|rmdirSync|fs\\.rm|rmdir)${tgt}"
+  rx "(rmtree|rimraf|rm_rf|rm_r|remove_entry|remove_dir|removeSync|emptyDirSync)${tgt}" "$interp_norm" && return 0
+  rx 'recursive' "$interp_norm" || return 1
+  rx "(rmSync|rmdirSync|fs\\.rm|rmdir)${tgt}" "$interp_norm"
 }
 if rm_src "$cmd" || rm_src "$scan_shell"; then
   block "recursive rm on a source directory. Confirm with a human first."
@@ -412,5 +497,13 @@ if [ -n "$interp" ]; then
     rm_src "$seg" && block "recursive rm on a source directory. Confirm with a human first."
   done < <(printf '%s\n' "$interp_norm" | tr ';|&' '\n\n\n')
   interp_removes && block "recursive removal of a source directory through an interpreter. Confirm with a human first."
+fi
+return 0
+}
+# The verdict is the union of two independent scans. The raw scan reads the command as written and always runs. The wrapper scan runs only when the wrapper test matched and can only add blocks.
+( judge "$cmd" unwrap ) || exit 2
+if [ "$wrapper" -eq 1 ]; then
+  ( judge "$(flatten "$cmd")" flat ) || exit 2
+  case $cmd in *"$nl"*) ( judge "$(flatten "$cmd" join)" flat ) || exit 2 ;; esac
 fi
 exit 0

@@ -353,7 +353,7 @@ check_file_line_budget() {
   # SKILL.md also has 50 prose lines outside fences. A SKILL.md that registered_skillmds lists stays with
   # check_skillmd_body_length (its frontmatter is capped here: 7 lines, closed); every other SKILL.md is
   # capped at 12. Any symlink, hidden directory or skill.md in another letter case outside a template root, or a carriage return, fails. A row may only shrink
-  # and none is born after the initial capture: scripts/check-line-budget-frozen.sh compares it with the
+  # and none is ever added: scripts/check-line-budget-frozen.sh compares it with the
   # base ref. TIMELESS.
   # Not caught: text quality; growth that stays under a file's own limit; any file in a template root
   # (a real template directory beside a template.manifest; the template checks list its files); files with
@@ -1937,8 +1937,8 @@ check_seeded_pipefail_readers() {
   # A seeded script that sets pipefail must not pipe into a reader that can quit before the writer
   # finishes: grep -q (any flag spelling, also -m, -l, -L), head, sed with q, awk with an exit outside
   # END, or read. Past 64 KB the writer is killed (EPIPE), the pipeline returns non-zero, and a real
-  # match reads as no match, so a gate is skipped. Use a here-string, a temp file, a case match or a
-  # reader that reads to the end. No waiver comment exists. The scan covers every .sh, .envsh, .yml
+  # match reads as no match, so a gate is skipped. Use printf piped into a reader that reads to the end,
+  # a case match or a temp file you check. No waiver comment exists. The scan covers every .sh, .envsh, .yml
   # and .yaml file in a template tree and under migrate/general that sets pipefail, and the inline
   # run/script blocks of the CI yaml. Heredoc bodies and backtick bodies are skipped. A file the
   # tokenizer cannot finish also fails, the scanner must report every file it was given (a crash
@@ -1958,10 +1958,10 @@ check_seeded_pipefail_readers() {
   fi
   local py out hits anchors a missing="" scan_list expected scanned
   read -r -d '' py <<'PY' || true
-import os, re, sys
+import json, os, re, sys
 
 
-WHY = "the reader can exit before the writer finishes, so under pipefail a real match reads as no match; use a here-string, a temp file, a case match or a reader that reads to the end"
+WHY = "the reader can exit before the writer finishes, so under pipefail a real match reads as no match; use printf piped into a reader that reads to the end (grep without -q, with >/dev/null), a case match or a temp file you check"
 PREFIX = ("command", "builtin", "env", "exec", "time", "nice", "!", "{", "(", "if", "then", "do", "else", "while", "until")
 WRAPPERS = ("xargs", "timeout", "sudo", "stdbuf", "nice", "ionice", "nohup")
 READERS = ("grep", "egrep", "fgrep", "ggrep", "head", "ghead", "sed", "gsed", "awk", "gawk", "mawk", "nawk", "read")
@@ -2316,32 +2316,133 @@ def sets_pipefail(text):
     return False
 
 
+KEY_ALT = "|".join(KEYS)
+KEY_RE = re.compile(r"^( *)(?:-\s+)*([\"']?)(?:" + KEY_ALT + r")\2\s*:(?:\s+(.*))?$")
+LOOSE_RE = re.compile(r"(?:^|[{,\[]|^\s*[-?]\s)\s*[\"']?(?:" + KEY_ALT + r")[\"']?\s*:|^\s*(?:-\s+)*\?\s+[\"']?(?:" + KEY_ALT + r")")
+HEADER_RE = re.compile(r"^(?:[&!][^\s]*\s+)*[|>](?:[1-9][-+]?|[-+][1-9]?)?\s*(?:#.*)?$")
+COMMENT_RE = re.compile(r"^\s*(?:#.*)?$")
+
+
+def indent_of(row):
+    return len(row) - len(row.lstrip(" "))
+
+
+def scalar_text(val):
+    if val.startswith('"'):
+        end = 1
+        while end < len(val):
+            if val[end] == "\\":
+                end += 2
+                continue
+            if val[end] == '"':
+                break
+            end += 1
+        else:
+            return None
+        rest = val[end + 1:].strip()
+        if rest and not rest.startswith("#"):
+            return None
+        try:
+            return json.loads(val[: end + 1])
+        except ValueError:
+            return None
+    if val.startswith("'"):
+        end = 1
+        while end < len(val):
+            if val[end] == "'":
+                if val[end + 1:end + 2] == "'":
+                    end += 2
+                    continue
+                break
+            end += 1
+        else:
+            return None
+        rest = val[end + 1:].strip()
+        if rest and not rest.startswith("#"):
+            return None
+        return val[1:end].replace("''", "'")
+    if val[:1] in "[{*&!@`%" or val.startswith(("? ", "- ")):
+        return None
+    cut = val.find(" #")
+    return val if cut < 0 else val[:cut].rstrip()
+
+
 def yaml_blocks(text):
-    rows = text.split("\n")
-    out, numbers = [], []
+    rows = [r.rstrip("\r") for r in text.split("\n")]
+    out, numbers, problems = [], [], []
+
+    def refuse(k, why):
+        problems.append((k + 1, "yaml form not understood (%s); scripts in it were not checked" % why))
+
     k = 0
-    key_re = re.compile(r"^(\s*)(?:-\s+)?(" + "|".join(KEYS) + r"):\s*(.*)$")
     while k < len(rows):
-        m = key_re.match(rows[k])
-        if not m:
+        row = rows[k]
+        m = KEY_RE.match(row)
+        if re.match(r"^ *\t", row):
+            refuse(k, "a tab in the indentation")
             k += 1
             continue
-        indent, val = len(m.group(1)), m.group(3).strip()
-        if re.match(r"^[|>][-+]?\s*(#.*)?$", val):
+        if not m:
+            if LOOSE_RE.search(row):
+                refuse(k, "a script key in flow, complex or inline form")
             k += 1
-            while k < len(rows) and (rows[k].strip() == "" or len(rows[k]) - len(rows[k].lstrip()) > indent):
+            continue
+        indent = indent_of(row)
+        val = (m.group(3) or "").strip()
+        body_start = k + 1
+        if val == "" or val.startswith("#"):
+            j = body_start
+            while j < len(rows) and COMMENT_RE.match(rows[j]):
+                j += 1
+            if j < len(rows) and indent_of(rows[j]) > indent and re.match(r"^\s*[|>]", rows[j]) and HEADER_RE.match(rows[j].strip()):
+                k = j
+                val = rows[j].strip()
+            else:
+                lines = []
+                while j < len(rows) and (rows[j].strip() == "" or indent_of(rows[j]) > indent):
+                    lines.append((j, rows[j]))
+                    j += 1
+                if not any(t.strip() for _, t in lines):
+                    refuse(k, "a script key with no value")
+                    k += 1
+                    continue
+                for n, t in lines:
+                    out.append(t.strip())
+                    numbers.append(n + 1)
+                out.append("")
+                numbers.append(j)
+                k = j
+                continue
+        if HEADER_RE.match(val):
+            k += 1
+            while k < len(rows) and (rows[k].strip() == "" or indent_of(rows[k]) > indent):
                 out.append(rows[k])
                 numbers.append(k + 1)
                 k += 1
             out.append("")
             numbers.append(k)
-        else:
-            out.append(val)
-            numbers.append(k + 1)
-            out.append("")
-            numbers.append(k + 1)
+            continue
+        txt = scalar_text(val)
+        if txt is None:
+            refuse(k, "a quoted, flow or alias value that does not end on its line")
             k += 1
-    return out, numbers
+            continue
+        k += 1
+        cont = []
+        while k < len(rows) and rows[k].strip() != "" and indent_of(rows[k]) > indent and not COMMENT_RE.match(rows[k]):
+            cont.append(k)
+            k += 1
+        if cont:
+            if val[:1] in "\"'":
+                refuse(cont[0] - 1, "a quoted value that continues on the next line")
+            for n in cont:
+                out.append(rows[n].strip())
+                numbers.append(n + 1)
+        out.insert(len(out) - len(cont), txt)
+        numbers.insert(len(numbers) - len(cont), cont[0] if cont else k)
+        out.append("")
+        numbers.append(k)
+    return out, numbers, problems
 
 
 def scan(path):
@@ -2349,8 +2450,11 @@ def scan(path):
         text = fh.read()
     if not sets_pipefail(text):
         return [], [], False
+    yaml_problems = []
     if path.endswith((".yml", ".yaml")):
-        rows, numbers = yaml_blocks(text)
+        rows, numbers, yaml_problems = yaml_blocks(text)
+        if not rows:
+            return [], yaml_problems, True
         body = "\n".join(rows) + "\n"
         per_char = []
         for r, no in zip(rows, numbers):
@@ -2364,7 +2468,7 @@ def scan(path):
                 no += 1
     p = Parser(body, per_char)
     p.run()
-    return p.hits, p.problems, True
+    return p.hits, yaml_problems + p.problems, True
 
 
 def main():
@@ -2400,8 +2504,93 @@ PY
     hits="${hits:+$hits$'\n'}anchor script missing or no longer sets pipefail: $missing"
   fi
   report "$hits" \
-    "A seeded pipefail script pipes into an early-exit reader (or cannot be parsed) — use a here-string, a temp file, a case match or a reader that reads to the end" \
+    "A seeded pipefail script pipes into an early-exit reader (or cannot be parsed) — pipe printf into a reader that reads to the end (grep without -q, with >/dev/null), use a case match or a temp file you check" \
     "No seeded pipefail script pipes into an early-exit reader"
+}
+
+# Lines that hold the characters <<< but are not a here-string: "path<TAB>exact line", path relative to the skills folder.
+HERE_STRING_ALLOW=(
+  $'scaffold/shared/template-ts/.claude/hooks/block-no-verify.sh\t  { print; l = $0; gsub(/<<</, "", l)'
+  $'scaffold/shared/template-py/.claude/hooks/block-no-verify.sh\t  { print; l = $0; gsub(/<<</, "", l)'
+)
+
+check_seeded_here_strings() {
+  # A here-string is written to a temp file before the command starts. When the temp folder is
+  # unwritable or full, bash prints one error and the command reads nothing: a grep match test reads as
+  # no match, a read leaves its variable empty, a loop runs no turns. A gate then passes unchecked. So
+  # the lint does not parse bash: a seeded script that sets pipefail, and every hook, may not hold the
+  # three characters <<< on any line, except a full-line comment (not one that follows a line ending in a backslash) and the exact lines in
+  # HERE_STRING_ALLOW (text that is not a here-string, such as an awk pattern). An allow row that
+  # matches no line fails, so a stale row cannot hide a later hit. A file that cannot be read fails and
+  # the scanner must report every file it was given. Use printf piped into a reader that reads to the
+  # end, a redirect, a case match or a process substitution instead. TIMELESS.
+  header "Seeded pipefail scripts and hooks use no here-string"
+  if ! have_python; then
+    fail "python3 is required for this check"
+    return
+  fi
+  local py out hits scan_list expected scanned allow
+  read -r -d '' py <<'PY' || true
+import os, sys
+
+root = os.environ["HS_ROOT"].rstrip("/") + "/"
+allow = {}
+for row in os.environ.get("HS_ALLOW", "").split("\n"):
+    if row:
+        path, _, text = row.partition("\t")
+        allow[(path, text)] = False
+
+
+def is_comment(lines, i):
+    # A full-line comment starts with # after blanks only (space and tab: Python lstrip() would also
+    # strip U+00A0, U+2028, \x1c-\x1f and \x85, which bash reads as word characters), and the line before
+    # does not end with a backslash (that joins the two lines, so the # is no comment). A CR before the
+    # line break stays part of the line; it is not stripped as a blank, and a backslash before it still counts
+    # as a joiner (fail closed: bash would not join there, so a comment line may be read as code, never the reverse).
+    if i > 0 and lines[i - 1].rstrip("\r").endswith("\\"):
+        return False
+    return lines[i].lstrip(" \t").startswith("#")
+
+
+def sets_pipefail(lines):
+    return any("pipefail" in r and not is_comment(lines, i) for i, r in enumerate(lines))
+
+
+for path in sys.argv[1:]:
+    # newline="" keeps every CR: text mode would turn a lone CR into a line break, and a line such as
+    # `grep -q x<CR># <<< "$v"` would then read as a comment while bash runs it (CR is a word character).
+    with open(path, encoding="utf-8", errors="replace", newline="") as fh:
+        lines = fh.read().split("\n")
+    rel = path[len(root):] if path.startswith(root) else path
+    if not (sets_pipefail(lines) or "/hooks/" in path):
+        continue
+    for n, text in enumerate(lines, 1):
+        if "<<<" not in text or is_comment(lines, n - 1):
+            continue
+        if (rel, text) in allow:
+            allow[(rel, text)] = True
+            continue
+        print("HIT %s:%d: <<< is a here-string; use a pipe or a redirect, or add a HERE_STRING_ALLOW row with a reason if it is not one" % (path, n))
+for (rel, text), used in allow.items():
+    if not used:
+        print("HIT %s: HERE_STRING_ALLOW row matches no line: %s" % (rel, text))
+print("DONE %d" % len(sys.argv[1:]))
+PY
+  scan_list=$({
+    template_files
+    { (cd "$SKILLS_DIR" 2>/dev/null && find migrate/general -type f -name '*.sh') || true; } | sed "s|^|$SKILLS_DIR/|"
+  } | grep -E '\.(sh|envsh|yml|yaml)$' | LC_ALL=C sort -u)
+  allow=$(printf '%s\n' "${HERE_STRING_ALLOW[@]}")
+  out=$(printf '%s\n' "$scan_list" | HS_ROOT="$SKILLS_DIR" HS_ALLOW="$allow" xargs python3 -I -c "$py" || true)
+  hits=$(printf '%s\n' "$out" | grep -E '^HIT ' | sed -E 's/^HIT //' || true)
+  expected=$(printf '%s\n' "$scan_list" | grep -c . || true)
+  scanned=$(printf '%s\n' "$out" | awk '/^DONE / { n += $2 } END { print n + 0 }')
+  if [[ "$scanned" != "$expected" ]]; then
+    hits="${hits:+$hits$'\n'}the scanner stopped early: it finished $scanned of $expected files, so the files after it were not checked"
+  fi
+  report "$hits" \
+    "A seeded pipefail script or hook holds <<< — a here-string's temp file can fail to open and the command then reads nothing; pipe printf into a reader that reads to the end, use a redirect or a case match" \
+    "No seeded pipefail script or hook holds <<<"
 }
 
 # ── RUN ALL CHECKS ─────────────────────────────────────────────────────────────
@@ -2431,6 +2620,7 @@ check_template_trees_complete
 check_no_template_skill_md
 check_copy_script_single
 check_seeded_pipefail_readers
+check_seeded_here_strings
 check_step0_before_install
 check_migrate_hook_inventory_matches_kit
 check_duplicated_iam_blocks_match
