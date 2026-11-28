@@ -206,7 +206,8 @@ py_fixture() {
   base_fixture "$1"
   mkdir -p "$D/.venv/bin"
   : > "$D/requirements.txt"
-  printf '#!/bin/sh\nprintf '"'"'%s\\n'"'"'\n' "$2" > "$D/.venv/bin/python"
+  printf 'home = /usr/bin\n' > "$D/.venv/pyvenv.cfg"
+  printf '#!/bin/sh\ncase "$*" in *sys.base_prefix*) exit 0 ;; esac\nprintf '"'"'%s\\n'"'"'\n' "$2" > "$D/.venv/bin/python"
   chmod +x "$D/.venv/bin/python"
 }
 py_fixture py-good 'fastapi@0.1	MIT'
@@ -220,6 +221,34 @@ py_fixture py-bad 'gpl-lib@3.0	GPL-3.0-only'
 run "$D"
 check 1 "$EC" "python licence outside the list fails"
 has "gpl-lib@3.0 has licence GPL-3.0-only" "$OUT" "python message names the package and licence"
+
+# A planted python must not pass for a virtual environment: no pyvenv.cfg, a probe that fails, or a non-executable file each stop the gate (exit 2); py-good is the control.
+py_fixture py-nocfg 'fastapi@0.1	MIT'
+rm -f "$D/.venv/pyvenv.cfg"
+run "$D"
+check 2 "$EC" "a planted python without pyvenv.cfg is refused"
+has "has no pyvenv.cfg" "$OUT" "message says pyvenv.cfg is missing"
+py_fixture py-noprobe 'fastapi@0.1	MIT'
+printf '#!/bin/sh\ncase "$*" in *sys.base_prefix*) exit 1 ;; esac\nprintf '"'"'fastapi@0.1\tMIT\\n'"'"'\n' > "$D/.venv/bin/python"
+run "$D"
+check 2 "$EC" "a python that is not a venv interpreter is refused although pyvenv.cfg exists"
+has "does not run as a virtual environment interpreter" "$OUT" "message says the interpreter is not a venv"
+py_fixture py-noexec 'fastapi@0.1	MIT'
+chmod -x "$D/.venv/bin/python"
+run "$D"
+check 2 "$EC" "a non-executable python is refused"
+has "no project Python environment" "$OUT" "message says there is no usable Python environment"
+py_fixture py-dir 'fastapi@0.1	MIT'
+rm -f "$D/.venv/bin/python"
+mkdir "$D/.venv/bin/python"
+run "$D"
+check 2 "$EC" "a python that is a directory is refused"
+has "is not a regular file" "$OUT" "message says bin/python is not a regular file"
+py_fixture py-link 'fastapi@0.1	MIT'
+mv "$D/.venv/bin/python" "$D/.venv/bin/real-python"
+ln -s real-python "$D/.venv/bin/python"
+run "$D"
+check 0 "$EC" "a python that is a resolving symlink passes ($OUT)"
 
 # Python read by the real metadata code from a fake environment.
 # env_fixture <name> <requirements text>: a Python project with a real empty venv (no global site-packages; the gate reads it with python -I, so PYTHONPATH cannot feed it); sets D and SITE.

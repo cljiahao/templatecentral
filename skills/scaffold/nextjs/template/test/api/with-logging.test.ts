@@ -3,14 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { type RouteContext, withLogging } from '@/lib/utils/with-logging';
 
-function makeRequest(url: string): NextRequest {
-  return new NextRequest(url);
-}
-
 describe('withLogging', () => {
   it('returns the handler response on success', async () => {
     const GET = withLogging(async () => NextResponse.json({ ok: true }, { status: 201 }));
-    const res = await GET(makeRequest('http://localhost/api/thing'));
+    const res = await GET(new NextRequest('http://localhost/api/thing'));
     expect(res.status).toBe(201);
     await expect(res.json()).resolves.toEqual({ ok: true });
   });
@@ -19,7 +15,7 @@ describe('withLogging', () => {
     const GET = withLogging(async () => {
       throw new Error('boom');
     });
-    const res = await GET(makeRequest('http://localhost/api/thing'));
+    const res = await GET(new NextRequest('http://localhost/api/thing'));
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toEqual({ error: 'Internal server error' });
   });
@@ -29,7 +25,7 @@ describe('withLogging', () => {
       const { id } = await params;
       return NextResponse.json({ id });
     });
-    const res = await GET(makeRequest('http://localhost/api/thing/42'), {
+    const res = await GET(new NextRequest('http://localhost/api/thing/42'), {
       params: Promise.resolve({ id: '42' }),
     });
     await expect(res.json()).resolves.toEqual({ id: '42' });

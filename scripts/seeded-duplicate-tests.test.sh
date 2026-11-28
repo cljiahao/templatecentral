@@ -898,6 +898,52 @@ has "git cannot open it" "$OUT" "corrupt .git/HEAD: names the cause"
 printf 'ref: refs/heads/main\n' > "$P/.git/HEAD"
 verdict 1 "clean control: a repaired HEAD reads the files again"
 
+# An awk that fails in a command substitution must stop the run (exit 2 with a message), never read as "nothing to check".
+# The stub runs the real awk unless a call holds TC_FAIL_SUB in an argument and its last argument ends with TC_FAIL_SUFFIX.
+STUB=$T/awkstub
+mkdir -p "$STUB"
+REAL_AWK=$(command -v awk)
+printf '%s\n' "$REAL_AWK" > "$STUB/real"
+cat > "$STUB/awk" << 'STUB'
+#!/bin/sh
+if [ -n "${TC_FAIL_SUB:-}" ]; then
+  hit=0
+  last=''
+  for a in "$@"; do case "$a" in *"$TC_FAIL_SUB"*) hit=1 ;; esac; last=$a; done
+  case "$last" in *"$TC_FAIL_SUFFIX") [ "$hit" -eq 0 ] || { echo "stub awk: forced failure" >&2; exit 3; } ;; esac
+fi
+real=$(cat "$(dirname "$0")/real")
+exec "$real" "$@"
+STUB
+chmod +x "$STUB/awk"
+stub_run() { # stub_run <sub> <suffix> — the check on $P with the stub awk first on PATH
+  OUT=$(PATH="$STUB:$PATH" TC_FAIL_SUB="$1" TC_FAIL_SUFFIX="$2" bash "$CHECK" "$P" 2>&1)
+  EC=$?
+}
+newp
+ts_case "$P/a.test.ts" "" 2
+ts_case "$P/b.test.ts" "" 3
+stub_run "" ""
+check 0 "$EC" "stub awk armed with nothing: clean control passes"
+stub_run "print NR" "/cand"
+check 2 "$EC" "awk failing on the candidate count: exit 2"
+has "awk failed counting the candidate test files" "$OUT" "awk failing on the candidate count: message"
+stub_run "print NR" "/cand.git"
+check 2 "$EC" "awk failing on the git-listed count: exit 2"
+has "awk failed counting the git-listed test files" "$OUT" "awk failing on the git-listed count: message"
+stub_run "print NR" "/records"
+check 2 "$EC" "awk failing on the test case count: exit 2"
+has "awk failed counting the test cases" "$OUT" "awk failing on the test case count: message"
+newp
+ts_case "$P/a.test.ts" "" 2
+ts_case "$P/vendor/lib/b.test.ts" "" 2
+git init -q "$P/vendor/lib"
+stub_run "" ""
+check 0 "$EC" "stub awk, nested repository: clean control passes"
+stub_run "TC_PREFIX" "/cand"
+check 2 "$EC" "awk failing on the nested repository count: exit 2"
+has "awk failed counting the test files under a nested git repository" "$OUT" "awk failing on the nested repository count: message"
+
 # A corrupt index stops the run instead of reading nothing.
 newp
 ts_case "$P/a.test.ts" "" 2

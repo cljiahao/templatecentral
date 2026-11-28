@@ -2054,6 +2054,86 @@ for gp in .claude/ci-gates.sh azure-pipelines/templatecentral-gates.yml; do
   expect_verify 1 "$CG" "flags a modified $gp"
 done
 
+# The loop above leaves a one-line azure pipeline file behind that no gate row is run by; drop it so a plain regood baseline is clean again.
+rm -rf "$V/azure-pipelines"
+# regood: the baseline manifest for the fixture as it stands now (gate stubs and the hook file hashed fresh).
+regood() { printf '%s' "{\"seeded_files\":{\"a\":{\"path\":\".claude/hooks/a.sh\",\"origin_hash\":\"$(sha "$V/.claude/hooks/a.sh")\"}$(gate_entries "$V")${1:-}}}"; }
+# vout <harness.json>: commit the fixture and print verify-harness output then its exit code on a last line.
+vout() {
+  printf '%s' "$1" > "$V/.claude/harness.json"
+  vcommit "$V"
+  local o rc
+  o=$(cd "$V" && bash "$KIT/verify-harness.sh" 2>&1); rc=$?
+  printf '%s\nRC=%s\n' "$o" "$rc"
+}
+vrc() { printf '%s\n' "$1" | sed -n 's/^RC=//p'; }
+# The exclusion gate must require its four helper files as hashed entries: they come from the guarded list, so a silent shrink of that list fails here.
+vout "$(regood)" > /dev/null
+guarded_now=$(cd "$V" && bash scripts/gate-ratchet.sh --list-guarded HEAD 2> /dev/null | awk -F'\t' '$3 == 1 { print $2 }')
+derived_excl=$(printf '%s\n' "$guarded_now" | awk -v self="scripts/check-exclude-reasons.sh" 'index($0, "scripts/check-exclude-") == 1 && $0 != self')
+for hn in scripts/check-exclude-rules.sh scripts/check-exclude-reasons.awk scripts/check-exclude-reasons.mjs scripts/check-exclude-reasons.py; do
+  check 1 "$(printf '%s\n' "$derived_excl" | grep -cFx "$hn")" "verify-harness derives $hn as a required exclusion helper from the guarded list"
+done
+# vrun: run verify-harness on the fixture as it stands (nothing committed), printing its output then its exit code.
+vrun() { local o rc; o=$(cd "$V" && bash "$KIT/verify-harness.sh" 2>&1); rc=$?; printf '%s\nRC=%s\n' "$o" "$rc"; }
+# A gate script holding only whitespace and NUL bytes does nothing (bash drops the NULs and exits 0), so it is blank; real content with a NUL inside stays content (the control). git hands the guarded list from HEAD, so the working file changes after the commit.
+echo docs > "$V/scripts/check-docs.sh"
+printf '%s' "$(regood)" > "$V/.claude/harness.json"; vcommit "$V"
+for nulcase in 'lone NUL:\0' 'newline NUL newline:\n\0\n' 'NULs and spaces:\0 \0\t\0' 'whitespace only: \n\t\n'; do
+  printf '%b' "${nulcase#*:}" > "$V/scripts/check-docs.sh"
+  printf '%s' "$(regood)" > "$V/.claude/harness.json"
+  out=$(vrun); check 1 "$(vrc "$out")" "verify-harness fails a gate file of ${nulcase%%:*}"
+  check 1 "$(grep -c 'GATE FILE BLANK: docs' <<< "$out")" "verify-harness names the blank gate file (${nulcase%%:*})"
+done
+printf 'real\0content\n' > "$V/scripts/check-docs.sh"
+printf '%s' "$(regood)" > "$V/.claude/harness.json"
+out=$(vrun); check 0 "$(vrc "$out")" "verify-harness control: real content with one NUL inside passes"
+check 0 "$(grep -c 'GATE FILE BLANK' <<< "$out")" "verify-harness control: content with a NUL is not blank"
+# The gate itself names the four exclusion helpers: a guarded list that lost one cannot drop it from the required files.
+cp "$V/scripts/gate-ratchet.sh" "$V/scripts/gate-ratchet.orig.sh"
+cat > "$V/scripts/gate-ratchet.sh" <<'EOS'
+#!/bin/bash
+bash "$(dirname "$0")/gate-ratchet.orig.sh" "$@" | grep -v 'check-exclude-reasons.awk' || true
+EOS
+echo docs > "$V/scripts/check-docs.sh"
+NOAWK=$(regood | sed 's/,"[^"]*":{"path":"scripts\/check-exclude-reasons\.awk","origin_hash":"[0-9a-f]*"}//')
+out=$(vout "$NOAWK"); check 1 "$(grep -c 'GATE FILE UNREGISTERED: exclusions reads scripts/check-exclude-reasons.awk' <<< "$out")" "verify-harness requires check-exclude-reasons.awk although the guarded list lost it"
+rm -f "$V/scripts/gate-ratchet.orig.sh"
+cp "$TPL/template/scripts/gate-ratchet.sh" "$V/scripts/gate-ratchet.sh"
+echo docs > "$V/scripts/check-docs.sh"
+# A guarded path holding a backslash: shasum marks the line with a leading backslash, which must not read as a changed file. git quotes such a path, so a wrapper adds it to the guarded list.
+cp "$V/scripts/gate-ratchet.sh" "$V/scripts/gate-ratchet.orig.sh"
+cat > "$V/scripts/gate-ratchet.sh" <<'EOS'
+#!/bin/bash
+bash "$(dirname "$0")/gate-ratchet.orig.sh" "$@" || exit $?
+if [ "${1:-}" = --list-guarded ]; then printf 'guard\t.claude/hooks/b\\c.sh\t1\n'; fi
+EOS
+printf 'bs\n' > "$V/.claude/hooks/b\c.sh"
+BSE=",\"bs\":{\"path\":\".claude/hooks/b\\\\c.sh\",\"origin_hash\":\"$(sha "$V/.claude/hooks/b\\c.sh")\"}"
+out=$(vout "$(regood "$BSE")"); check 0 "$(vrc "$out")" "verify-harness passes an untouched file whose path holds a backslash"
+check 0 "$(grep -c 'MODIFIED' <<< "$out")" "verify-harness does not call an untouched backslash path MODIFIED"
+echo changed >> "$V/.claude/hooks/b\c.sh"
+out=$(vout "$(regood "$BSE")"); check 1 "$(vrc "$out")" "verify-harness control: an edited backslash-path file is still flagged"
+check 1 "$(grep -c 'MODIFIED: .claude/hooks/b\\c.sh' <<< "$out")" "verify-harness names the edited backslash-path file"
+rm -f "$V/.claude/hooks/b\\c.sh" "$V/scripts/gate-ratchet.orig.sh"
+cp "$TPL/template/scripts/gate-ratchet.sh" "$V/scripts/gate-ratchet.sh"
+# A newline in a manifest path still fails closed (exit non-zero), never passes.
+NLE=",\"nl\":{\"path\":\".claude/hooks/n\\nl.sh\",\"origin_hash\":\"$(sha "$V/.claude/hooks/a.sh")\"}"
+out=$(vout "$(regood "$NLE")"); nlrc=$(vrc "$out"); if [[ "$nlrc" != 0 ]]; then nlfail=1; else nlfail=0; fi
+check 1 "$nlfail" "verify-harness fails closed on a newline in a manifest path"
+# An unreadable guarded file stays exit 2 and the output names it.
+if [[ "$(id -u)" != 0 ]]; then
+  printf '%s' "$(regood)" > "$V/.claude/harness.json"; vcommit "$V"
+  chmod 000 "$V/.claude/hooks/a.sh"
+  out=$(cd "$V" && bash "$KIT/verify-harness.sh" 2>&1); rc=$?
+  chmod 644 "$V/.claude/hooks/a.sh"
+  check 2 "$rc" "verify-harness exits 2 on an unreadable guarded file"
+  check 1 "$(grep -c 'UNREADABLE: .claude/hooks/a.sh' <<< "$out")" "verify-harness names the unreadable file"
+  out=$(vout "$(regood)"); check 0 "$(vrc "$out")" "verify-harness control: the same file readable passes"
+else
+  echo "SKIP: unreadable-file test needs a non-root user"
+fi
+
 # No match test may read from a pipe whose writer the reader's early exit can kill: under pipefail that turns a match
 # into a failure (a false "omits a gate") or silently skips a guarded file. The inputs below are far above the pipe
 # buffer and match on their first line, so the piped form fails every time and no timing is involved.

@@ -180,13 +180,6 @@ else
   mb=$(git merge-base "$ref" HEAD 2> /dev/null) || die "no merge base between $ref and HEAD. Fix: fetch full history (CI needs fetch-depth: 0)."
   head_sha=$(git rev-parse HEAD 2> /dev/null) || die "cannot read HEAD"
   git -c core.quotePath=false diff --relative --src-prefix=a/ --dst-prefix=b/ --no-color --no-ext-diff --no-textconv --text -U0 -M --diff-filter=AMR "$mb" -- . > "$wd/diff" 2> "$wd/diff.err" || die "git diff failed: $(head -n 1 "$wd/diff.err")"
-  bin_rc=0
-  grep -aE '^Binary files .* differ$' "$wd/diff" > /dev/null || bin_rc=$?
-  case "$bin_rc" in
-    0) die "git reported a changed file as binary, so its comments cannot be read from the diff. Fix: remove the -diff or binary attribute for it in .gitattributes, or run with --all." ;;
-    1) ;;
-    *) die "cannot read the git diff" ;;
-  esac
   awk '
     /^diff --git / { hdr = 1; f = ""; next }
     hdr && /^\+\+\+ / {

@@ -78,17 +78,28 @@ refuse_tracked_env() {
   done
 }
 
+# Dies unless $1 is a real virtual environment (pyvenv.cfg beside bin/, a regular-file bin/python, sys.prefix differing from sys.base_prefix); the callers already test that bin/python is executable.
+require_real_venv() {
+  local dir=$1 p=$1/bin/python
+  if [ ! -f "$p" ]; then die "'$p' is not a regular file, so '$dir' is not a usable Python environment. Recreate it: uv venv && uv pip install --require-hashes -r requirements.txt"; fi
+  if [ ! -f "$dir/pyvenv.cfg" ]; then die "'$dir' has no pyvenv.cfg, so it is not a real virtual environment and its python is not trusted. Recreate it: uv venv && uv pip install --require-hashes -r requirements.txt"; fi
+  if ! "$p" -I -c 'import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 1)' > /dev/null 2>&1; then die "'$p' does not run as a virtual environment interpreter (sys.prefix equals sys.base_prefix, or it failed to start). Recreate it: uv venv && uv pip install --require-hashes -r requirements.txt"; fi
+}
+
 # Writes the SBOM of a Python project to $1, built from the packages installed in the project environment.
 sbom_python() {
-  local py='' req='' rc=''
+  local py='' req='' rc='' env=''
   if [ -n "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/python" ]; then
     py=$VIRTUAL_ENV/bin/python
+    env=$VIRTUAL_ENV
   elif [ -x .venv/bin/python ]; then
     py=.venv/bin/python
+    env=.venv
   else
     die "no project Python environment (VIRTUAL_ENV or .venv). Create the environment and install first: uv venv && uv pip install --require-hashes -r requirements.txt"
   fi
   refuse_tracked_env
+  require_real_venv "$env"
   if [ -f requirements.txt ]; then req=requirements.txt; fi
   "$py" -I "$helper" sbom "$req" "$1" 2> "$tmp/err.txt"
   rc=$?

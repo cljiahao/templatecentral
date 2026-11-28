@@ -5,7 +5,7 @@
 #                           --exclude-standard` (tracked and untracked, ignored files left out); elsewhere it is every file except
 #                           node_modules, .git and a virtual environment folder (outside git only), and a caller that finds rules_in_git ROOT false prints RULES_NOTE.
 #                           Config discovery and the marker scan both read this one list: no folder is skipped by its name alone.
-#   rules_init LIST         read the project facts from the file list LIST: the non-test source files and the package folders.
+#   rules_init LIST         read the project facts from the file list LIST: the non-test source files and the package folders; returns 1 with a message when awk fails.
 #   hides_source ENTRY DIR  true when the exclude ENTRY, written in a config in folder DIR, leaves out every non-test source file of the
 #                           project, of one package (a folder with its own package.json or pyproject.toml), or of one top-level folder that holds
 #                           half or more of the sources, or every source file of one extension (3 files or more) in any of those. A form the
@@ -143,7 +143,7 @@ EOF
 # Read the project facts from the file list $1 (newline separated, relative paths): RULES_SRC holds the non-test source files and
 # RULES_PKGS the folders with their own package.json or pyproject.toml, other than the root.
 rules_init() {
-  RULES_SRC=$(printf '%s\n' "$1" | awk '
+  if ! RULES_SRC=$(printf '%s\n' "$1" | awk '
     function issrc(p,   b) {
       b = p
       sub(/^.*\//, "", b)
@@ -157,15 +157,21 @@ rules_init() {
       if (p ~ /^scripts\/(check-exclude-reasons\.(mjs|py)|check-comments\.(mjs|py)|duplicate-tests-ts\.mjs|duplicate_tests_py\.py|py-env\.py)$/ || p ~ /^\.claude\/hooks\/user-prompt-guard\.(py|cjs)$/) return 0
       return 1
     }
-    issrc($0) { print }')
-  RULES_PKGS=$(printf '%s\n' "$1" | awk '
+    issrc($0) { print }'); then
+    printf 'check-exclude-rules: awk failed reading the source file list, so nothing would be checked\n' >&2
+    return 1
+  fi
+  if ! RULES_PKGS=$(printf '%s\n' "$1" | awk '
     { b = $0; sub(/^.*\//, "", b) }
     b == "package.json" || b == "pyproject.toml" {
       d = $0
       if (index(d, "/") == 0) next
       sub(/\/[^\/]*$/, "", d)
       print d
-    }' | LC_ALL=C sort -u)
+    }' | LC_ALL=C sort -u); then
+    printf 'check-exclude-rules: awk or sort failed reading the package folder list, so nothing would be checked\n' >&2
+    return 1
+  fi
 }
 
 # Evaluate patterns against RULES_SRC. MODE excl: exit 0 when one pattern of RULES_PAT (newline separated) covers a whole scope.
@@ -661,7 +667,7 @@ unparsed_exclude_line() {
 }
 
 # Print the interpreter for the TOML and INI scanner: the first of the highest python3.N on the path and python3
-# that can import tomllib or tomli. Prints nothing when none can; RULES_PY_TRIED then lists what was tried and why each failed.
+# that can import tomllib or tomli (the other gates need only python3, this one also needs a TOML reader). Prints nothing when none can; RULES_PY_TRIED then lists what was tried and why each failed.
 resolve_python() {
   local cand cands='' n tried='' out
   for n in $(compgen -c python3. 2> /dev/null | grep -E '^python3\.[0-9]+$' | sort -t. -k2 -n -r | uniq); do

@@ -215,7 +215,7 @@ tab=$(printf '\t')
 # a .gitignore does not hide; outside one it is every file except node_modules, .git and virtualenv folders. No folder is skipped by name.
 FILES=$(rules_files .) || die "cannot list the project files (git ls-files or find failed, see the message above): fix the repository, then run again"
 if ! rules_in_git .; then printf 'check-exclude-reasons: NOTE %s\n' "$RULES_NOTE" >&2; fi
-rules_init "$FILES"
+rules_init "$FILES" || die "cannot read the project file list (awk failed, see the message above), so nothing was checked"
 
 # Put FILE into the scanner list for its type; false when no scanner can read it. With a TOOL (the tool word of the command line that pointed
 # at the file) the tool decides the scan mode, never the file name: jest, vitest, stryker, nyc and c8 read a JS, TS or JSON file in their
@@ -519,7 +519,7 @@ if [ "${#js_files[@]}" -gt 0 ]; then
   done
 fi
 if [ "$nconf" -eq 0 ]; then
-  src=$(printf '%s\n' "$FILES" | awk '/\.(ts|tsx|js|jsx|mjs|cjs|py)$/ && !seen { print; seen = 1 }')
+  if ! src=$(printf '%s\n' "$FILES" | awk '/\.(ts|tsx|js|jsx|mjs|cjs|py)$/ && !seen { print; seen = 1 }'); then die "awk failed looking for source files, so the gate cannot tell whether there is anything to check"; fi
   if [ -n "$src" ]; then
     bad "no coverage, Sonar or mutation config found, but the project has source files (for example $src), so nothing proves what it excludes. Fix: add a coverage config (vitest.config.ts, jest.config.js, pyproject.toml or sonar-project.properties)."
   elif [ "$fail_count" -eq 0 ]; then

@@ -12,9 +12,10 @@ class TestClient extends FetchClient {
 
 const client = new TestClient('http://api.test', { 'X-Key': 'k' });
 
-function reply(body: BodyInit | null, status: number, type?: string) {
+function reply(body: BodyInit | null, status: number, type?: string, statusText?: string) {
   const headers = type ? { 'Content-Type': type } : undefined;
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body, { status, headers })));
+  const res = new Response(body, { status, statusText, headers });
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res));
 }
 
 beforeEach(() => {
@@ -48,12 +49,7 @@ describe('FetchClient', () => {
     ['unreadable JSON', 'oops', 'application/json', 'Bad Request'],
     ['HTML', '<html></html>', 'text/html', 'Bad Request'],
   ])('turns a %s error body into an APIError', async (_label, body, type, message) => {
-    const res = new Response(body, {
-      status: 400,
-      statusText: 'Bad Request',
-      headers: type ? { 'Content-Type': type } : undefined,
-    });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res));
+    reply(body, 400, type, 'Bad Request');
     await expect(client.call('x')).rejects.toMatchObject({ statusCode: 400, message });
   });
 });
