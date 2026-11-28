@@ -466,6 +466,85 @@ cpu_took=$(($(cpu_cs) - cpu_start))
 if [[ $cpu_took -le 200 ]]; then cpu_ok=1; else cpu_ok=0; fi
 check 1 "$cpu_ok" "a 13 KB nested wrapper is answered by both hooks in at most 2 s of CPU (took ${cpu_took} cs)"
 
+# A shell or eval word that is only an argument of a plain git command must not hide a bypass (the flatten step once turned it into a separator).
+while IFS= read -r c; do
+  [[ -n "$c" ]] && expect_bash 2 "$c"
+done <<'CASES'
+git commit -m eval -n
+git commit -m "fix eval" -n
+git commit -m "x" eval -n
+git commit -m eval -an
+git commit -m "use eval" -nm x
+git commit -m eval --no-verify
+git commit -m "bash" -nc HEAD
+git commit -m sh -n -c HEAD
+git commit -m "run sh" -n -c HEAD
+git commit -c HEAD -m "bash" -nc x
+git commit -m ash -n -c HEAD
+git push origin main eval -f
+git push origin eval main -f
+git push eval -f origin main
+sh -c'git commit -n'
+sh -c"git commit -n"
+sh -cx "git commit -n"
+sh -c $'git commit -n'
+bash -c $'git commit --no-verify'
+bash -c 'echo "git commit -n"'
+CASES
+# Text that names a forbidden form inside a real wrapper stays blocked (by design); ordinary commands that only mention a shell pass.
+while IFS= read -r c; do
+  [[ -n "$c" ]] && expect_bash 0 "$c"
+done <<'CASES'
+git commit -m "fix --no-verify docs"
+echo --no-verify
+git log -n 5
+git push -n
+/bin/sh script.sh
+/usr/bin/env bash script.sh
+bash scripts/run.sh -c config
+cat /bin/sh
+which sh
+brew install dash
+ssh host -c aes
+npm run push
+deno eval "1"
+node -e "eval('1')"
+grep -c sh file
+python -c 'print(1)'
+psql -c 'select 1'
+git commit -m "eval this"
+git commit -m "bash" -c HEAD
+docker run img sh -c 'echo hi'
+kubectl exec p -- sh -c 'ls'
+bash -c 'echo ok'
+bash -c 'git log -n 5'
+ls | xargs -I{} sh -c 'echo {}'
+git stash
+git commit -m ""
+CASES
+# Long prose that names a shell without a wrapper has no size gate: a commit message, a heredoc write and a PR body.
+pad2k=$(printf 'the bash 3.2 build and the dash board and the ash tray. %.0s' $(seq 1 40))
+expect_bash 0 "git commit -m \"\$(cat <<'EOF'${NL}${pad2k}${NL}EOF${NL})\""
+expect_bash 0 "cat > docs/notes.md <<'EOF'${NL}run bash scripts/run.sh then sh x. ${pad2k}${NL}EOF"
+expect_bash 0 "git commit -m \"${pad2k}\""
+expect_bash 0 "gh pr create --title t --body \"${pad2k} call sh in CI\""
+expect_bash 0 "cat > f <<'EOF'${NL}$(printf 'use eval and more words here. %.0s' $(seq 1 100))${NL}EOF"
+# The same prose inside a real wrapper over 4000 bytes is refused as too long to judge.
+expect_bash 2 "bash -c 'echo ${pad2k}${pad2k}'"
+# CPU bound: the worst wrapper under the 4000 byte bound (newline-heavy, judged three times) and a 16 KB command with no wrapper, each at most 2.5 s over both hooks.
+worst="sh -c 'echo$(printf '\na%.0s' $(seq 1 1900))'"
+cpu_start=$(cpu_cs)
+expect_bash 0 "$worst"
+cpu_took=$(($(cpu_cs) - cpu_start))
+if [[ $cpu_took -le 250 ]]; then cpu_ok=1; else cpu_ok=0; fi
+check 1 "$cpu_ok" "a ${#worst} byte newline-heavy wrapper is answered by both hooks in at most 2.5 s of CPU (took ${cpu_took} cs)"
+long16=$(printf 'git commit -m x; %.0s' $(seq 1 1000))
+cpu_start=$(cpu_cs)
+expect_bash 0 "$long16"
+cpu_took=$(($(cpu_cs) - cpu_start))
+if [[ $cpu_took -le 250 ]]; then cpu_ok=1; else cpu_ok=0; fi
+check 1 "$cpu_ok" "a ${#long16} byte command with no wrapper is answered by both hooks in at most 2.5 s of CPU (took ${cpu_took} cs)"
+
 while IFS= read -r c; do
   [[ -n "$c" ]] && expect_bash 0 "$c"
 done <<'CASES'

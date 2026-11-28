@@ -8,10 +8,13 @@
 # Path.rmdir, os.removedirs), a secret name with no leading dot or slash inside inline code when the file does not exist, a shell reached
 # through a program not known as a wrapper ($SHELL, ssh host sh, docker exec -i c sh, kubectl exec), a command built at run time from a file or
 # variable (sh ./x.sh, sh -c "$CMD" with the bypass token held in a variable), an xargs -I{} sh -c '{}' placeholder with no bypass token visible in the command, an alias or shell function defined earlier, a binary that calls git itself, edits made outside the agent, runners other than the listed interpreters (npx tsx -e), and a removal target built by a call (path.join(root, 'src')) or an aliased import (from shutil import rmtree as r).
+# Also not caught: ANSI-C escapes inside a wrapper ($'git commit\x20-n', $'git\tcommit -n', $'git commit \055n'), shells not in the list (fish, csh, tcsh, versioned names like bash5), su -c and script -c.
 # Everything else on the list below is judged. An unreadable shape (xargs handing a placeholder to sh -c) with a forbidden token anywhere in the command is blocked.
 # Wrapper rule: a shell (sh bash zsh dash ksh ash, any path prefix) followed later by a -c option, or eval, makes the command a wrapper; wrappers are flattened (quotes and backslashes deleted, each wrapper word a command separator), not parsed, so any nesting depth is judged.
 # Over-blocking inside a wrapper is by design: bash -c 'echo "git commit -n"' is blocked as text. Outside a wrapper, quoted text stays text.
-# Size bound: a wrapper command over 1500 bytes is blocked as too long to judge (about 0.6 CPU seconds at the bound on bash 3.2); a long command with no wrapper is judged as before.
+# Union rule: the verdict is the union of two scans and the hook blocks when either blocks. The raw scan judges the command as written and always runs. The wrapper scan runs only when the wrapper test matches, judges the flattened text, and can only add blocks.
+# Size gate: only a wrapper command over 4000 bytes is blocked as too long to judge (worst case under the bound is about 0.55 CPU seconds on bash 3.2); a command with no wrapper has no size gate, so prose that names a shell (a commit message, a heredoc, a PR body) passes.
+# General cap: none needed. Long commands with no wrapper stay linear (a 16 KB command judges in under 1.5 CPU seconds, a 64 KB one in about 3 on bash 3.2).
 # Shells judged: sh bash zsh dash ksh ash busybox sh. Wrappers judged: sudo doas env nice ionice nohup setsid time timeout stdbuf xargs command exec builtin, alone or stacked; quoted and backslash-escaped tokens count as written.
 # A shell in command position that the guard sees fed from a pipe, here-string, heredoc, `-s` or process substitution is blocked outright
 # (even `echo hi | sh`), also behind the wrappers sudo, command, exec, nohup, time, nice, builtin, env, timeout, stdbuf, xargs and uv/poetry/pipenv/pdm run,
@@ -28,10 +31,6 @@ in_cwd=${parsed%%$'\n'*}
 cmd=${parsed#*$'\n'}
 [ -n "$in_cwd" ] && orig_dir=$in_cwd
 [ -z "$cmd" ] && exit 0
-# Size gate first: the later steps are quadratic in bash 3.2, so a shell or eval wrapper in a command over 1500 bytes is refused before any of them runs.
-if [ "${#cmd}" -gt 1500 ] && { [[ $cmd =~ (^|[^A-Za-z0-9_.+-])(sh|bash|zsh|dash|ksh|ash)([^A-Za-z0-9_.+/-]|$) ]] || [[ $cmd =~ (^|[^A-Za-z0-9_.+-])eval([^A-Za-z0-9_.+/-]|$) ]]; }; then
-  echo "BLOCKED: a shell or eval wrapper in a command over 1500 bytes is too long for this guard to judge. Split it or run the commands directly." >&2; exit 2
-fi
 # Drop heredoc bodies so commit-message text is not scanned as a command; the opening line is still scanned. Text without << has none, so awk is skipped.
 case $cmd in *'<<'*) cmd=$(printf '%s\n' "$cmd" | awk '
   inh { t = $0; if (tabs) sub(/^\t+/, "", t); if (t == w) inh = 0; next }
@@ -39,16 +38,34 @@ case $cmd in *'<<'*) cmd=$(printf '%s\n' "$cmd" | awk '
     if (match(l, /<<-?[[:space:]]*["\047]?[A-Za-z_][A-Za-z0-9_]*/)) {
       w = substr(l, RSTART, RLENGTH); tabs = (w ~ /^<<-/); sub(/^<<-?[[:space:]]*["\047]?/, "", w); inh = 1 } }') ;;
 esac
-# A backslash-newline continues the command line, so a flag on the next line is part of it.
-cmd=${cmd//\\$'\n'/}
+# A backslash-newline continues the command line, so a flag on the next line is part of it. One awk pass: bash 3.2 substitution is quadratic in the match count.
+case $cmd in *\\$'\n'*) cmd=$(printf '%s' "$cmd" | LC_ALL=C awk 'NR > 1 { if (p ~ /\\$/) { sub(/\\$/, "", p); printf "%s", p } else print p } { p = $0 } END { printf "%s", p }') ;; esac
+# Wrapper test, on the text as written (heredoc bodies already dropped): a shell word (sh bash zsh dash ksh ash, any path prefix, quoted or not; busybox sh ends in sh)
+# with a later option word that holds the letter c (-c -lc -ec -cx, also glued to a quote: -c'..'), or eval in command position or after a wrapper.
+# Only the first shell word is tested: a later one with an option after it has the same option after the first. Not a wrapper: bash script.sh, /bin/sh x.sh, grep -c sh f, git commit -m eval, deno eval.
+nl=$'\n'
+wrapper=0
+case $cmd in
+  *sh*)
+    if [[ $cmd =~ (^|[^A-Za-z0-9_.+-])(sh|bash|zsh|dash|ksh|ash)([^A-Za-z0-9_.+/-]|$) ]]; then
+      rest=${cmd#*"${BASH_REMATCH[0]}"}
+      [[ $rest =~ (^|[[:space:]])-[A-Za-z]*c[A-Za-z]*([^A-Za-z]|$) ]] && wrapper=1
+    fi ;;
+esac
+evre="(^|[;&|(\`{${nl}]|(then|do|else)[[:space:]])[[:space:]]*(((/[^[:space:]]*)?/)?(sudo|doas|command|exec|nohup|time|nice|ionice|setsid|builtin|env|timeout|stdbuf|xargs)([[:space:]]+(-[^[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|[0-9][0-9.]*[smhd]?))*[[:space:]]+)*[\\\\'\"]*eval([^A-Za-z0-9_.+/-]|\$)"
+case $cmd in *eval*) [[ $cmd =~ $evre ]] && wrapper=1 ;; esac
+# Size gate: only a wrapper command is refused for length. Its second scan costs about as much as the first, so the bound keeps the worst case under one CPU second on bash 3.2.
+if [ "$wrapper" -eq 1 ] && [ "${#cmd}" -gt 4000 ]; then
+  echo "BLOCKED: a shell or eval wrapper in a command over 4000 bytes is too long for this guard to judge. Split it or run the commands directly." >&2; exit 2
+fi
 # cut200 <text>: at most 200 bytes, never inside a UTF-8 sequence, in any locale and with any awk (same ucut as every other hook cap).
 cut200() { S=$1 LC_ALL=C awk 'function ucut(s, n) { if (length(s) <= n) return s; s = substr(s, 1, n); sub(/[\300-\337]$/, "", s); sub(/[\340-\357][\200-\277]?$/, "", s); sub(/[\360-\367]([\200-\277]([\200-\277])?)?$/, "", s); return s } BEGIN { printf "%s", ucut(ENVIRON["S"], 200) }' || printf 'BLOCKED'; }
 # block <message>: message capped at 200 bytes.
 block() { echo "$(cut200 "BLOCKED: $1")" >&2; exit 2; }
 # rx <ere> <text>: grep -qE on one line without a fork; text with a newline still goes through grep, which matches per line.
 rx() { case $2 in *$'\n'*) printf '%s\n' "$2" | grep -qE -- "$1" ;; *) [[ $2 =~ $1 ]] ;; esac; }
-# words <text>: splits on blanks into the array tw through a pipe, not a here-string, whose temp file can fail to open and read as empty.
-words() { read -ra tw < <(printf '%s\n' "$1"); }
+# words <text>: splits on blanks into the array tw with no fork (a process substitution per segment cost seconds on long commands) and no here-string, whose temp file can fail to open and read as empty. Globbing is off during the split.
+words() { local IFS=$' \t\n'; set -f; set -- $1; set +f; tw=("$@"); }
 protected='main|uat|develop'
 root=$PWD
 # Shell access to secret files: Read deny rules gate the Read tool, not cat. A read is blocked when the named file exists; a write or copy that would create one is blocked outright. Env templates stay usable.
@@ -75,8 +92,7 @@ writes_to_secret() {
 secret_guard() {
   local delim tokens tok d f p b cdt tok_d hits
   local -a sdirs
-  flat="${cmd//\\/}"
-  flat="${flat//[\"\']/}"
+  flat=$(printf '%s' "$cmd" | tr -d "\\\\\"'")
   delim="[:space:]\"'\`;|&<>()="
   tokens=$(printf '%s' "$flat" | grep -oiE "[^$delim]*(\\.env|\\.pem|\\.key|\\.p12|\\.pfx|credentials\\.json|\\.netrc|secrets|[*?[])[^$delim]*" || true)
   [ -n "$tokens" ] || return 0
@@ -106,9 +122,11 @@ secret_guard() {
     if [[ "$tok" == *:* ]] && is_secret "${tok#*:}" && [[ "$flat" =~ (^|[[:space:]\;\&\|\(])git[[:space:]]+([^;&|]*[[:space:]])?(show|cat-file|archive|blame|grep|log|diff)[[:space:]] ]]; then secret_block "${tok#*:}"; fi
   done < <(printf '%s\n' "$tokens")
 }
-secret_guard
 # Directories a bare commit/push may land on: the cwd plus literal cd targets; anything unresolved adds the project root.
 cand=("$orig_dir")
+# memo and bmemo cache directory resolution and the branch per directory: a fork per segment cost seconds on a command with a thousand of them.
+memo=""
+bmemo=""
 redir=0
 unresolved() { [[ -z "$1" || "$1" == - || "$1" == Q || "$1" == *[\$\`~]* ]]; }
 add_target() {
@@ -122,16 +140,32 @@ add_target() {
     if [[ "$d" == /* ]]; then c=$d; else c="$c/$d"; fi
     [ -d "$c" ] || continue
     n=1
-    c=$(cd "$c" 2>/dev/null && pwd -P) || continue
+    case "$memo" in
+      *$'\n'"$c"$'\t'*) r=${memo#*$'\n'"$c"$'\t'}; c=${r%%$'\n'*} ;;
+      *) r=$(cd "$c" 2>/dev/null && pwd -P) || continue; memo="$memo"$'\n'"$c"$'\t'"$r"; c=$r ;;
+    esac
     # Already a candidate: nothing new, so the repeat passes settle.
     [[ " ${cand[*]} ${new[*]} " == *" $c "* ]] || new+=("$c")
   done
   if [ "$n" -eq 1 ]; then cand+=("${new[@]}"); else redir=1; fi
 }
-# Prints the first protected branch a bare commit/push may land on, or nothing.
+# branch_of <dir>: sets BRANCH to the checked-out branch of that directory (cached; the branch cannot change while the command is judged); returns 1 outside a repo.
+branch_of() {
+  local r
+  case "$bmemo" in
+    *$'\n'"$1"$'\t'*) r=${bmemo#*$'\n'"$1"$'\t'}; r=${r%%$'\n'*} ;;
+    *)
+      if r=$(git -C "$1" rev-parse --abbrev-ref HEAD 2>/dev/null); then r="+$r"; else r=-; fi
+      bmemo="$bmemo"$'\n'"$1"$'\t'"$r" ;;
+  esac
+  BRANCH=${r#+}
+  [ "$r" != - ]
+}
+# Sets PB to the first protected branch a bare commit/push may land on, or to nothing.
 protected_branch() {
-  local d b found=0 cd_ok=0
+  local d found=0 cd_ok=0
   local -a dirs=("${cand[@]}")
+  PB=""
   [ "$redir" -eq 1 ] && dirs+=("$root")
   if [ -n "$cdir" ]; then
     if unresolved "$cdir"; then dirs+=("$root"); else cd_ok=1; fi
@@ -140,38 +174,45 @@ protected_branch() {
     if [ "$cd_ok" -eq 1 ]; then
       if [[ "$cdir" == /* ]]; then d=$cdir; else d="$d/$cdir"; fi
     fi
-    b=$(git -C "$d" rev-parse --abbrev-ref HEAD 2>/dev/null) || continue
+    branch_of "$d" || continue
     found=1
-    [[ "$b" =~ ^($protected)$ ]] && { echo "$b"; return; }
+    [[ "$BRANCH" =~ ^($protected)$ ]] && { PB=$BRANCH; return; }
   done
   [ "$found" -eq 1 ] && return
   # No candidate is inside a git repo: judge the project root, as before.
-  if [ "$cd_ok" -eq 1 ]; then b=$(git -C "$cdir" rev-parse --abbrev-ref HEAD 2>/dev/null); else b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); fi
-  [[ "$b" =~ ^($protected)$ ]] && echo "$b"
+  if [ "$cd_ok" -eq 1 ]; then branch_of "$cdir"; else branch_of .; fi
+  [[ "$BRANCH" =~ ^($protected)$ ]] && PB=$BRANCH
 }
 
-# Wrappers are flattened, not parsed: with a shell (sh bash zsh dash ksh ash, any path) followed later by a -c option, or eval, anywhere in the command, every quote and backslash is deleted and each wrapper word with its flags becomes a command separator, so the whole text is judged as plain commands at any depth.
-# The test over-matches on purpose: a quoted bypass inside a wrapper blocks even as text (bash -c 'echo "git commit -n"'). A wrapper command over 1500 bytes is blocked as too long to judge.
-cmd_raw=$cmd
-wrapper=0
-shw='(^|[^A-Za-z0-9_.+-])(sh|bash|zsh|dash|ksh|ash)([^A-Za-z0-9_.+/-]|$)'
-if [[ $cmd =~ ${shw}(.*[^A-Za-z0-9_-])?-[A-Za-z]*c([^A-Za-z0-9_-]|$) ]] || [[ $cmd =~ (^|[^A-Za-z0-9_.+-])eval([^A-Za-z0-9_.+/-]|$) ]]; then
-  wrapper=1
-  cmd=$(printf '%s' "$cmd" | tr -d "\\\\\"'" | sed -E -e 's/[[:space:]]/&&/g' -e 's#(^|[^A-Za-z0-9_.+-])([^[:space:];&|()]*/)?(sh|bash|zsh|dash|ksh|ash|eval)([[:space:]]+-[A-Za-z]+)*([[:space:]]|$)#\1 ; #g')
-fi
-# mkscan <text>: empty quote pairs glued to a word vanish in the shell (--no-ver""ify, -""n), so they go first; a lone empty argument stays; single words are unquoted and other quoted text is masked as Q, double quotes first so an apostrophe cannot swallow flags.
+# mkscan <text> [unwrap]: empty quote pairs glued to a word vanish in the shell (--no-ver""ify, -""n), so they go first; a lone empty argument stays; with "unwrap" a quoted bash -c/eval string is unwrapped one layer (the raw scan); single words are unquoted and other quoted text is masked as Q, double quotes first so an apostrophe cannot swallow flags.
 # A quoted word holding a shell operator stays masked: its pipe, semicolon or redirect is text, not syntax ('x|sh', "a|bash").
 sq="'"
+dq='"'
 mkscan() {
+  local -a un=()
+  if [ "${2:-}" = unwrap ]; then
+    un=(-e "s/(^|[[:space:];&|(])(bash|sh|zsh|dash|ksh|ash|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+\"([^\"]*)\"/\1 \4 /g"
+      -e "s/(^|[[:space:];&|(])(bash|sh|zsh|dash|ksh|ash|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+${sq}([^${sq}]*)${sq}/\1 \4 /g")
+  fi
   printf '%s' "$1" | sed -E \
     -e "s/([^[:space:]])\"\"/\1/g" -e "s/\"\"([^[:space:]])/\1/g" -e "s/([^[:space:]])${sq}${sq}/\1/g" -e "s/${sq}${sq}([^[:space:]])/\1/g" \
+    "${un[@]}" \
     -e "s/\"([^\"${sq}[:space:]|;\&<>()]+)\"/\1/g" -e "s/\"[^\"]*\"/ Q /g" \
     -e "s/${sq}([^${sq}[:space:]|;\&<>()]+)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g" \
     -e 's/\\([A-Za-z0-9_.-])/\1/g'
 }
-scan=$(mkscan "$cmd")
-# Every later raw-text check (inline code, rm, lowercase scan) reads the command as written; only the scan carries the flattened text.
-cmd=$cmd_raw
+# flatten <text> [join]: the wrapper scan's text. A glued option is split from its quote (-c'..'), a $ before a quote goes (ANSI-C $'..'), quotes and backslashes go, and every shell word or eval with its option words becomes a command separator, so the wrapped text starts a new segment at any nesting depth. With "join" lines become blanks.
+flatten() {
+  local f
+  f=$(printf '%s' "$1" | sed -E -e 's/(^|[[:space:]])(-[A-Za-z]*c[A-Za-z]*)(\$?['"$dq$sq"'])/\1\2 \3/g' -e 's/\$(['"$dq$sq"'])/\1/g' | tr -d "\\\\$dq$sq")
+  [ "${2:-}" = join ] && f=$(printf '%s' "$f" | tr '\n' ' ')
+  printf '%s' "$f" | sed -E -e 's/[[:space:]]/&&/g' -e 's#(^|[^A-Za-z0-9_.+-])([^[:space:];&|()]*/)?(sh|bash|zsh|dash|ksh|ash|eval)([[:space:]]+-[A-Za-z]+)*([[:space:]]|$)#\1 ; #g'
+}
+# judge <text> <unwrap|flat>: every check below on one reading of the command; a block exits the calling subshell with 2.
+judge() {
+cmd=$1
+secret_guard
+scan=$(mkscan "$cmd" "$2")
 
 # Command position: line start, after ; & | ( { or a backtick, or after then/do/else; wrappers that run the next word (sudo, env, xargs, nohup, uv run) may follow.
 cpos='(^|[;&|(`{]|(^|[[:space:]])(then|do|else))[[:space:]]*'
@@ -198,18 +239,11 @@ blind_shell() {
     rx "${cpos}${wrap}${w}${f}[[:space:]]+(-[A-Za-z]*s[A-Za-z]*|-)([[:space:]]|\$)" "$joined" ||
     rx "${cpos}(source|\\.)[[:space:]]+<\\(" "$joined"
 }
-# With a wrapper the unflattened text is judged too: xargs sh -c with no readable string is only visible there.
-if [ "$wrapper" -eq 1 ]; then
-  scan_flat=$scan
-  scan=$(mkscan "$cmd_raw")
-  blind_shell && block "a shell fed from a pipe, stdin, here-string, heredoc or process substitution hides its commands from this guard. Run the commands directly."
-  scan=$scan_flat
-fi
 if blind_shell; then
   block "a shell fed from a pipe, stdin, here-string, heredoc or process substitution hides its commands from this guard. Run the commands directly."
 fi
 # A shell or interpreter reached through xargs runs text this guard cannot see (xargs -I{} sh -c '{}'); with a forbidden token anywhere in the command that shape is blocked.
-norm=$(printf '%s' "$cmd_raw" | tr -d "\\\\\"'" | tr '[:upper:]' '[:lower:]')
+norm=$(printf '%s' "$cmd" | tr -d "\\\\\"'" | tr '[:upper:]' '[:lower:]')
 if [[ "$norm" =~ (^|[^a-z0-9_-])xargs([[:space:]]|$) ]] \
   && [[ "$norm" =~ (^|[^a-z0-9_-])(bash|sh|zsh|dash|ksh|ash|eval|python[0-9.]*|node|perl|ruby)[[:space:]]+-[a-z]*[cep]([[:space:]]|$) ]] \
   && rx 'no-veri|hookspath|lefthook(_exclude)?=|git[[:space:]]+([^;&|]*[[:space:]])?(commit|push)[^;&|]*[[:space:]]-[a-z]*n' "$norm"; then
@@ -325,7 +359,8 @@ chain_dirs() {
     else
       for w in "${tw[@]}"; do [[ "${w#\\}" == git || "${w#\\}" == */git ]] && return 1; done
     fi
-  done < <(printf '%s\n' "${scan//&&/$'\n'}")
+  done < <(printf '%s\n' "$scan" | sed 's/&&/\
+/g')
   [ "$sawgit" -eq 1 ] || return 1
   printf '%s\n' "${out[@]}"
 }
@@ -391,7 +426,7 @@ while IFS= read -r seg; do
             done ;;
         esac
       done
-      branch=$(protected_branch)
+      protected_branch; branch=$PB
       if [ -n "$branch" ]; then
         if rx 'git[[:space:]]+(checkout[[:space:]]+(-[bB]|--orphan)|switch[[:space:]]+(-[cC]|--create))' "$scan"; then
           block "commit chained after a branch switch while '$branch' is checked out. Run 'git checkout -b <name>' alone first, then run 'git commit' as a separate command."
@@ -414,11 +449,11 @@ while IFS= read -r seg; do
             [[ "$a" == +* || "$a" == :* ]] && force=1
             [[ "$a" =~ ^\+?((refs/heads/)?($protected)|[^:]*:(refs/heads/)?($protected))$ ]] && target=1
             # `HEAD` / `@` (no `:dst`) pushes the current branch to its same-named remote branch
-            if [[ "$a" =~ ^\+?(HEAD|@)$ ]]; then [ -n "$(protected_branch)" ] && target=1; fi ;;
+            if [[ "$a" =~ ^\+?(HEAD|@)$ ]]; then protected_branch; [ -n "$PB" ] && target=1; fi ;;
         esac
       done
       if [ "$explicit" -eq 0 ]; then
-        [ -n "$(protected_branch)" ] && target=1
+        protected_branch; [ -n "$PB" ] && target=1
       fi
       [ "$force" -eq 1 ] && [ "$target" -eq 1 ] && block "force-push/delete on a protected branch (--force, -f, +refspec, HEAD:main). Open a PR instead."
       ;;
@@ -455,5 +490,13 @@ if [ -n "$interp" ]; then
     rm_src "$seg" && block "recursive rm on a source directory. Confirm with a human first."
   done < <(printf '%s\n' "$interp_norm" | tr ';|&' '\n\n\n')
   interp_removes && block "recursive removal of a source directory through an interpreter. Confirm with a human first."
+fi
+return 0
+}
+# The verdict is the union of two independent scans. The raw scan reads the command as written and always runs. The wrapper scan runs only when the wrapper test matched and can only add blocks.
+( judge "$cmd" unwrap ) || exit 2
+if [ "$wrapper" -eq 1 ]; then
+  ( judge "$(flatten "$cmd")" flat ) || exit 2
+  case $cmd in *"$nl"*) ( judge "$(flatten "$cmd" join)" flat ) || exit 2 ;; esac
 fi
 exit 0
