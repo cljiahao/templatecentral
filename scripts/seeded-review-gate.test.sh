@@ -243,6 +243,20 @@ suite() {
   prep
   has "base origin/main" "$OUT" "default base is origin/main"
 
+  # A failing git diff reports git's own message, not only "git diff failed"; the clean control (no stub) emits the diff.
+  fixture gitdiff
+  mkdir -p "$T/gitstub"
+  printf '#!/bin/sh\nfor a in "$@"; do\n  if [ "$a" = diff ]; then echo "fatal: stub diff failure: bad object abc123" >&2; exit 128; fi\ndone\nexec "%s" "$@"\n' "$(command -v git)" > "$T/gitstub/git"
+  chmod +x "$T/gitstub/git"
+  run check-review-record.sh --emit
+  check 0 "$EC" "git diff control: the diff is emitted without the stub ($OUT)"
+  EXTRA=("PATH=$T/gitstub:$PATH")
+  run check-review-record.sh --emit
+  check 1 "$EC" "a failing git diff fails closed"
+  has "stub diff failure: bad object abc123" "$OUT" "a failing git diff names git's own error text"
+  has "git diff failed against" "$OUT" "a failing git diff keeps the gate's own message"
+  EXTRA=(TC_NOOP=1)
+
   fixture config
   run check-review-record.sh --emit
   h1=$(printf '%s\n' "$OUT" | sed -n 3p)

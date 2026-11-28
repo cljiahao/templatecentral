@@ -41,6 +41,8 @@ while IFS=$'\t' read -r path origin; do
   in_list "$guarded_nl" "$path" || continue
   checked=$((checked + 1))
   if [ ! -f "$path" ]; then echo "MISSING:  $path" >&2; drift=1; continue; fi
+  # A file the manifest lists but this user cannot read stays exit 2 (stricter than MODIFIED); the reason names the file.
+  if [ ! -r "$path" ]; then echo "UNREADABLE: $path (cannot be read, so its hash cannot be checked; fix its permissions)" >&2; exit 2; fi
   hash_paths+=("./$path"); hash_origins+=("$origin")
 done < <(printf '%s\n' "$entries")
 # One hash call for every file: the hasher is a script, so a start per file is the cost.
@@ -49,7 +51,9 @@ if [ "${#hash_paths[@]}" -gt 0 ]; then
   else hashes=$(sha256sum -- "${hash_paths[@]}") || { echo "verify-harness: cannot hash the enforcement files" >&2; exit 2; }; fi
   hi=0
   while IFS= read -r hline; do
-    if [ "$hi" -ge "${#hash_paths[@]}" ] || [ "${hline%% *}" != "${hash_origins[$hi]}" ]; then echo "MODIFIED: ${hash_paths[$hi]#./}" >&2; drift=1; fi
+    # shasum prefixes a backslash to the hash when the path holds one; strip that one marker before comparing.
+    htok=${hline%% *}; htok=${htok#\\}
+    if [ "$hi" -ge "${#hash_paths[@]}" ] || [ "$htok" != "${hash_origins[$hi]}" ]; then echo "MODIFIED: ${hash_paths[$hi]#./}" >&2; drift=1; fi
     hi=$((hi + 1))
   done < <(printf '%s\n' "$hashes")
   [ "$hi" -eq "${#hash_paths[@]}" ] || { echo "verify-harness: the hasher returned $hi lines for ${#hash_paths[@]} files" >&2; exit 2; }
@@ -64,16 +68,14 @@ has() { case "$1" in *"$2"*) return 0 ;; esac; return 1; }
 required_gates="harness docs testbudget nosonar secrets deps changelog comments commentshape duptests exclusions ratchet supplychain workflows envexample dockerfile workarounds review licences sbom changesize bundle diffcover"
 # A gate script a hook or CI step runs must be a regular file, not a link, and hold content: an empty script exits 0 and passes.
 gate_file_ok() {
-  local gf=$1 gid=$2 grc=0 gl
+  local gf=$1 gid=$2 gn
   if [ -L "$gf" ]; then echo "GATE FILE SYMLINK: $gid reads $gf, which is a symlink; replace it with the file itself (git checkout <merge-base> -- $gf)" >&2; return 1; fi
   if [ ! -f "$gf" ]; then echo "GATE FILE MISSING: $gid reads $gf, which is not a file; restore it from git (git checkout <merge-base> -- $gf)" >&2; return 1; fi
   case "$gf" in *.sh|*.mjs|*.py|*.awk) ;; *) return 0 ;; esac
   [ -r "$gf" ] || { echo "verify-harness: cannot read $gf" >&2; exit 2; }
-  grc=1
-  while IFS= read -r gl || [ -n "$gl" ]; do
-    case "$gl" in *[![:space:]]*) grc=0; break ;; esac
-  done < "$gf"
-  if [ "$grc" -eq 1 ]; then echo "GATE FILE BLANK: $gid reads $gf, which holds no content; restore it from git (git checkout <merge-base> -- $gf)" >&2; return 1; fi
+  # Count non-space bytes (NULs included): a file with any NUL byte holds content, where a shell read loop drops NULs and calls it blank.
+  gn=$(LC_ALL=C tr -d '[:space:]' < "$gf" | wc -c) || { echo "verify-harness: cannot count the content of $gf" >&2; exit 2; }
+  if [ "$gn" -eq 0 ]; then echo "GATE FILE BLANK: $gid reads $gf, which holds no content; restore it from git (git checkout <merge-base> -- $gf)" >&2; return 1; fi
 }
 hook_text=$(code_of lefthook.yml)
 gh_text=$(code_of .github/workflows/ci.yml)

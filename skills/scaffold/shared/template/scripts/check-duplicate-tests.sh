@@ -130,15 +130,15 @@ filter_list() {
   if [ "$in_git" -eq 1 ]; then
     while IFS= read -r v; do
       dir=${v%/.git}
-      nn=$(TC_PREFIX="$dir/" awk 'BEGIN { p = ENVIRON["TC_PREFIX"]; n = length(p) } substr($0, 1, n) == p { c++ } END { print c + 0 }' "$wd/cand")
+      if ! nn=$(TC_PREFIX="$dir/" awk 'BEGIN { p = ENVIRON["TC_PREFIX"]; n = length(p) } substr($0, 1, n) == p { c++ } END { print c + 0 }' "$wd/cand"); then die "awk failed counting the test files under a nested git repository, so nothing was checked"; fi
       nsum=$((nsum + nn))
       [ "$nn" -eq 0 ] || printf '%s\t%s\n' "${dir#"$root"/}" "$nn" >> "$wd/nested.cnt"
     done < "$wd/nested.dirs"
-    before=$(awk 'END { print NR }' "$wd/cand")
+    if ! before=$(awk 'END { print NR }' "$wd/cand"); then die "awk failed counting the candidate test files, so nothing was checked"; fi
     TC_ROOT_PREFIX="$root/" awk 'BEGIN { pre = ENVIRON["TC_ROOT_PREFIX"]; n = length(pre) }
       NR == FNR { g[$0] = 1; next }
       substr($0, 1, n) == pre && (substr($0, n + 1) in g) { print }' "$wd/gitlist" "$wd/cand" > "$wd/cand.git" || die "cannot compare the file list with git's"
-    after=$(awk 'END { print NR }' "$wd/cand.git")
+    if ! after=$(awk 'END { print NR }' "$wd/cand.git"); then die "awk failed counting the git-listed test files, so nothing was checked"; fi
     ndropped=$((ndropped + before - after - nsum))
     tr '\n' '\0' < "$wd/cand.git" > "$2"
   else
@@ -256,7 +256,7 @@ if [ -s "$wd/py.list" ]; then
   "$py" -I "$HERE/duplicate_tests_py.py" "$root" "$wd/py.list" >> "$wd/records" || die "the Python scan failed (see above); fix that first"
 fi
 
-ncases=$(awk 'END { print NR }' "$wd/records")
+if ! ncases=$(awk 'END { print NR }' "$wd/records"); then die "awk failed counting the test cases, so nothing was checked"; fi
 if [ "$ncases" -eq 0 ]; then
   die "test files exist but hold no test case the check recognises: the check would pass without reading anything"
 fi

@@ -63,16 +63,18 @@ mb_out=""
 
 # Writes the committed diff of this project from the merge base of $1 to HEAD into file $2; fails closed on every problem.
 write_diff() {
-  local bsha hsha mb
+  local bsha hsha mb gerr
   hsha=$(git rev-parse HEAD 2> /dev/null) || fail "no commit yet: commit first, then review."
   bsha=$(git rev-parse --verify --quiet "$1^{commit}" 2> /dev/null) || fail "base ref '$1' does not exist here."
   [ "$bsha" != "$hsha" ] || fail "base ref '$1' is HEAD itself: there is nothing to review."
   mb=$(git merge-base "$1" HEAD 2> /dev/null) || fail "no merge base between '$1' and HEAD (shallow clone or unrelated history): fetch more history, for example git fetch --unshallow, or set TC_REVIEW_BASE."
   [ "$mb" != "$hsha" ] || fail "HEAD has no commit beyond '$1': there is nothing to review."
   mb_out=$mb
-  git -c core.quotepath=false -c diff.noprefix=false -c diff.mnemonicPrefix=false diff \
+  if ! gerr=$(git -c core.quotepath=false -c diff.noprefix=false -c diff.mnemonicPrefix=false diff \
     --no-ext-diff --no-textconv --text --no-color --no-renames --full-index \
-    --src-prefix=a/ --dst-prefix=b/ -U3 --diff-algorithm=myers "$mb" HEAD -- . > "$2" 2> /dev/null || fail "git diff failed against '$1'."
+    --src-prefix=a/ --dst-prefix=b/ -U3 --diff-algorithm=myers "$mb" HEAD -- . 2>&1 > "$2"); then
+    fail "git diff failed against '$1': ${gerr%%$'\n'*}"
+  fi
   [ -s "$2" ] || fail "the diff against '$1' is empty: there is nothing to review."
 }
 

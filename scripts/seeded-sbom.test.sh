@@ -41,7 +41,7 @@ run() {
 stub() {
   mkdir -p "$1"
   rm -f "$1/$2"
-  { echo '#!/bin/sh'; cat; } > "$1/$2"
+  { echo '#!/bin/sh'; if [ "$2" = python ]; then echo 'case "$*" in *sys.base_prefix*) exit 0 ;; esac'; fi; cat; } > "$1/$2"
   chmod +x "$1/$2"
 }
 # exists <path>: 1 when the file exists and is not empty, else 0.
@@ -287,6 +287,37 @@ exit 3
 EOS
 run "$D"
 check 1 "$EC" "a Python helper that reports a bad document fails (exit 1)"
+
+# A planted python must not pass for a virtual environment: a real venv is the control; a missing pyvenv.cfg, a failing probe or a non-executable file stop the gate (exit 2).
+env_fixture py-realvenv 'alpha==1.0
+'
+dist alpha 1.0
+run "$D"
+check 0 "$EC" "a real venv passes the interpreter check ($OUT)"
+env_fixture py-nocfg 'alpha==1.0
+'
+dist alpha 1.0
+rm -f "$D/.venv/pyvenv.cfg"
+run "$D"
+check 2 "$EC" "a python without pyvenv.cfg beside bin/ is refused"
+has "has no pyvenv.cfg" "$OUT" "message says pyvenv.cfg is missing"
+env_fixture py-noprobe 'alpha==1.0
+'
+dist alpha 1.0
+rm -f "$D/.venv/bin/python"
+printf '#!/bin/sh\nexit 1\n' > "$D/.venv/bin/python"
+chmod +x "$D/.venv/bin/python"
+run "$D"
+check 2 "$EC" "a python that is not a venv interpreter is refused although pyvenv.cfg exists"
+has "does not run as a virtual environment interpreter" "$OUT" "message says the interpreter is not a venv"
+env_fixture py-noexec 'alpha==1.0
+'
+dist alpha 1.0
+rm -f "$D/.venv/bin/python"
+printf '#!/bin/sh\nexit 0\n' > "$D/.venv/bin/python"
+chmod -x "$D/.venv/bin/python"
+run "$D"
+check 2 "$EC" "a non-executable python is refused"
 pnpm_fixture node-crash
 stub "$D/stub" node << 'EOS'
 echo "node blew up" >&2

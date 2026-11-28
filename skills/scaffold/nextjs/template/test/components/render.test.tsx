@@ -47,18 +47,21 @@ describe('components', () => {
     { label: 'Docs', href: '/docs' },
     { label: 'Ext', href: 'https://x.test', target: '_blank' },
   ];
+  // Each attribute is pinned to the element that owns it, in any attribute order.
+  const externalAnchor = /<a(?=[^>]*target="_blank")(?=[^>]*rel="noopener noreferrer")[^>]*>/;
+  const relAnchor = /<a[^>]*\srel=/;
+  const describedBy = /<input[^>]*aria-describedby="name-description"/;
   // Each row renders alone: [name, element, strings it must contain, strings it must not].
-  const cases: [string, ReactElement, string[], string[]?][] = [
+  const cases: [string, ReactElement, (string | RegExp)[], (string | RegExp)[]?][] = [
     ['BrandLogo', h(BrandLogo), ['alt="Logo"']],
     ['FloatingShape', h(FloatingShape), ['aria-hidden="true"']],
+    ['Solid', h(Pill, { variant: 'solid' }, 'Tag'), ['Tag', 'text-background'], ['bg-card']],
+    ['Outline', h(Pill, null, 'Tag'), ['bg-card'], ['text-background']],
     [
-      'Solid',
-      h(Pill, { variant: 'solid', children: 'Tag' }),
-      ['Tag', 'text-background'],
-      ['bg-card'],
+      'Card',
+      h(CustomCard, { header: 'Title', description: 'About' }, 'Body'),
+      ['Title', 'About', 'Body'],
     ],
-    ['Outline', h(Pill, { children: 'Tag' }), ['bg-card'], ['text-background']],
-    ['Card', h(CustomCard, { header: 'Hd', description: 'Ds' }, 'Bd'), ['Hd', 'Ds', 'Bd']],
     ['ThemeToggleButton', h(ThemeToggleButton), ['aria-label="Toggle dark mode"']],
     [
       'Dialog',
@@ -72,13 +75,9 @@ describe('components', () => {
     ],
     ['Media', h(MediaCard, { title: 'T', mediaPosition: 'left' }, 'media'), ['media', 'flex-row']],
     ['Media bare', h(MediaCard, { title: 'Only', description: 'D' }), ['Only', '>D<'], ['media']],
-    ['Link', h(LinkList, { links }), ['href="/docs"', 'target="_blank" rel="noopener noreferrer"']],
-    ['Link int', h(LinkList, { links: links.slice(0, 1) }), ['href="/docs"'], ['rel=']],
-    [
-      'Field',
-      h(FieldHarness),
-      ['aria-describedby="name-description"', 'id="name-description"', 'for="name"', 'id="name"'],
-    ],
+    ['Link', h(LinkList, { links }), ['href="/docs"', externalAnchor]],
+    ['Link int', h(LinkList, { links: links.slice(0, 1) }), ['href="/docs"'], [relAnchor]],
+    ['Field', h(FieldHarness), [describedBy, 'id="name-description"', 'for="name"', 'id="name"']],
     ['SiteFooter default', h(SiteFooter), ['Built with templateCentral'], ['<nav']],
     [
       'SiteFooter custom',
@@ -91,8 +90,8 @@ describe('components', () => {
 
   it.each(cases)('%s renders its own content and attributes', (_name, element, has, lacks = []) => {
     const out = html(element);
-    has.forEach((text) => expect(out).toContain(text));
-    lacks.forEach((text) => expect(out).not.toContain(text));
+    has.forEach((match) => expect(out).toMatch(match));
+    lacks.forEach((match) => expect(out).not.toMatch(match));
   });
 
   it.each([

@@ -9,9 +9,7 @@ function framed(pathname = '/'): Response {
 }
 
 describe('applyFrameProtection', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
+  afterEach(() => vi.unstubAllEnvs());
 
   it('denies all framing when EMBED_PARENT_ORIGIN is unset', () => {
     const res = framed();
