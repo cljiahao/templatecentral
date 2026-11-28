@@ -434,6 +434,26 @@ jobs:
       - name: Exclusion audit tests
         run: bash scripts/exclusion-audit.test.sh
 
+  seeded-gate-wiring-tests:
+    name: Seeded mutation, contract, boundary and import-layer gate tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Mutation-diff gate tests
+        run: bash scripts/seeded-mutation-diff.test.sh
+      - name: Contract gate tests
+        run: bash scripts/seeded-contract.test.sh
+      - name: Import-boundary gate tests
+        run: bash scripts/seeded-boundaries.test.sh
+      - name: Import-layer gate tests
+        run: bash scripts/seeded-import-layers.test.sh
+
   defect-report-tests:
     name: Migrate defect report tests
     runs-on: ubuntu-24.04
@@ -570,6 +590,7 @@ jobs:
       - seeded-gate-tests
       - seeded-gate-ci-tests
       - seeded-gate-helper-tests
+      - seeded-gate-wiring-tests
       - keyless-gate-tests
       - golden-tests
       - template-copy-tests

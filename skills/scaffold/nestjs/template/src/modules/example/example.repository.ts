@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { ExampleItem } from './example.types';
+import type { ExampleItem, ExampleUpdate } from './example.types';
 
 @Injectable()
 export class ExampleRepository {
@@ -20,11 +20,12 @@ export class ExampleRepository {
     return item;
   }
 
-  update(id: string, data: Partial<ExampleItem>): ExampleItem {
+  update(id: string, data: ExampleUpdate): ExampleItem {
     const existing = this.findById(id);
-    const updated = {
+    const updated: ExampleItem = {
       ...existing,
-      ...data,
+      name: data.name ?? existing.name,
+      description: data.description ?? existing.description,
       updatedAt: new Date().toISOString(),
     };
     this.items.set(id, updated);

@@ -5,6 +5,7 @@ import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended'
 import sonarjs from 'eslint-plugin-sonarjs';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import layers from './layers.config.mjs';
 
 const sonarjsPlugin = sonarjs.configs.recommended.plugins.sonarjs;
 
@@ -17,7 +18,7 @@ export default tseslint.config(
       'vitest.config.e2e.mts',
       'coverage/**',
       '.claude/**',
-      'scripts/{check-comments,check-exclude-reasons,duplicate-tests-ts}.mjs',
+      'scripts/{check-comments,check-exclude-reasons,duplicate-tests-ts,export-openapi}.mjs',
     ],
   },
   eslint.configs.recommended,
@@ -30,6 +31,7 @@ export default tseslint.config(
     },
   },
   eslintComments.recommended,
+  ...layers,
   {
     languageOptions: {
       globals: {
@@ -56,10 +58,7 @@ export default tseslint.config(
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
       // Comment hygiene gate — see templatecentral:standards code-standards/comments.md.
-      'no-inline-comments': [
-        'error',
-        { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul ' },
-      ],
+      'no-inline-comments': ['error', { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul ' }],
       'sonarjs/no-commented-code': 'error',
       // SonarQube's default quality gate: cognitive complexity 15 per function.
       'sonarjs/cognitive-complexity': ['error', 15],
@@ -72,9 +71,22 @@ export default tseslint.config(
         'error',
         { ignore: ['eslint-enable'] },
       ],
-      '@eslint-community/eslint-comments/disable-enable-pair': [
+      '@eslint-community/eslint-comments/disable-enable-pair': ['error', { allowWholeFile: true }],
+    },
+  },
+  {
+    // Standards: PascalCase types and classes, camelCase functions and methods.
+    files: ['**/*.ts'],
+    rules: {
+      '@typescript-eslint/naming-convention': [
         'error',
-        { allowWholeFile: true },
+        { selector: 'typeLike', format: ['PascalCase'] },
+        { selector: ['function', 'method'], format: ['camelCase'], leadingUnderscore: 'allow' },
+        {
+          selector: 'variable',
+          format: ['camelCase', 'PascalCase', 'UPPER_CASE'],
+          leadingUnderscore: 'allowSingleOrDouble',
+        },
       ],
     },
   },
@@ -102,5 +114,10 @@ export default tseslint.config(
       'sonarjs/no-hardcoded-secrets': 'off',
       'sonarjs/no-clear-text-protocols': 'off',
     },
+  },
+  {
+    // Plain ES-module files such as layers.config.mjs sit outside tsconfig, so they are linted without type information.
+    files: ['**/*.mjs'],
+    ...tseslint.configs.disableTypeChecked,
   },
 );

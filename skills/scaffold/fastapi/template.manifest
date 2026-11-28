@@ -22,6 +22,7 @@ template/docs/architecture.md 644 - -
 template/pyproject.toml 644 - -
 template/pyrightconfig.json 644 - -
 template/requirements-dev.txt 644 - -
+template/scripts/export-openapi.py 644 - -
 template/src/.env.default 644 - -
 template/src/api/__init__.py 644 - -
 template/src/api/routers/__init__.py 644 - -

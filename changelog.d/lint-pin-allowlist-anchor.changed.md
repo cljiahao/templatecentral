@@ -1,0 +1,1 @@
+- The exact-pin allow-list in the skills lint now anchors the `requirements-dev.txt` path, so a path that only contains that name no longer matches.

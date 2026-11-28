@@ -1,0 +1,1 @@
+- The seeded ratchet reads every relative import of an eslint config as a required fact: repointing, adding or renaming one, or importing a file the merge base lacked, is refused as weaker, and an import that names no tracked file stops the ratchet as unreadable instead of passing.

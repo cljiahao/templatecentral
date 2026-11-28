@@ -32,7 +32,7 @@ describe('AppController (e2e)', () => {
     const created = await app.inject({ method: 'POST', url: '/examples', payload });
     const { id } = created.json<{ id: string }>();
     const send = (method: 'GET' | 'PUT' | 'DELETE', body?: object) =>
-      app.inject({ method, url: `/examples/${id}`, payload: body });
+      app.inject({ method, url: `/examples/${id}`, ...(body && { payload: body }) });
     const read = await send('GET');
     expect([created.statusCode, read.statusCode, read.json()]).toMatchObject([
       201,

@@ -1,0 +1,1 @@
+- Seeded template comments that broke the comment gate (multi-line blocks and asides) are shortened to one line.

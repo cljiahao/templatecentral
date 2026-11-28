@@ -13,7 +13,7 @@ Optional — dev-only component-stack logging: add `type ErrorInfo` to the exist
 // src/components/layout/error-boundary.tsx — edit in place
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
-componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
   logError('react.error-boundary', error);
   if (ENV.IS_DEV) {
     console.error('Component stack:', errorInfo.componentStack);

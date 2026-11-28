@@ -1,0 +1,1 @@
+- The seeded contract gate no longer treats the `.claude/.harness-base/` mirror of the seeded files as a second app, which made it fail on every finished fastapi and nestjs scaffold.

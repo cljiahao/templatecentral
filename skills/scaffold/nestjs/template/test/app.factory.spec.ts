@@ -3,7 +3,7 @@ import { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createApp } from '../src/app.factory';
 import { appConfig, serviceConfig } from '../src/config';
 
-const [origin] = serviceConfig.CLIENT_URL;
+const [origin = ''] = serviceConfig.CLIENT_URL;
 // RFC 5737 documentation address
 const clientIp = '203.0.113.9';
 const original = appConfig.TRUST_PROXY;

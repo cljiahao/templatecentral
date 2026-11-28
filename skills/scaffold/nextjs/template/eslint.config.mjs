@@ -1,8 +1,10 @@
 import eslintComments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import coreWebVitals from 'eslint-config-next/core-web-vitals';
 import typescript from 'eslint-config-next/typescript';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
 import noUnsanitized from 'eslint-plugin-no-unsanitized';
 import sonarjs from 'eslint-plugin-sonarjs';
+import layers from './layers.config.mjs';
 
 const sonarjsPlugin = sonarjs.configs.recommended.plugins.sonarjs;
 
@@ -16,6 +18,9 @@ const config = [
     },
   },
   eslintComments.recommended,
+  // The full jsx-a11y recommended set at error level; eslint-config-next registers the plugin and warns on a subset.
+  { files: ['**/*.{jsx,tsx}'], rules: { ...jsxA11y.flatConfigs.recommended.rules } },
+  ...layers,
   // innerHTML, outerHTML, insertAdjacentHTML and document.write take only DOMPurify or Trusted Types sanitized input.
   noUnsanitized.configs.recommended,
   {
@@ -46,10 +51,7 @@ const config = [
         'error',
         { ignore: ['eslint-enable'] },
       ],
-      '@eslint-community/eslint-comments/disable-enable-pair': [
-        'error',
-        { allowWholeFile: true },
-      ],
+      '@eslint-community/eslint-comments/disable-enable-pair': ['error', { allowWholeFile: true }],
     },
   },
   {

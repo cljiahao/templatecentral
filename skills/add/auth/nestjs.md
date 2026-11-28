@@ -183,8 +183,8 @@ pnpm add @fastify/cookie
 ```typescript
 import fastifyCookie from '@fastify/cookie';
 
-  // Parses req.cookies and adds reply.setCookie — required by the auth session cookie.
-  await fastify.register(fastifyCookie);
+// Parses req.cookies and adds reply.setCookie — required by the auth session cookie.
+await fastify.register(fastifyCookie);
 ```
 
 **3. `src/modules/auth/auth.cookies.ts`**

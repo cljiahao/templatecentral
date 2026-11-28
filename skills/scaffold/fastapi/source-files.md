@@ -77,6 +77,7 @@ python -m pytest test/ -v  # all tests must pass
 ruff check src/            # zero lint errors
 ruff format --check src/   # zero formatting drift
 python -m pyright src/     # zero type errors
+python3 -I scripts/export-openapi.py > openapi.json   # the API contract the contract gate compares against
 ```
 
 Do not copy `AGENTS.md` until all checks pass. The gate probes only `/health`: before handing off, also check that the Swagger docs render.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|commentshape|duptests|exclusions|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle|list> [base-branch]
+# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|commentshape|duptests|exclusions|mutation|contract|importlinter|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle|list> [base-branch]
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -136,7 +136,7 @@ pr_only() {
 }
 
 case "$gate" in
-  secrets|changelog|comments|commentshape|duptests|exclusions|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle)
+  secrets|changelog|comments|commentshape|duptests|exclusions|mutation|contract|importlinter|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle)
     gate_listed "$gate" || fail "gate '$gate' is not listed in .claude/gates.txt"
     ;;
   list)
@@ -515,6 +515,19 @@ JS
     gate_script scripts/check-exclude-reasons.sh
     bash scripts/check-exclude-reasons.sh || fail "a coverage, Sonar or mutation exclude has no reason, hides a whole source scope, or could not be read (output above). Write a reason: line above it, or remove the exclude."
     ;;
+  mutation)
+    pr_only
+    gate_script scripts/check-mutation-diff.sh
+    bash scripts/check-mutation-diff.sh "$base" || fail "a mutant in a line this change touches survived, a mutation config was weakened, or the gate could not run (output above). Add a test that kills the mutant; never loosen the mutation config."
+    ;;
+  importlinter)
+    gate_script scripts/check-import-layers.sh
+    bash scripts/check-import-layers.sh || fail "a layer imports one it must not, or import-linter could not run (output above). Fix the import, or restore the [tool.importlinter] contract."
+    ;;
+  contract)
+    gate_script scripts/check-contract.sh
+    bash scripts/check-contract.sh ${branch:+"$base"} || fail "the OpenAPI document the code produces differs from the committed openapi.json, or the gate could not run (output above). Regenerate the contract with the command shown and commit it, or revert the route change."
+    ;;
   sbom)
     gate_script scripts/generate-sbom.sh
     bash scripts/generate-sbom.sh || fail "SBOM generation failed (output above). Install the dependencies first."
@@ -530,7 +543,7 @@ JS
     bash scripts/check-bundle-size.sh --build || fail "bundle size check failed (output above). Lazy-load heavy routes or drop the large dependency; raise .claude/bundle-budget.txt only after a human decision."
     ;;
   *)
-    echo "usage: ci-gates.sh <secrets|changelog|comments|commentshape|duptests|exclusions|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle|list> [base-branch]" >&2
+    echo "usage: ci-gates.sh <secrets|changelog|comments|commentshape|duptests|exclusions|mutation|contract|importlinter|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|licences|sbom|changesize|bundle|list> [base-branch]" >&2
     exit 2
     ;;
 esac

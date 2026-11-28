@@ -43,12 +43,7 @@ export type GithubRepo = z.infer<typeof githubRepoSchema>;
 **`src/modules/<name>-integration/<name>-integration.service.ts`**:
 
 ```typescript
-import {
-  BadGatewayException,
-  GatewayTimeoutException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { BadGatewayException, GatewayTimeoutException, Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { AxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
@@ -70,8 +65,7 @@ export class GithubIntegrationService {
       ({ data } = await firstValueFrom(this.http.get<unknown>(UPSTREAM)));
     } catch (error) {
       // Never log the raw AxiosError — `error.config.headers` carries the Bearer token.
-      const status =
-        error instanceof AxiosError ? (error.response?.status ?? 0) : 0;
+      const status = error instanceof AxiosError ? (error.response?.status ?? 0) : 0;
       const timedOut =
         error instanceof AxiosError &&
         (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT');
@@ -98,9 +92,7 @@ export class GithubIntegrationService {
     }
 
     if (skipped > 0) {
-      this.logger.warn(
-        `Discarded ${skipped} malformed repo(s) from GitHub ${UPSTREAM}`,
-      );
+      this.logger.warn(`Discarded ${skipped} malformed repo(s) from GitHub ${UPSTREAM}`);
     }
 
     return repos;

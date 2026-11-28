@@ -5,7 +5,7 @@ was read from). check-sonar-parity.sh compares the pin with versions.txt and fai
 
   1. install the pinned packages somewhere (for example `npm pack <name>@<spec>` and extract, or any node_modules tree)
   2. python3 -I scripts/regen-sonar-parity-presets.py --sonarjs DIR --typescript-eslint DIR --eslint-js DIR \\
-         --next DIR --prettier DIR --ruff BIN [--sonar-meta]
+         --next DIR --prettier DIR --jsx-a11y DIR --ruff BIN [--sonar-meta]
      where each DIR is the package directory itself (the one holding package.json) and BIN is the ruff executable.
      Pass only the flags whose snapshots need regenerating.
   3. --sonar-meta also fetches public rule metadata (SonarJS and sonar-python repositories on raw.githubusercontent.com,
@@ -168,6 +168,16 @@ def regen_next(w, pkg):
             "rule<TAB>level", keys, extra=("# touches: " + " ".join(NEXT_PREFIXES),))
 
 
+def regen_jsx_a11y(w, pkg):
+    code = "const r = require(process.argv[1]).flatConfigs.recommended.rules; for (const k of Object.keys(r)) console.log(k + '\\t' + (Array.isArray(r[k]) ? r[k][0] : r[k]))"
+    out = subprocess.run(["node", "-e", code, os.path.abspath(pkg)], check=True, capture_output=True, text=True).stdout
+    rows = [tuple(line.split("\t")) for line in out.splitlines() if line]
+    if not rows or any(lvl not in ("error", "warn", "off") for _, lvl in rows):
+        die("eslint-plugin-jsx-a11y flatConfigs.recommended.rules no longer has the expected shape")
+    w.write("jsx-a11y-recommended", [("npm", "eslint-plugin-jsx-a11y", pkg_version(pkg))],
+            "eslint-plugin-jsx-a11y flatConfigs.recommended.rules, the first element of an array value is the level", "rule<TAB>level", rows)
+
+
 def regen_prettier(w, pkg):
     text = read(os.path.join(pkg, "index.js"))
     body = text[text.index("exports.rules"):]
@@ -230,7 +240,7 @@ def regen_sonar(w, table):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    for flag in ("sonarjs", "typescript-eslint", "eslint-js", "next", "prettier", "ruff"):
+    for flag in ("sonarjs", "typescript-eslint", "eslint-js", "next", "prettier", "ruff", "jsx-a11y"):
         ap.add_argument("--" + flag)
     ap.add_argument("--sonar-meta", action="store_true")
     ap.add_argument("--out", default=os.path.join(HERE, "sonar-parity-presets"))
@@ -246,6 +256,8 @@ def main():
         regen_eslint_js(w, a.eslint_js)
     if a.next:
         regen_next(w, a.next)
+    if a.jsx_a11y:
+        regen_jsx_a11y(w, a.jsx_a11y)
     if a.prettier:
         regen_prettier(w, a.prettier)
     if a.ruff:

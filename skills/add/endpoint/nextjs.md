@@ -86,11 +86,11 @@ import { NextResponse } from 'next/server';
 
 export const GET = withLogging<RouteContext<{ id: string }>>(async (_request, { params }) => {
   try {
-    const { id: _id } = await params;
-    // ← Replace: e.g. await db.select().from(projects).where(eq(projects.id, _id)).then(r => r[0] ?? null)
+    const { id } = await params;
+    // ← Replace: e.g. await db.select().from(projects).where(eq(projects.id, id)).then(r => r[0] ?? null)
     const project = null;
     if (!project) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json({ error: `Project ${id} not found` }, { status: 404 });
     }
     return NextResponse.json({ data: project });
   } catch (error) {

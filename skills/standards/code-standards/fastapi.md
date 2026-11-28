@@ -92,7 +92,7 @@ api/           →  models/
 - Set `response_model` on every route; it filters outgoing data
 
 **CORS**
-- In dev, `ALLOWED_CORS` is a fixed list of localhost origins — never `["*"]` with credentials
+- In dev, `allowed_cors` is a fixed list of localhost origins — never `["*"]` with credentials
 - In production, set `CORS_ORIGINS` env var; always set explicit methods and headers
 
 **Auth**

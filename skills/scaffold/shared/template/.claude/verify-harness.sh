@@ -61,7 +61,7 @@ gates=".claude/gates.txt"
 code_of() { for f in "$@"; do if [ -f "$f" ]; then grep -vE '^[[:space:]]*#' "$f" || true; fi; done; }
 has() { case "$1" in *"$2"*) return 0 ;; esac; return 1; }
 # Every gate id this harness ships. A deleted gates.txt row cannot drop a gate, and test-harness-kit pins this list to the seeded gates.txt.
-required_gates="harness docs testbudget nosonar secrets deps changelog comments commentshape duptests exclusions ratchet supplychain workflows envexample dockerfile workarounds review licences sbom changesize bundle diffcover"
+required_gates="harness docs testbudget nosonar secrets deps changelog comments commentshape duptests exclusions mutation contract importlinter ratchet supplychain workflows envexample dockerfile workarounds review licences sbom changesize bundle diffcover"
 # A gate script a hook or CI step runs must be a regular file, not a link, and hold content: an empty script exits 0 and passes.
 gate_file_ok() {
   local gf=$1 gid=$2 grc=0 gl
@@ -98,6 +98,7 @@ while IFS='|' read -r gid lh ci || [ -n "$gid" ]; do
     bundle) need="$need .claude/bundle-budget.txt" ;;
     duptests) need="$need scripts/duplicate-tests-ts.mjs scripts/duplicate_tests_py.py" ;;
     exclusions) need="$need $(printf '%s\n' "$guarded" | awk -v self="${lh%% *}" 'index($0, "scripts/check-exclude-") == 1 && $0 != self')" ;;
+    contract) need="$need $(printf '%s\n' "$guarded" | awk 'index($0, "scripts/export-openapi.") == 1')" ;;
     commentshape) need="$need scripts/check-comments.mjs scripts/check-comments.py scripts/check-comments.licences.txt" ;;
     changesize) need="$need .claude/change-size-exclude.txt" ;;
   esac

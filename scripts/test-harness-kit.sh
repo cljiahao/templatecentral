@@ -1915,7 +1915,7 @@ out=$(gate_verify); check 2 "$?" "verify-harness fails when gates.txt is missing
 cp "$KIT/gates.txt" "$GV/.claude/gates.txt"; printf 'broken\n' >> "$GV/.claude/gates.txt"
 out=$(gate_verify); check 2 "$?" "verify-harness fails on a malformed manifest line"
 bash "$KIT/ci-gates.sh" list > "$T/gl.txt" 2>&1
-check "testbudget nosonar secrets deps changelog comments commentshape duptests exclusions ratchet supplychain workflows envexample dockerfile workarounds licences sbom changesize bundle diffcover" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints only the gates ci-gates.sh runs, in manifest order"
+check "testbudget nosonar secrets deps changelog comments commentshape duptests exclusions mutation contract importlinter ratchet supplychain workflows envexample dockerfile workarounds licences sbom changesize bundle diffcover" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints only the gates ci-gates.sh runs, in manifest order"
 bash "$KIT/ci-gates.sh" harness > "$T/gu.txt" 2>&1
 check 2 "$?" "ci-gates harness is a usage error (the control for the list check below)"
 while IFS= read -r lg; do

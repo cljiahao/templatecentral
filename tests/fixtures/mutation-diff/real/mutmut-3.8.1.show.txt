@@ -1,0 +1,9 @@
+# b.x_clamp__mutmut_1: survived
+--- src/b.py
++++ src/b.py
+@@ -1,4 +1,4 @@
+ def clamp(n, mx):
+-    if n > mx:
++    if n >= mx:
+         return mx
+     return n

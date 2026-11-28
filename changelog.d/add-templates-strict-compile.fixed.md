@@ -1,0 +1,1 @@
+- `templatecentral:add` templates compile and lint clean under the strict compiler flags: `override` on the nextjs error boundary and the vite-react snippet, a typed `MONGODB_URL` read in the nextjs mongoose client, an indexed-access guard in the nestjs cookie e2e test, no unused `_id` in the nextjs dynamic-route example, and prettier-formatted nestjs leaf code.

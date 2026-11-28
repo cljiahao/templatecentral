@@ -25,6 +25,7 @@ template/docker-entrypoint.sh 755 - -
 template/docker/15-frame-protection.envsh 644 - -
 template/docs/architecture.md 644 - -
 template/eslint.config.mjs 644 - -
+template/layers.config.mjs 644 - -
 template/index.html 644 - -
 template/nginx.conf.template 644 - -
 template/package.json 644 __TC_PROJECT_NAME__ -

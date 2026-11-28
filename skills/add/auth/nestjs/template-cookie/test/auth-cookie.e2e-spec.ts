@@ -31,7 +31,7 @@ function cookieHeader(setCookie: SetCookie): string {
 
 function cookieValue(setCookie: SetCookie, name: string): string {
   const pair = [setCookie ?? []].flat().find((c) => c.startsWith(`${name}=`)) ?? '';
-  return decodeURIComponent(pair.split(';')[0].slice(name.length + 1));
+  return decodeURIComponent((pair.split(';')[0] ?? '').slice(name.length + 1));
 }
 
 describe('Auth cookie mode (e2e)', () => {

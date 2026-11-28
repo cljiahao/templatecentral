@@ -1,10 +1,12 @@
 import eslintComments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import js from '@eslint/js';
-import reactHooks from 'eslint-plugin-react-hooks';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
 import noUnsanitized from 'eslint-plugin-no-unsanitized';
+import reactHooks from 'eslint-plugin-react-hooks';
 import sonarjs from 'eslint-plugin-sonarjs';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import layers from './layers.config.mjs';
 
 const sonarjsPlugin = sonarjs.configs.recommended.plugins.sonarjs;
 
@@ -25,6 +27,7 @@ export default tseslint.config(
     },
   },
   eslintComments.recommended,
+  ...layers,
   // innerHTML, outerHTML, insertAdjacentHTML and document.write take only DOMPurify or Trusted Types sanitized input.
   noUnsanitized.configs.recommended,
   {
@@ -36,10 +39,13 @@ export default tseslint.config(
     },
     plugins: {
       'react-hooks': reactHooks,
+      'jsx-a11y': jsxA11y,
       ...sonarjs.configs.recommended.plugins,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // The full jsx-a11y recommended set, at error level.
+      ...jsxA11y.flatConfigs.recommended.rules,
       ...sonarjs.configs.recommended.rules,
       // Honour the `_`-prefix convention for intentionally-unused args/vars.
       '@typescript-eslint/no-unused-vars': [
@@ -47,10 +53,7 @@ export default tseslint.config(
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
       // Comment hygiene gate — see templatecentral:standards code-standards/comments.md.
-      'no-inline-comments': [
-        'error',
-        { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul ' },
-      ],
+      'no-inline-comments': ['error', { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul ' }],
       'sonarjs/no-commented-code': 'error',
       // SonarQube's default quality gate: cognitive complexity 15 per function.
       'sonarjs/cognitive-complexity': ['error', 15],
@@ -63,10 +66,7 @@ export default tseslint.config(
         'error',
         { ignore: ['eslint-enable'] },
       ],
-      '@eslint-community/eslint-comments/disable-enable-pair': [
-        'error',
-        { allowWholeFile: true },
-      ],
+      '@eslint-community/eslint-comments/disable-enable-pair': ['error', { allowWholeFile: true }],
     },
   },
   {
@@ -90,10 +90,14 @@ export default tseslint.config(
     rules: { 'no-restricted-exports': ['error', { restrictDefaultExports: { direct: true } }] },
   },
   {
-    // shadcn/ui primitives are generated; prefer-read-only-props cannot be fixed without diverging from shadcn add output.
+    // shadcn/ui primitives are generated and cannot follow these rules without diverging from shadcn add output.
     files: ['src/components/ui/**/*.tsx'],
     plugins: { sonarjs: sonarjsPlugin },
-    rules: { 'sonarjs/prefer-read-only-props': 'off' },
+    rules: {
+      'sonarjs/prefer-read-only-props': 'off',
+      'jsx-a11y/click-events-have-key-events': 'off',
+      'jsx-a11y/no-noninteractive-element-interactions': 'off',
+    },
   },
   {
     // Test fixtures legitimately use fake secrets and http:// literals to exercise guards.

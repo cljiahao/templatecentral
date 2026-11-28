@@ -72,7 +72,7 @@ class ForwardedHostMiddleware:
 
 def configure_cors(app: FastAPI) -> None:
     """Adds the CORS middleware."""
-    origins = api_settings.ALLOWED_CORS
+    origins = api_settings.allowed_cors
 
     app.add_middleware(
         CORSMiddleware,

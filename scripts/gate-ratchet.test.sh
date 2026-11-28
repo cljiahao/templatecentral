@@ -39,7 +39,7 @@ seed() {
   cp "$SH/template/.claude/ci-gates.sh" "$SH/template/.claude/verify-harness.sh" "$R/.claude/"
   cp "$SH/template-$1/lefthook.yml" "$R/lefthook.yml"
   if [[ "$1" == ts ]]; then
-    cp "$SH/../nestjs/template/eslint.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
+    cp "$SH/../nestjs/template/eslint.config.mjs" "$SH/../nestjs/template/layers.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
     cp "$SH/template-ts/.jscpd.json" "$R/.jscpd.json"
     cp "$FX/sonar-ts.properties" "$R/sonar-project.properties"
     cp "$SH/../nestjs/template/package.json" "$R/package.json"
@@ -234,6 +234,90 @@ edit eslint.config.mjs "    ignores: [
 ratchet
 check 2 "$EC" "broken eslint config: exits 2 ($OUT)"
 has "UNREADABLE eslint.config.mjs" "$OUT" "broken eslint config: names the file"
+weakens eslint.config.mjs "from './layers.config.mjs'" "from './vitest.config.ts'" "layers import repointed to another tracked file" "local-import"
+# An eslint config that can load code the ratchet does not read fails closed. Each probe adds one line to the seeded config.
+probe() { # probe <label> <text>
+  edit eslint.config.mjs "// @ts-check" "// @ts-check
+$2"
+  ratchet
+  check 2 "$EC" "load-code probe $1: exits 2 ($OUT)"
+  has "UNREADABLE eslint.config.mjs" "$OUT" "load-code probe $1: names the file"
+}
+probe "import call" "const a = await import('./x.mjs');"
+probe "import call, space" "const a = import  (x);"
+probe "import call, newline" "const a = import
+('./x.mjs');"
+probe "require" "const r = require('./x.cjs');"
+probe "createRequire" "const c = createRequire(url);"
+probe "eval" "eval('1');"
+probe "Function" "const f = new Function('return 1');"
+probe "import.meta.resolve" "const m = import.meta.resolve('./x');"
+probe "process.binding" "process.binding('fs');"
+probe "module.constructor" "module.constructor._load('x');"
+probe "token in a comment" "// loads import() later"
+probe "backtick source" "import q from \`./x.mjs\`;"
+probe "joined source" "import q from ['.', '/x.mjs'].join('');"
+probe "multi-line import, backtick source" "import {
+  a,
+  b
+}
+from \`./x.mjs\`;"
+probe "from after a brace, source on the next line" "import { a } from
+\`./x.mjs\`;"
+probe "export star, backtick source" "export * from \`./x.mjs\`;"
+probe "export star, identifier source" "export * from someVar;"
+passes eslint.config.mjs "// @ts-check" "// @ts-check
+const a = Array.from({ length: 2 });" "Array.from is not an import source"
+passes eslint.config.mjs "// @ts-check" "// @ts-check
+const o = { from: 1 }; // loads rules from here" "from as a key or in prose is not an import source"
+passes eslint.config.mjs "// @ts-check" "// @ts-check
+const e = 'import x from y';" "from inside a string is not an import source"
+passes eslint.config.mjs "// @ts-check" "// @ts-check
+export * from './layers.config.mjs';" "export star from a plain quoted source"
+MAIN0=$(git_ rev-parse main)
+git_ checkout -q -B work main
+printf 'export const extra = 1;\n' > "$R/helper.mjs"
+git_ add helper.mjs
+git_ commit -q -m helper
+git_ branch -f main work
+git_ checkout -q -B work main
+python3 - "$R/helper.mjs" <<'PY'
+import sys
+open(sys.argv[1], "w").write("export const extra = eval('1');\n")
+PY
+python3 - "$R/layers.config.mjs" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+open(p, "w").write("import { extra } from './helper.mjs';\n" + s)
+PY
+git_ commit -q -am "helper loads code"
+ratchet
+check 2 "$EC" "a file the layers config imports that loads code: exits 2 ($OUT)"
+has "helper.mjs: it can load code the ratchet does not read" "$OUT" "a file the layers config imports that loads code: names the file"
+git_ checkout -q -B work "$MAIN0"
+git_ branch -f main "$MAIN0"
+for st in nestjs nextjs vite-react; do
+  for cf in eslint.config.mjs layers.config.mjs; do
+    for mode in eslint eslintimport; do
+      awk '/^cat > "[$]wd\/facts.awk" <<.AWK.$/ { f = 1; next } f && /^AWK$/ { exit } f' "$RATCHET" > "$T/facts.awk"
+      awk -v K=$mode -v B=1 -f "$T/facts.awk" "$SH/../$st/template/$cf" > /dev/null 2> "$T/facts.err"
+      check 0 "$?" "pristine $st $cf reads clean as $mode ($(cat "$T/facts.err"))"
+    done
+  done
+done
+# A branch that adds layers.config.mjs to the ignores, or removes it from them, is judged like any ignore change.
+edit eslint.config.mjs "      'eslint.config.mjs',
+" "      'eslint.config.mjs',
+      'layers.config.mjs',
+"
+ratchet
+check 1 "$EC" "layers.config.mjs added to the ignores: exits 1 ($OUT)"
+has "layers.config.mjs" "$OUT" "layers.config.mjs added to the ignores: names it"
+edit eslint.config.mjs "from './layers.config.mjs'" "from './missing.mjs'"
+ratchet
+check 2 "$EC" "eslint config importing an untracked file: exits 2 ($OUT)"
+has "names no file tracked at HEAD" "$OUT" "eslint config importing an untracked file: says why"
 edit .jscpd.json '"threshold": 3,' ''
 ratchet
 check 2 "$EC" "jscpd without a threshold: exits 2 ($OUT)"
@@ -457,7 +541,7 @@ rm -rf "$R"
 mkdir -p "$R/.claude" "$R/scripts"
 cp "$SH/template/.claude/gates.txt" "$R/.claude/gates.txt"
 cp "$RATCHET" "$R/scripts/gate-ratchet.sh"
-cp "$SH/../nextjs/template/eslint.config.mjs" "$R/"
+cp "$SH/../nextjs/template/eslint.config.mjs" "$SH/../nextjs/template/layers.config.mjs" "$R/"
 git -C "$R" init -q -b main
 git_ add -A
 git_ commit -q -m base
@@ -493,7 +577,7 @@ R="$T/adopt"
 rm -rf "$R"
 mkdir -p "$R/src"
 echo 'export const a = 1;' > "$R/src/a.ts"
-cp "$SH/../nestjs/template/eslint.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
+cp "$SH/../nestjs/template/eslint.config.mjs" "$SH/../nestjs/template/layers.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
 git -C "$R" init -q -b main
 git_ add -A
 git_ commit -q -m "plain project"
@@ -753,6 +837,21 @@ weakens pyproject.toml "fail_under = 80" "fail_under = 70" "python coverage thre
 weakens .jscpd.json '"threshold": 3' '"threshold": 9' "python duplication limit raised" "was 3" "now 9"
 passes pyproject.toml "max-complexity = 15" "max-complexity = 12" "ruff complexity lowered"
 passes pyproject.toml "fail_under = 80" "fail_under = 85" "python coverage raised"
+weakens pyproject.toml '"core", "utils", "constants"]
+' '"core", "utils"]
+' "import-linter root package dropped" "importlinter"
+weakens pyproject.toml 'layers = ["api", "logic", "models", "core", "utils", "constants"]' 'layers = ["api", "logic", "models", "core", "constants", "utils"]' "import-linter layer order changed" "importlinter"
+weakens pyproject.toml 'type = "layers"
+' 'type = "layers"
+ignore_imports = ["api.* -> models.*"]
+' "import-linter ignore_imports added" "importlinter"
+weakens pyproject.toml "[tool.importlinter]
+" "[tool.importlinter]
+include_external_packages = true
+" "import-linter setting added" "importlinter"
+add_file .importlinter "[importlinter]
+root_package = api"
+expect 1 "new .importlinter beside pyproject settings" ".importlinter" "may read it instead"
 passes pyproject.toml "line-length = 88" "line-length = 100" "line length edit"
 weakens pyproject.toml "line-length = 88" "line-length = 88
 lint.ignore = [\"E501\"]" "dotted lint.ignore" "E501"
@@ -981,8 +1080,9 @@ expect 1 "new tsconfig with strict off" "tsconfig.spec.json" "strictness option 
 add_file tsconfig.spec.json '{"extends": "./tsconfig.json", "compilerOptions": {"strict": true}}'
 expect 0 "new tsconfig with strict on"
 seed py
-weakens pyrightconfig.json '"venvPath": "."' '"typeCheckingMode": "off", "venvPath": "."' "pyright mode off" "pyrightconfig.json" "typeCheckingMode"
-passes pyrightconfig.json '"venvPath": "."' '"typeCheckingMode": "strict", "venvPath": "."' "pyright mode strict"
+weakens pyrightconfig.json '"typeCheckingMode": "strict"' '"typeCheckingMode": "off"' "pyright mode off" "pyrightconfig.json" "typeCheckingMode"
+weakens pyrightconfig.json '"typeCheckingMode": "strict"' '"typeCheckingMode": "standard"' "pyright strict lowered to standard" "pyrightconfig.json" "pyright-mode"
+passes pyrightconfig.json '"venv": ".venv"' '"venv": ".venv", "reportMissingImports": "error"' "pyright rule set to error"
 weakens pyrightconfig.json '"venvPath": "."' '"reportMissingImports": "none", "venvPath": "."' "pyright rule none" "reportMissingImports"
 
 # Round 3: the guarded set is derived from the tree.

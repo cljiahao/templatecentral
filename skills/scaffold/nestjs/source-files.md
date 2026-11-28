@@ -60,6 +60,7 @@ pnpm install
 ```bash
 pnpm format
 pnpm build
+node scripts/export-openapi.mjs > openapi.json   # the API contract the contract gate compares against (needs dist/)
 pnpm check        # format + lint + typecheck
 pnpm test
 pnpm test:e2e

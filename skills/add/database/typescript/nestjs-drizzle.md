@@ -149,11 +149,11 @@ Vitest does not load `.env`, and `env.config.ts` now throws without `DATABASE_UR
 ```typescript
 import { DrizzleService } from '../src/database/drizzle.service';
 
-    const moduleFixture = await Test.createTestingModule({ imports: [AppModule] })
-      // No database in this suite: skip DrizzleService's connection probe.
-      .overrideProvider(DrizzleService)
-      .useValue({})
-      .compile();
+const moduleFixture = await Test.createTestingModule({ imports: [AppModule] })
+  // No database in this suite: skip DrizzleService's connection probe.
+  .overrideProvider(DrizzleService)
+  .useValue({})
+  .compile();
 ```
 
 Suites with real queries use a disposable Postgres (CI service container); the job's `DATABASE_URL` wins over `test.env`.
@@ -227,7 +227,7 @@ const PG_UNIQUE_VIOLATION = '23505';
 export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
-    private readonly drizzle: DrizzleService,
+    private readonly drizzle: DrizzleService
   ) {}
 
   async register(dto: RegisterDto) {
@@ -256,7 +256,7 @@ export class AuthService {
       .limit(1);
     const passwordOk = await argon2.verify(
       user?.hashedPassword ?? (await DUMMY_HASH),
-      dto.password,
+      dto.password
     );
     if (!user || !passwordOk) {
       throw new UnauthorizedException('Invalid credentials.');

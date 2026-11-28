@@ -27,7 +27,7 @@ describe('FetchClient', () => {
   it('sends the query, headers and JSON body, and parses a JSON reply', async () => {
     reply('{"ok":true}', 200, 'application/json');
     const out = await client.call('items', 'POST', { a: 1 }, { page: 2, skip: undefined });
-    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
     expect(String(url)).toBe('http://api.test/items?page=2');
     expect(init?.headers).toEqual({ 'X-Key': 'k', 'Content-Type': 'application/json' });
     expect([init?.body, out]).toEqual(['{"a":1}', { ok: true }]);

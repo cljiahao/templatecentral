@@ -5,6 +5,7 @@
 # Guarded set, derived from the tracked tree, never listed by hand: each file under .claude/hooks/, each .claude/*.sh, .claude/settings.json, every scripts/ or .claude/ path named in a hook, .claude/*.sh, gates.txt, scripts/, lefthook, a Node hook-manager folder, CI file, Makefile or package.json gate script, and every protect-files.sh pattern except instruction, invariant, agent, MCP, image and merge-snapshot entries. Skill, agent, rule and markdown files are never read. Parsed configs keep their parsed comparison; the rest are compared by content.
 # Test scripts: every package.json script whose name has a test, coverage, lint, typecheck, build, check, verify, ci, format or audit word keeps its word list. Any change is a finding except these known-safe words: --reporter, --coverage.reporter, --outputFile (with or without a value), --coverage.reportsDirectory=, --silent, --color, --no-color. A script that is gone is a finding; a new script is covered by the flag checks and the CI and lefthook comparison.
 # pytest: any change to a [tool.pytest.ini_options] key or a new key is a finding, except raising --cov-fail-under and the markers, pythonpath and asyncio_default_fixture_loop_scope keys.
+# import-linter: every key of [tool.importlinter] and its contracts must stay as it was (layers, root_packages, ignore_imports); a new .importlinter or setup.cfg competes with it.
 # Type checkers: tsconfig and pyright strictness may tighten, never loosen; a new tsconfig or pyright config may not switch strictness off.
 # Gate-time budget: .claude/gate-budget.conf may not be deleted, and its three limits may not rise; a conf with no merge-base copy is held to the seeded defaults (600, 180, 25) and may not set a higher limit or leave one out. The kind is not enforced, so a human applying the allow-gate-change label can waive a raise or a deletion, by design.
 # Allow-lists: dep-audit-allow.txt may only lose lines; comment-hygiene-patterns.txt may only gain lines at the end.
@@ -60,7 +61,7 @@ fi
 kind_of() {
   case "$1" in
     .jscpd.json | */.jscpd.json) KIND=jscpd ;;
-    eslint.config.* | */eslint.config.*) KIND=eslint ;;
+    eslint.config.* | */eslint.config.* | layers.config.mjs | */layers.config.mjs) KIND=eslint ;;
     vitest.config.* | vite.config.* | vitest.workspace.* | */vitest.config.* | */vite.config.* | */vitest.workspace.*) KIND=vitest ;;
     sonar-project.properties | */sonar-project.properties) KIND=sonar ;;
     package.json | */package.json) KIND=pkgjson ;;
@@ -191,14 +192,14 @@ base_has() { gs_test grep -Fxq -- "$1" "$wd/base.paths"; }
 # True when HEAD tracks this exact path.
 head_has() { gs_test grep -Fxq -- "$1" "$wd/head.paths"; }
 
-# True when any pyproject.toml the merge base tracked, at any depth, sets pytest or coverage options.
+# True when any pyproject.toml the merge base tracked, at any depth, sets pytest, coverage or import-linter options.
 py_settings() {
   local f
   gs_grep -E '(^|/)pyproject[.]toml$' "$wd/base.paths" > "$wd/pyproject.lst" || die "cannot list the pyproject.toml files of the merge base"
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     git show "$mb:$f" > "$wd/py.txt" || die "cannot read $f at the merge base $mb"
-    if gs_test grep -Eq '^[[:space:]]*[[]tool[.](pytest|coverage)' "$wd/py.txt"; then return 0; fi
+    if gs_test grep -Eq '^[[:space:]]*[[]tool[.](pytest|coverage|importlinter)' "$wd/py.txt"; then return 0; fi
   done < "$wd/pyproject.lst"
   return 1
 }
@@ -211,7 +212,7 @@ shadow_reason() {
   case "$1" in */*) dir=${1%/*}/ ;; esac
   case "$name" in
     ruff.toml | .ruff.toml) if base_has "${dir}pyproject.toml"; then echo "ruff reads it instead of pyproject.toml"; return 0; fi ;;
-    .coveragerc | pytest.ini | tox.ini | setup.cfg) if py_settings; then echo "pytest and coverage may read it instead of the pyproject.toml settings"; return 0; fi ;;
+    .coveragerc | .importlinter | pytest.ini | tox.ini | setup.cfg) if py_settings; then echo "pytest, coverage and import-linter may read it instead of the pyproject.toml settings"; return 0; fi ;;
     .gitleaksignore) if base_has "${dir}.gitleaks.toml"; then echo "gitleaks reads it besides .gitleaks.toml"; return 0; fi ;;
     .eslintignore) if gs_test grep -Eq "^${dir}eslint[.]config[.][^/]*$" "$wd/base.paths"; then echo "it adds ignores besides eslint.config"; return 0; fi ;;
     jscpd.json | .jscpdrc | .jscpdrc.json | .jscpd.yml | .jscpd.yaml | .jscpd.js) if base_has "${dir}.jscpd.json"; then echo "jscpd may read it instead of .jscpd.json"; return 0; fi ;;
@@ -534,7 +535,82 @@ function eslint_entries(   p, id, v, nobj) {
   emit("min", "eslint-config-objects", nobj)
 }
 
+# Copy of T with the inside of every string and template literal replaced by "_", so a word inside a string is not read as code. T is already comment-free and its strings are known to end.
+function oneline(x) { gsub(/[ \t\n]+/, " ", x); return x }
+
+function strmask(s,   i, n, c, j, ch, out, k) {
+  n = length(s); out = ""; i = 1
+  while (i <= n) {
+    c = substr(s, i, 1)
+    if (c == "\"" || c == "'" || c == "`") {
+      j = i + 1
+      while (j <= n) { ch = substr(s, j, 1); if (ch == "\\") { j += 2; continue } if (ch == c) break; j++ }
+      out = out c
+      for (k = i + 1; k < j; k++) out = out "_"
+      out = out c; i = j + 1; continue
+    }
+    out = out c; i++
+  }
+  return out
+}
+
+# Start of the last import or export keyword in pre, or 0.
+function last_stmt_kw(pre,   off, best, r, st) {
+  off = 0; best = 0; r = pre
+  while (match(r, /(^|[^A-Za-z0-9_$.])(import|export)([^A-Za-z0-9_$]|$)/)) {
+    st = RSTART; if (substr(r, st, 1) !~ /[a-z]/) st++
+    best = off + st
+    off += RSTART + RLENGTH - 1; r = substr(pre, off + 1)
+  }
+  return best
+}
+
+# A config that can load code the ratchet never reads fails closed (head only: BASEREAD skips the merge base, which only supplies the facts to compare with): any token that loads or builds code at run time, anywhere in the raw text (comments too), and any import or export whose source is not one plain quoted string.
+function code_scan(   toks, nt, i, S, pos, rest, fs, before, after, pre, kw, seg, b, a) {
+  if (BASEREAD) return
+  nt = 0
+  toks[++nt] = "import[ \t\n]*[(]"
+  toks[++nt] = "require[ \t\n]*[(]"
+  toks[++nt] = "createRequire"
+  toks[++nt] = "(^|[^A-Za-z0-9_$])eval([^A-Za-z0-9_$]|$)"
+  toks[++nt] = "(^|[^A-Za-z0-9_$])Function[ \t\n]*[(]"
+  toks[++nt] = "import[ \t\n]*[.][ \t\n]*meta[ \t\n]*[.][ \t\n]*resolve"
+  toks[++nt] = "process[ \t\n]*[.][ \t\n]*binding"
+  toks[++nt] = "module[ \t\n]*[.][ \t\n]*constructor"
+  for (i = 1; i <= nt; i++) if (match(T0, toks[i])) fail("it can load code the ratchet does not read: '" oneline(substr(T0, RSTART, RLENGTH > 40 ? 40 : RLENGTH)) "' (an import, require, eval, Function or module-internals call; fail closed)")
+  S = strmask(T); pos = 1
+  while (pos <= length(S)) {
+    rest = substr(S, pos)
+    if (!match(rest, /(^|[^A-Za-z0-9_$.])from([^A-Za-z0-9_$]|$)/)) break
+    fs = pos + RSTART - 1
+    if (substr(S, fs, 4) != "from") fs++
+    pos = fs + 4
+    pre = substr(S, 1, fs - 1)
+    b = pre; sub(/[ \t\n]+$/, "", b); before = substr(b, length(b), 1)
+    if (before !~ /[A-Za-z0-9_$}*]/) continue
+    a = substr(S, fs + 4); sub(/^[ \t\n]+/, "", a); after = substr(a, 1, 1)
+    if (after ~ /[:=,;()}.]/ || after == "") continue
+    kw = last_stmt_kw(pre)
+    if (kw == 0) continue
+    seg = substr(pre, kw)
+    if (index(seg, ";")) continue
+    if (a ~ /^'_*'/ || a ~ /^"_*"/) continue
+    fail("an import or export source is not one plain quoted string: '" oneline(substr(a, 1, 30)) "' (fail closed)")
+  }
+}
+
+# A file the eslint config imports is read only for code that loads other code and for its own local imports; the ratchet judges rules in the config itself.
+function do_eslint_import(   from, m) {
+  code_scan(); from = 1
+  while (find("(from|import|require)[ \t\n]*[(]?[ \t\n]*['\"][.][.]?/[^'\"]*['\"]", from)) {
+    m = substr(T, MS, ML); from = MS + ML
+    sub(/^[^'"]*['"]/, "", m); sub(/['"]$/, "", m)
+    emit("req", "local-import", m)
+  }
+}
+
 function do_eslint(   from, m, name, rest, sev, seen, p, opt, sc, key, lim) {
+  code_scan()
   seen = 0; from = 1
   brace_map()
   while (find("['\"]?[@A-Za-z0-9/_.-]+['\"]?[ \t\n]*:[ \t\n]*([[][ \t\n]*)?(['\"](off|warn|error)['\"]|[012][],} \t\n])", from)) {
@@ -552,6 +628,12 @@ function do_eslint(   from, m, name, rest, sev, seen, p, opt, sc, key, lim) {
   }
   from = 1
   while (find("[A-Za-z0-9_]+[.]configs[.][A-Za-z0-9_.]+|[A-Za-z0-9_]+[.]recommended", from)) { emit("req", "preset", substr(T, MS, ML)); from = MS + ML; seen = 1 }
+  from = 1
+  while (find("(from|import|require)[ \t\n]*[(]?[ \t\n]*['\"][.][.]?/[^'\"]*['\"]", from)) {
+    m = substr(T, MS, ML); from = MS + ML
+    sub(/^[^'"]*['"]/, "", m); sub(/['"]$/, "", m)
+    emit("req", "local-import", m); emit("set", "local-import", m)
+  }
   from = 1
   while (find("globalIgnores[(][ \t\n]*[[]", from)) { scan_array(MS + ML - 1, "set", "ignore"); from = ARR_END + 1 }
   arrays_named("ignores", "set")
@@ -743,7 +825,7 @@ function toml_lines(   i, line, raw, rest, p, sect, csect, pos, kind, s2, k2, n,
       if (s2 ~ /^tool[.]pytest/) vtxt = mask_cov(vtxt)
       if (!cov_only(vtxt)) emit("cfg", csect "|" raw, vtxt)
     }
-    else if (!known && ((s2 == "" && k2 == "tool") || (s2 == "tool" && k2 ~ /^(ruff|coverage|pytest|pyright|mypy)$/))) emit("cfg", csect "|" raw, vtxt)
+    else if (!known && ((s2 == "" && k2 == "tool") || (s2 == "tool" && k2 ~ /^(ruff|coverage|pytest|pyright|mypy|importlinter)$/))) emit("cfg", csect "|" raw, vtxt)
     if (k2 == "useDefault" && rest ~ /true/) emit("req", "extend", "useDefault")
   }
 }
@@ -765,7 +847,7 @@ function cov_only(v) {
 # Tables whose every key must be known: all of .gitleaks.toml, and the ruff, coverage, pytest, pyright and mypy tables of pyproject.toml.
 function cfg_scope(s) {
   if (MODE == "gitleaks") return 1
-  return (s ~ /^tool[.](ruff|coverage|pytest|pyright|mypy)([.]|$)/)
+  return (s ~ /^tool[.](ruff|coverage|pytest|pyright|mypy|importlinter)([.]|$)/)
 }
 # Keys that change nothing about what a gate catches.
 function cfg_neutral(s, k) {
@@ -1268,6 +1350,7 @@ END {
   MODE = K; TOML = (K == "pyproject" || K == "gitleaks"); T0 = T
   if (K == "jscpd") { T = clean(T, "plain"); do_jscpd() }
   else if (K == "eslint") { T = clean(T, "js"); do_eslint() }
+  else if (K == "eslintimport") { T = clean(T, "js"); do_eslint_import() }
   else if (K == "vitest") { T = clean(T, "js"); do_vitest() }
   else if (K == "pyproject") { T = clean(T, "toml"); do_pyproject() }
   else if (K == "gitleaks") { T = clean(T, "toml"); do_gitleaks() }
@@ -1345,7 +1428,7 @@ END {
     else if (p[1] == "sev" && (n in bsevmax) && hagg[k] + 0 < bsevmax[n] + 0) { printf "WEAKENED %s: lint rule %s is %s in a new block, below %s at the merge base\n", F, p[2], label("sev", hagg[k]), label("sev", bsevmax[n]); bad = 1 }
     else if (p[1] == "max" && p[2] ~ /[.]limit/ && (n in blim) && hagg[k] + 0 > blim[n] + 0) { printf "WEAKENED %s: limit %s is %s in a new block, above %s at the merge base\n", F, p[2], hagg[k], blim[n]; bad = 1 }
   }
-  if (!NEWFILE) for (i = 1; i <= nn; i++) { split(hnew[i], p, SUBSEP); if (p[2] == "script-flag" && p[3] ~ /: (--config|-c|--workspace|--root)([ =]|$)/ && !script_at_base(p[3])) continue; if (p[2] == "conftest-hook") printf "WEAKENED %s: new or edited collection hook, plugin list, collect_ignore, autouse, skip or exit block, which can hide tests: '%s'\n", F, substr(p[3], 1, 120); else printf "WEAKENED %s: new ignore or exclude in %s was absent, now '%s'\n", F, p[2], p[3]; bad = 1 }
+  if (!NEWFILE) for (i = 1; i <= nn; i++) { split(hnew[i], p, SUBSEP); if (p[2] == "script-flag" && p[3] ~ /: (--config|-c|--workspace|--root)([ =]|$)/ && !script_at_base(p[3])) continue; if (p[2] == "local-import") printf "WEAKENED %s: new local import '%s' (rules it carries are not read here; only a file the merge base already had is judged)\n", F, p[3]; else if (p[2] == "conftest-hook") printf "WEAKENED %s: new or edited collection hook, plugin list, collect_ignore, autouse, skip or exit block, which can hide tests: '%s'\n", F, substr(p[3], 1, 120); else printf "WEAKENED %s: new ignore or exclude in %s was absent, now '%s'\n", F, p[2], p[3]; bad = 1 }
   for (k in hwl) if (!(k in bwl) && k ~ /^(prepare|prepublish|prepack|install|preinstall|postinstall)$/) { printf "WEAKENED %s: new install-time script %s (it runs on every install and can skip the gates; a gate script may only change by the known-safe words in the gate-ratchet.sh header)\n", F, k; bad = 1 }
   for (k in bwl) {
     if (!(k in hwl)) { printf "WEAKENED %s: script %s was '%s', now removed (a gate script may only change by the known-safe words in the gate-ratchet.sh header)\n", F, k, bwl[k]; bad = 1 }
@@ -1366,6 +1449,50 @@ END {
   exit bad
 }
 AWK
+
+# Fails with the first local import source of config $1 (facts file $2) that names no file tracked at HEAD, so a config cannot pull its rules from a place the ratchet cannot see.
+local_imports_resolve() {
+  local dir src target
+  dir=""
+  case "$1" in */*) dir=${1%/*}/ ;; esac
+  while IFS=$'\t' read -r _ _ src; do
+    target=$(awk -v p="$dir$src" 'BEGIN { m = split(p, a, "/"); n = 0; for (i = 1; i <= m; i++) { if (a[i] == "." || a[i] == "") continue; if (a[i] == "..") { if (n == 0) { print "outside-the-repository"; exit } n-- } else { n++; q[n] = a[i] } } out = q[1]; for (i = 2; i <= n; i++) out = out "/" q[i]; print out }') || { echo "cannot resolve the local import '$src'"; return 1; }
+    if ! head_has "$target"; then
+      echo "the local import '$src' names no file tracked at HEAD, so the rules it brings cannot be judged"
+      return 1
+    fi
+  done < <(awk -F'\t' '$1 == "req" && $2 == "local-import"' "$2")
+  return 0
+}
+
+# Fails when a file the eslint config $1 imports, directly or through other local files (facts file $2 holds the config's own imports), can load code the ratchet does not read.
+local_imports_closure() {
+  local dir target todo seen cur msg
+  todo="$wd/closure.todo"; seen="$wd/closure.seen"
+  : > "$seen"
+  dir=""
+  case "$1" in */*) dir=${1%/*}/ ;; esac
+  awk -F'\t' -v d="$dir" '$1 == "req" && $2 == "local-import" { print d $3 }' "$2" > "$todo"
+  while [ -s "$todo" ]; do
+    cur=$(sed -n '1p' "$todo")
+    sed '1d' "$todo" > "$todo.n" && mv "$todo.n" "$todo"
+    target=$(awk -v p="$cur" 'BEGIN { m = split(p, a, "/"); n = 0; for (i = 1; i <= m; i++) { if (a[i] == "." || a[i] == "") continue; if (a[i] == "..") { if (n == 0) { print "outside-the-repository"; exit } n-- } else { n++; q[n] = a[i] } } out = q[1]; for (i = 2; i <= n; i++) out = out "/" q[i]; print out }') || { echo "cannot resolve the local import '$cur'"; return 1; }
+    if grep -Fxq -- "$target" "$seen"; then continue; fi
+    printf '%s\n' "$target" >> "$seen"
+    case "$target" in
+      *.mjs | *.js | *.cjs | *.ts | *.mts | *.cts) ;;
+      *) continue ;;
+    esac
+    git show "HEAD:$target" > "$wd/closure.file" 2> /dev/null || { echo "cannot read the local import '$target' at HEAD"; return 1; }
+    if ! msg=$(awk -v K=eslintimport -v B=1 -f "$wd/facts.awk" "$wd/closure.file" 2>&1 > "$wd/closure.f"); then
+      echo "$target: $msg"
+      return 1
+    fi
+    case "$target" in */*) dir=${target%/*}/ ;; *) dir="" ;; esac
+    awk -F'\t' -v d="$dir" '$1 == "req" && $2 == "local-import" { print d $3 }' "$wd/closure.f" >> "$todo"
+  done
+  return 0
+}
 
 if [ -n "$list_mode" ]; then
   guard_scan "$list_ref" || die "--list-guarded: cannot list or read the tracked files of $list_ref"
@@ -1424,9 +1551,19 @@ while IFS=$'\t' read -r kind path _; do
       unreadable=1
       continue
     fi
+    if [ "$kind" = eslint ] && ! msg=$(local_imports_resolve "$path" "$wd/head.f"); then
+      printf 'UNREADABLE %s: %s (fail closed)\n' "$path" "$msg"
+      unreadable=1
+      continue
+    fi
+    if [ "$kind" = eslint ] && ! msg=$(local_imports_closure "$path" "$wd/head.f"); then
+      printf 'UNREADABLE %s: %s (fail closed)\n' "$path" "$msg"
+      unreadable=1
+      continue
+    fi
     if [ "$have_base" -eq 0 ]; then
       case "$kind" in tsconfig | pyright) newfile=1; : > "$wd/base.f" ;; conftest) : > "$wd/base.f" ;; gatetime) seeded=1; printf 'max\tgatetime:total_budget_seconds\t600\nmax\tgatetime:per_gate_budget_seconds\t180\nmax\tgatetime:regression_percent\t25\n' > "$wd/base.f" ;; *) continue ;; esac
-    elif ! msg=$(awk -v K="$kind" -v B="$have_base" -f "$wd/facts.awk" "$wd/base" 2>&1 > "$wd/base.f"); then
+    elif ! msg=$(awk -v K="$kind" -v B="$have_base" -v BASEREAD=1 -f "$wd/facts.awk" "$wd/base" 2>&1 > "$wd/base.f"); then
       printf 'NOTE %s: unreadable at the merge base (%s); compared with an empty baseline\n' "$path" "$msg"
       : > "$wd/base.f"
     fi

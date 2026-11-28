@@ -73,7 +73,7 @@ const PG_UNIQUE_VIOLATION = '23505';
 export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
-    private readonly db: KyselyService,
+    private readonly db: KyselyService
   ) {}
 
   async register(dto: RegisterDto) {
@@ -103,7 +103,7 @@ export class AuthService {
     const passwordOk = await argon2.verify(
       // `||`, not `??`: rows backfilled by the NNN_add_auth migration hold '' — argon2.verify throws on it.
       user?.hashed_password || (await DUMMY_HASH),
-      dto.password,
+      dto.password
     );
     if (!user || !passwordOk) {
       throw new UnauthorizedException('Invalid credentials.');

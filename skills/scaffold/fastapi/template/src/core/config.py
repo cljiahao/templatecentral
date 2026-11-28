@@ -1,4 +1,4 @@
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -32,14 +32,11 @@ class APISettings(BaseSettings):
     FASTAPI_ROOT: str = Field(default="")
     API_PORT: int = Field(default=8000)
     CORS_ORIGINS: str = Field(default="http://localhost:3000")
-    ALLOWED_CORS: list[str] = []
     TRUST_PROXY: str = Field(default="")
 
-    def model_post_init(self, __context: Any) -> None:
-        """Compute allowed CORS origins after initialization."""
-        self.ALLOWED_CORS = self._compute_allowed_cors()
-
-    def _compute_allowed_cors(self) -> list[str]:
+    @property
+    def allowed_cors(self) -> list[str]:
+        """Allowed CORS origins: a fixed localhost list in dev, else CORS_ORIGINS."""
         if common_settings.ENVIRONMENT == "dev":
             return [
                 "http://localhost:3000",

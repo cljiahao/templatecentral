@@ -74,6 +74,10 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: bash .claude/ci-gates.sh commentshape "$BASE_REF"
+      - name: API contract (the code's OpenAPI document equals the committed openapi.json)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash .claude/ci-gates.sh contract "$BASE_REF"
       - name: Bundle size (gzip JS and CSS within .claude/bundle-budget.txt)
         run: bash .claude/ci-gates.sh bundle
       - name: Duplication (production source <= 3%, per .jscpd.json)
@@ -89,6 +93,8 @@ jobs:
           fi
       - run: ruff check src/ test/ && ruff format --check src/ test/
       - run: python -I -m pyright src/
+      - name: Import layers (import-linter enforces docs/architecture.md)
+        run: bash .claude/ci-gates.sh importlinter
       # Serial on purpose: xdist measured slower at this suite size.
       - name: Tests (serial; pytest-cov writes coverage.xml)
         run: python -m pytest test/ --cov=src --cov-report=xml -q
@@ -102,6 +108,10 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: bash .claude/ci-gates.sh diffcover "$BASE_REF"
+      - name: Mutation score on changed lines (mutmut from requirements-dev.txt)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash .claude/ci-gates.sh mutation "$BASE_REF"
       # Prints the gate-time note for the gates this job ran. Exits 0 when over budget and 2 when the budget file, gate list or timing record is broken. Skipped when an earlier step fails.
       - name: Gate-time budget note
         run: bash .claude/gate-budget.sh check

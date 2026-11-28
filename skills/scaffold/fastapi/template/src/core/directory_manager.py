@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from pathlib import Path
 from shutil import rmtree
 
@@ -35,7 +36,7 @@ class DirectoryManager:
             raise OSError(f"Failed to create directory: {folder_path}") from e
 
     def create_subdirectories(
-        self, directory: Path, folder_list: list[str], to_remove: bool = False
+        self, directory: Path, folder_list: Sequence[object], to_remove: bool = False
     ) -> None:
         """Creates each named subdirectory under directory."""
         for folder in folder_list:

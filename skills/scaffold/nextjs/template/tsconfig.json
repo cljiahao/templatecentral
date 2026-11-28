@@ -5,6 +5,10 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    // exactOptionalPropertyTypes stays off: shadcn's generated sonner.tsx and the NextConfig, Response and vitest option bags pass undefined (6 errors).
+    // noPropertyAccessFromIndexSignature stays off: every process.env.X needs a ProcessEnv declaration and NEXT_PUBLIC_* must stay dot access to be inlined (8 errors, 22 more in add templates).
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",

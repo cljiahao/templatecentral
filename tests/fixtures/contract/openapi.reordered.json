@@ -1,0 +1,1 @@
+{"paths":{"/items":{"get":{"responses":{"200":{"description":"ok"}},"operationId":"listItems"}}},"info":{"version":"1.0.0","title":"api"},"openapi":"3.1.0"}

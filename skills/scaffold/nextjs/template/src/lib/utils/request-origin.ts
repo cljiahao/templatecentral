@@ -4,7 +4,7 @@ import { type NextRequest } from 'next/server';
 export function getAppOrigin(request: NextRequest): string {
   const trustProxy = process.env.TRUST_PROXY;
   const proto = (trustProxy
-    ? request.headers.get('x-forwarded-proto')?.split(',')[0].trim()
+    ? request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
     : undefined) ?? request.nextUrl.protocol.replace(/:$/, '');
   const host = (trustProxy
     ? (request.headers.get('x-forwarded-host') ?? request.headers.get('host'))

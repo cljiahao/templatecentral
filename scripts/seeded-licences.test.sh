@@ -816,6 +816,12 @@ if [ "$real_ok" -eq 1 ]; then
   run "$D"
   check 0 "$EC" "the same environment passes in prod scope without the nodeenv row ($OUT)"
   cp "$T/exc-real.txt" "$D/.claude/licence-exceptions.txt"
+  grep -v '^grimp ' "$T/exc-real.txt" > "$D/.claude/licence-exceptions.txt"
+  check 0 "$(cmp -s "$T/exc-real.txt" "$D/.claude/licence-exceptions.txt"; echo $((1 - $?)))" "the probe exceptions file lost the grimp row"
+  run "$D" LICENCES_SCOPE=all
+  check 1 "$EC" "scope all fails on grimp without its row"
+  has "grimp@" "$OUT" "scope all names grimp"
+  cp "$T/exc-real.txt" "$D/.claude/licence-exceptions.txt"
   rm "$D/.claude/licence-exceptions.txt"
   run "$D"
   check 1 "$EC" "real fastapi scaffold without the exceptions file fails on certifi"

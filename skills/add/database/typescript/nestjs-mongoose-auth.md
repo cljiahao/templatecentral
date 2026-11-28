@@ -53,7 +53,7 @@ const MONGO_DUPLICATE_KEY = 11000;
 export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
-    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>
   ) {}
 
   async register(dto: RegisterDto) {
@@ -83,7 +83,7 @@ export class AuthService {
       .exec();
     const passwordOk = await argon2.verify(
       user?.hashedPassword ?? (await DUMMY_HASH),
-      dto.password,
+      dto.password
     );
     if (!user || !passwordOk) {
       throw new UnauthorizedException('Invalid credentials.');

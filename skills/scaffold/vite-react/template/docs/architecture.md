@@ -14,7 +14,7 @@ Codemap. Update it in the same change that moves a layer or a shared module.
 
 ## Dependency direction
 
-`pages` → `features` → `components`, `lib`. Features reach another feature only through its entry point. `lib` imports from no other layer. Nothing imports from `pages`.
+`pages` → `features` → `components`, `lib`. Features reach another feature only through its entry point. `lib` imports from no other layer. Nothing imports from `pages`; the app shell in `components/layout` may import features through their entry point.
 
 ## Reuse
 

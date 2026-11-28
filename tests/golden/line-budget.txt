@@ -13,7 +13,7 @@ add/database/typescript/nestjs-mongoose.md	180	36
 add/database/typescript/nextjs-drizzle.md	174	50
 add/database/typescript/nextjs-kysely.md	194	47
 add/endpoint/fastapi.md	158	35
-add/endpoint/nestjs.md	291	55
+add/endpoint/nestjs.md	298	55
 add/endpoint/nextjs.md	167	39
 add/error-handling/fastapi.md	186	15
 add/error-handling/nextjs.md	200	18

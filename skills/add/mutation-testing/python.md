@@ -12,8 +12,10 @@ Report-only mutation testing with mutmut. Run it on changed modules or one named
 Add to `requirements-dev.txt` (create the file if absent):
 
 ```
-mutmut>=3.8.1
+mutmut
 ```
+
+> Pin it to the exact `mutmut` version in `<skill-dir>/../scaffold/shared/versions.txt`, the same one the seeded mutation gate runs.
 
 > The floor and why it is there: the plugin's `<skill-dir>/../../.claude/rules/fastapi.md`.
 

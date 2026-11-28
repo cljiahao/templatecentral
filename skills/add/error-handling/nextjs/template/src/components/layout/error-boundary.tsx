@@ -24,14 +24,14 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   // Report here: getDerivedStateFromError cannot, so render errors would never reach the logger.
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     logError('ErrorBoundary caught an error', error);
     if (process.env.NODE_ENV === 'development') {
       console.error('Component stack:', errorInfo.componentStack);
     }
   }
 
-  render() {
+  override render() {
     if (this.state.error) {
       if (this.props.fallback) return this.props.fallback;
 

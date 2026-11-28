@@ -5,9 +5,7 @@ import { serviceConfig } from '../config/env.config';
 
 @Global()
 @Module({
-  imports: [
-    MongooseModule.forRoot(serviceConfig.MONGODB_URL),
-  ],
+  imports: [MongooseModule.forRoot(serviceConfig.MONGODB_URL)],
 })
 export class DatabaseModule implements OnModuleInit {
   constructor(@InjectConnection() private readonly connection: Connection) {}
