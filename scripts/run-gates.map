@@ -273,7 +273,7 @@ scripts/changelog-assemble.test.sh	bash scripts/changelog-check.sh {BASE}
 # Fixture READMEs and docs written into a temp dir:
 @noread	bash scripts/check-doc-sync.test.sh	README.md EXAMPLES.md
 @noread	bash scripts/check-docs.test.sh	README.md
-@noread	bash scripts/day-one.test.sh	README.md
+@noread	bash scripts/day-one.test.sh	README.md CHANGELOG.md
 @noread	bash scripts/gate-ratchet.test.sh	README.md
 @noread	bash scripts/seeded-gates.test.sh	README.md
 @noread	bash scripts/seeded-change-size.test.sh	README.md

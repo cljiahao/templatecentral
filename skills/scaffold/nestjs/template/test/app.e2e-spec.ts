@@ -1,27 +1,18 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Test } from '@nestjs/testing';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
-import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
-import { AppModule } from '../src/app.module';
+import { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { createApp } from '../src/app.factory';
 
-// Mirrors app.factory.ts's adapter options so request IDs behave as in the running app.
+// Boots the app through createApp(), so the e2e run sees the production adapter, security and CORS setup.
 describe('AppController (e2e)', () => {
   let app: NestFastifyApplication;
 
   beforeAll(async () => {
-    const moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
-
-    app = moduleFixture.createNestApplication<NestFastifyApplication>(
-      new FastifyAdapter({ genReqId: () => crypto.randomUUID() })
-    );
-    await app.init();
-    await app.getHttpAdapter().getInstance().ready();
+    app = (await createApp()).app;
   });
 
-  afterAll(async () => {
-    await app.close();
-  });
+  afterAll(() => app.close());
 
   it('GET / returns 200 with the hello payload', async () => {
     const result = await app.inject({ method: 'GET', url: '/' });

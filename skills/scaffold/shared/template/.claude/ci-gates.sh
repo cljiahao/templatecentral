@@ -142,8 +142,9 @@ case "$gate" in
   list)
     manifest="$(dirname "$0")/gates.txt"
     [ -f "$manifest" ] || fail "$manifest is missing — the gate manifest is the authority for which gates exist"
-    listed=$(grep -vE '^[[:space:]]*(#|$)' "$manifest" | cut -d'|' -f1)
-    [ -n "$listed" ] || fail "$manifest lists no gate"
+    # Only gates this script runs: harness, docs and review are run by their own scripts (their CI field names those, not ci-gates.sh).
+    listed=$(grep -vE '^[[:space:]]*(#|$)' "$manifest" | awk -F'|' '$3 == "ci-gates.sh " $1 { print $1 }')
+    [ -n "$listed" ] || fail "$manifest lists no gate this script runs"
     printf '%s\n' "$listed"
     exit 0
     ;;
@@ -438,7 +439,9 @@ JS
     code=""
     while IFS= read -r f; do
       [ -n "$f" ] || continue
-      if git --literal-pathspecs diff -U0 --no-color --no-ext-diff --no-textconv --text "$base"...HEAD -- "$f" | awk -v py="$(case "$f" in *.py) echo 1 ;; *) echo 0 ;; esac)" '
+      is_py=0
+      case "$f" in *.py) is_py=1 ;; esac
+      if git --literal-pathspecs diff -U0 --no-color --no-ext-diff --no-textconv --text "$base"...HEAD -- "$f" | awk -v py="$is_py" '
         /^@@/ { inbody = 1; next }
         inbody && /^[+]/ {
           t = substr($0, 2); sub(/^[ \t]+/, "", t)
@@ -455,7 +458,11 @@ JS
     src=${code%$'\n'}
     if [ -z "$src" ]; then echo "diffcover: no source file changed that needs coverage (deleted, excluded from coverage, or only comments and blank lines) — skipped"; exit 0; fi
     out=${DIFF_COVER_OUTPUT:-diff-cover.txt}
-    [ -f "$out" ] || fail "$out is missing although source changed. The diff-cover step must run first and keep its output there."
+    if [ ! -f "$out" ]; then
+      report=coverage/cobertura-coverage.xml
+      if [ -f pyproject.toml ]; then report=coverage.xml; fi
+      fail "$out is missing although source changed. The diff-cover step must run first and keep its output there: pipx run diff-cover $report --compare-branch=$base --fail-under=80 | tee $out"
+    fi
     if grep -q "No lines with coverage information" "$out"; then
       fail "source changed but the coverage report has no lines for it ($(printf '%s' "$src" | tr '\n' ' ')). The tests did not run with coverage, or the report is stale; regenerate it. Do not exclude the files."
     fi

@@ -21,6 +21,7 @@ template-ci/github-ts/.github/dependabot.yml 644 - -
 template-ci/github-ts/.github/workflows/ci.yml 644 - -
 template-late/.claude/skills/skill-audit/SKILL.md.tmpl 644 - -
 template-late/.claude/skills/test-consolidate/SKILL.md.tmpl 644 - -
+template-late/CHANGELOG.md 644 - -
 template-late/FUTURE.md 644 - -
 template-late/docs/CONSTITUTION.md 644 __TC_PROJECT_TITLE__ -
 template-late/docs/adr/0001-test-each-behaviour-once.md 644 - -

@@ -1,0 +1,1 @@
+- `ci-gates.sh list` prints only the gates the script runs; `harness`, `docs` and `review` (run by their own scripts) no longer appear as usage errors.

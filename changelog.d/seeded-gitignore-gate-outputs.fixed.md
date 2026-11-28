@@ -1,0 +1,1 @@
+- Seeded `.gitignore` now ignores `diff-cover.txt` on all four stacks and `dist/` on nextjs, so the SBOM and diffcover gates no longer dirty the tree or get committed by `git add -A`.

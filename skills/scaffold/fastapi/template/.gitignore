@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 *.pyo
 *.egg-info/
-dist/
+/dist/
 build/
 
 # Virtual environments
@@ -66,3 +66,6 @@ Thumbs.db
 .claude/gate-budget.??????
 # Local review records written by scripts/record-review.sh (per machine, never committed)
 .claude/review/
+
+# Files the seeded gates write: the diffcover gate's report (CI redirects diff-cover output into it) and the SBOM
+diff-cover.txt

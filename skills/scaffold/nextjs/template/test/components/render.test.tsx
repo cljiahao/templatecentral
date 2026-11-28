@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { createElement as h, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FormProvider, useForm } from 'react-hook-form';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,7 +8,7 @@ import Home from '@/app/(public)/page';
 import DashboardPage from '@/app/dashboard/(overview)/page';
 import DashboardLayout from '@/app/dashboard/layout';
 import NotFound from '@/app/not-found';
-import { Navbar, Providers, SiteFooter, ThemeProvider } from '@/components/layout';
+import { Navbar, Providers, SiteFooter } from '@/components/layout';
 import {
   BrandLogo,
   CustomCard,
@@ -27,9 +27,7 @@ import { useExampleItems } from '@/features/example/hooks/use-example-items.quer
 
 const pathname = vi.hoisted(() => ({ value: '/' }));
 vi.mock('next/navigation', () => ({ usePathname: () => pathname.value }));
-vi.mock('@/features/example/hooks/use-example-items.query', () => ({
-  useExampleItems: vi.fn(),
-}));
+vi.mock('@/features/example/hooks/use-example-items.query', () => ({ useExampleItems: vi.fn() }));
 
 const html = (node: ReactElement) => renderToStaticMarkup(node);
 
@@ -44,83 +42,65 @@ function FieldHarness() {
   );
 }
 
-describe('widgets', () => {
-  it('render their content', () => {
-    const out = html(
-      <>
-        <BrandLogo />
-        <FloatingShape />
-        <Pill variant="solid">Tag</Pill>
-        <CustomCard header="Head" description="Desc">
-          Body
-        </CustomCard>
-        <ThemeToggleButton />
-        <CustomDialog title="Title" description="Why" trigger={<button>Open</button>}>
-          Inside
-        </CustomDialog>
-      </>
-    );
-    expect(out).toContain('Head');
+describe('components', () => {
+  const links = [
+    { label: 'Docs', href: '/docs' },
+    { label: 'Ext', href: 'https://x.test', target: '_blank' },
+  ];
+  // Each row renders alone: [name, element, strings it must contain, strings it must not].
+  const cases: [string, ReactElement, string[], string[]?][] = [
+    ['BrandLogo', h(BrandLogo), ['alt="Logo"']],
+    ['FloatingShape', h(FloatingShape), ['aria-hidden="true"']],
+    [
+      'Solid',
+      h(Pill, { variant: 'solid', children: 'Tag' }),
+      ['Tag', 'text-background'],
+      ['bg-card'],
+    ],
+    ['Outline', h(Pill, { children: 'Tag' }), ['bg-card'], ['text-background']],
+    ['Card', h(CustomCard, { header: 'Hd', description: 'Ds' }, 'Bd'), ['Hd', 'Ds', 'Bd']],
+    ['ThemeToggleButton', h(ThemeToggleButton), ['aria-label="Toggle dark mode"']],
+    [
+      'Dialog',
+      h(CustomDialog, {
+        title: 'T',
+        description: 'Why',
+        trigger: h('b', null, 'Open'),
+        children: 'x',
+      }),
+      ['Open'],
+    ],
+    ['Media', h(MediaCard, { title: 'T', mediaPosition: 'left' }, 'media'), ['media', 'flex-row']],
+    ['Media bare', h(MediaCard, { title: 'Only', description: 'D' }), ['Only', '>D<'], ['media']],
+    ['Link', h(LinkList, { links }), ['href="/docs"', 'target="_blank" rel="noopener noreferrer"']],
+    ['Link int', h(LinkList, { links: links.slice(0, 1) }), ['href="/docs"'], ['rel=']],
+    [
+      'Field',
+      h(FieldHarness),
+      ['aria-describedby="name-description"', 'id="name-description"', 'for="name"', 'id="name"'],
+    ],
+    ['SiteFooter default', h(SiteFooter), ['Built with templateCentral'], ['<nav']],
+    [
+      'SiteFooter custom',
+      h(SiteFooter, { creditText: 'Credit', links: [{ label: 'L', href: '/l' }] }),
+      ['Credit', 'href="/l"', 'aria-label="Footer"'],
+      ['Built with templateCentral'],
+    ],
+    ['Providers', h(Providers, null, h('p', null, 'child')), ['<p>child</p>']],
+  ];
+
+  it.each(cases)('%s renders its own content and attributes', (_name, element, has, lacks = []) => {
+    const out = html(element);
+    has.forEach((text) => expect(out).toContain(text));
+    lacks.forEach((text) => expect(out).not.toContain(text));
   });
 
-  it('lays out a media card with and without media', () => {
-    const out = html(
-      <>
-        <MediaCard title="T" mediaPosition="left">
-          media
-        </MediaCard>
-        <MediaCard title="Only title" description="D" />
-      </>
-    );
-    expect(out).toContain('Only title');
-  });
-
-  it('marks external links safe to open', () => {
-    const out = html(
-      <LinkList
-        links={[
-          { label: 'Docs', href: '/docs' },
-          { label: 'Ext', href: 'https://x.test', target: '_blank' },
-        ]}
-      />
-    );
-    expect(out).toContain('rel="noopener noreferrer"');
-  });
-
-  it('wires a form field to its label, description and control', () => {
-    const out = html(<FieldHarness />);
-    expect(out).toContain('aria-describedby="name-description"');
-  });
-});
-
-describe('layout', () => {
   it.each([
     ['/', false],
     ['/dashboard/x', true],
   ])('renders the navbar for %s', (path, isDashboard) => {
     pathname.value = path;
     expect(html(<Navbar />).includes('aria-current="page"')).toBe(isDashboard);
-  });
-
-  it('renders the footer with and without links', () => {
-    const out = html(
-      <>
-        <SiteFooter />
-        <SiteFooter creditText="Credit" links={[{ label: 'L', href: '/l' }]} />
-      </>
-    );
-    expect(out).toContain('Credit');
-  });
-
-  it('wraps children in the app providers', () => {
-    const out = html(
-      <ThemeProvider attribute="class">
-        <Providers>
-          <p>child</p>
-        </Providers>
-      </ThemeProvider>
-    );
-    expect(out).toContain('child');
   });
 
   it('composes the pages from the layout', () => {

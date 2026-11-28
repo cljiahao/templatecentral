@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { createApp, resolveTrustProxy } from '../src/app.factory';
+import { createApp } from '../src/app.factory';
 import { appConfig, serviceConfig } from '../src/config';
 
 const [origin = ''] = serviceConfig.CLIENT_URL;
@@ -25,33 +25,22 @@ afterEach(async () => {
 
 describe('app factory', () => {
   it.each([
-    ['*', true],
-    [undefined, undefined],
-    ['loopback', 'loopback'],
-  ])('resolveTrustProxy(%s) is %s', (value, expected) =>
-    expect(resolveTrustProxy(value)).toBe(expected)
-  );
-
-  it('serves /health with security headers', async () => {
-    const result = await request('/health');
-    expect([result.statusCode, result.payload, result.headers['x-content-type-options']]).toEqual([
+    [origin, origin],
+    ['https://unlisted.invalid', undefined],
+  ])('GET /health from %s: security headers, CORS grants %s', async (from, granted) => {
+    const { statusCode, payload, headers } = await request('/health', { origin: from });
+    expect([statusCode, payload, headers['x-content-type-options']]).toEqual([
       200,
       '{"status":"ok"}',
       'nosniff',
     ]);
-  });
-
-  it.each([
-    [origin, origin],
-    ['https://unlisted.invalid', undefined],
-  ])('CORS for origin %s grants %s', async (requestOrigin, granted) => {
-    const result = await request('/health', { origin: requestOrigin });
-    expect(result.headers['access-control-allow-origin']).toBe(granted);
+    expect(headers['access-control-allow-origin']).toBe(granted);
   });
 
   it.each([
     [undefined, false],
     ['loopback', true],
+    ['*', true],
   ])('TRUST_PROXY=%s honours X-Forwarded-For: %s', async (trust, honoured) => {
     const result = await request('/__client-ip', { 'x-forwarded-for': clientIp }, trust);
     expect(result.json<{ ip: string }>().ip === clientIp).toBe(honoured);

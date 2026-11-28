@@ -4,5 +4,5 @@ rmline	src/app/dashboard/(overview)/page.tsx	import { ExampleList } from '@/feat
 rmblock	src/app/dashboard/(overview)/page.tsx	6	      <p className="mt-2 text-muted-foreground">	      </div>	-
 rmline	test/components/render.test.tsx	import DashboardPage from '@/app/dashboard/(overview)/page';	-
 rmblock	test/components/render.test.tsx	4	import { getExampleItems } from '@/features/example/api/example-service';	import { useExampleItems } from '@/features/example/hooks/use-example-items.query';	-
-rmblock	test/components/render.test.tsx	3	vi.mock('@/features/example/hooks/use-example-items.query', () => ({	}));	-
+rmline	test/components/render.test.tsx	vi.mock('@/features/example/hooks/use-example-items.query', () => ({ useExampleItems: vi.fn() }));	-
 rmblock	test/components/render.test.tsx	26	describe('example feature', () => {	});	before

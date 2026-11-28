@@ -10,3 +10,9 @@ pnpm-lock.yaml
 lefthook.yml
 .github/
 .gitleaks.toml
+
+# Seeded gate helpers — hash-guarded harness files nobody may edit; a reformat drifts them from the integrity baseline.
+scripts/check-comments.mjs
+scripts/check-exclude-reasons.mjs
+scripts/duplicate-tests-ts.mjs
+scripts/export-openapi.mjs
