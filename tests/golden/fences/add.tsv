@@ -388,7 +388,7 @@ ea4f39addd280acc520ff27afa06b19d265c93d37f4b47b9fc9519440e4c9960	skills/add/logg
 7dcae74f91c8858cfe5a39a882b8261bafd5beb1c93d2b13d02fc9d97a8f3edf	skills/add/logging/vite-react.md	4. Add router navigation breadcrumbs	1	tsx
 ee6caf0c8e9b4a0a2e03cafbf471fde45aecabb51c325794e7dde2df6df1d03b	skills/add/logging/vite-react.md	5. Export from `src/lib/logging/index.ts`	0	ts
 d4215fbedeb2233765a4498380598229b8ac2cc65a30e8df98d9ea1928743d33	skills/add/logging/vite-react.md	5. Export from `src/lib/logging/index.ts`	1	ts
-9596ded4f99a544358595ed46a1ba3fb6128978d5bc7c78a7a04ffb0b6d23250	skills/add/mutation-testing/python.md	Dependencies	0	-
+c905cf891556a49623431395bec0934e2877d2eed94bcdd1a3ee20f478e62e88	skills/add/mutation-testing/python.md	Dependencies	0	-
 fa72d6cbbce95a0c4211c2445ea879fa6d9f70429c8b1bd2f89e69f8991c3b0a	skills/add/mutation-testing/python.md	Step 1 — Add mutmut configuration	0	toml
 ecc80fa931d674f2929143c554b395f482585738f632809e857191cc189c7c46	skills/add/mutation-testing/python.md	Step 2 — Update .gitignore	0	-
 d2598c1c6822f00af3469e894410b2fd6b9176d3a9b1c7637d413c1b54e2bda0	skills/add/mutation-testing/python.md	Step 3 — Add CI job	0	yaml
