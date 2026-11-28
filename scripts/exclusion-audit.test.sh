@@ -589,6 +589,13 @@ for pair in "scan.awk:check-exclude-reasons.awk" "scan.py:check-exclude-reasons.
   g=${pair##*:}
   if cmp -s "$AUDITDIR/$a" "$GATEDIR/$g"; then ok "$a is a byte copy of $g"; else nok "$a differs from $g"; fi
 done
+# The byte comparison catches drift: a planted one-character change in a copy of scan.py is refused, and an untouched copy passes.
+mkdir -p "$WORK/drift"
+cp "$AUDITDIR/scan.py" "$WORK/drift/clean.py"
+cp "$AUDITDIR/scan.py" "$WORK/drift/planted.py"
+printf '#\n' >> "$WORK/drift/planted.py"
+if cmp -s "$WORK/drift/clean.py" "$GATEDIR/check-exclude-reasons.py"; then ok "drift control: an untouched copy of scan.py matches the seeded gate"; else nok "drift control: an untouched copy of scan.py differs from the seeded gate"; fi
+if cmp -s "$WORK/drift/planted.py" "$GATEDIR/check-exclude-reasons.py"; then nok "planted drift in scan.py went unnoticed"; else ok "planted drift in scan.py is caught by the byte comparison"; fi
 sed -n "s/^dflt '\([^']*\)'.*/\1/p" "$GATEDIR/check-exclude-reasons.sh" > "$WORK/gate-defaults.txt"
 if cmp -s "$WORK/gate-defaults.txt" "$AUDITDIR/defaults.txt" && [ -s "$AUDITDIR/defaults.txt" ]; then ok "defaults.txt equals the gate's default entries"; else nok "defaults.txt differs from the gate's default entries"; fi
 awk "/^PLACEHOLDERS='/ { f = 1; sub(/^PLACEHOLDERS='/, \"\") } f { if (\$0 ~ /'\$/) { sub(/'\$/, \"\"); print; exit } print }" "$GATEDIR/check-exclude-reasons.sh" > "$WORK/gate-words.txt"

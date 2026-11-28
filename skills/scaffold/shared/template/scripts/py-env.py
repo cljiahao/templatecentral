@@ -62,85 +62,121 @@ def why(line):
     return "it is not name==version, a --hash line or a known global option"
 
 
-def wanted(path):
-    """Returns the normalised names in requirements.txt: those that must be installed, and those behind an environment marker."""
-    required, optional = [], []
+def refuse(path, number, text, reason):
+    """Stops with exit 3 and names the line of the hashed lock that is refused."""
+    stop("%s line %d '%s': %s. The hashed lock must list every package as name==version with hashes (uv pip compile --generate-hashes), so recompile it." % (path, number, text.strip(), reason))
+
+
+def read_lock(path):
+    """Returns the bytes of the requirements file without a leading byte order mark."""
     try:
         with open(path, "rb") as f:
             data = f.read()
     except OSError as e:
         stop("cannot read %s: %s. The hashed lock must be a readable requirements.txt." % (path, e.strerror or e))
-    if data.startswith(b"\xef\xbb\xbf"):
-        data = data[3:]
+    return data[3:] if data.startswith(b"\xef\xbb\xbf") else data
+
+
+def check_bytes(path, data):
+    """Stops on a byte other than tab, LF, CRLF or printable ASCII."""
     for i, b in enumerate(data):
         if b in (9, 10) or 32 <= b <= 126:
             continue
         if b == 13 and data[i + 1 : i + 2] == b"\n":
             continue
         stop("%s line %d: byte 0x%02x is not allowed (only tab, LF, CRLF and printable ASCII), because pip may read it as a line break or another encoding. The hashed lock must be plain ASCII as uv pip compile --generate-hashes writes it, so recompile it." % (path, data.count(b"\n", 0, i) + 1, b))
+
+
+def lock_lines(path):
+    """Returns the lines of the requirements file after the byte and coding checks."""
+    data = read_lock(path)
+    check_bytes(path, data)
     lines = data.decode("ascii").replace("\r\n", "\n").split("\n")
     for number, text in enumerate(lines[:2], 1):
         if re.match(r"[ \t]*#.*?coding[:=][ \t]*[-\w.]+", text):
             stop("%s line %d '%s': a coding comment makes pip decode the file in another encoding. Remove it: the hashed lock must be plain ASCII as uv pip compile --generate-hashes writes it." % (path, number, text.strip()))
     if lines and lines[-1] == "":
         lines.pop()
+    return lines
 
-    def refuse(number, text, reason):
-        stop("%s line %d '%s': %s. The hashed lock must list every package as name==version with hashes (uv pip compile --generate-hashes), so recompile it." % (path, number, text.strip(), reason))
 
+def check_layout(path, number, raw, ends):
+    """Refuses a backslash that is not last, and a # $ or tab that pip reads differently, on a line that is not a comment."""
+    if raw.rstrip().endswith("\\") and not ends:
+        refuse(path, number, raw, "a backslash must be the last character of the line")
+    if raw.lstrip().startswith("#"):
+        return
+    if "#" in raw:
+        refuse(path, number, raw, "a # is only allowed at the start of a line, because pip joins a continuation first and then drops everything after #, which can drop a hash")
+    if "$" in raw:
+        refuse(path, number, raw, "a $ is only allowed in a full-line comment, because pip expands ${VAR} before it reads the line")
+    if "\t" in raw:
+        refuse(path, number, raw, "a tab is only allowed in a full-line comment, because pip splits a joined line on a space only")
+    if ends and not raw[:-1].endswith(" "):
+        refuse(path, number, raw, "a line that continues must end with a space and then the backslash, because pip joins the lines without adding a space")
+
+
+def check_hash_line(path, number, raw, body):
+    """Refuses a continuation line that is not one --hash option starting with a space."""
+    if not HASH.match(body.lstrip()):
+        refuse(path, number, raw, "a continuation line must be --hash=<alg>:<hex> only" if body.strip() else "a continuation line is empty")
+    if not raw.startswith(" "):
+        refuse(path, number, raw, "a hash continuation line must start with a space, because pip joins the lines without adding one")
+
+
+def check_option(path, number, raw, stripped, ends):
+    """Refuses an option line that is not a known global option with its arguments."""
+    if ends:
+        refuse(path, number, raw, "an option line must not end with a backslash")
+    try:
+        tokens = shlex.split(stripped)
+    except ValueError:
+        refuse(path, number, raw, "the line cannot be tokenised")
+    head, eq, rest = tokens[0].partition("=")
+    args = ([rest] if eq else []) + tokens[1:]
+    if head not in OPTION_ARGS or len(args) != OPTION_ARGS[head] or any(a.startswith("-") for a in args):
+        refuse(path, number, raw, why(stripped))
+
+
+def read_entry(path, number, raw, stripped, ends, found):
+    """Reads one line outside a continuation and returns True when hash lines follow it."""
+    if not stripped.strip() and not ends:
+        return False
+    if stripped.lstrip().startswith("#"):
+        if ends:
+            refuse(path, number, raw, "a comment line must not end with a backslash")
+        return False
+    if ends and not stripped.strip():
+        refuse(path, number, raw, "a lone backslash line")
+    if stripped.startswith("-"):
+        check_option(path, number, raw, stripped, ends)
+        return False
+    m = REQUIREMENT.match(stripped)
+    if not m:
+        refuse(path, number, raw, why(stripped.strip() or raw))
+    if not ends:
+        refuse(path, number, raw, "a requirement needs at least one --hash continuation")
+    found[1 if m.group(3) else 0].append(norm(m.group(1)))
+    return True
+
+
+def wanted(path):
+    """Returns the normalised names in requirements.txt: those that must be installed, and those behind an environment marker."""
+    lines = lock_lines(path)
+    found = ([], [])
     continued = False
     for number, raw in enumerate(lines, 1):
         ends = raw.endswith("\\")
-        if raw.rstrip().endswith("\\") and not ends:
-            refuse(number, raw, "a backslash must be the last character of the line")
+        check_layout(path, number, raw, ends)
         body = (raw[:-1] if ends else raw).rstrip()
-        if not raw.lstrip().startswith("#"):
-            if "#" in raw:
-                refuse(number, raw, "a # is only allowed at the start of a line, because pip joins a continuation first and then drops everything after #, which can drop a hash")
-            if "$" in raw:
-                refuse(number, raw, "a $ is only allowed in a full-line comment, because pip expands ${VAR} before it reads the line")
-            if "\t" in raw:
-                refuse(number, raw, "a tab is only allowed in a full-line comment, because pip splits a joined line on a space only")
-            if ends and not raw[:-1].endswith(" "):
-                refuse(number, raw, "a line that continues must end with a space and then the backslash, because pip joins the lines without adding a space")
         if continued:
-            if not HASH.match(body.lstrip()):
-                refuse(number, raw, "a continuation line must be --hash=<alg>:<hex> only" if body.strip() else "a continuation line is empty")
-            if not raw.startswith(" "):
-                refuse(number, raw, "a hash continuation line must start with a space, because pip joins the lines without adding one")
+            check_hash_line(path, number, raw, body)
             continued = ends
-            continue
-        stripped = body
-        if not stripped.strip() and not ends:
-            continue
-        if stripped.lstrip().startswith("#"):
-            if ends:
-                refuse(number, raw, "a comment line must not end with a backslash")
-            continue
-        if ends and not stripped.strip():
-            refuse(number, raw, "a lone backslash line")
-        if stripped.startswith("-"):
-            if ends:
-                refuse(number, raw, "an option line must not end with a backslash")
-            try:
-                tokens = shlex.split(stripped)
-            except ValueError:
-                refuse(number, raw, "the line cannot be tokenised")
-            head, eq, rest = tokens[0].partition("=")
-            args = ([rest] if eq else []) + tokens[1:]
-            if head not in OPTION_ARGS or len(args) != OPTION_ARGS[head] or any(a.startswith("-") for a in args):
-                refuse(number, raw, why(stripped))
-            continue
-        m = REQUIREMENT.match(stripped)
-        if not m:
-            refuse(number, raw, why(stripped.strip() or raw))
-        if not ends:
-            refuse(number, raw, "a requirement needs at least one --hash continuation")
-        (optional if m.group(3) else required).append(norm(m.group(1)))
-        continued = True
+        else:
+            continued = read_entry(path, number, raw, body, ends, found)
     if continued:
-        refuse(len(lines), lines[-1], "the last line must not end with a backslash")
-    return required, optional
+        refuse(path, len(lines), lines[-1], "the last line must not end with a backslash")
+    return found
 
 
 def require_installed(req, named):
@@ -168,33 +204,29 @@ def cmd_licences(req, scope):
         print("%s@?\tUnknown" % folder)
 
 
-def cmd_sbom(req, out):
-    named, nameless = installed()
-    if nameless:
-        stop("the environment has a package with no Name in its metadata (%s), so it cannot be listed." % ", ".join(nameless[:3]))
-    require_installed(req, named)
-    latest = {}
-    for (key, _version), (_name, d) in sorted(named.items()):
-        latest.setdefault(key, d)
-    components, dependencies = [], []
-    for key in sorted(latest):
-        d = latest[key]
-        ref = "pkg:pypi/%s@%s" % (key, d.version)
-        component = {"type": "library", "bom-ref": ref, "name": d.metadata["Name"], "version": d.version, "purl": ref}
-        text, is_expr = licence(d.metadata)
-        if text != "Unknown":
-            component["licenses"] = [{"expression": text}] if is_expr else [{"license": {"name": text}}]
-        components.append(component)
-        depends = set()
-        for r in d.requires or []:
-            if ";" in r and "extra" in r.split(";", 1)[1]:
-                continue
-            m = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", r.strip())
-            if m and norm(m.group(0)) in latest:
-                depends.add("pkg:pypi/%s@%s" % (norm(m.group(0)), latest[norm(m.group(0))].version))
-        dependencies.append({"ref": ref, "dependsOn": sorted(depends)})
-    if not components:
-        stop("the project environment has no packages installed.")
+def sbom_component(d, ref):
+    """Returns the CycloneDX component of one distribution."""
+    component = {"type": "library", "bom-ref": ref, "name": d.metadata["Name"], "version": d.version, "purl": ref}
+    text, is_expr = licence(d.metadata)
+    if text != "Unknown":
+        component["licenses"] = [{"expression": text}] if is_expr else [{"license": {"name": text}}]
+    return component
+
+
+def sbom_depends(d, latest):
+    """Returns the sorted refs of the installed packages a distribution requires, extras left out."""
+    depends = set()
+    for r in d.requires or []:
+        if ";" in r and "extra" in r.split(";", 1)[1]:
+            continue
+        m = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", r.strip())
+        if m and norm(m.group(0)) in latest:
+            depends.add("pkg:pypi/%s@%s" % (norm(m.group(0)), latest[norm(m.group(0))].version))
+    return sorted(depends)
+
+
+def write_sbom(out, components, dependencies):
+    """Writes the CycloneDX document to the output file."""
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     doc = {
         "bomFormat": "CycloneDX",
@@ -208,6 +240,25 @@ def cmd_sbom(req, out):
     with open(out, "w", encoding="utf-8") as f:
         json.dump(doc, f, indent=2)
         f.write("\n")
+
+
+def cmd_sbom(req, out):
+    named, nameless = installed()
+    if nameless:
+        stop("the environment has a package with no Name in its metadata (%s), so it cannot be listed." % ", ".join(nameless[:3]))
+    require_installed(req, named)
+    latest = {}
+    for (key, _version), (_name, d) in sorted(named.items()):
+        latest.setdefault(key, d)
+    components, dependencies = [], []
+    for key in sorted(latest):
+        d = latest[key]
+        ref = "pkg:pypi/%s@%s" % (key, d.version)
+        components.append(sbom_component(d, ref))
+        dependencies.append({"ref": ref, "dependsOn": sbom_depends(d, latest)})
+    if not components:
+        stop("the project environment has no packages installed.")
+    write_sbom(out, components, dependencies)
 
 
 def cmd_check(path):
