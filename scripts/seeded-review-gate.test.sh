@@ -517,6 +517,14 @@ for ST in nextjs nestjs vite-react fastapi; do
   wf_ratchet; check 1 "$EC" "wiring[$ST]: (c) edited reviewer agent fails the ratchet"
   wf_reset; printf 'x\n' >> "$W/scripts/record-review.sh"; wf_commit "edit recorder"
   wf_ratchet; check 1 "$EC" "wiring[$ST]: (c) edited record-review.sh fails the ratchet"
+
+  # (e) the review row deleted from gates.txt: the hash check catches it until a human re-hashes; verify-harness.sh does not yet fail on the missing row after that
+  wf_reset; grep -v '^review|' "$W/.claude/gates.txt" > "$W/.claude/gates.new" && mv "$W/.claude/gates.new" "$W/.claude/gates.txt"
+  check 0 "$(grep -c '^review|' "$W/.claude/gates.txt")" "wiring[$ST]: (e) the probe removed the review row"
+  wf_commit "drop review row"
+  wf_verify; check 1 "$EC" "wiring[$ST]: (e) a deleted review row fails verify-harness"
+  has ".claude/gates.txt" "$OUT" "wiring[$ST]: (e) the failure names gates.txt"
+  wf_reset; wf_bless; wf_verify; check 0 "$EC" "wiring[$ST]: (e) control, the untouched row passes after re-hashing"
 done
 
 # (d) each new manifest row dropped in turn: the copy refuses every stack it feeds; a row only one stack uses leaves the other stack copying

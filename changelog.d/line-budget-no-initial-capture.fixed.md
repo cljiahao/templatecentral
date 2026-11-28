@@ -1,0 +1,1 @@
+- A missing `tests/golden/line-budget.txt` at the merge base is now an error (exit 2) in `scripts/check-line-budget-frozen.sh`, not an initial capture that passes.

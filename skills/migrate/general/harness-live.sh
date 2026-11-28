@@ -339,9 +339,9 @@ hook_file() {
 fire() {
   local out rc
   case "$1" in
-    *.sh) out=$(cd "$P" && CLAUDE_PROJECT_DIR="$P" bash "$1" 2>&1 >/dev/null <<<"$2"); rc=$? ;;
-    *.py) out=$(cd "$P" && CLAUDE_PROJECT_DIR="$P" python3 "$1" 2>&1 >/dev/null <<<"$2"); rc=$? ;;
-    *) out=$(cd "$P" && CLAUDE_PROJECT_DIR="$P" node "$1" 2>&1 >/dev/null <<<"$2"); rc=$? ;;
+    *.sh) out=$(cd "$P" && printf '%s' "$2" | CLAUDE_PROJECT_DIR="$P" bash "$1" 2>&1 >/dev/null); rc=$? ;;
+    *.py) out=$(cd "$P" && printf '%s' "$2" | CLAUDE_PROJECT_DIR="$P" python3 "$1" 2>&1 >/dev/null); rc=$? ;;
+    *) out=$(cd "$P" && printf '%s' "$2" | CLAUDE_PROJECT_DIR="$P" node "$1" 2>&1 >/dev/null); rc=$? ;;
   esac
   echo "$rc $out"
 }

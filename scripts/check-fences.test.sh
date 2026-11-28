@@ -533,6 +533,65 @@ bad_row badup "skills/add/s.md\tS\t0\t$(printf '%s' "$good" | tr a-f A-F)" "P8_u
 bad_row badpath "docs/s.md\tS\t0\t$good" "P8_path_outside_skills"
 bad_row badesc "skills/../x.md\tS\t0\t$good" "P8_path_with_dotdot"
 bad_row junkfile "$good" "P8_one_column"
+
+# A folder inside deleted.d is not a slice file: the full check and --has-mappings both refuse it.
+r=$(three del-nested)
+rm_fence "$r" A; del_row "$r" 0 slice-a
+expect_ok "$r" "P13_control_flat_deleted_d"
+mkdir -p "$r/$G/deleted.d/sub"
+printf 'skills/add/s.md\tS\t1\t%s\n' "$(snap_sha "$r" 1)" > "$r/$G/deleted.d/sub/b.tsv"
+run "$r"; check 2 "$RC" "P13_nested_file_under_deleted_d_full_check"
+run "$r" --has-mappings; check 2 "$RC" "P13_nested_file_under_deleted_d_has_mappings"
+r=$(three del-badrow-hasmap)
+rm_fence "$r" A; mkdir -p "$r/$G/deleted.d"
+run "$r" --has-mappings; check 1 "$RC" "P13_control_has_mappings_with_clean_deleted_d"
+printf 'junk\n' > "$r/$G/deleted.d/a.tsv"
+run "$r" --has-mappings; check 2 "$RC" "P13_has_mappings_reads_a_malformed_deleted_d_row"
+
+# Deleting every fence of a heading: the rows cover all of them, a fence in another heading keeps the check non-empty.
+r=$(three del-heading)
+printf '\n## T\n\n```ts\nT\n```\n' >> "$r/skills/add/s.md"
+snapshot "$r"
+rm_fence "$r" A; rm_fence "$r" B; rm_fence "$r" C
+del_row "$r" 0 slice-a; del_row "$r" 1 slice-a; del_row "$r" 2 slice-a
+expect_ok "$r" "P14_every_fence_of_a_heading_deleted_with_rows"
+r=$(three del-heading-short)
+printf '\n## T\n\n```ts\nT\n```\n' >> "$r/skills/add/s.md"
+snapshot "$r"
+rm_fence "$r" A; rm_fence "$r" B; rm_fence "$r" C
+del_row "$r" 0 slice-a; del_row "$r" 1 slice-a
+expect_fail "$r" "MISSING skills/add/s.md :: S :: 2" "P14_one_row_short_of_every_fence_of_a_heading"
+
+# Deleting every fence in every file leaves nothing to compare: EMPTY, rows or not.
+r=$(three del-allfile)
+rm_fence "$r" A; rm_fence "$r" B; rm_fence "$r" C
+del_row "$r" 0 slice-a; del_row "$r" 1 slice-a; del_row "$r" 2 slice-a
+for sk in migrate standards; do
+  printf '## A\n\nno fence left\n' > "$r/skills/$sk/anchor.md"
+  printf 'skills/%s/anchor.md\tA\t0\t%s\n' "$sk" "$(awk -F'\t' '$2 ~ /anchor/ { print $1 }' "$r/$G/$sk.tsv")" >> "$r/$G/deleted.d/slice-a.tsv"
+done
+expect_fail "$r" "EMPTY" "P15_every_fence_of_every_file_deleted_is_empty"
+r=$(three del-allfile-other)
+printf '## O\n\n```ts\nO\n```\n' > "$r/skills/add/o.md"
+snapshot "$r"
+rm_fence "$r" A; rm_fence "$r" B; rm_fence "$r" C
+del_row "$r" 0 slice-a; del_row "$r" 1 slice-a; del_row "$r" 2 slice-a
+expect_ok "$r" "P15_control_every_fence_of_one_file_deleted_another_file_keeps_a_fence"
+
+# Siblings with the same body share one hash: each row still pins its own index.
+r=$(mkroot del-same)
+printf '## S\n\n```ts\nX\n```\n\n```ts\nX\n```\n\n```ts\nX\n```\n' > "$r/skills/add/s.md"
+snapshot "$r"
+python3 - "$r/skills/add/s.md" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read().replace("```ts\nX\n```\n\n", "", 1)
+open(p, "w").write(s)
+PY
+del_row "$r" 0 slice-a
+expect_ok "$r" "P16_identical_siblings_one_deleted"
+del_row "$r" 1 slice-b
+expect_fail "$r" "UNDELETED" "P16_identical_siblings_second_row_but_fence_still_present"
 r=$(three del-unknown-entry)
 rm_fence "$r" A; del_row "$r" 0 slice-a; : > "$r/$G/deleted.d/notes.txt"
 run "$r"; check 2 "$RC" "P8_unexpected_entry_in_deleted_d"

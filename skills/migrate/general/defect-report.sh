@@ -266,7 +266,7 @@ for def in "$DEFECTS"/*.sh; do
   case "$level" in high|check) ;; *) die "bad level '$level' in $def" ;; esac
   command -v check >/dev/null 2>&1 || die "no check function in $def"
   RUN=$((RUN + 1))
-  read -r -a namearr <<< "$names"
+  read -r -a namearr < <(printf '%s\n' "$names")
   contentargs=()
   for w in $content; do contentargs=("${contentargs[@]+"${contentargs[@]}"}" -e "$w"); done
   if [ -n "$content" ]; then
