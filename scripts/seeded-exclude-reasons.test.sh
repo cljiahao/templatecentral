@@ -1162,10 +1162,20 @@ run_gate "$d"
 if [ ! -e "$d/.venv/bin/python3.ran" ]; then ok "the gate never runs a project .venv/bin/python3"; else nok "the gate ran a planted .venv/bin/python3"; fi
 
 # A failing awk is an error, never a clean pass: each awk the gate reads facts with is stubbed to fail, and a pass-through stub is the control.
+has_text() { case $1 in *"$2"*) return 0 ;; esac; return 1; } # has_text HAYSTACK NEEDLE: literal substring test with no pipe
 REAL_AWK=$(command -v awk)
 awk_stub() { # awk_stub NAME PATTERN: a PATH folder whose awk exits 2 when its arguments hold PATTERN, else runs the real awk
   mkdir -p "$WORK/awkstub-$1"
-  printf '#!/bin/sh\ncase "$*" in *\"%s\"*) echo "stub awk: forced failure" >&2; exit 2 ;; esac\nexec "%s" "$@"\n' "$2" "$REAL_AWK" > "$WORK/awkstub-$1/awk"
+  printf '%s\n' "$2" > "$WORK/awkstub-$1/pat"
+  printf '%s\n' "$REAL_AWK" > "$WORK/awkstub-$1/real"
+  cat > "$WORK/awkstub-$1/awk" << 'STUB'
+#!/bin/sh
+here=$(dirname "$0")
+pat=$(cat "$here/pat")
+real=$(cat "$here/real")
+case "$*" in *"$pat"*) echo "stub awk: forced failure" >&2; exit 2 ;; esac
+exec "$real" "$@"
+STUB
   chmod +x "$WORK/awkstub-$1/awk"
 }
 d=$(r3dir awkfail)
@@ -1181,15 +1191,15 @@ for row in 'srcls|function issrc|reading the source file list' 'pkgls|package.js
   if [ "$name" = first ]; then tgt=$nc; fi
   OUT=$(PATH="$WORK/awkstub-$name:$PATH" bash "$root/$GATE" "$tgt" 2>&1)
   RC=$?
-  if [ "$RC" -ne 0 ] && printf '%s' "$OUT" | grep -q "$msg"; then ok "awk failure ($name) stops the gate and says why"; else nok "awk failure ($name) should stop the gate with '$msg' (exit $RC)" "$OUT"; fi
+  if [ "$RC" -ne 0 ] && has_text "$OUT" "$msg"; then ok "awk failure ($name) stops the gate and says why"; else nok "awk failure ($name) should stop the gate with '$msg' (exit $RC)" "$OUT"; fi
 done
 awk_stub control 'no-such-text-in-any-awk-program'
 OUT=$(PATH="$WORK/awkstub-control:$PATH" bash "$root/$GATE" "$nc" 2>&1)
 RC=$?
-if [ "$RC" -eq 1 ] && printf '%s' "$OUT" | grep -q 'no coverage, Sonar or mutation config found'; then ok "awk failure control: a pass-through awk reports the missing config"; else nok "awk failure control (no config) should report the missing config (exit $RC)" "$OUT"; fi
+if [ "$RC" -eq 1 ] && has_text "$OUT" 'no coverage, Sonar or mutation config found'; then ok "awk failure control: a pass-through awk reports the missing config"; else nok "awk failure control (no config) should report the missing config (exit $RC)" "$OUT"; fi
 OUT=$(PATH="$WORK/awkstub-control:$PATH" bash "$root/$GATE" "$d" 2>&1)
 RC=$?
-if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q 'OK\.'; then ok "awk failure control: a pass-through awk passes"; else nok "awk failure control should pass (exit $RC)" "$OUT"; fi
+if [ "$RC" -eq 0 ] && has_text "$OUT" 'OK.'; then ok "awk failure control: a pass-through awk passes"; else nok "awk failure control should pass (exit $RC)" "$OUT"; fi
 
 # Python without tomllib or tomli: the TOML and INI scanner cannot run, so a project with a pyproject.toml fails closed; a TypeScript-only project still passes.
 mkdir -p "$WORK/nopy"
@@ -1201,11 +1211,11 @@ d=$(r3dir notoml)
 mk "$d" pyproject.toml $'[tool.coverage.run]\nomit = ["src/gen/*"]\n'
 OUT=$(PATH="$WORK/nopy:$PATH" bash "$root/$GATE" "$d" 2>&1)
 RC=$?
-if [ "$RC" -ne 0 ] && printf '%s' "$OUT" | grep -q 'or the tomli package'; then ok "python without tomllib: a pyproject.toml fails closed and names the missing reader"; else nok "python without tomllib should fail closed naming the tomli package (exit $RC)" "$OUT"; fi
+if [ "$RC" -ne 0 ] && has_text "$OUT" 'or the tomli package'; then ok "python without tomllib: a pyproject.toml fails closed and names the missing reader"; else nok "python without tomllib should fail closed naming the tomli package (exit $RC)" "$OUT"; fi
 d=$(r3dir tsonly)
 OUT=$(PATH="$WORK/nopy:$PATH" bash "$root/$GATE" "$d" 2>&1)
 RC=$?
-if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q 'OK\.'; then ok "python without tomllib: a TypeScript-only project still passes"; else nok "python without tomllib should still pass a TypeScript-only project (exit $RC)" "$OUT"; fi
+if [ "$RC" -eq 0 ] && has_text "$OUT" 'OK.'; then ok "python without tomllib: a TypeScript-only project still passes"; else nok "python without tomllib should still pass a TypeScript-only project (exit $RC)" "$OUT"; fi
 
 printf '%d passed, %d failed\n' "$pass" "$failed"
 [ "$failed" -eq 0 ]

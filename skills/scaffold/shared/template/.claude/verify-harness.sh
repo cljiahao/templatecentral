@@ -73,8 +73,8 @@ gate_file_ok() {
   if [ ! -f "$gf" ]; then echo "GATE FILE MISSING: $gid reads $gf, which is not a file; restore it from git (git checkout <merge-base> -- $gf)" >&2; return 1; fi
   case "$gf" in *.sh|*.mjs|*.py|*.awk) ;; *) return 0 ;; esac
   [ -r "$gf" ] || { echo "verify-harness: cannot read $gf" >&2; exit 2; }
-  # Count non-space bytes (NULs included): a file with any NUL byte holds content, where a shell read loop drops NULs and calls it blank.
-  gn=$(LC_ALL=C tr -d '[:space:]' < "$gf" | wc -c) || { echo "verify-harness: cannot count the content of $gf" >&2; exit 2; }
+  # Count bytes that are neither whitespace nor NUL: a script of only whitespace and NULs does nothing (bash drops the NULs) yet exits 0, so it is blank.
+  gn=$(LC_ALL=C tr -d '[:space:]\000' < "$gf" | wc -c) || { echo "verify-harness: cannot count the content of $gf" >&2; exit 2; }
   if [ "$gn" -eq 0 ]; then echo "GATE FILE BLANK: $gid reads $gf, which holds no content; restore it from git (git checkout <merge-base> -- $gf)" >&2; return 1; fi
 }
 hook_text=$(code_of lefthook.yml)
@@ -99,7 +99,11 @@ while IFS='|' read -r gid lh ci || [ -n "$gid" ]; do
     sbom) need="$need scripts/py-env.py" ;;
     bundle) need="$need .claude/bundle-budget.txt" ;;
     duptests) need="$need scripts/duplicate-tests-ts.mjs scripts/duplicate_tests_py.py" ;;
-    exclusions) need="$need $(printf '%s\n' "$guarded" | awk -v self="${lh%% *}" 'index($0, "scripts/check-exclude-") == 1 && $0 != self')" ;;
+    exclusions)
+      # The four exclusion helpers are named here, so a guarded list that shrank cannot drop one (the prefix is split so no guarded path is spelled out whole).
+      xh=scripts/check-exclude
+      xn="$xh-rules.sh $xh-reasons.awk $xh-reasons.mjs $xh-reasons.py"
+      need="$need $xn $(printf '%s\n' "$guarded" | awk -v self="${lh%% *}" -v named=" $xn " 'index($0, "scripts/check-exclude-") == 1 && $0 != self && index(named, " " $0 " ") == 0')" ;;
     commentshape) need="$need scripts/check-comments.mjs scripts/check-comments.py scripts/check-comments.licences.txt" ;;
     changesize) need="$need .claude/change-size-exclude.txt" ;;
   esac

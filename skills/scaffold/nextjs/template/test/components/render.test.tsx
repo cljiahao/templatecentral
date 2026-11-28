@@ -55,8 +55,8 @@ describe('components', () => {
   const cases: [string, ReactElement, (string | RegExp)[], (string | RegExp)[]?][] = [
     ['BrandLogo', h(BrandLogo), ['alt="Logo"']],
     ['FloatingShape', h(FloatingShape), ['aria-hidden="true"']],
-    ['Solid', h(Pill, { variant: 'solid' }, 'Tag'), ['Tag', 'text-background'], ['bg-card']],
-    ['Outline', h(Pill, null, 'Tag'), ['bg-card'], ['text-background']],
+    ['Solid', h(Pill, { variant: 'solid', children: 'Tag' }), ['Tag', 'text-background'], ['bg-card']],
+    ['Outline', h(Pill, { children: 'Tag' }), ['bg-card'], ['text-background']],
     [
       'Card',
       h(CustomCard, { header: 'Title', description: 'About' }, 'Body'),

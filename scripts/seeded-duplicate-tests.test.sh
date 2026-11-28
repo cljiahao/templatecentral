@@ -903,7 +903,18 @@ verdict 1 "clean control: a repaired HEAD reads the files again"
 STUB=$T/awkstub
 mkdir -p "$STUB"
 REAL_AWK=$(command -v awk)
-printf '#!/bin/sh\nif [ -n "${TC_FAIL_SUB:-}" ]; then\n  hit=0\n  for a in "$@"; do case "$a" in *"$TC_FAIL_SUB"*) hit=1 ;; esac; last=$a; done\n  case "$last" in *"$TC_FAIL_SUFFIX") [ "$hit" -eq 0 ] || { echo "stub awk: forced failure" >&2; exit 3; } ;; esac\nfi\nexec "%s" "$@"\n' "$REAL_AWK" > "$STUB/awk"
+printf '%s\n' "$REAL_AWK" > "$STUB/real"
+cat > "$STUB/awk" << 'STUB'
+#!/bin/sh
+if [ -n "${TC_FAIL_SUB:-}" ]; then
+  hit=0
+  last=''
+  for a in "$@"; do case "$a" in *"$TC_FAIL_SUB"*) hit=1 ;; esac; last=$a; done
+  case "$last" in *"$TC_FAIL_SUFFIX") [ "$hit" -eq 0 ] || { echo "stub awk: forced failure" >&2; exit 3; } ;; esac
+fi
+real=$(cat "$(dirname "$0")/real")
+exec "$real" "$@"
+STUB
 chmod +x "$STUB/awk"
 stub_run() { # stub_run <sub> <suffix> — the check on $P with the stub awk first on PATH
   OUT=$(PATH="$STUB:$PATH" TC_FAIL_SUB="$1" TC_FAIL_SUFFIX="$2" bash "$CHECK" "$P" 2>&1)

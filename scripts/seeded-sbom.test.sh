@@ -318,6 +318,14 @@ printf '#!/bin/sh\nexit 0\n' > "$D/.venv/bin/python"
 chmod -x "$D/.venv/bin/python"
 run "$D"
 check 2 "$EC" "a non-executable python is refused"
+env_fixture py-dir 'alpha==1.0
+'
+dist alpha 1.0
+rm -f "$D/.venv/bin/python"
+mkdir "$D/.venv/bin/python"
+run "$D"
+check 2 "$EC" "a python that is a directory is refused"
+has "is not a regular file" "$OUT" "message says bin/python is not a regular file"
 pnpm_fixture node-crash
 stub "$D/stub" node << 'EOS'
 echo "node blew up" >&2

@@ -246,7 +246,15 @@ suite() {
   # A failing git diff reports git's own message, not only "git diff failed"; the clean control (no stub) emits the diff.
   fixture gitdiff
   mkdir -p "$T/gitstub"
-  printf '#!/bin/sh\nfor a in "$@"; do\n  if [ "$a" = diff ]; then echo "fatal: stub diff failure: bad object abc123" >&2; exit 128; fi\ndone\nexec "%s" "$@"\n' "$(command -v git)" > "$T/gitstub/git"
+  command -v git > "$T/gitstub/real"
+  cat > "$T/gitstub/git" << 'STUB'
+#!/bin/sh
+for a in "$@"; do
+  if [ "$a" = diff ]; then echo "fatal: stub diff failure: bad object abc123" >&2; exit 128; fi
+done
+real=$(cat "$(dirname "$0")/real")
+exec "$real" "$@"
+STUB
   chmod +x "$T/gitstub/git"
   run check-review-record.sh --emit
   check 0 "$EC" "git diff control: the diff is emitted without the stub ($OUT)"

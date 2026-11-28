@@ -2076,17 +2076,30 @@ for hn in scripts/check-exclude-rules.sh scripts/check-exclude-reasons.awk scrip
 done
 # vrun: run verify-harness on the fixture as it stands (nothing committed), printing its output then its exit code.
 vrun() { local o rc; o=$(cd "$V" && bash "$KIT/verify-harness.sh" 2>&1); rc=$?; printf '%s\nRC=%s\n' "$o" "$rc"; }
-# A gate script holding only a NUL byte is content, not blank; a whitespace-only one is blank (the control). git hands the guarded list from HEAD, so the working file changes after the commit.
+# A gate script holding only whitespace and NUL bytes does nothing (bash drops the NULs and exits 0), so it is blank; real content with a NUL inside stays content (the control). git hands the guarded list from HEAD, so the working file changes after the commit.
 echo docs > "$V/scripts/check-docs.sh"
 printf '%s' "$(regood)" > "$V/.claude/harness.json"; vcommit "$V"
-printf '\0' > "$V/scripts/check-docs.sh"
+for nulcase in 'lone NUL:\0' 'newline NUL newline:\n\0\n' 'NULs and spaces:\0 \0\t\0' 'whitespace only: \n\t\n'; do
+  printf '%b' "${nulcase#*:}" > "$V/scripts/check-docs.sh"
+  printf '%s' "$(regood)" > "$V/.claude/harness.json"
+  out=$(vrun); check 1 "$(vrc "$out")" "verify-harness fails a gate file of ${nulcase%%:*}"
+  check 1 "$(grep -c 'GATE FILE BLANK: docs' <<< "$out")" "verify-harness names the blank gate file (${nulcase%%:*})"
+done
+printf 'real\0content\n' > "$V/scripts/check-docs.sh"
 printf '%s' "$(regood)" > "$V/.claude/harness.json"
-out=$(vrun); check 0 "$(vrc "$out")" "verify-harness counts a gate file holding a NUL byte as content"
-check 0 "$(grep -c 'GATE FILE BLANK' <<< "$out")" "verify-harness does not report a NUL-only gate file blank"
-printf ' \n\t\n' > "$V/scripts/check-docs.sh"
-printf '%s' "$(regood)" > "$V/.claude/harness.json"
-out=$(vrun); check 1 "$(vrc "$out")" "verify-harness fails a whitespace-only gate file"
-check 1 "$(grep -c 'GATE FILE BLANK: docs' <<< "$out")" "verify-harness names the blank gate file"
+out=$(vrun); check 0 "$(vrc "$out")" "verify-harness control: real content with one NUL inside passes"
+check 0 "$(grep -c 'GATE FILE BLANK' <<< "$out")" "verify-harness control: content with a NUL is not blank"
+# The gate itself names the four exclusion helpers: a guarded list that lost one cannot drop it from the required files.
+cp "$V/scripts/gate-ratchet.sh" "$V/scripts/gate-ratchet.orig.sh"
+cat > "$V/scripts/gate-ratchet.sh" <<'EOS'
+#!/bin/bash
+bash "$(dirname "$0")/gate-ratchet.orig.sh" "$@" | grep -v 'check-exclude-reasons.awk' || true
+EOS
+echo docs > "$V/scripts/check-docs.sh"
+NOAWK=$(regood | sed 's/,"[^"]*":{"path":"scripts\/check-exclude-reasons\.awk","origin_hash":"[0-9a-f]*"}//')
+out=$(vout "$NOAWK"); check 1 "$(grep -c 'GATE FILE UNREGISTERED: exclusions reads scripts/check-exclude-reasons.awk' <<< "$out")" "verify-harness requires check-exclude-reasons.awk although the guarded list lost it"
+rm -f "$V/scripts/gate-ratchet.orig.sh"
+cp "$TPL/template/scripts/gate-ratchet.sh" "$V/scripts/gate-ratchet.sh"
 echo docs > "$V/scripts/check-docs.sh"
 # A guarded path holding a backslash: shasum marks the line with a leading backslash, which must not read as a changed file. git quotes such a path, so a wrapper adds it to the guarded list.
 cp "$V/scripts/gate-ratchet.sh" "$V/scripts/gate-ratchet.orig.sh"
@@ -2106,7 +2119,8 @@ rm -f "$V/.claude/hooks/b\\c.sh" "$V/scripts/gate-ratchet.orig.sh"
 cp "$TPL/template/scripts/gate-ratchet.sh" "$V/scripts/gate-ratchet.sh"
 # A newline in a manifest path still fails closed (exit non-zero), never passes.
 NLE=",\"nl\":{\"path\":\".claude/hooks/n\\nl.sh\",\"origin_hash\":\"$(sha "$V/.claude/hooks/a.sh")\"}"
-out=$(vout "$(regood "$NLE")"); check 1 "$([[ "$(vrc "$out")" != 0 ]] && echo 1 || echo 0)" "verify-harness fails closed on a newline in a manifest path"
+out=$(vout "$(regood "$NLE")"); nlrc=$(vrc "$out"); if [[ "$nlrc" != 0 ]]; then nlfail=1; else nlfail=0; fi
+check 1 "$nlfail" "verify-harness fails closed on a newline in a manifest path"
 # An unreadable guarded file stays exit 2 and the output names it.
 if [[ "$(id -u)" != 0 ]]; then
   printf '%s' "$(regood)" > "$V/.claude/harness.json"; vcommit "$V"

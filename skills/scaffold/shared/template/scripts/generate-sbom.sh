@@ -78,10 +78,10 @@ refuse_tracked_env() {
   done
 }
 
-# Dies unless $1 is a real virtual environment (pyvenv.cfg beside bin/, an executable bin/python, sys.prefix differing from sys.base_prefix): a planted file must not fake a pass.
+# Dies unless $1 is a real virtual environment (pyvenv.cfg beside bin/, a regular-file bin/python, sys.prefix differing from sys.base_prefix); the callers already test that bin/python is executable.
 require_real_venv() {
   local dir=$1 p=$1/bin/python
-  if [ ! -f "$p" ] || [ ! -x "$p" ]; then die "'$p' is not an executable file, so '$dir' is not a usable Python environment. Recreate it: uv venv && uv pip install --require-hashes -r requirements.txt"; fi
+  if [ ! -f "$p" ]; then die "'$p' is not a regular file, so '$dir' is not a usable Python environment. Recreate it: uv venv && uv pip install --require-hashes -r requirements.txt"; fi
   if [ ! -f "$dir/pyvenv.cfg" ]; then die "'$dir' has no pyvenv.cfg, so it is not a real virtual environment and its python is not trusted. Recreate it: uv venv && uv pip install --require-hashes -r requirements.txt"; fi
   if ! "$p" -I -c 'import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 1)' > /dev/null 2>&1; then die "'$p' does not run as a virtual environment interpreter (sys.prefix equals sys.base_prefix, or it failed to start). Recreate it: uv venv && uv pip install --require-hashes -r requirements.txt"; fi
 }

@@ -238,6 +238,12 @@ chmod -x "$D/.venv/bin/python"
 run "$D"
 check 2 "$EC" "a non-executable python is refused"
 has "no project Python environment" "$OUT" "message says there is no usable Python environment"
+py_fixture py-dir 'fastapi@0.1	MIT'
+rm -f "$D/.venv/bin/python"
+mkdir "$D/.venv/bin/python"
+run "$D"
+check 2 "$EC" "a python that is a directory is refused"
+has "is not a regular file" "$OUT" "message says bin/python is not a regular file"
 py_fixture py-link 'fastapi@0.1	MIT'
 mv "$D/.venv/bin/python" "$D/.venv/bin/real-python"
 ln -s real-python "$D/.venv/bin/python"
