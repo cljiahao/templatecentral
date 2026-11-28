@@ -119,7 +119,7 @@ pre-push:
       # Fails on a comment this branch adds that is long, a parenthetical aside, inside a function body, or a bare disable. Needs the project's own typescript in node_modules for TS files.
       run: bash scripts/check-comments.sh
     mutation:
-      # Runs the seeded mutation tool on the source lines this branch changes and fails on a surviving mutant; prints a not-set-up line when templatecentral:add mutation-testing has not run.
+      # Runs the seeded mutation tool on the whole source files this branch touches and fails on a surviving mutant; prints a not-set-up line when templatecentral:add mutation-testing has not run.
       run: bash scripts/check-mutation-diff.sh
     importlinter:
       # Fails when a fastapi layer imports a layer it must not, per docs/architecture.md; the TypeScript stacks print a nothing-checked line.

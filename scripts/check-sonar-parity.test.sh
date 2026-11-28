@@ -8,7 +8,7 @@ CHECK="$REPO_ROOT/scripts/check-sonar-parity.sh"
 SC="skills/scaffold"
 NEXT="$SC/nextjs/template/eslint.config.mjs"
 PYP="$SC/fastapi/template/pyproject.toml"
-ROW_KEYS_TS="S3776 S4144 S2201 S4822 S9998 CTRL1 CTRL2 CTRL3 CTRL4 CTRL5 CTRL6 CTRLTS CTRLRTC CTRLU CTRLV"
+ROW_KEYS_TS="S3776 S4144 S2201 S4822 S9998 CTRL1 CTRL2 CTRL3 CTRL4 CTRL5 CTRL6 CTRLTS CTRLRTC CTRLU CTRLV CTRLIMP"
 ROW_KEYS_PY="S3776 S1481 S2068 S100 CTRLP2 CTRLP3 CTRLP4 CTRLP5"
 
 PASS=0
@@ -310,6 +310,22 @@ edit "$SC/nestjs/template/eslint.config.mjs" "s.replace(\"'./layers.config.mjs'\
 run "$T/rtc4.tsv"
 check 1 "$EC" "a layer config imported from any other file is not read"
 has "not a known config preset" "$OUT" "the unknown import is named as unknown"
+
+{ control; row ts typescript:CTRLIMP "code smell" covered no-restricted-imports ""; } > "$T/imp.tsv"
+fresh_root layers_row
+run "$T/imp.tsv"
+check 1 "$EC" "a row mapped to no-restricted-imports fails because the layers config is not read rule by rule"
+has "config reference that is not read rule by rule" "$OUT" "the layers reference message"
+for st in nestjs nextjs vite-react; do
+  has "$st" "$OUT" "the layers row fails on $st"
+done
+fresh_root layers_row_off
+for st in nestjs nextjs vite-react; do
+  inject "$st" "  { rules: { 'no-restricted-imports': 'off' } },"
+done
+run "$T/imp.tsv"
+check 1 "$EC" "a later rule-off entry does not make a no-restricted-imports row pass"
+has "config reference that is not read rule by rule" "$OUT" "the layers reference message with a later rule-off entry"
 
 # --- Sonar metadata: type and title come from the sonar-rules snapshot; a key it lacks must say unverified
 fresh_root meta_name

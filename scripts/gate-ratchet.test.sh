@@ -39,7 +39,7 @@ seed() {
   cp "$SH/template/.claude/ci-gates.sh" "$SH/template/.claude/verify-harness.sh" "$R/.claude/"
   cp "$SH/template-$1/lefthook.yml" "$R/lefthook.yml"
   if [[ "$1" == ts ]]; then
-    cp "$SH/../nestjs/template/eslint.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
+    cp "$SH/../nestjs/template/eslint.config.mjs" "$SH/../nestjs/template/layers.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
     cp "$SH/template-ts/.jscpd.json" "$R/.jscpd.json"
     cp "$FX/sonar-ts.properties" "$R/sonar-project.properties"
     cp "$SH/../nestjs/template/package.json" "$R/package.json"
@@ -234,6 +234,11 @@ edit eslint.config.mjs "    ignores: [
 ratchet
 check 2 "$EC" "broken eslint config: exits 2 ($OUT)"
 has "UNREADABLE eslint.config.mjs" "$OUT" "broken eslint config: names the file"
+weakens eslint.config.mjs "from './layers.config.mjs'" "from './vitest.config.ts'" "layers import repointed to another tracked file" "local-import"
+edit eslint.config.mjs "from './layers.config.mjs'" "from './missing.mjs'"
+ratchet
+check 2 "$EC" "eslint config importing an untracked file: exits 2 ($OUT)"
+has "names no file tracked at HEAD" "$OUT" "eslint config importing an untracked file: says why"
 edit .jscpd.json '"threshold": 3,' ''
 ratchet
 check 2 "$EC" "jscpd without a threshold: exits 2 ($OUT)"
@@ -457,7 +462,7 @@ rm -rf "$R"
 mkdir -p "$R/.claude" "$R/scripts"
 cp "$SH/template/.claude/gates.txt" "$R/.claude/gates.txt"
 cp "$RATCHET" "$R/scripts/gate-ratchet.sh"
-cp "$SH/../nextjs/template/eslint.config.mjs" "$R/"
+cp "$SH/../nextjs/template/eslint.config.mjs" "$SH/../nextjs/template/layers.config.mjs" "$R/"
 git -C "$R" init -q -b main
 git_ add -A
 git_ commit -q -m base
@@ -493,7 +498,7 @@ R="$T/adopt"
 rm -rf "$R"
 mkdir -p "$R/src"
 echo 'export const a = 1;' > "$R/src/a.ts"
-cp "$SH/../nestjs/template/eslint.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
+cp "$SH/../nestjs/template/eslint.config.mjs" "$SH/../nestjs/template/layers.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
 git -C "$R" init -q -b main
 git_ add -A
 git_ commit -q -m "plain project"

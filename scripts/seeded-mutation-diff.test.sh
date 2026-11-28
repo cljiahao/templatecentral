@@ -162,6 +162,10 @@ run "$D" STUB_KILL=1 MUTATION_DIFF_CPU_SECONDS=100
 check 1 "$EC" "a tool killed without using its cpu allowance fails ($OUT)"
 has "stryker exited 137 and wrote no report" "$OUT" "an early SIGKILL is not reported as the cpu cap"
 hasnt "used more than" "$OUT" "an early SIGKILL does not print the cap message"
+run "$D" STUB_KILL=2 MUTATION_DIFF_CPU_SECONDS=1
+check 1 "$EC" "a tool killed after part of a one-second allowance fails ($OUT)"
+has "stryker exited 137 and wrote no report" "$OUT" "part of the allowance is not the whole allowance"
+hasnt "used more than" "$OUT" "part of the allowance does not print the cap message"
 runci "$D" MUTATION_DIFF_CPU_SECONDS=100000
 check 2 "$EC" "a cap above the default is refused in CI"
 run "$D" MUTATION_DIFF_CPU_SECONDS=abc

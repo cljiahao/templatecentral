@@ -1,5 +1,6 @@
 // Layer allow-list for docs/architecture.md: one entry per layer, naming every `@/` layer it may import.
 const MAX_DEPTH = 5;
+// esquery ends a regex at the first slash, so a selector regex writes each slash as \x2f.
 const SLASH = '\\x2f';
 const LAYERS = [
   { name: 'pages', unit: 'src/pages', allow: 'pages|components|lib', features: true },

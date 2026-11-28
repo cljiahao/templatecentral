@@ -1,1 +1,2 @@
 - The seeded mutation gate prints its CPU-cap message on Linux too: a tool the kernel kills with exit 137 after it used its whole allowance is reported as the cap, and any other early kill stays a plain failure.
+- The mutation gate compares the CPU a killed tool used with its allowance in hundredths of a second, so a tool killed after a fraction of the allowance is no longer reported as the cap.

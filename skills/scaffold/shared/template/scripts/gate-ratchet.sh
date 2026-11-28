@@ -554,6 +554,12 @@ function do_eslint(   from, m, name, rest, sev, seen, p, opt, sc, key, lim) {
   from = 1
   while (find("[A-Za-z0-9_]+[.]configs[.][A-Za-z0-9_.]+|[A-Za-z0-9_]+[.]recommended", from)) { emit("req", "preset", substr(T, MS, ML)); from = MS + ML; seen = 1 }
   from = 1
+  while (find("(from|import|require)[ \t\n]*[(]?[ \t\n]*['\"][.][.]?/[^'\"]*['\"]", from)) {
+    m = substr(T, MS, ML); from = MS + ML
+    sub(/^[^'"]*['"]/, "", m); sub(/['"]$/, "", m)
+    emit("req", "local-import", m); emit("set", "local-import", m)
+  }
+  from = 1
   while (find("globalIgnores[(][ \t\n]*[[]", from)) { scan_array(MS + ML - 1, "set", "ignore"); from = ARR_END + 1 }
   arrays_named("ignores", "set")
   emit("max", "eslint-disable-comments", occurrences(T0, "eslint-disable") - occurrences(T, "eslint-disable"))
@@ -1346,7 +1352,7 @@ END {
     else if (p[1] == "sev" && (n in bsevmax) && hagg[k] + 0 < bsevmax[n] + 0) { printf "WEAKENED %s: lint rule %s is %s in a new block, below %s at the merge base\n", F, p[2], label("sev", hagg[k]), label("sev", bsevmax[n]); bad = 1 }
     else if (p[1] == "max" && p[2] ~ /[.]limit/ && (n in blim) && hagg[k] + 0 > blim[n] + 0) { printf "WEAKENED %s: limit %s is %s in a new block, above %s at the merge base\n", F, p[2], hagg[k], blim[n]; bad = 1 }
   }
-  if (!NEWFILE) for (i = 1; i <= nn; i++) { split(hnew[i], p, SUBSEP); if (p[2] == "script-flag" && p[3] ~ /: (--config|-c|--workspace|--root)([ =]|$)/ && !script_at_base(p[3])) continue; if (p[2] == "conftest-hook") printf "WEAKENED %s: new or edited collection hook, plugin list, collect_ignore, autouse, skip or exit block, which can hide tests: '%s'\n", F, substr(p[3], 1, 120); else printf "WEAKENED %s: new ignore or exclude in %s was absent, now '%s'\n", F, p[2], p[3]; bad = 1 }
+  if (!NEWFILE) for (i = 1; i <= nn; i++) { split(hnew[i], p, SUBSEP); if (p[2] == "script-flag" && p[3] ~ /: (--config|-c|--workspace|--root)([ =]|$)/ && !script_at_base(p[3])) continue; if (p[2] == "local-import") printf "WEAKENED %s: new local import '%s' (rules it carries are not read here; only a file the merge base already had is judged)\n", F, p[3]; else if (p[2] == "conftest-hook") printf "WEAKENED %s: new or edited collection hook, plugin list, collect_ignore, autouse, skip or exit block, which can hide tests: '%s'\n", F, substr(p[3], 1, 120); else printf "WEAKENED %s: new ignore or exclude in %s was absent, now '%s'\n", F, p[2], p[3]; bad = 1 }
   for (k in hwl) if (!(k in bwl) && k ~ /^(prepare|prepublish|prepack|install|preinstall|postinstall)$/) { printf "WEAKENED %s: new install-time script %s (it runs on every install and can skip the gates; a gate script may only change by the known-safe words in the gate-ratchet.sh header)\n", F, k; bad = 1 }
   for (k in bwl) {
     if (!(k in hwl)) { printf "WEAKENED %s: script %s was '%s', now removed (a gate script may only change by the known-safe words in the gate-ratchet.sh header)\n", F, k, bwl[k]; bad = 1 }
@@ -1367,6 +1373,21 @@ END {
   exit bad
 }
 AWK
+
+# Fails with the first local import source of config $1 (facts file $2) that names no file tracked at HEAD, so a config cannot pull its rules from a place the ratchet cannot see.
+local_imports_resolve() {
+  local dir src target
+  dir=""
+  case "$1" in */*) dir=${1%/*}/ ;; esac
+  while IFS=$'\t' read -r _ _ src; do
+    target=$(awk -v p="$dir$src" 'BEGIN { m = split(p, a, "/"); n = 0; for (i = 1; i <= m; i++) { if (a[i] == "." || a[i] == "") continue; if (a[i] == "..") { if (n == 0) { print "outside-the-repository"; exit } n-- } else { n++; q[n] = a[i] } } out = q[1]; for (i = 2; i <= n; i++) out = out "/" q[i]; print out }') || { echo "cannot resolve the local import '$src'"; return 1; }
+    if ! head_has "$target"; then
+      echo "the local import '$src' names no file tracked at HEAD, so the rules it brings cannot be judged"
+      return 1
+    fi
+  done < <(awk -F'\t' '$1 == "req" && $2 == "local-import"' "$2")
+  return 0
+}
 
 if [ -n "$list_mode" ]; then
   guard_scan "$list_ref" || die "--list-guarded: cannot list or read the tracked files of $list_ref"
@@ -1421,6 +1442,11 @@ while IFS=$'\t' read -r kind path _; do
   seeded=0
   if [ "$kind" != guard ] && [ "$kind" != allow ] && [ "$kind" != patterns ] && [ "$kind" != baseline ]; then
     if ! msg=$(awk -v K="$kind" -v B="$have_base" -f "$wd/facts.awk" "$wd/head" 2>&1 > "$wd/head.f"); then
+      printf 'UNREADABLE %s: %s (fail closed)\n' "$path" "$msg"
+      unreadable=1
+      continue
+    fi
+    if [ "$kind" = eslint ] && ! msg=$(local_imports_resolve "$path" "$wd/head.f"); then
       printf 'UNREADABLE %s: %s (fail closed)\n' "$path" "$msg"
       unreadable=1
       continue

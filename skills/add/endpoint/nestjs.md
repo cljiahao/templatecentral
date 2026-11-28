@@ -5,12 +5,14 @@
 # Add an Endpoint (NestJS module)
 
 ## Naming Convention
+Replace `<name>` throughout:
 | Context | Format | Example (`<name>` = `task`) |
 |---------|--------|-----------------------------|
 | Directory | kebab-case | `src/modules/task/` |
 | File names | kebab-case + dot suffix | `task.controller.ts` |
 | Class names | PascalCase + suffix | `TaskController`, `TaskService`, `TaskModule` |
-| Route, tag | kebab-case plural, Title case plural | `@Controller('tasks')`, `@ApiTags('Tasks')` |
+| Route path | kebab-case plural | `@Controller('tasks')` |
+| Swagger tag | Title case plural | `@ApiTags('Tasks')` |
 
 ## Steps
 
@@ -20,7 +22,6 @@ Create `src/modules/<name>/`; Steps 2–7 fill it.
 ### 2. Define Types
 
 Create `src/modules/<name>/<name>.types.ts`:
-
 ```typescript
 export interface Task {
   id: string;
@@ -34,7 +35,6 @@ export interface Task {
 ### 3. Define DTOs
 
 Create `src/modules/<name>/<name>.dto.ts`:
-
 ```typescript
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';

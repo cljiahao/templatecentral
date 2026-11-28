@@ -97,15 +97,26 @@ lint_probe() { # lint_probe <dir> <name> <file> <content> <want> <revert>: fails
 }
 
 tsc_probe() { # tsc_probe <dir> <name> <content> <want-code> <flag>: fails with <want-code> in the probe file, passes with --<flag> false
-  local dir=$1 name=$2 content=$3 want=$4 flag=$5 out
+  local dir=$1 name=$2 content=$3 want=$4 flag=$5 out all rc
   printf '%s\n' "$content" > "$dir/src/probe-types.ts"
-  out=$(tsc_in "$dir")
-  out=$(printf '%s\n' "$out" | grep 'probe-types' || true)
+  all=$(tsc_in "$dir")
+  rc=$?
+  tsc_ran "$name" "$rc" "$all"
+  out=$(printf '%s\n' "$all" | grep 'probe-types' || true)
   has "$want" "$out" "$name fails typecheck"
-  out=$(tsc_in "$dir" "--$flag" false)
-  out=$(printf '%s\n' "$out" | grep 'probe-types' || true)
+  all=$(tsc_in "$dir" "--$flag" false)
+  rc=$?
+  tsc_ran "$name with --$flag false" "$rc" "$all"
+  out=$(printf '%s\n' "$all" | grep 'probe-types' || true)
   check "" "$out" "$name passes once --$flag is false"
   rm -f "$dir/src/probe-types.ts"
+}
+
+tsc_ran() { # tsc_ran <name> <status> <output>: a non-zero tsc status without any error line means it crashed, so nothing was checked
+  case $3 in
+    *"error TS"*) ;;
+    *) check 0 "$2" "$1 typecheck ran [$3]" ;;
+  esac
 }
 
 tsc_in() { # tsc_in <dir> [tsc flags]: the project typecheck output, stderr included
@@ -121,11 +132,7 @@ control() { # control <dir> <name>: lint of the whole project and typecheck, apa
   check 0 "$?" "$name clean control passes lint [$(echo "$out" | tail -n 3)]"
   out=$(tsc_in "$dir")
   rc=$?
-  # tsc exiting non-zero without any error line means it crashed, so nothing was checked
-  case $out in
-    *"error TS"*) ;;
-    *) check 0 "$rc" "$name typecheck ran [$out]" ;;
-  esac
+  tsc_ran "$name" "$rc" "$out"
   out=$(printf '%s\n' "$out" | grep 'error TS' | grep -v "TS2307.*components/ui" || true)
   check "" "$out" "$name clean control passes typecheck"
 }
@@ -141,6 +148,43 @@ ratchet_probe() { # ratchet_probe <dir> <name> <edit-command>: the edit is commi
   check 1 "$rc" "ratchet refuses: $name"
   has "WEAKENED" "$out" "ratchet names the weakening: $name"
   git -C "$dir" reset -q --hard main
+}
+
+ratchet_error() { # ratchet_error <dir> <name> <edit-command>: the edit is committed and the ratchet must stop with a config it cannot read, never report ok
+  local dir=$1 name=$2 out rc
+  git -C "$dir" reset -q --hard main
+  (cd "$dir" && eval "$3")
+  git -C "$dir" add -A
+  "${GIT[@]}" -C "$dir" commit -q -m probe
+  out=$(cd "$dir" && bash scripts/gate-ratchet.sh main 2>&1)
+  rc=$?
+  check 2 "$rc" "ratchet stops: $name"
+  has "UNREADABLE" "$out" "ratchet names the unreadable config: $name"
+  git -C "$dir" reset -q --hard main
+}
+
+ratchet_pass() { # ratchet_pass <dir> <name> <edit-command>: the edit is committed and the ratchet must report no weakening
+  local dir=$1 name=$2 out rc
+  git -C "$dir" reset -q --hard main
+  (cd "$dir" && eval "$3")
+  git -C "$dir" add -A
+  "${GIT[@]}" -C "$dir" commit -q -m probe
+  out=$(cd "$dir" && bash scripts/gate-ratchet.sh main 2>&1)
+  rc=$?
+  check 0 "$rc" "ratchet accepts: $name [$out]"
+  git -C "$dir" reset -q --hard main
+}
+
+layers_bypass_probes() { # layers_bypass_probes <dir> <stack>: every way to stop eslint.config.mjs reading the layer rules is refused
+  local dir=$1 st=$2 emptied="printf 'export default [];\\n' > other.mjs"
+  ratchet_probe "$dir" "$st layers import repointed to a new file" "$emptied && sed -i.bak \"s|'./layers.config.mjs'|'./other.mjs'|\" eslint.config.mjs && rm eslint.config.mjs.bak"
+  ratchet_probe "$dir" "$st layers import renamed and repointed" "$emptied && sed -i.bak \"s|import layers from './layers.config.mjs'|import x from './other.mjs'|; s|^  ...layers,|  ...x,|\" eslint.config.mjs && rm eslint.config.mjs.bak"
+  ratchet_probe "$dir" "$st layers file pulls in another file" "$emptied && { printf \"import other from './other.mjs';\\n\"; cat layers.config.mjs; } > t.mjs && mv t.mjs layers.config.mjs"
+  ratchet_error "$dir" "$st layers file exports another file instead of its blocks" "$emptied && { printf \"import other from './other.mjs';\\n\"; cat layers.config.mjs; } > t.mjs && mv t.mjs layers.config.mjs && sed -i.bak 's|^export default .*|export default other;|' layers.config.mjs && rm layers.config.mjs.bak"
+  ratchet_probe "$dir" "$st layers spread filtered to nothing" "sed -i.bak 's|^  ...layers,|  ...layers.filter(() => false),|' eslint.config.mjs && rm eslint.config.mjs.bak"
+  ratchet_probe "$dir" "$st layers spread replaced by an empty array" "sed -i.bak 's|^  ...layers,|  ...[],|' eslint.config.mjs && rm eslint.config.mjs.bak"
+  ratchet_error "$dir" "$st layers import points at a file that does not exist" "sed -i.bak \"s|'./layers.config.mjs'|'./missing.mjs'|\" eslint.config.mjs && rm eslint.config.mjs.bak"
+  ratchet_pass "$dir" "$st an unrelated stricter rule" "awk '{ print } /^  ...layers,/ { print \"  { rules: { eqeqeq: \\\"error\\\" } },\" }' eslint.config.mjs > t.mjs && mv t.mjs eslint.config.mjs"
 }
 
 workaround_probe() { # workaround_probe <dir> <name> <file> <content>: an inline disable of a new rule is flagged
@@ -178,6 +222,7 @@ export class Sub extends Base { run(): void {} }" "TS4114" noImplicitOverride
   ratchet_probe "$D" "$st a11y preset dropped" "sed -i.bak \"s|rules: { ...jsxA11y.flatConfigs.recommended.rules } }|rules: {} }|\" eslint.config.mjs && rm eslint.config.mjs.bak"
   ratchet_probe "$D" "$st layer blocks dropped" "sed -i.bak 's|^  ...layers,||' eslint.config.mjs && rm eslint.config.mjs.bak"
   ratchet_probe "$D" "$st layer rule turned off" "sed -i.bak \"s|'no-restricted-imports': \\['error'|'no-restricted-imports': ['off'|\" layers.config.mjs && rm layers.config.mjs.bak"
+  layers_bypass_probes "$D" "$st"
   ratchet_probe "$D" "$st path-wide ignore" "sed -i.bak \"s|^const config = \[|const config = [ { ignores: ['src/**'] },|\" eslint.config.mjs && rm eslint.config.mjs.bak"
   ratchet_probe "$D" "$st type flag removed" "sed -i.bak '/noUncheckedIndexedAccess/d' tsconfig.json && rm tsconfig.json.bak"
   ratchet_probe "$D" "$st type flag turned off" "sed -i.bak 's/\"noImplicitOverride\": true/\"noImplicitOverride\": false/' tsconfig.json && rm tsconfig.json.bak"
@@ -206,6 +251,7 @@ export class Sub extends Base { run(): void {} }" "TS4114" noImplicitOverride
   ratchet_probe "$D" "$st a11y preset dropped" "sed -i.bak 's|^      ...jsxA11y.flatConfigs.recommended.rules,||' eslint.config.mjs && rm eslint.config.mjs.bak"
   ratchet_probe "$D" "$st layer blocks dropped" "sed -i.bak 's|^  ...layers,||' eslint.config.mjs && rm eslint.config.mjs.bak"
   ratchet_probe "$D" "$st layer rule turned off" "sed -i.bak \"s|'no-restricted-imports': \\['error'|'no-restricted-imports': ['off'|\" layers.config.mjs && rm layers.config.mjs.bak"
+  layers_bypass_probes "$D" "$st"
   ratchet_probe "$D" "$st type flag turned off" "sed -i.bak 's/\"noImplicitOverride\": true/\"noImplicitOverride\": false/' tsconfig.json && rm tsconfig.json.bak"
   workaround_probe "$D" "$st inline a11y disable" src/probe-disable.tsx "export const A = () => <img src=\"/a.png\" />; // eslint-disable-line jsx-a11y/alt-text"
 fi
@@ -230,6 +276,7 @@ export class Sub extends Base { run(): void {} }" "TS4114" noImplicitOverride
 export const v = m.key;" "TS4111" noPropertyAccessFromIndexSignature
   ratchet_probe "$D" "$st layer blocks dropped" "sed -i.bak 's|^  ...layers,||' eslint.config.mjs && rm eslint.config.mjs.bak"
   ratchet_probe "$D" "$st layer rule turned off" "sed -i.bak \"s|'no-restricted-imports': \\['error'|'no-restricted-imports': ['off'|\" layers.config.mjs && rm layers.config.mjs.bak"
+  layers_bypass_probes "$D" "$st"
   ratchet_probe "$D" "$st type flag removed" "sed -i.bak '/noUncheckedIndexedAccess/d' tsconfig.json && rm tsconfig.json.bak"
   workaround_probe "$D" "$st inline layer-rule disable" src/probe-disable.ts "import { x } from './modules/example/example.service'; // eslint-disable-line no-restricted-imports"
 fi

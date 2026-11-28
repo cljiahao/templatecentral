@@ -1,5 +1,6 @@
 // Layer allow-list for docs/architecture.md: a relative import may climb only as far as its own layer folder, plus the listed `via` targets.
 const MAX_DEPTH = 5;
+// esquery ends a regex at the first slash, so a selector regex writes each slash as \x2f.
 const SLASH = '\\x2f';
 const LAYERS = [
   {
