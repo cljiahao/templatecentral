@@ -1711,6 +1711,15 @@ hsd real_heredoc_is_clean "${HS_PF}"$'cat <<EOF\nbody\nEOF\ncat <<-\'E\'\n\tx\n\
 hsd allow_listed_line_is_clean "${HS_PF}"$'echo a <<< b\n' clean
 hsd allow_listed_text_with_other_spacing_is_a_hit "${HS_PF}"$'echo a  <<< b\n' "3"
 hsd stale_allow_row_file_is_clean "${HS_PF}"$'x=1\n' clean
+hsd here_string_after_backslash_continued_line_is_not_a_comment $'#!/usr/bin/env bash\nset -o pipefail\ny=1\\\n#<<< "$(echo SIDE >&2)"\n' "4"
+hsd here_string_after_backslash_continued_comment_line "${HS_PF}"$'x=1 \\\n  # grep -q x <<< "$v"\n' "4"
+hsd here_string_after_no_break_space_is_a_hit "${HS_PF}"$'\xc2\xa0# grep -q x <<< "$v"\n' "3"
+hsd here_string_after_line_separator_is_a_hit "${HS_PF}"$'\xe2\x80\xa8# grep -q x <<< "$v"\n' "3"
+hsd here_string_after_next_line_char_is_a_hit "${HS_PF}"$'\xc2\x85# grep -q x <<< "$v"\n' "3"
+hsd here_string_after_file_separator_is_a_hit "${HS_PF}"$'\x1c# grep -q x <<< "$v"\n' "3"
+hsd comment_after_a_finished_line_is_clean "${HS_PF}"$'y=1\n# grep -q x <<< "$v"\n' clean
+hsd tab_indented_comment_after_a_finished_line_is_clean "${HS_PF}"$'y=1\n\t# grep -q x <<< "$v"\n' clean
+hsd yml_run_block_comment_is_clean $'jobs:\n  x:\n    steps:\n      - run: |\n          set -o pipefail\n          # grep -q x <<< "$v"\n' clean
 run_hsd() {
   local d="$T/hsd" py i f out want got
   py=$(awk '/^check_seeded_here_strings\(\)/ { f = 1 } f && /read -r -d .. py <<.PY. \|\| true/ { on = 1; next } on && /^PY$/ { exit } on { print }' "$LINT")
@@ -1750,6 +1759,10 @@ hs_stale_row() { local f="$S/scaffold/shared/template-ts/.claude/hooks/block-no-
 fails stale_allow_row_for_a_removed_line_fails_the_lint "$H_HS" hs_stale_row "HERE_STRING_ALLOW row matches no line"
 hs_hook_fixture() { printf '%s\n' '#!/usr/bin/env bash' $'grep -q x <<< "$v"' > "$S/scaffold/shared/template-ts/.claude/hooks/zz-fixture.sh"; }
 fails here_string_in_a_hook_fails_the_lint "$H_HS" hs_hook_fixture "hooks/zz-fixture.sh:2: <<< is a here-string"
+hs_yml_fixture() { printf '%s\n' 'jobs:' '  x:' '    steps:' '      - run: |' '          set -o pipefail' $'          grep -q x <<< "$v"' > "$S/scaffold/shared/template-ci/azure/azure-pipelines/zz-fixture.yml"; }
+fails here_string_in_a_seeded_pipefail_yml_fails_the_lint "$H_HS" hs_yml_fixture "zz-fixture.yml:6: <<< is a here-string"
+hs_yml_clean() { printf '%s\n' 'jobs:' '  x:' '    steps:' '      - run: |' '          set -o pipefail' $'          printf \'%s\\n\' "$v" | grep -q x' > "$S/scaffold/shared/template-ci/azure/azure-pipelines/zz-fixture.yml"; }
+passes clean_seeded_pipefail_yml_passes_the_here_string_lint "$H_HS" hs_yml_clean
 
 # ── file line budget: the check alone, on a scratch tree (a full lint per probe is too slow) ──
 # lb_probe builds a tree that passes (the clean control), applies one mutation and expects the

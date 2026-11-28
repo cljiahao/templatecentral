@@ -2519,7 +2519,7 @@ check_seeded_here_strings() {
   # unwritable or full, bash prints one error and the command reads nothing: a grep match test reads as
   # no match, a read leaves its variable empty, a loop runs no turns. A gate then passes unchecked. So
   # the lint does not parse bash: a seeded script that sets pipefail, and every hook, may not hold the
-  # three characters <<< on any line, except a full-line comment and the exact lines in
+  # three characters <<< on any line, except a full-line comment (not one that follows a line ending in a backslash) and the exact lines in
   # HERE_STRING_ALLOW (text that is not a here-string, such as an awk pattern). An allow row that
   # matches no line fails, so a stale row cannot hide a later hit. A file that cannot be read fails and
   # the scanner must report every file it was given. Use printf piped into a reader that reads to the
@@ -2541,8 +2541,17 @@ for row in os.environ.get("HS_ALLOW", "").split("\n"):
         allow[(path, text)] = False
 
 
+def is_comment(lines, i):
+    # A full-line comment starts with # after blanks only (space and tab: Python lstrip() would also
+    # strip U+00A0, U+2028, \x1c-\x1f and \x85, which bash reads as word characters), and the line before
+    # does not end with a backslash (that joins the two lines, so the # is no comment).
+    if i > 0 and lines[i - 1].endswith("\\"):
+        return False
+    return lines[i].lstrip(" \t").startswith("#")
+
+
 def sets_pipefail(lines):
-    return any("pipefail" in r and not r.lstrip().startswith("#") for r in lines)
+    return any("pipefail" in r and not is_comment(lines, i) for i, r in enumerate(lines))
 
 
 for path in sys.argv[1:]:
@@ -2552,7 +2561,7 @@ for path in sys.argv[1:]:
     if not (sets_pipefail(lines) or "/hooks/" in path):
         continue
     for n, text in enumerate(lines, 1):
-        if "<<<" not in text or text.lstrip().startswith("#"):
+        if "<<<" not in text or is_comment(lines, n - 1):
             continue
         if (rel, text) in allow:
             allow[(rel, text)] = True
@@ -2566,7 +2575,7 @@ PY
   scan_list=$({
     template_files
     { (cd "$SKILLS_DIR" 2>/dev/null && find migrate/general -type f -name '*.sh') || true; } | sed "s|^|$SKILLS_DIR/|"
-  } | grep -E '\.(sh|envsh)$' | LC_ALL=C sort -u)
+  } | grep -E '\.(sh|envsh|yml|yaml)$' | LC_ALL=C sort -u)
   allow=$(printf '%s\n' "${HERE_STRING_ALLOW[@]}")
   out=$(printf '%s\n' "$scan_list" | HS_ROOT="$SKILLS_DIR" HS_ALLOW="$allow" xargs python3 -I -c "$py" || true)
   hits=$(printf '%s\n' "$out" | grep -E '^HIT ' | sed -E 's/^HIT //' || true)
