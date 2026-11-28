@@ -2160,7 +2160,13 @@ out=$(gate_verify); check 2 "$?" "verify-harness fails when gates.txt is missing
 cp "$KIT/gates.txt" "$GV/.claude/gates.txt"; printf 'broken\n' >> "$GV/.claude/gates.txt"
 out=$(gate_verify); check 2 "$?" "verify-harness fails on a malformed manifest line"
 bash "$KIT/ci-gates.sh" list > "$T/gl.txt" 2>&1
-check "harness docs testbudget nosonar secrets deps changelog comments commentshape duptests exclusions ratchet supplychain workflows envexample dockerfile workarounds review licences sbom changesize bundle diffcover" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints the manifest gates in order"
+check "testbudget nosonar secrets deps changelog comments commentshape duptests exclusions ratchet supplychain workflows envexample dockerfile workarounds licences sbom changesize bundle diffcover" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints only the gates ci-gates.sh runs, in manifest order"
+bash "$KIT/ci-gates.sh" harness > "$T/gu.txt" 2>&1
+check 2 "$?" "ci-gates harness is a usage error (the control for the list check below)"
+while IFS= read -r lg; do
+  if grep -qE "^  $lg\\)" "$KIT/ci-gates.sh"; then has_arm=1; else has_arm=0; fi
+  check 1 "$has_arm" "ci-gates list prints $lg and ci-gates.sh has a handler for it"
+done < "$T/gl.txt"
 KG=$(mktemp -d "$T/kg.XXXX"); cp "$KIT/ci-gates.sh" "$KG/"; grep -v '^nosonar|' "$KIT/gates.txt" > "$KG/gates.txt"
 bash "$KG/ci-gates.sh" nosonar >/dev/null 2>&1
 check 1 "$?" "ci-gates refuses a gate the manifest does not list"

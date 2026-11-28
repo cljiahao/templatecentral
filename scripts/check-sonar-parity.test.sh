@@ -712,6 +712,34 @@ run "$T/control.tsv"
 check 1 "$EC" "ruff extend-exclude under lint fails closed"
 has "extend-exclude is not read" "$OUT" "extend-exclude message"
 
+fresh_root ruff_extend_exclude_top_source
+edit "$PYP" "s.replace('extend-exclude = [', 'extend-exclude = [\"src\",', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a top-level extend-exclude that hides a source folder fails closed"
+has "extend-exclude is not read" "$OUT" "top-level extend-exclude message"
+
+fresh_root ruff_extend_exclude_seeded_helpers
+run "$T/control.tsv"
+check 0 "$EC" "a top-level extend-exclude of only the seeded Python helpers passes"
+
+fresh_root ruff_extend_exclude_empty
+edit "$PYP" "s.replace('extend-exclude = [', 'extend-exclude = []\nignored-key = [', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "an empty top-level extend-exclude fails closed"
+has "extend-exclude is not read" "$OUT" "empty extend-exclude message"
+
+fresh_root ruff_extend_exclude_duplicate
+edit "$PYP" "s.replace('extend-exclude = [', 'extend-exclude = [\"scripts/py-env.py\", \"scripts/py-env.py\",', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a top-level extend-exclude with a duplicate entry fails closed"
+has "extend-exclude is not read" "$OUT" "duplicate extend-exclude message"
+
+fresh_root ruff_force_exclude_off
+edit "$PYP" "s.replace('force-exclude = true', 'force-exclude = false', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "extend-exclude with force-exclude = false fails closed"
+has "extend-exclude needs force-exclude = true" "$OUT" "force-exclude message"
+
 fresh_root ruff_inline_extend_pfi
 edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\nextend-per-file-ignores = {\"app/*.py\" = [\"C901\"]}\n', 1)"
 run "$T/control.tsv"

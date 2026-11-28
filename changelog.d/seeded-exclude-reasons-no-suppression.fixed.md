@@ -1,0 +1,1 @@
+- The seeded `scripts/check-exclude-reasons.py` loads the TOML reader by `importlib` instead of two `# type: ignore` lines, so the workarounds gate passes on the whole scaffold.

@@ -1,0 +1,1 @@
+- The `block-no-verify.sh` header and `docs/harness.md` now state exactly what the Bash guard blocks. `rm -rf /`, `rm -rf ~` and `git reset --hard` were never blocked and the text no longer says destructive commands are.

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# PreToolUse(Bash) — block hook-bypass and destructive git/shell commands. Exit 2 = block.
+# PreToolUse(Bash) — block hook bypasses, commits and force-pushes on protected branches, shell access to secret files, and recursive forced rm of src, app, lib, test, .claude, .lefthook, .git or node_modules. Exit 2 = block.
+# It does not block rm -rf of other paths (/, ~), git reset --hard, git clean or other history rewrites.
 # Best-effort tripwire, not a security boundary; the lefthook + CI layers are the backstop.
 # Closed list of what this text guard cannot see: variable indirection and command substitution (cat "$f", cat $(echo .env)),
 # strings built at run time inside an interpreter ('.e'+'nv', base64 decoded in Python), a script file written first and run second,
