@@ -450,7 +450,7 @@ report_fails() {
 # Sets CHILD_CPU to the hundredths of a CPU second that this shell's finished children have used, so two readings subtract without rounding error. It runs in this shell: a pipe or command substitution forks and sees no children.
 children_cpu() {
   times > "$tmp/times.txt"
-  CHILD_CPU=$(awk 'NR == 2 { for (i = 1; i <= NF; i++) { split($i, p, /[ms]/); t += p[1] * 60 + p[2] } printf "%d", t * 100 }' "$tmp/times.txt")
+  CHILD_CPU=$(awk 'NR == 2 { for (i = 1; i <= NF; i++) { split($i, p, /[ms]/); t += p[1] * 60 + p[2] } printf "%d", int(t * 100 + 0.5) }' "$tmp/times.txt")
 }
 
 # Runs the tool command in $1 (a root) with the cpu cap; the rest are the command and its arguments. Sets TOOL_EC.

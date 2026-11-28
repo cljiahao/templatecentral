@@ -5,7 +5,9 @@
 # Add an Endpoint (NestJS module)
 
 ## Naming Convention
-Replace `<name>` throughout:
+
+Replace `<name>` throughout using these rules:
+
 | Context | Format | Example (`<name>` = `task`) |
 |---------|--------|-----------------------------|
 | Directory | kebab-case | `src/modules/task/` |
@@ -17,11 +19,13 @@ Replace `<name>` throughout:
 ## Steps
 
 ### 1. Create Module Directory
+
 Create `src/modules/<name>/`; Steps 2–7 fill it.
 
 ### 2. Define Types
 
 Create `src/modules/<name>/<name>.types.ts`:
+
 ```typescript
 export interface Task {
   id: string;
@@ -35,6 +39,7 @@ export interface Task {
 ### 3. Define DTOs
 
 Create `src/modules/<name>/<name>.dto.ts`:
+
 ```typescript
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
@@ -191,7 +196,9 @@ export class TaskController {
 ```
 
 #### Authorization — decide before moving on
+
 The controller above is **fully public**: anyone can create, update and delete records.
+
 - **If `src/modules/auth/` exists**, put `@UseGuards(JwtAuthGuard)` + `@ApiBearerAuth()` on
   the controller class, and remove the guard from read routes only where public access is
   deliberate.
