@@ -21,6 +21,7 @@ SOURCE_EXTS = {"nextjs": ("ts", "tsx"), "vite-react": ("ts", "tsx"), "nestjs": (
 TOOLING_ANYWHERE = ("node_modules", ".next", ".turbo", ".git", ".venv", "venv", "__pycache__")
 TOOLING_DIRS = ("node_modules", "dist", "build", "out", "coverage", ".next", ".claude", ".turbo", ".git", ".venv", "venv",
                 "__pycache__")
+SEEDED_PY_HELPERS = ("scripts/check-comments.py", "scripts/check-exclude-reasons.py", "scripts/duplicate_tests_py.py", "scripts/py-env.py")
 SEEDED_HELPERS = ("scripts/check-comments.mjs", "scripts/check-exclude-reasons.mjs", "scripts/duplicate-tests-ts.mjs")
 # Config references the seeded files use today: (import source, dotted tail) -> (snapshot or None, rule prefixes it may touch).
 # A None snapshot means the reference only adds rules under those prefixes (a plugin's own namespace); a mapped rule with one
@@ -878,6 +879,11 @@ def flag(lint, top, key):
     return False
 
 
+def seeded_py_only(value):
+    """True when a top-level extend-exclude is a non-empty list of distinct entries, all exact seeded Python gate helpers (guarded files nobody edits)."""
+    return isinstance(value, list) and bool(value) and len(set(value)) == len(value) and all(isinstance(v, str) and v in SEEDED_PY_HELPERS for v in value)
+
+
 def ruff_state(path):
     with open(path, encoding="utf-8") as fh:
         doc = toml_parse(fh.read())
@@ -904,8 +910,10 @@ def ruff_state(path):
             raise Unresolved("inline %s is not read; use a [tool.ruff.lint.%s] table" % (key, key))
     for body in (top, lint):
         for key in ("exclude", "extend-exclude"):
-            if key in body:
+            if key in body and not (body is top and key == "extend-exclude" and seeded_py_only(body[key])):
                 raise Unresolved("%s is not read" % key)
+    if "extend-exclude" in top and top.get("force-exclude") is not True:
+        raise Unresolved("extend-exclude needs force-exclude = true, or a file passed by name is still linted")
     st = types.SimpleNamespace()
     st.select = str_items(lint.get("select", []), "select") + str_items(lint.get("extend-select", []), "extend-select")
     st.ignore = str_items(lint.get("ignore", []), "ignore") + str_items(lint.get("extend-ignore", []), "extend-ignore")

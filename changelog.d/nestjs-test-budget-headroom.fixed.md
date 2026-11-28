@@ -1,0 +1,1 @@
+- The nestjs scaffold boots its e2e test through `createApp()` and drops a redundant `resolveTrustProxy` table (the `TRUST_PROXY` test covers it), taking the bare test ratio from 33.80 to 29.86 per 100 source lines against the unchanged limit of 35.

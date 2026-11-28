@@ -1,0 +1,1 @@
+- Sonar parity check accepts the ruff `extend-exclude` that lists only the four seeded Python gate helpers, and still fails on any other exclude.

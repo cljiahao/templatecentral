@@ -1,0 +1,1 @@
+- `ci-gates.sh diffcover` fails with one line that names the exact `diff-cover` command to run when `diff-cover.txt` is missing, the same every run.

@@ -57,6 +57,68 @@ ruff_gate() {
   local -a r=("${RUFF_CMD[@]}")
   gate ruff-format "${r[@]}" format --check src/ test/
   gate ruff-check "${r[@]}" check src/ test/
+  local f
+  for f in "$P"/scripts/*.py; do
+    gate "ruff check skips ${f##*/}" "${r[@]}" check "scripts/${f##*/}"
+    gate "ruff format skips ${f##*/}" "${r[@]}" format --check "scripts/${f##*/}"
+  done
+}
+
+# gate_default FILE KEY: the first default value written as KEY...} in FILE.
+gate_default() {
+  awk -v key="$2" 'index($0, key) { v = substr($0, index($0, key) + length(key)); sub(/\}.*/, "", v); print v; exit }' "$1"
+}
+
+# gate_outputs_ignored: every path a seeded gate writes is ignored and the tree stays clean; rows are <path> <writer>.
+# SBOM needs a lockfile (network) and a review record needs a verdict, so those files are made by hand.
+gate_outputs_ignored() {
+  local sbom dc rows row p dirty
+  sbom=$(gate_default "$P/scripts/generate-sbom.sh" 'SBOM_OUT:-')
+  dc=$(gate_default "$P/.claude/ci-gates.sh" 'DIFF_COVER_OUTPUT:-')
+  if [ -z "$sbom" ] || [ -z "$dc" ]; then bad "$ST/$HOST cannot read the SBOM or diff-cover output path from the gates"; return; fi
+  rows="$sbom sbom-gate
+$dc diffcover-gate
+dist/x bundle-gate-build-and-sbom
+.claude/gate-times.tsv gate-budget-record
+.claude/gate-times.AbC123 gate-budget-temp-file
+.claude/gate-budget.seen gate-budget-seen-marker
+.claude/skill-usage.log skill-usage-log-hook
+.claude/review/current.diff record-review-prepare"
+  case $ST in
+    fastapi) rows="$rows
+coverage.xml verify-gate-pytest-cov
+.coverage verify-gate-pytest-cov
+htmlcov/x verify-gate-pytest-cov
+.pytest_cache/x verify-gate-pytest
+.ruff_cache/x verify-gate-ruff" ;;
+    *) rows="$rows
+coverage/x verify-gate-vitest-coverage
+tsconfig.tsbuildinfo verify-gate-tsc" ;;
+  esac
+  if [ "$ST" = nextjs ]; then rows="$rows
+.next/x bundle-gate-build"; fi
+  while IFS= read -r row; do
+    p=${row%% *}
+    if ! git -C "$P" check-ignore -q "$p"; then bad "$ST/$HOST ${row#* } writes $p but .gitignore does not ignore it"; fi
+  done <<< "$rows"
+  # dist/ is the root build and SBOM output only; developer source under src/ must stay visible to the git gates.
+  if git -C "$P" check-ignore -q src/dist/x; then bad "$ST/$HOST ignores src/dist/x, which hides developer source from the git gates"; fi
+  mkdir -p "$P/$(dirname "$sbom")" "$P/.claude/review" && : > "$P/$sbom" && : > "$P/$dc" && : > "$P/.claude/review/current.diff"
+  dirty=$(git -C "$P" status --porcelain)
+  if [ -z "$dirty" ]; then ok; else bad "$ST/$HOST tree is dirty after the gates: $dirty"; fi
+}
+
+# ts_helpers_skipped: every hash-guarded seeded scripts/*.mjs is named in the eslint ignores and in .prettierignore, so the first commit's format-lint cannot parse-fail or rewrite it.
+ts_helpers_skipped() {
+  local list f stem
+  list=$(grep -o '"scripts/[^"]*\.mjs"' "$P/.claude/harness.json" | tr -d '"')
+  if [ -z "$list" ]; then bad "$ST/$HOST harness.json lists no seeded scripts/*.mjs"; return 0; fi
+  for f in $list; do
+    stem=${f#scripts/}
+    stem=${stem%.mjs}
+    gate "eslint ignores $f" grep -Eq "'scripts/(\{([a-z-]+,)*$stem(,[a-z-]+)*\}|$stem)\.mjs'" eslint.config.mjs
+    gate "prettier ignores $f" grep -qx "$f" .prettierignore
+  done
 }
 
 for ST in nestjs nextjs vite-react fastapi; do
@@ -70,6 +132,8 @@ for ST in nestjs nextjs vite-react fastapi; do
     TC_STACK=$ST TC_PART=manifest bash "$SHARED/tc-copy.sh" "$P" > /dev/null 2>&1 || bad "$ST/$HOST tc-copy part manifest failed"
     printf '# %s\n\nA scaffolded project.\n' "$ST" > "$P/README.md"
     git -C "$P" init -q -b main
+    git -C "$P" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q --allow-empty -m "chore: root"
+    ROOT=$(git -C "$P" rev-parse HEAD)
     git -C "$P" add -A
     git -C "$P" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m "chore: scaffold" || bad "$ST/$HOST base commit failed"
     git -C "$P" checkout -q -b work
@@ -79,27 +143,37 @@ for ST in nestjs nextjs vite-react fastapi; do
     gate testbudget bash scripts/test-budget.sh
     gate nosonar bash .claude/ci-gates.sh nosonar
     gate workarounds bash scripts/check-workarounds.sh main
+    gate workarounds-whole-scaffold bash scripts/check-workarounds.sh "$ROOT"
     gate ratchet bash scripts/gate-ratchet.sh auto
+    gate ratchet-whole-scaffold bash scripts/gate-ratchet.sh "$ROOT"
     gate envexample bash scripts/check-env-example.sh
     gate workflows bash scripts/check-workflows.sh
     gate supplychain bash scripts/check-supply-chain.sh
     gate dockerfile bash scripts/check-dockerfile.sh
+    gate_outputs_ignored
+    gate changelog-seeded bash -c 'head -n 1 CHANGELOG.md | grep -qx "# Changelog" && grep -qx "## \[Unreleased\]" CHANGELOG.md'
     case $ST in
       fastapi)
         gate ignores bash -c 'git check-ignore -q coverage.xml && git check-ignore -q .coverage'
         gate coverage-floor grep -q 'fail_under = 80' pyproject.toml
         ruff_gate
+        gate exclusions bash scripts/check-exclude-reasons.sh
         ;;
       nestjs)
         gate ignores bash -c 'git check-ignore -q coverage/x && git check-ignore -q blob/x'
+        ts_helpers_skipped
+        gate test-budget-headroom env TEST_BUDGET_MAX_RATIO=32 bash scripts/test-budget.sh
         gate coverage-floor grep -Eq 'thresholds: [{] lines: 80' vitest.config.mts
         ;;
       nextjs)
         gate ignores bash -c 'git check-ignore -q coverage/x'
+        ts_helpers_skipped
+        gate test-budget-headroom env TEST_BUDGET_MAX_RATIO=33.5 bash scripts/test-budget.sh
         gate coverage-floor grep -Eq 'thresholds: [{] lines: 80' vitest.config.ts
         ;;
       vite-react)
         gate ignores bash -c 'git check-ignore -q coverage/x'
+        ts_helpers_skipped
         gate coverage-floor grep -Eq 'thresholds: [{] lines: 80' vite.config.ts
         ;;
     esac

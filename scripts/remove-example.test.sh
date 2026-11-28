@@ -70,7 +70,7 @@ dels_of() { case "$1" in
   fastapi) echo "src/api/routers/example.py src/api/schemas/request/example.py src/api/schemas/response/example.py src/api/services/example.py test/test_api/test_example.py" ;;
   nestjs) echo "src/modules/example" ;; esac; }
 edits_of() { case "$1" in
-  nextjs) echo "src/app/dashboard/(overview)/page.tsx:-8 test/components/render.test.tsx:-35" ;;
+  nextjs) echo "src/app/dashboard/(overview)/page.tsx:-8 test/components/render.test.tsx:-33" ;;
   vite-react) echo "src/pages/dashboard.tsx:-9" ;;
   fastapi) echo "src/api/routes.py:-3 src/api/tags.py:-1" ;;
   nestjs) echo "test/app.e2e-spec.ts:-33 src/modules/index.ts:-1 src/app.module.ts:-1" ;; esac; }

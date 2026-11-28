@@ -375,6 +375,37 @@ else
   nok "no python3 on the path, so the no-tomllib case cannot run"
 fi
 
+# The tomli fallback path: tomllib cannot load, tomli can (a stand-in that is the real reader), so the gate still reads and passes.
+if [ -n "$PYBIN" ] && [ -n "$realpy" ]; then
+  shim2=$WORK/shim2
+  mkdir -p "$shim2"
+  for tool in "$shim"/*; do
+    tname=${tool##*/}
+    case "$tname" in python3 | blocked.py) continue ;; esac
+    ln -s "$(readlink "$tool" || printf '%s' "$tool")" "$shim2/$tname"
+  done
+  cat > "$shim2/fallback.py" <<'PYEND'
+import runpy
+import sys
+
+try:
+    import tomllib as reader
+except ImportError:
+    import tomli as reader
+sys.modules["tomli"] = reader
+sys.modules["tomllib"] = None
+args = sys.argv[1:]
+sys.argv = args
+runpy.run_path(args[0], run_name="__main__")
+PYEND
+  printf $'#!/bin/sh\nif [ "$1" = -I ]; then shift; fi\nexec "%s" -I "%s" "$@"\n' "$(command -v "$PYBIN")" "$shim2/fallback.py" > "$shim2/python3"
+  chmod +x "$shim2/python3"
+  d=$(stage defaults-py-ok)
+  OUT=$(PATH="$shim2" bash "$root/$GATE" "$d" 2>&1)
+  RC=$?
+  if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q 'OK\.'; then ok "a Python with only the tomli fallback still reads the TOML and passes"; else nok "tomli fallback should pass (exit $RC)" "$OUT"; fi
+fi
+
 # The four real stack templates carry a "reason:" line on every exclude, so each passes.
 tpl_stage() {
   local d=$WORK/tpl-$1

@@ -1,6 +1,15 @@
 [tool.ruff]
 line-length = 88
 target-version = "py314"
+# The seeded gate helpers are guarded harness files nobody may edit, so lint and format cannot be satisfied.
+# force-exclude keeps them out when a hook passes the file name explicitly.
+extend-exclude = [
+  "scripts/check-comments.py",
+  "scripts/check-exclude-reasons.py",
+  "scripts/duplicate_tests_py.py",
+  "scripts/py-env.py",
+]
+force-exclude = true
 
 [tool.ruff.lint]
 # `select`, not `extend-select`: ruff >=0.16 enables ~413 rules by default, and this is the

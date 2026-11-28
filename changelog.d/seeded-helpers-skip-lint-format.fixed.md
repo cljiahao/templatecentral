@@ -1,0 +1,2 @@
+- The first commit of a scaffolded NestJS project no longer fails: `eslint.config.mjs` now ignores the seeded gate helper scripts, as the Next.js and Vite + React configs already did.
+- The seeded gate helper scripts are no longer rewritten by `prettier` (`.prettierignore`, all TypeScript stacks) or `ruff` (`extend-exclude` and `force-exclude` in the FastAPI `pyproject.toml`), so the harness integrity check reports no drift after a commit. `scripts/day-one.test.sh` covers every seeded helper.
