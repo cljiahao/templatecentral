@@ -2544,8 +2544,10 @@ for row in os.environ.get("HS_ALLOW", "").split("\n"):
 def is_comment(lines, i):
     # A full-line comment starts with # after blanks only (space and tab: Python lstrip() would also
     # strip U+00A0, U+2028, \x1c-\x1f and \x85, which bash reads as word characters), and the line before
-    # does not end with a backslash (that joins the two lines, so the # is no comment).
-    if i > 0 and lines[i - 1].endswith("\\"):
+    # does not end with a backslash (that joins the two lines, so the # is no comment). A CR before the
+    # line break stays part of the line; it is not stripped as a blank, and a backslash before it still counts
+    # as a joiner (fail closed: bash would not join there, so a comment line may be read as code, never the reverse).
+    if i > 0 and lines[i - 1].rstrip("\r").endswith("\\"):
         return False
     return lines[i].lstrip(" \t").startswith("#")
 
@@ -2555,7 +2557,9 @@ def sets_pipefail(lines):
 
 
 for path in sys.argv[1:]:
-    with open(path, encoding="utf-8", errors="replace") as fh:
+    # newline="" keeps every CR: text mode would turn a lone CR into a line break, and a line such as
+    # `grep -q x<CR># <<< "$v"` would then read as a comment while bash runs it (CR is a word character).
+    with open(path, encoding="utf-8", errors="replace", newline="") as fh:
         lines = fh.read().split("\n")
     rel = path[len(root):] if path.startswith(root) else path
     if not (sets_pipefail(lines) or "/hooks/" in path):

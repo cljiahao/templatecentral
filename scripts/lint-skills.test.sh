@@ -1717,6 +1717,11 @@ hsd here_string_after_no_break_space_is_a_hit "${HS_PF}"$'\xc2\xa0# grep -q x <<
 hsd here_string_after_line_separator_is_a_hit "${HS_PF}"$'\xe2\x80\xa8# grep -q x <<< "$v"\n' "3"
 hsd here_string_after_next_line_char_is_a_hit "${HS_PF}"$'\xc2\x85# grep -q x <<< "$v"\n' "3"
 hsd here_string_after_file_separator_is_a_hit "${HS_PF}"$'\x1c# grep -q x <<< "$v"\n' "3"
+hsd here_string_after_lone_cr_is_a_hit "${HS_PF}"$'grep -q x\r# <<< "$v"\n' "3"
+hsd here_string_in_crlf_file_is_a_hit $'#!/usr/bin/env bash\r\nset -o pipefail\r\ngrep -q x <<< "$v"\r\n' "3"
+hsd crlf_file_with_only_a_comment_is_clean $'#!/usr/bin/env bash\r\nset -o pipefail\r\n# grep -q x <<< "$v"\r\n' clean
+hsd crlf_comment_after_a_finished_line_is_clean $'#!/usr/bin/env bash\r\nset -o pipefail\r\ny=1\r\n  # <<< "$v"\r\n' clean
+hsd here_string_after_crlf_backslash_line_is_a_hit $'#!/usr/bin/env bash\r\nset -o pipefail\r\ny=1\\\r\n#<<< "$(echo SIDE >&2)"\r\n' "4"
 hsd comment_after_a_finished_line_is_clean "${HS_PF}"$'y=1\n# grep -q x <<< "$v"\n' clean
 hsd tab_indented_comment_after_a_finished_line_is_clean "${HS_PF}"$'y=1\n\t# grep -q x <<< "$v"\n' clean
 hsd yml_run_block_comment_is_clean $'jobs:\n  x:\n    steps:\n      - run: |\n          set -o pipefail\n          # grep -q x <<< "$v"\n' clean
