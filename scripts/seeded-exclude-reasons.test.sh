@@ -1162,7 +1162,12 @@ run_gate "$d"
 if [ ! -e "$d/.venv/bin/python3.ran" ]; then ok "the gate never runs a project .venv/bin/python3"; else nok "the gate ran a planted .venv/bin/python3"; fi
 
 # A failing awk is an error, never a clean pass: each awk the gate reads facts with is stubbed to fail, and a pass-through stub is the control.
-has_text() { case $1 in *"$2"*) return 0 ;; esac; return 1; } # has_text HAYSTACK NEEDLE: literal substring test with no pipe
+# Succeeds when the haystack holds the needle as a fixed string; the needle is never read as an option or a pattern.
+has_text() { grep -qF -- "$2" <<< "$1"; }
+if has_text 'run -x flag' '-x'; then ok "has_text finds a needle that starts with a dash"; else nok "has_text should find a needle that starts with a dash"; fi
+if has_text 'a.b' 'a.b'; then ok "has_text finds a needle that holds a dot"; else nok "has_text should find a needle that holds a dot"; fi
+if has_text 'axb' 'a.b'; then nok "has_text read a dot as a pattern"; else ok "has_text does not read a dot as a pattern"; fi
+if has_text 'ab' 'a*b'; then nok "has_text read a star as a pattern"; else ok "has_text does not read a star as a pattern"; fi
 REAL_AWK=$(command -v awk)
 awk_stub() { # awk_stub NAME PATTERN: a PATH folder whose awk exits 2 when its arguments hold PATTERN, else runs the real awk
   mkdir -p "$WORK/awkstub-$1"
