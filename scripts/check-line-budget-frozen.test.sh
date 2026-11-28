@@ -28,9 +28,10 @@ run() { bash "$FROZEN" "$@" > "$T/out" 2>&1; echo $?; }
 commit_all() { git add -A && git commit -qm "$1"; }
 rows() { printf '# header\n'; printf '%b' "$1"; }
 
-# the base holds no budget file: the initial capture passes
+# the base holds no budget file: an error, never a pass
 rows 'add/auth/fastapi.md\t400\t80\nCONVENTIONS.md\t354\t-\n' > "$F"; commit_all capture
-check 0 "$(run initial)" "initial_capture_passes"
+check 2 "$(run initial)" "base_without_budget_file_exits_2"
+case "$(cat "$T/out")" in *"holds no tests/golden/line-budget.txt"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: base_without_budget_file_says_why [$(cat "$T/out")]" ;; esac
 git branch -q seeded
 check 2 "$(run)" "missing_base_exits_2"
 check 2 "$(run no-such-ref)" "unknown_base_exits_2"
@@ -55,7 +56,7 @@ git checkout -q -b kind seeded
 rows 'add/auth/fastapi.md\t400\t-\nCONVENTIONS.md\t354\t-\n' > "$F"; commit_all kind
 check 1 "$(run seeded)" "prose_kind_change_fails"
 
-# a new row never passes after the initial capture: not for a file that existed, not for a new file
+# a new row never passes: not for a file that existed, not for a new file
 git checkout -q -b newrow-existing seeded
 rows 'add/auth/fastapi.md\t400\t80\nCONVENTIONS.md\t354\t-\nadd/auth/small.md\t90\t40\n' > "$F"; commit_all existing
 check 1 "$(run seeded)" "new_row_for_existing_file_fails"
@@ -104,7 +105,7 @@ echo y > other; git add -A; git commit -qm unrelated
 git checkout -q slice
 check 2 "$(run unrelated)" "no_merge_base_exits_2"
 
-# a git error on the merge base tree is exit 2, not an initial capture: drop the tree object in a copy
+# a git error on the merge base tree is exit 2, not a pass: drop the tree object in a copy
 git clone -q "$T/r" "$T/e" 2> /dev/null
 ( cd "$T/e" || exit 2
   git config user.email t@example.com; git config user.name t

@@ -4,18 +4,15 @@
 # Usage: bash scripts/check-line-budget-frozen.sh BASE_REF
 #   Compares tests/golden/line-budget.txt at HEAD with its merge base against BASE_REF. A row may only
 #   shrink or go: a larger max_lines or max_prose fails, a max_prose that turns from - to a number or back
-#   fails, and so does every row that is not in the base file: the initial capture is the only way rows are
-#   born, and a new file that fits its class cap needs none. A head file with no data rows while the base has
-#   rows fails (restore it). The initial capture passes only when the merge base lists no line-budget.txt;
-#   a git error, no BASE_REF, an unknown ref, no merge base or an unreadable file fails (exit 2), so CI
-#   without a base never passes silently. Row syntax and stale rows are the lint's job.
+#   fails, and so does every row that is not in the base file: a new file that fits its class cap needs none.
+#   A head file with no data rows while the base has rows fails (restore it). A merge base that lists no
+#   line-budget.txt is an error, as are a git error, no BASE_REF, an unknown ref, no merge base or an
+#   unreadable file (exit 2), so CI without a base never passes silently. Row syntax and stale rows are the
+#   lint's job.
 # Not caught: a row that stays above what its file now needs; a change that edits the gate itself (CI runs
-#   the change's own copy, so human review covers it; no label or variable waives it); a push without a PR;
-#   a later PR that targets a branch whose merge base lists no line-budget.txt: there is nothing to compare,
-#   so it passes as an initial capture and may add or raise rows.
-# Base without line-budget.txt: the run is an initial capture and passes. Base with the file: a kind change
-#   or a new row fails, and no label or variable waives it.
-# Exit 0 ok, 1 an allowance was raised or a row was added, 2 usage error or no base.
+#   the change's own copy, so human review covers it; no label or variable waives it); a push without a PR.
+# A kind change or a new row fails, and no label or variable waives it.
+# Exit 0 ok, 1 an allowance was raised or a row was added, 2 usage error, no base or no base file.
 set -uo pipefail
 
 base="${1:-}"
@@ -37,8 +34,8 @@ if ! listing=$(git ls-tree "$mb" -- "$F" 2> /dev/null); then
   exit 2
 fi
 if [[ -z "$listing" ]]; then
-  echo "check-line-budget-frozen: $base holds no $F; initial capture"
-  exit 0
+  echo "check-line-budget-frozen: the merge base $mb holds no $F, so the allowances cannot be compared; fetch a base that has it" >&2
+  exit 2
 fi
 T=$(mktemp -d) || exit 2
 trap 'rm -rf "$T"' EXIT
@@ -72,7 +69,7 @@ out=$(awk -v bf="$T/base" -v hf="$T/head" '
         if ((hp[p] == "-") != (bp[p] == "-")) print p ": max_prose changed from " bp[p] " to " hp[p] " — cut the file, never change the kind of its row"
         else if (hp[p] != "-" && hp[p] + 0 > bp[p] + 0) print p ": max_prose raised from " bp[p] " to " hp[p] " — cut the file, never raise its row"
       } else {
-        print p ": new row — a row is never born after the initial capture; cut the file to its class cap instead"
+        print p ": new row — a row is never added; cut the file to its class cap instead"
       }
     }
   }' < /dev/null 2>&1) || { echo "check-line-budget-frozen: the comparison failed: $out" >&2; exit 2; }

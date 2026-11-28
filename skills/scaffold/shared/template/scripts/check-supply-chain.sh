@@ -71,19 +71,19 @@ pnpm_settings() {
     '' | *[!0-9]*) bad "$ws needs 'minimumReleaseAge: <minutes>' (a number). Add 'minimumReleaseAge: 10080' to wait 7 days before installing a new release." ;;
     *) if [ "$v" -lt 1440 ]; then bad "$ws sets minimumReleaseAge to $v minutes; the floor is 1440 (1 day). Restore 'minimumReleaseAge: 10080'."; fi ;;
   esac
-  if grep -qE '^minimumReleaseAgeExclude:' <<< "$wsl"; then
+  if printf '%s\n' "$wsl" | grep -E '^minimumReleaseAgeExclude:' >/dev/null; then
     bad "$ws sets minimumReleaseAgeExclude, which disables the cooldown for the listed packages. Remove it and wait out the release age, or pin an older release."
   fi
-  if ! grep -qE '^allowBuilds:' <<< "$wsl"; then
+  if ! printf '%s\n' "$wsl" | grep -E '^allowBuilds:' >/dev/null; then
     bad "$ws has no 'allowBuilds:' map. Dependency install scripts stay off unless a package is listed there with true; add 'allowBuilds:' and list only the packages that need a build."
   fi
-  if grep -qE "^dangerouslyAllowAllBuilds:[[:space:]]*${q}[Tt][Rr][Uu][Ee]" <<< "$wsl"; then
+  if printf '%s\n' "$wsl" | grep -E "^dangerouslyAllowAllBuilds:[[:space:]]*${q}[Tt][Rr][Uu][Ee]" >/dev/null; then
     bad "$ws sets dangerouslyAllowAllBuilds: true, which runs every dependency's install script. Remove it and list only the needed packages under allowBuilds."
   fi
-  if grep -qE "^strictDepBuilds:[[:space:]]*${q}[Ff][Aa][Ll][Ss][Ee]" <<< "$wsl"; then
+  if printf '%s\n' "$wsl" | grep -E "^strictDepBuilds:[[:space:]]*${q}[Ff][Aa][Ll][Ss][Ee]" >/dev/null; then
     bad "$ws sets strictDepBuilds: false, which hides unreviewed install scripts. Remove it so an unlisted build script fails the install."
   fi
-  if grep -qE "^ignoreScripts:[[:space:]]*${q}[Ff][Aa][Ll][Ss][Ee]" <<< "$wsl"; then
+  if printf '%s\n' "$wsl" | grep -E "^ignoreScripts:[[:space:]]*${q}[Ff][Aa][Ll][Ss][Ee]" >/dev/null; then
     bad "$ws sets ignoreScripts: false. Remove it; the allowBuilds map is the only place to allow a build."
   fi
   if [ -f .npmrc ] && grep -qiE '^[[:space:]]*(ignore-scripts[[:space:]]*=[[:space:]]*false|dangerously-allow-all-builds[[:space:]]*=[[:space:]]*true)' .npmrc; then
@@ -105,7 +105,7 @@ registry_hosts() {
     )
     for host in $hosts; do
       case "$host" in registry.npmjs.org | pypi.org | files.pythonhosted.org) continue ;; esac
-      if [ -n "$allow_hosts" ] && grep -qxF -- "$host" <<< "$allow_hosts"; then continue; fi
+      if [ -n "$allow_hosts" ] && printf '%s\n' "$allow_hosts" | grep -xF -- "$host" >/dev/null; then continue; fi
       line=$(awk -v h="$host" 'index(tolower($0), tolower(h)) { print NR; exit }' "$f")
       bad "$f:${line:-1} resolves a package from $host, which is not the default public registry. Remove the dependency, or add '$host' to $allow after review."
     done

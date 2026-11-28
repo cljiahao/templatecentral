@@ -237,8 +237,8 @@ json_has() {
 
 # ── Twin drift ────────────────────────────────────────────────────────────────
 
-# strip_json <file>: the hook without its JSON-extraction statement (one node line in the TS twin, three python3 lines in the FastAPI twin).
-strip_json() { awk '/^(cmd|in_cwd|file)=\$\(printf .%s. "\$input" \| (node -e|python3 -I -c)/ { skip = 1 } skip { if ($0 ~ /2>\/dev\/null\)$/) skip = 0; next } /^  (node -e|python3 -I -c) / { next } { print }' "$1"; }
+# strip_json <file>: the hook without its JSON-extraction statement (one node line in the TS twin, several python3 lines in the FastAPI twin).
+strip_json() { awk '/^(cmd|in_cwd|file|parsed)=\$\(printf .%s. "\$input" \| (node -e|python3 -I -c)/ { skip = 1 } skip { if ($0 ~ /2>\/dev\/null\)( \|\| .*)?$/) skip = 0; next } /^  (node -e|python3 -I -c) / { next } { print }' "$1"; }
 # drift_ok <ts file> <py file>: same text once the JSON extraction is stripped, and the strip kept at least 90% of the lines.
 drift_ok() {
   local a b total kept
@@ -382,7 +382,194 @@ git checkout HEAD .claude
 rm -rf src
 rm -rf ./src/
 rm -fr .claude
+git commit --no-ver\ify -m x
+git commit --no-v\erify -m x
+git -c core.hooks\Path=/dev/null commit -m x
+echo 'git commit --no-verify -m x' | xargs -I{} sh -c '{}'
+echo 'git commit -n -m x' | xargs -I % bash -c '%'
+echo 'git -c core.hooksPath=/dev/null commit -m x' | xargs -I{} sh -c '{}'
+doas git commit --no-verify -m x
+ionice -c3 git commit --no-verify -m x
+setsid git commit --no-verify -m x
+sudo env nice git commit --no-verify -m x
+sudo doas nice ionice setsid nohup git commit -n -m x
+bash -c 'doas setsid git commit -n -m x'
+echo hi | sudo sh
+echo hi | doas sh
+echo hi | env sh
+echo hi | nice sh
+echo hi | ionice sh
+echo hi | nohup sh
+echo hi | setsid sh
+echo hi | time sh
+echo hi | timeout sh
+echo hi | stdbuf sh
+echo hi | command sh
+echo hi | exec sh
+echo hi | builtin sh
+xargs sh < f
+xargs bash -s
+git commit --no-ver""ify -m x
+git commit --no-ver''ify -m x
+git commit -""n -m x
+dash -c 'git commit -n -m x'
+ksh -c 'git commit -n -m x'
+ash -c 'git commit --no-verify -m x'
+busybox sh -c 'git commit -n -m x'
+/bin/sh -c 'git commit -n -m x'
+/bin/bash -c 'git commit -n -m x'
+/bin/dash -c 'git commit -n -m x'
+/usr/bin/ksh -c "git commit --no-verify -m x"
+sh -c 'sh -c "git commit -n -m x"'
+echo hi | dash
+echo hi | ksh
+echo hi | ash
+echo hi | busybox sh
 CASES
+
+# Wrapper shapes the hook flattens instead of parsing: every path form of a shell, every nesting depth and style, with each forbidden command.
+# shq <text>: the text in single quotes the way a shell writes it (each ' becomes '"'"'); dq <text>: the text in double quotes with \ and " escaped.
+shq() { local t=$1 q="'"; printf '%s' "'${t//$q/$q\"$q\"$q}'"; }
+dq() { local t=$1; t=${t//\\/\\\\}; t=${t//\"/\\\"}; printf '"%s"' "$t"; }
+# nest <shq|dq> <depth> <shell> <command>: the command wrapped depth times in <shell> -c.
+nest() {
+  local f=$1 d=$2 sh=$3 c=$4
+  while [[ $d -gt 0 ]]; do c="$sh -c $($f "$c")"; d=$((d - 1)); done
+  printf '%s' "$c"
+}
+tilde='~'
+for forbidden in 'git commit -n' 'git commit --no-verify -m x' 'git push --force origin main'; do
+  for sh in sh bash /bin/sh; do
+    for d in 3 4 7 9; do expect_bash 2 "$(nest shq "$d" "$sh" "$forbidden")"; done
+    for d in 3 5 9; do expect_bash 2 "$(nest dq "$d" "$sh" "$forbidden")"; done
+  done
+  for sh in ./sh ./bin/sh ../bin/sh bin/sh "$tilde/bin/sh" /bin/sh /usr/bin/ksh 'env sh' '/usr/bin/env bash' 'bash -l' 'bash -e' '/opt/my\ tools/sh' "'/opt/my tools/sh'"; do
+    expect_bash 2 "$sh -c $(shq "$forbidden")"
+  done
+  expect_bash 2 "bash -lc $(shq "$forbidden")"
+  expect_bash 2 "bash -ec $(shq "$forbidden")"
+  expect_bash 2 "eval $(dq "$forbidden")"
+  expect_bash 2 "eval $(shq "$forbidden")"
+done
+# A wrapper command over the size bound is refused rather than judged; the same text without a wrapper is judged as before.
+expect_bash 2 "$(nest shq 9 sh 'git status')"
+expect_bash 2 "$(nest shq 9 sh "echo $(printf 'x%.0s' $(seq 1 200))")"
+expect_bash 0 "echo $(printf 'x%.0s' $(seq 1 2000))"
+# cpu_cs: sets cpu_now to the user plus system CPU time of every child this shell has waited for, in hundredths of a second.
+# Call it in the current shell, never inside $( ): a command substitution forks a subshell that reports 0 for children, so a before/after pair read 0 0 and no limit could fail.
+cpu_cs() {
+  times > "$T/cpu.times"
+  cpu_now=$(awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub("s", "", a[2]); t += a[1] * 60 + a[2] } printf "%d", t * 100 }' "$T/cpu.times")
+}
+# cpu_stub <iterations>: runs a stub hook that burns that many awk iterations and sets cpu_burn to its CPU cost.
+cpu_stub() {
+  printf '#!/usr/bin/env bash\nawk "BEGIN { for (i = 0; i < %s; i++) x += i * 2 }"\nexit 0\n' "$1" > "$T/stub-hook.sh"
+  cpu_cs
+  cpu_before=$cpu_now
+  bash "$T/stub-hook.sh"
+  cpu_cs
+  cpu_burn=$((cpu_now - cpu_before))
+}
+# Self-test of the meter: a known burn reads above 0, and a limit set under the slow stub's cost fails it while the fast stub passes (the same -le test the CPU bounds below use).
+cpu_stub 4000000
+cpu_slow=$cpu_burn
+check 1 "$(if [[ $cpu_slow -gt 0 ]]; then echo 1; else echo 0; fi)" "the CPU meter reads above 0 after a known burn (read ${cpu_slow} cs)"
+cpu_limit=$((cpu_slow / 2))
+check 0 "$(if [[ $cpu_slow -le $cpu_limit ]]; then echo 1; else echo 0; fi)" "a planted slow hook stub fails the CPU limit (${cpu_slow} cs over limit ${cpu_limit} cs)"
+cpu_stub 10
+check 1 "$(if [[ $cpu_burn -le $cpu_limit ]]; then echo 1; else echo 0; fi)" "a fast hook stub passes the same CPU limit (${cpu_burn} cs, limit ${cpu_limit} cs)"
+# CPU bound: a 13 KB nested wrapper is answered in under two CPU seconds (a wall clock would flake on a busy machine).
+big=$(nest shq 8 sh 'git commit -n')
+cpu_cs
+cpu_start=$cpu_now
+expect_bash 2 "$big$(printf ' x%.0s' $(seq 1 3000))"
+cpu_cs
+cpu_took=$((cpu_now - cpu_start))
+if [[ $cpu_took -le 200 ]]; then cpu_ok=1; else cpu_ok=0; fi
+check 1 "$cpu_ok" "a 13 KB nested wrapper is answered by both hooks in at most 2 s of CPU (took ${cpu_took} cs)"
+
+# A shell or eval word that is only an argument of a plain git command must not hide a bypass (the flatten step once turned it into a separator).
+while IFS= read -r c; do
+  [[ -n "$c" ]] && expect_bash 2 "$c"
+done <<'CASES'
+git commit -m eval -n
+git commit -m "fix eval" -n
+git commit -m "x" eval -n
+git commit -m eval -an
+git commit -m "use eval" -nm x
+git commit -m eval --no-verify
+git commit -m "bash" -nc HEAD
+git commit -m sh -n -c HEAD
+git commit -m "run sh" -n -c HEAD
+git commit -c HEAD -m "bash" -nc x
+git commit -m ash -n -c HEAD
+git push origin main eval -f
+git push origin eval main -f
+git push eval -f origin main
+sh -c'git commit -n'
+sh -c"git commit -n"
+sh -cx "git commit -n"
+sh -c $'git commit -n'
+bash -c $'git commit --no-verify'
+bash -c 'echo "git commit -n"'
+CASES
+# Text that names a forbidden form inside a real wrapper stays blocked (by design); ordinary commands that only mention a shell pass.
+while IFS= read -r c; do
+  [[ -n "$c" ]] && expect_bash 0 "$c"
+done <<'CASES'
+git commit -m "fix --no-verify docs"
+echo --no-verify
+git log -n 5
+git push -n
+/bin/sh script.sh
+/usr/bin/env bash script.sh
+bash scripts/run.sh -c config
+cat /bin/sh
+which sh
+brew install dash
+ssh host -c aes
+npm run push
+deno eval "1"
+node -e "eval('1')"
+grep -c sh file
+python -c 'print(1)'
+psql -c 'select 1'
+git commit -m "eval this"
+git commit -m "bash" -c HEAD
+docker run img sh -c 'echo hi'
+kubectl exec p -- sh -c 'ls'
+bash -c 'echo ok'
+bash -c 'git log -n 5'
+ls | xargs -I{} sh -c 'echo {}'
+git stash
+git commit -m ""
+CASES
+# Long prose that names a shell without a wrapper has no size gate: a commit message, a heredoc write and a PR body.
+pad2k=$(printf 'the bash 3.2 build and the dash board and the ash tray. %.0s' $(seq 1 40))
+expect_bash 0 "git commit -m \"\$(cat <<'EOF'${NL}${pad2k}${NL}EOF${NL})\""
+expect_bash 0 "cat > docs/notes.md <<'EOF'${NL}run bash scripts/run.sh then sh x. ${pad2k}${NL}EOF"
+expect_bash 0 "git commit -m \"${pad2k}\""
+expect_bash 0 "gh pr create --title t --body \"${pad2k} call sh in CI\""
+expect_bash 0 "cat > f <<'EOF'${NL}$(printf 'use eval and more words here. %.0s' $(seq 1 100))${NL}EOF"
+# The same prose inside a real wrapper over 4000 bytes is refused as too long to judge.
+expect_bash 2 "bash -c 'echo ${pad2k}${pad2k}'"
+# CPU bound: the worst wrapper under the 4000 byte bound (newline-heavy, judged three times) and a 16 KB command with no wrapper, each at most 2.5 s over both hooks.
+worst="sh -c 'echo$(printf '\na%.0s' $(seq 1 1900))'"
+cpu_cs
+cpu_start=$cpu_now
+expect_bash 0 "$worst"
+cpu_cs
+cpu_took=$((cpu_now - cpu_start))
+if [[ $cpu_took -le 250 ]]; then cpu_ok=1; else cpu_ok=0; fi
+check 1 "$cpu_ok" "a ${#worst} byte newline-heavy wrapper is answered by both hooks in at most 2.5 s of CPU (took ${cpu_took} cs)"
+long16=$(printf 'git commit -m x; %.0s' $(seq 1 1000))
+cpu_cs
+cpu_start=$cpu_now
+expect_bash 0 "$long16"
+cpu_cs
+cpu_took=$((cpu_now - cpu_start))
+if [[ $cpu_took -le 250 ]]; then cpu_ok=1; else cpu_ok=0; fi
+check 1 "$cpu_ok" "a ${#long16} byte command with no wrapper is answered by both hooks in at most 2.5 s of CPU (took ${cpu_took} cs)"
 
 while IFS= read -r c; do
   [[ -n "$c" ]] && expect_bash 0 "$c"
@@ -413,12 +600,104 @@ git checkout -b newbranch
 git restore src/app.ts
 git -C sub log -n 5
 echo "LEFTHOOK is cool"
+echo 'git status' | xargs -I{} sh -c '{}'
+doas git status
+sudo env nice git log -n 3
+echo hi | sudo ls
+echo hi | doas ls
+echo hi | env ls
+echo hi | nice ls
+echo hi | ionice ls
+echo hi | nohup ls
+echo hi | setsid ls
+echo hi | time ls
+echo hi | timeout ls
+echo hi | stdbuf ls
+echo hi | command ls
+echo hi | exec ls
+echo hi | builtin ls
+echo hi | xargs sh script.sh
+git commit -m "fix --no-verify docs"
+echo --no-verify
+git push -n
+git commit -m ""
+git commit -m ''
+ls | xargs -I{} sh -c 'echo {}'
+echo hi | dash script.sh
+dash -c 'git status'
+/bin/sh script.sh
+/usr/bin/env bash script.sh
+bash -c 'echo ok'
+cat /bin/sh
+which sh
+brew install dash
+ssh host
+npm run push
+git stash
+echo --no-verify
+git log -n 5
+bash scripts/run.sh -c config
+bash -c 'git log -n 5'
 git merge feat
 git rebase main
 grep -rn "no-verify" docs
 git commit -m "Q"
 node -e "console.log(1)"
 CASES
+
+expect_bash 2 $'git commit -m x \\\n--no-verify'
+expect_bash 2 $'git commit -m x \\\n  -n'
+expect_bash 0 $'git commit -m x \\\n  -m y'
+# Round 5 regressions: a shell or eval word with a glued or extra option, a doubled wrapper, a path-qualified shell and an env prefix all still reach the bypass.
+expect_bash 2 "git commit -m 'sh -c' --no-verify"
+expect_bash 2 'sh -c"git commit --no-verify"'
+expect_bash 2 'sh -cx "git push -f"' "$MAIN"
+expect_bash 2 'eval "git commit -n"'
+expect_bash 2 "bash -c \"bash -c 'git commit -n'\""
+expect_bash 2 "/bin/sh -c 'git commit -n'"
+expect_bash 2 "env X=1 bash -c 'git commit -n'"
+
+# The verdict must not depend on the machine: a missing JSON reader blocks, an unwritable TMPDIR does not open the gate, and a 70 KB command is judged whole.
+# The TMPDIR cases are regression guards, not a mutant check: on bash 3.2 a here-string ignores TMPDIR and falls back to /tmp, so no environment variable breaks it; the here-string lint is the mutant check.
+NVB=$(mktemp -d "$T/nvbin.XXXXXX")
+# TMPDIR under a regular file cannot be written even by root.
+: > "$T/nv-not-a-dir"
+NVRO="$T/nv-not-a-dir/sub"
+for tool in cat awk sed grep tr git cut head bash; do ln -s "$(command -v "$tool")" "$NVB/$tool"; done
+BASH_BIN=$(command -v bash)
+# nv_env <hook> <dir> <json> [VAR=value ...]: runs the hook with extra environment, as run_hook does.
+nv_env() {
+  local hook=$1 dir=$2 json=$3
+  shift 3
+  printf '%s' "$json" > "$T/stdin"
+  OUT=$(cd / && env "$@" CLAUDE_PROJECT_DIR="$dir" "$BASH_BIN" "$hook" < "$T/stdin" 2>"$T/err")
+  EC=$?
+}
+for v in ts py; do
+  if [[ $v == ts ]]; then interp=node; else interp=python3; fi
+  json=$(tool_json Bash command 'git status')
+  nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json" PATH="$NVB"
+  check "2 yes" "$EC $(ok_if grep -q "needs $interp" "$T/err")" "block-no-verify.$v blocks with one line naming $interp when it is missing"
+  ln -s "$(command -v "$interp")" "$NVB/$interp"
+  nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json" PATH="$NVB"
+  check 0 "$EC" "block-no-verify.$v passes git status when $interp is on the PATH (control)"
+  rm -f "$NVB/$interp"
+  json=$(tool_json Bash command 'git commit --no-verify -m x')
+  nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json" TMPDIR="$NVRO"
+  check 2 "$EC" "block-no-verify.$v regression guard: still blocks --no-verify with TMPDIR under a regular file"
+  nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json" TMPDIR="$T"
+  check 2 "$EC" "block-no-verify.$v blocks --no-verify with TMPDIR writable (control)"
+  json=$(tool_json Bash command 'git status && git log -n 3')
+  nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json" TMPDIR="$NVRO"
+  check 0 "$EC" "block-no-verify.$v regression guard: passes an ordinary command with TMPDIR under a regular file"
+  big=$(head -c 70000 /dev/zero | tr '\0' x)
+  json=$(tool_json Bash command "git commit --no-verify -m $big")
+  nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json"
+  check 2 "$EC" "block-no-verify.$v blocks --no-verify in a 70 KB command"
+  json=$(tool_json Bash command "echo $big")
+  nv_env "$KIT/block-no-verify.$v.sh" "$FEAT" "$json"
+  check 0 "$EC" "block-no-verify.$v passes a 70 KB echo (control)"
+done
 
 # Interpreter wrappers and shells fed from sources the hook cannot read (inline code is scanned as text; blind shells are blocked).
 SEC=$(new_repo feat)

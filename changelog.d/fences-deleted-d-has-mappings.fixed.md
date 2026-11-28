@@ -1,0 +1,1 @@
+- `check-fences.py --has-mappings` reads `deleted.d` like the full check, so a malformed slice file or a nested folder there exits 2.

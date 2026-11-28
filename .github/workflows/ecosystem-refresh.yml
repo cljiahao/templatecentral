@@ -156,7 +156,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$branch"
-          git add .claude/audit-ecosystem-research.md
+          # Every PR needs a changelog fragment (changelog.d/README.md); the run id keeps the name unique.
+          printf -- '- Refresh the ecosystem research notes in `.claude/audit-ecosystem-research.md` (%s).\n' "$(date -u +%Y-%m-%d)" > "changelog.d/ecosystem-refresh-$(date -u +%Y%m%d)-$GITHUB_RUN_ID.changed.md"
+          git add .claude/audit-ecosystem-research.md changelog.d
           git commit -m "chore: refresh ecosystem research"
           {
             cat "$RUNNER_TEMP/research/pr-body.md"

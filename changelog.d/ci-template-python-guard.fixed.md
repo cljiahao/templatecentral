@@ -1,0 +1,1 @@
+- The CI template guard now requires isolated Python (`-I`) for every python and pip spelling: `python3.12`, `pip3.12`, `$(pwd)/.venv/bin/pip` and quoted paths.

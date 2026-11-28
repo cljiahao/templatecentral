@@ -1,0 +1,1 @@
+- Seeded `check-change-size.sh` works from a subfolder of the repository and ignores `color.diff` and `diff.external` settings, so the weight is the same everywhere.

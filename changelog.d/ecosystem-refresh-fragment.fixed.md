@@ -1,0 +1,1 @@
+- The scheduled ecosystem refresh PR now carries a `changelog.d` fragment, so it can pass the changelog check and merge.

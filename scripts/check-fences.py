@@ -231,9 +231,9 @@ def main(argv):
     gdir = os.path.join(root, "tests", "golden", "fences")
     try:
         moved_rows = read_moved(gdir)
+        deleted_rows = read_deleted(gdir)
         if mode == "has-mappings":
             return 0 if moved_rows else 1
-        deleted_rows = read_deleted(gdir)
         found = scan_skills(root)
         if mode == "snapshot":
             if moved_rows:

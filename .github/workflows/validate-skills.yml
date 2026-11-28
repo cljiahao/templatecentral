@@ -557,8 +557,9 @@ jobs:
   # The one check to require in branch protection. It runs even when a job failed or was cancelled
   # (if: always()) and fails unless every job in `needs` finished with result success. The only jobs
   # that may be skipped are fence-snapshot-frozen and line-budget-frozen, and only on a push, where
-  # their own `if` skips them by design; on a pull request they must succeed. It also fails when a job of this workflow is
-  # missing from `needs`, so a new job cannot be left out of the aggregate unnoticed.
+  # their own `if` skips them by design; on a pull request they must succeed. It also fails when a
+  # job of this workflow is missing from `needs`, so a new job cannot be left out of the aggregate
+  # unnoticed.
   all-checks:
     name: All checks
     if: always()
