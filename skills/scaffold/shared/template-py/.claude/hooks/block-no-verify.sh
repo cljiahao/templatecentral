@@ -14,8 +14,8 @@
 # Wrapper rule: a shell (sh bash zsh dash ksh ash, any path prefix) followed later by a -c option, or eval, makes the command a wrapper; wrappers are flattened (quotes and backslashes deleted, each wrapper word a command separator), not parsed, so any nesting depth is judged.
 # Over-blocking inside a wrapper is by design: bash -c 'echo "git commit -n"' is blocked as text. Outside a wrapper, quoted text stays text.
 # Union rule: the verdict is the union of two scans and the hook blocks when either blocks. The raw scan judges the command as written and always runs. The wrapper scan runs only when the wrapper test matches, judges the flattened text, and can only add blocks.
-# Size gate: only a wrapper command over 4000 bytes is blocked as too long to judge (worst case under the bound is about 0.55 CPU seconds on bash 3.2); a command with no wrapper has no size gate, so prose that names a shell (a commit message, a heredoc, a PR body) passes.
-# General cap: none needed. Long commands with no wrapper stay linear (a 16 KB command judges in under 1.5 CPU seconds, a 64 KB one in about 3 on bash 3.2).
+# Size gate: only a wrapper command over 4000 bytes is blocked as too long to judge (the worst 3.8 KB wrapper measures about 0.52 CPU seconds on bash 3.2); a command with no wrapper has no size gate, so prose that names a shell (a commit message, a heredoc, a PR body) passes.
+# General cap: none needed. Long commands with no wrapper stay linear (measured on bash 3.2: about 0.15 CPU seconds at 17 KB, 0.36 at 68 KB).
 # Shells judged: sh bash zsh dash ksh ash busybox sh. Wrappers judged: sudo doas env nice ionice nohup setsid time timeout stdbuf xargs command exec builtin, alone or stacked; quoted and backslash-escaped tokens count as written.
 # A shell in command position that the guard sees fed from a pipe, here-string, heredoc, `-s` or process substitution is blocked outright
 # (even `echo hi | sh`), also behind the wrappers sudo, command, exec, nohup, time, nice, builtin, env, timeout, stdbuf, xargs and uv/poetry/pipenv/pdm run,
