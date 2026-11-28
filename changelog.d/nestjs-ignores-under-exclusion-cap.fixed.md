@@ -1,1 +1,2 @@
-- The seeded NestJS lint config lists its own tooling configs as one ignore pattern (`*.config.mjs`) instead of two entries, so the template stays within the exclusion budget (8 against a cap of 8) and the Sonar parity check still resolves the ignores.
+- The seeded NestJS lint config no longer ignores `layers.config.mjs`: the file is plain ES-module data and is now linted like the rest of the project, in a closing block that lints `*.mjs` files without type information. The ignore list keeps exact paths only and the exclusion count is back within its cap.
+- The sonar-parity check reads `tseslint.configs.disableTypeChecked` and fails closed when a block spreading it also covers the stack's source extensions.

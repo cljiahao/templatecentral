@@ -31,6 +31,7 @@ PRESETS = {
     ("eslint-plugin-sonarjs", "configs.recommended.rules"): ("sonarjs-recommended", ()),
     ("typescript-eslint", "configs.recommended"): ("typescript-eslint-recommended", ()),
     ("typescript-eslint", "configs.recommendedTypeChecked"): ("typescript-eslint-recommended-type-checked", ()),
+    ("typescript-eslint", "configs.disableTypeChecked"): (None, ()),
     ("@eslint/js", "configs.recommended"): ("eslint-recommended", ()),
     ("eslint-config-next/typescript", ""): ("next-typescript", ()),
     ("eslint-config-next/core-web-vitals", ""): ("next-core-web-vitals", ()),
@@ -359,7 +360,8 @@ class Block:
 
 
 class Eval:
-    def __init__(self, parser, presets):
+    def __init__(self, parser, presets, stack):
+        self.stack = stack
         self.p = parser
         self.presets = presets
         self.cache = {}
@@ -423,10 +425,12 @@ class Eval:
     def object_block(self, node, out, inherited_files, inherited_ignores):
         rules = {}
         files, ignores, ta = None, None, None
+        turns_off_types = False
         # Object-literal order: a spread or a 'rules' key replaces everything gathered so far, as in JavaScript.
         for key, val in node[1]:
             if key == "spread":
                 rules = self.known(val, "a block-level spread")
+                turns_off_types = (dotted(self.deref(val)) or [""])[-1] == "disableTypeChecked"
             elif key == "files":
                 files = self.str_list(val, "files")
             elif key == "ignores":
@@ -438,6 +442,11 @@ class Eval:
                     ta = self.parser_type_aware(val)
                 except Unresolved as exc:
                     raise Unresolved("%s, in %s" % (exc, self.describe(node)))
+        if turns_off_types:
+            pats = [q for f in (files or ["**/*"]) for q in expand_braces(f)]
+            exts = all_form_exts(pats)
+            if exts is None or "*" in exts or any(e in exts for e in SOURCE_EXTS[self.stack]):
+                raise Unresolved("a block that spreads disableTypeChecked must be limited to files outside the source extensions, not %s" % (files or "all files"))
         if ignores is not None and files is None and rules == {} and all(k in ("ignores", "name") for k, _ in node[1]):
             for pat in ignores:
                 if not tooling_path(pat):
@@ -586,7 +595,7 @@ def eslint_stack(name, path, rel, presets):
         toks, lines = tokenize(fh.read(), rel)
     parser = Parser(toks, lines, rel)
     parser.program()
-    ev = Eval(parser, presets)
+    ev = Eval(parser, presets, name)
     out = []
     ev.blocks(parser.default, out)
     stack = Stack(name, out, ev.touches)

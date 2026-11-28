@@ -266,6 +266,22 @@ run "$T/control.tsv"
 check 1 "$EC" "a spread of an unknown value in the config array fails closed"
 has "unknownThing, which is not a known config preset" "$OUT" "array spread names the reference"
 
+fresh_root disable_types_mjs
+inject nestjs "  { files: ['**/*.cjs'], ...tseslint.configs.disableTypeChecked },"
+run "$T/control.tsv"
+check 0 "$EC" "disableTypeChecked limited to a non-source extension is accepted"
+
+fresh_root disable_types_all
+inject nestjs "  { ...tseslint.configs.disableTypeChecked },"
+run "$T/control.tsv"
+check 1 "$EC" "disableTypeChecked with no files fails closed"
+has "must be limited to files outside the source extensions" "$OUT" "disableTypeChecked all-files message"
+
+fresh_root disable_types_ts
+inject nestjs "  { files: ['**/*.ts'], ...tseslint.configs.disableTypeChecked },"
+run "$T/control.tsv"
+check 1 "$EC" "disableTypeChecked on source files fails closed"
+
 fresh_root known_const_spread
 prepend nextjs "const extra = { 'no-debugger': 'error' };"
 inject nextjs "  { rules: { ...extra } },"

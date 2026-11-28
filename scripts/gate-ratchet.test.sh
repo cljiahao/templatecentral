@@ -185,9 +185,9 @@ weakens eslint.config.mjs "      'sonarjs/no-commented-code': 'error',
 " "" "rule removed" "sonarjs/no-commented-code" "now removed"
 weakens eslint.config.mjs "'sonarjs/todo-tag': 'warn'" "'sonarjs/todo-tag': 'off'" "warn lowered to off" "sonarjs/todo-tag" "now off"
 weakens eslint.config.mjs "    ignores: [
-      '*.config.mjs'," "    ignores: [
+      'eslint.config.mjs'," "    ignores: [
       'src/legacy/**',
-      '*.config.mjs'," "new eslint ignore" "src/legacy/**"
+      'eslint.config.mjs'," "new eslint ignore" "src/legacy/**"
 weakens eslint.config.mjs "  eslint.configs.recommended,
 " "" "eslint preset dropped" "eslint.configs.recommended"
 weakens vitest.config.ts "lines: 80" "lines: 60" "coverage threshold lowered" "was 80" "now 60"
@@ -229,12 +229,91 @@ passes .claude/gates.txt "secrets|gitleaks|ci-gates.sh secrets" "secrets|gitleak
 extra|-|ci-gates.sh extra" "gate added"
 
 edit eslint.config.mjs "    ignores: [
-      '*.config.mjs'," "    ignores: [
-      '*.config.mjs"
+      'eslint.config.mjs'," "    ignores: [
+      'eslint.config.mjs"
 ratchet
 check 2 "$EC" "broken eslint config: exits 2 ($OUT)"
 has "UNREADABLE eslint.config.mjs" "$OUT" "broken eslint config: names the file"
 weakens eslint.config.mjs "from './layers.config.mjs'" "from './vitest.config.ts'" "layers import repointed to another tracked file" "local-import"
+# An eslint config that can load code the ratchet does not read fails closed. Each probe adds one line to the seeded config.
+probe() { # probe <label> <text>
+  edit eslint.config.mjs "// @ts-check" "// @ts-check
+$2"
+  ratchet
+  check 2 "$EC" "load-code probe $1: exits 2 ($OUT)"
+  has "UNREADABLE eslint.config.mjs" "$OUT" "load-code probe $1: names the file"
+}
+probe "import call" "const a = await import('./x.mjs');"
+probe "import call, space" "const a = import  (x);"
+probe "import call, newline" "const a = import
+('./x.mjs');"
+probe "require" "const r = require('./x.cjs');"
+probe "createRequire" "const c = createRequire(url);"
+probe "eval" "eval('1');"
+probe "Function" "const f = new Function('return 1');"
+probe "import.meta.resolve" "const m = import.meta.resolve('./x');"
+probe "process.binding" "process.binding('fs');"
+probe "module.constructor" "module.constructor._load('x');"
+probe "token in a comment" "// loads import() later"
+probe "backtick source" "import q from \`./x.mjs\`;"
+probe "joined source" "import q from ['.', '/x.mjs'].join('');"
+probe "multi-line import, backtick source" "import {
+  a,
+  b
+}
+from \`./x.mjs\`;"
+probe "from after a brace, source on the next line" "import { a } from
+\`./x.mjs\`;"
+probe "export star, backtick source" "export * from \`./x.mjs\`;"
+probe "export star, identifier source" "export * from someVar;"
+passes eslint.config.mjs "// @ts-check" "// @ts-check
+const a = Array.from({ length: 2 });" "Array.from is not an import source"
+passes eslint.config.mjs "// @ts-check" "// @ts-check
+const o = { from: 1 }; // loads rules from here" "from as a key or in prose is not an import source"
+passes eslint.config.mjs "// @ts-check" "// @ts-check
+const e = 'import x from y';" "from inside a string is not an import source"
+passes eslint.config.mjs "// @ts-check" "// @ts-check
+export * from './layers.config.mjs';" "export star from a plain quoted source"
+MAIN0=$(git_ rev-parse main)
+git_ checkout -q -B work main
+printf 'export const extra = 1;\n' > "$R/helper.mjs"
+git_ add helper.mjs
+git_ commit -q -m helper
+git_ branch -f main work
+git_ checkout -q -B work main
+python3 - "$R/helper.mjs" <<'PY'
+import sys
+open(sys.argv[1], "w").write("export const extra = eval('1');\n")
+PY
+python3 - "$R/layers.config.mjs" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+open(p, "w").write("import { extra } from './helper.mjs';\n" + s)
+PY
+git_ commit -q -am "helper loads code"
+ratchet
+check 2 "$EC" "a file the layers config imports that loads code: exits 2 ($OUT)"
+has "helper.mjs: it can load code the ratchet does not read" "$OUT" "a file the layers config imports that loads code: names the file"
+git_ checkout -q -B work "$MAIN0"
+git_ branch -f main "$MAIN0"
+for st in nestjs nextjs vite-react; do
+  for cf in eslint.config.mjs layers.config.mjs; do
+    for mode in eslint eslintimport; do
+      awk '/^cat > "[$]wd\/facts.awk" <<.AWK.$/ { f = 1; next } f && /^AWK$/ { exit } f' "$RATCHET" > "$T/facts.awk"
+      awk -v K=$mode -v B=1 -f "$T/facts.awk" "$SH/../$st/template/$cf" > /dev/null 2> "$T/facts.err"
+      check 0 "$?" "pristine $st $cf reads clean as $mode ($(cat "$T/facts.err"))"
+    done
+  done
+done
+# A branch that adds layers.config.mjs to the ignores, or removes it from them, is judged like any ignore change.
+edit eslint.config.mjs "      'eslint.config.mjs',
+" "      'eslint.config.mjs',
+      'layers.config.mjs',
+"
+ratchet
+check 1 "$EC" "layers.config.mjs added to the ignores: exits 1 ($OUT)"
+has "layers.config.mjs" "$OUT" "layers.config.mjs added to the ignores: names it"
 edit eslint.config.mjs "from './layers.config.mjs'" "from './missing.mjs'"
 ratchet
 check 2 "$EC" "eslint config importing an untracked file: exits 2 ($OUT)"
@@ -612,8 +691,8 @@ weakens azure-pipelines.yml "NodeTool@0" "NodeTool@latest" "azure task moved off
 passes .github/workflows/ci.yml "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1" "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" "pin comment dropped"
 
 edit eslint.config.mjs "    ignores: [
-      '*.config.mjs'," "    ignores: [
-      '*.config.mjs"
+      'eslint.config.mjs'," "    ignores: [
+      'eslint.config.mjs"
 ci_gate "allow-gate-change"
 check 1 "$EC" "unreadable config: the label does not waive it ($OUT)"
 has "cannot waive an unreadable config" "$OUT" "unreadable config: says why"

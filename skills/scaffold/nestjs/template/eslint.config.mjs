@@ -13,7 +13,7 @@ export default tseslint.config(
   // The seeded gate helpers are guarded harness files that nobody may edit, so lint cannot be satisfied.
   {
     ignores: [
-      '*.config.mjs',
+      'eslint.config.mjs',
       'vitest.config.mts',
       'vitest.config.e2e.mts',
       'coverage/**',
@@ -114,5 +114,10 @@ export default tseslint.config(
       'sonarjs/no-hardcoded-secrets': 'off',
       'sonarjs/no-clear-text-protocols': 'off',
     },
-  }
+  },
+  {
+    // Plain ES-module files such as layers.config.mjs sit outside tsconfig, so they are linted without type information.
+    files: ['**/*.mjs'],
+    ...tseslint.configs.disableTypeChecked,
+  },
 );

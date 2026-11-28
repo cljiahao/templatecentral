@@ -18,7 +18,7 @@ const LAYERS = [
   },
 ];
 
-// One block per file depth, so a relative import may climb only as far as its own layer folder. A no-restricted-syntax selector repeats the regexes because no-restricted-imports skips import().
+// One block per file depth, so a relative import may climb only as far as its own layer folder. A no-restricted-syntax selector repeats the regexes because no-restricted-imports skips dynamic imports.
 const layerBlocks = ({ name, unit, allow, features, depth = MAX_DEPTH }) =>
   Array.from({ length: depth + 1 }, (_, d) => {
     const index = features ? '|features/[^/]+$' : '';

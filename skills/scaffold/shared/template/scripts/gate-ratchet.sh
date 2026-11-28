@@ -535,7 +535,82 @@ function eslint_entries(   p, id, v, nobj) {
   emit("min", "eslint-config-objects", nobj)
 }
 
+# Copy of T with the inside of every string and template literal replaced by "_", so a word inside a string is not read as code. T is already comment-free and its strings are known to end.
+function oneline(x) { gsub(/[ \t\n]+/, " ", x); return x }
+
+function strmask(s,   i, n, c, j, ch, out, k) {
+  n = length(s); out = ""; i = 1
+  while (i <= n) {
+    c = substr(s, i, 1)
+    if (c == "\"" || c == "'" || c == "`") {
+      j = i + 1
+      while (j <= n) { ch = substr(s, j, 1); if (ch == "\\") { j += 2; continue } if (ch == c) break; j++ }
+      out = out c
+      for (k = i + 1; k < j; k++) out = out "_"
+      out = out c; i = j + 1; continue
+    }
+    out = out c; i++
+  }
+  return out
+}
+
+# Start of the last import or export keyword in pre, or 0.
+function last_stmt_kw(pre,   off, best, r, st) {
+  off = 0; best = 0; r = pre
+  while (match(r, /(^|[^A-Za-z0-9_$.])(import|export)([^A-Za-z0-9_$]|$)/)) {
+    st = RSTART; if (substr(r, st, 1) !~ /[a-z]/) st++
+    best = off + st
+    off += RSTART + RLENGTH - 1; r = substr(pre, off + 1)
+  }
+  return best
+}
+
+# A config that can load code the ratchet never reads fails closed (head only: BASEREAD skips the merge base, which only supplies the facts to compare with): any token that loads or builds code at run time, anywhere in the raw text (comments too), and any import or export whose source is not one plain quoted string.
+function code_scan(   toks, nt, i, S, pos, rest, fs, before, after, pre, kw, seg, b, a) {
+  if (BASEREAD) return
+  nt = 0
+  toks[++nt] = "import[ \t\n]*[(]"
+  toks[++nt] = "require[ \t\n]*[(]"
+  toks[++nt] = "createRequire"
+  toks[++nt] = "(^|[^A-Za-z0-9_$])eval([^A-Za-z0-9_$]|$)"
+  toks[++nt] = "(^|[^A-Za-z0-9_$])Function[ \t\n]*[(]"
+  toks[++nt] = "import[ \t\n]*[.][ \t\n]*meta[ \t\n]*[.][ \t\n]*resolve"
+  toks[++nt] = "process[ \t\n]*[.][ \t\n]*binding"
+  toks[++nt] = "module[ \t\n]*[.][ \t\n]*constructor"
+  for (i = 1; i <= nt; i++) if (match(T0, toks[i])) fail("it can load code the ratchet does not read: '" oneline(substr(T0, RSTART, RLENGTH > 40 ? 40 : RLENGTH)) "' (an import, require, eval, Function or module-internals call; fail closed)")
+  S = strmask(T); pos = 1
+  while (pos <= length(S)) {
+    rest = substr(S, pos)
+    if (!match(rest, /(^|[^A-Za-z0-9_$.])from([^A-Za-z0-9_$]|$)/)) break
+    fs = pos + RSTART - 1
+    if (substr(S, fs, 4) != "from") fs++
+    pos = fs + 4
+    pre = substr(S, 1, fs - 1)
+    b = pre; sub(/[ \t\n]+$/, "", b); before = substr(b, length(b), 1)
+    if (before !~ /[A-Za-z0-9_$}*]/) continue
+    a = substr(S, fs + 4); sub(/^[ \t\n]+/, "", a); after = substr(a, 1, 1)
+    if (after ~ /[:=,;()}.]/ || after == "") continue
+    kw = last_stmt_kw(pre)
+    if (kw == 0) continue
+    seg = substr(pre, kw)
+    if (index(seg, ";")) continue
+    if (a ~ /^'_*'/ || a ~ /^"_*"/) continue
+    fail("an import or export source is not one plain quoted string: '" oneline(substr(a, 1, 30)) "' (fail closed)")
+  }
+}
+
+# A file the eslint config imports is read only for code that loads other code and for its own local imports; the ratchet judges rules in the config itself.
+function do_eslint_import(   from, m) {
+  code_scan(); from = 1
+  while (find("(from|import|require)[ \t\n]*[(]?[ \t\n]*['\"][.][.]?/[^'\"]*['\"]", from)) {
+    m = substr(T, MS, ML); from = MS + ML
+    sub(/^[^'"]*['"]/, "", m); sub(/['"]$/, "", m)
+    emit("req", "local-import", m)
+  }
+}
+
 function do_eslint(   from, m, name, rest, sev, seen, p, opt, sc, key, lim) {
+  code_scan()
   seen = 0; from = 1
   brace_map()
   while (find("['\"]?[@A-Za-z0-9/_.-]+['\"]?[ \t\n]*:[ \t\n]*([[][ \t\n]*)?(['\"](off|warn|error)['\"]|[012][],} \t\n])", from)) {
@@ -1275,6 +1350,7 @@ END {
   MODE = K; TOML = (K == "pyproject" || K == "gitleaks"); T0 = T
   if (K == "jscpd") { T = clean(T, "plain"); do_jscpd() }
   else if (K == "eslint") { T = clean(T, "js"); do_eslint() }
+  else if (K == "eslintimport") { T = clean(T, "js"); do_eslint_import() }
   else if (K == "vitest") { T = clean(T, "js"); do_vitest() }
   else if (K == "pyproject") { T = clean(T, "toml"); do_pyproject() }
   else if (K == "gitleaks") { T = clean(T, "toml"); do_gitleaks() }
@@ -1389,6 +1465,35 @@ local_imports_resolve() {
   return 0
 }
 
+# Fails when a file the eslint config $1 imports, directly or through other local files (facts file $2 holds the config's own imports), can load code the ratchet does not read.
+local_imports_closure() {
+  local dir target todo seen cur msg
+  todo="$wd/closure.todo"; seen="$wd/closure.seen"
+  : > "$seen"
+  dir=""
+  case "$1" in */*) dir=${1%/*}/ ;; esac
+  awk -F'\t' -v d="$dir" '$1 == "req" && $2 == "local-import" { print d $3 }' "$2" > "$todo"
+  while [ -s "$todo" ]; do
+    cur=$(sed -n '1p' "$todo")
+    sed '1d' "$todo" > "$todo.n" && mv "$todo.n" "$todo"
+    target=$(awk -v p="$cur" 'BEGIN { m = split(p, a, "/"); n = 0; for (i = 1; i <= m; i++) { if (a[i] == "." || a[i] == "") continue; if (a[i] == "..") { if (n == 0) { print "outside-the-repository"; exit } n-- } else { n++; q[n] = a[i] } } out = q[1]; for (i = 2; i <= n; i++) out = out "/" q[i]; print out }') || { echo "cannot resolve the local import '$cur'"; return 1; }
+    if grep -Fxq -- "$target" "$seen"; then continue; fi
+    printf '%s\n' "$target" >> "$seen"
+    case "$target" in
+      *.mjs | *.js | *.cjs | *.ts | *.mts | *.cts) ;;
+      *) continue ;;
+    esac
+    git show "HEAD:$target" > "$wd/closure.file" 2> /dev/null || { echo "cannot read the local import '$target' at HEAD"; return 1; }
+    if ! msg=$(awk -v K=eslintimport -v B=1 -f "$wd/facts.awk" "$wd/closure.file" 2>&1 > "$wd/closure.f"); then
+      echo "$target: $msg"
+      return 1
+    fi
+    case "$target" in */*) dir=${target%/*}/ ;; *) dir="" ;; esac
+    awk -F'\t' -v d="$dir" '$1 == "req" && $2 == "local-import" { print d $3 }' "$wd/closure.f" >> "$todo"
+  done
+  return 0
+}
+
 if [ -n "$list_mode" ]; then
   guard_scan "$list_ref" || die "--list-guarded: cannot list or read the tracked files of $list_ref"
   [ -s "$wd/tracked.lst" ] || die "--list-guarded: cannot list the tracked files of $list_ref"
@@ -1451,9 +1556,14 @@ while IFS=$'\t' read -r kind path _; do
       unreadable=1
       continue
     fi
+    if [ "$kind" = eslint ] && ! msg=$(local_imports_closure "$path" "$wd/head.f"); then
+      printf 'UNREADABLE %s: %s (fail closed)\n' "$path" "$msg"
+      unreadable=1
+      continue
+    fi
     if [ "$have_base" -eq 0 ]; then
       case "$kind" in tsconfig | pyright) newfile=1; : > "$wd/base.f" ;; conftest) : > "$wd/base.f" ;; gatetime) seeded=1; printf 'max\tgatetime:total_budget_seconds\t600\nmax\tgatetime:per_gate_budget_seconds\t180\nmax\tgatetime:regression_percent\t25\n' > "$wd/base.f" ;; *) continue ;; esac
-    elif ! msg=$(awk -v K="$kind" -v B="$have_base" -f "$wd/facts.awk" "$wd/base" 2>&1 > "$wd/base.f"); then
+    elif ! msg=$(awk -v K="$kind" -v B="$have_base" -v BASEREAD=1 -f "$wd/facts.awk" "$wd/base" 2>&1 > "$wd/base.f"); then
       printf 'NOTE %s: unreadable at the merge base (%s); compared with an empty baseline\n' "$path" "$msg"
       : > "$wd/base.f"
     fi
