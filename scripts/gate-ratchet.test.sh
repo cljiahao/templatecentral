@@ -185,9 +185,9 @@ weakens eslint.config.mjs "      'sonarjs/no-commented-code': 'error',
 " "" "rule removed" "sonarjs/no-commented-code" "now removed"
 weakens eslint.config.mjs "'sonarjs/todo-tag': 'warn'" "'sonarjs/todo-tag': 'off'" "warn lowered to off" "sonarjs/todo-tag" "now off"
 weakens eslint.config.mjs "    ignores: [
-      'eslint.config.mjs'," "    ignores: [
+      '*.config.mjs'," "    ignores: [
       'src/legacy/**',
-      'eslint.config.mjs'," "new eslint ignore" "src/legacy/**"
+      '*.config.mjs'," "new eslint ignore" "src/legacy/**"
 weakens eslint.config.mjs "  eslint.configs.recommended,
 " "" "eslint preset dropped" "eslint.configs.recommended"
 weakens vitest.config.ts "lines: 80" "lines: 60" "coverage threshold lowered" "was 80" "now 60"
@@ -229,8 +229,8 @@ passes .claude/gates.txt "secrets|gitleaks|ci-gates.sh secrets" "secrets|gitleak
 extra|-|ci-gates.sh extra" "gate added"
 
 edit eslint.config.mjs "    ignores: [
-      'eslint.config.mjs'," "    ignores: [
-      'eslint.config.mjs"
+      '*.config.mjs'," "    ignores: [
+      '*.config.mjs"
 ratchet
 check 2 "$EC" "broken eslint config: exits 2 ($OUT)"
 has "UNREADABLE eslint.config.mjs" "$OUT" "broken eslint config: names the file"
@@ -612,8 +612,8 @@ weakens azure-pipelines.yml "NodeTool@0" "NodeTool@latest" "azure task moved off
 passes .github/workflows/ci.yml "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1" "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" "pin comment dropped"
 
 edit eslint.config.mjs "    ignores: [
-      'eslint.config.mjs'," "    ignores: [
-      'eslint.config.mjs"
+      '*.config.mjs'," "    ignores: [
+      '*.config.mjs"
 ci_gate "allow-gate-change"
 check 1 "$EC" "unreadable config: the label does not waive it ($OUT)"
 has "cannot waive an unreadable config" "$OUT" "unreadable config: says why"

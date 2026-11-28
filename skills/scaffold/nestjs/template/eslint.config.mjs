@@ -13,8 +13,7 @@ export default tseslint.config(
   // The seeded gate helpers are guarded harness files that nobody may edit, so lint cannot be satisfied.
   {
     ignores: [
-      'eslint.config.mjs',
-      'layers.config.mjs',
+      '*.config.mjs',
       'vitest.config.mts',
       'vitest.config.e2e.mts',
       'coverage/**',

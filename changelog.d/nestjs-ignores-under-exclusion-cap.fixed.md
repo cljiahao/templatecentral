@@ -1,0 +1,1 @@
+- The seeded NestJS lint config lists its own tooling configs as one ignore pattern (`*.config.mjs`) instead of two entries, so the template stays within the exclusion budget (8 against a cap of 8) and the Sonar parity check still resolves the ignores.
