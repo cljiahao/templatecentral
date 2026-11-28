@@ -752,7 +752,7 @@ if [ "$parsed" -ge 40 ]; then ok; else bad "bash parse check found only $parsed 
 # ---- bash 3.2 (macOS /bin/bash) cannot parse a case statement opened inside $( ... ) unless its patterns start with "(";
 # bash -n on a newer bash accepts it, so this static guard is what fails on Linux. Line numbers of offenders are printed.
 cat > "$T/case-in-subst.awk" <<'AWKEOF'
-# Substitution depth is kept across lines until the matching ")"; a ")" that closes a case pattern is not a closer.
+# Substitution depth is kept across lines until the matching ")"; a ")" that closes a case pattern, quoted text included, is not a closer.
 # Prints the line of every `case ... in` opened inside $( ... ) whose first pattern has no leading "(": bash 3.2 cannot parse that.
 function judge(rest) {
   if (rest ~ /^[ \t]*\(/) return
@@ -782,7 +782,7 @@ function judge(rest) {
     }
     if (depth > 0 && c == ")") {
       pre = substr(line, 1, i - 1)
-      if (incase > 0 && pre ~ /(^|;;|;&|[ \t]in)[ \t]*\(?[^ \t();]+$/) continue
+      if (incase > 0 && pre ~ /(^|;;|;&|[ \t]in)[ \t]*\(?([^ \t();"'"'"']|"[^"]*"|'"'"'[^'"'"']*'"'"')+$/) continue
       dq = saved[depth]; depth--; continue
     }
     if (depth > 0 && incase > 0 && c == "e" && substr(line, i, 4) == "esac" && (i == 1 || substr(line, i - 1, 1) !~ /[A-Za-z0-9_-]/) && substr(line, i + 4, 1) !~ /[A-Za-z0-9_]/) { incase--; i += 3; continue }
@@ -821,12 +821,34 @@ v=$(
   esac
 )
 PLANT
+cat > "$T/plant-quoted-space.sh" <<'PLANT'
+v=$(
+  case "$f" in
+    ("a b") echo 1 ;;
+  esac
+  case "$g" in
+    *.py) echo 2 ;;
+  esac
+)
+PLANT
+cat > "$T/plant-quoted-plain.sh" <<'PLANT'
+v=$(
+  case "$f" in
+    ("ab") echo 1 ;;
+  esac
+  case "$g" in
+    *.py) echo 2 ;;
+  esac
+)
+PLANT
 cat > "$T/plant-main.sh" <<'PLANT'
 if git diff -U0 "$base"...HEAD -- "$f" | awk -v py="$(case "$f" in *.py) echo 1 ;; *) echo 0 ;; esac)" '{ print }'; then :; fi
 PLANT
 check "1" "$(case_in_subst "$T/plant-bad.sh")" "case-in-substitution guard flags a case opened inside \$( ... )"
 check "2" "$(case_in_subst "$T/plant-bad-multiline.sh")" "case-in-substitution guard flags a case with unparenthesised patterns on the next line"
 check "3" "$(case_in_subst "$T/plant-bad-later.sh")" "case-in-substitution guard flags a case on a later line of a multi-line substitution"
+check "5" "$(case_in_subst "$T/plant-quoted-space.sh")" "case-in-substitution guard keeps its depth past a quoted pattern holding a space and flags the later case"
+check "5" "$(case_in_subst "$T/plant-quoted-plain.sh")" "case-in-substitution guard control: the same shape with a quoted pattern without a space flags the later case"
 check "" "$(case_in_subst "$T/plant-ok.sh")" "case-in-substitution guard passes parenthesised patterns and a top-level case"
 offenders=
 while IFS= read -r f; do
