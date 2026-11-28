@@ -59,18 +59,22 @@ class Toml:
                 self.line += 1
             self.i += 1
 
+    def comment(self):
+        """Skips a # comment and keeps its text when nothing else is on its line."""
+        start = self.s.rfind("\n", 0, self.i) + 1
+        end = self.s.find("\n", self.i)
+        end = len(self.s) if end < 0 else end
+        if self.s[start : self.i].strip() == "":
+            self.comments[self.line] = self.s[self.i + 1 : end].strip()
+        self.adv(end - self.i)
+
     def ws(self, newlines):
         while self.i < len(self.s):
             c = self.s[self.i]
             if c in " \t\r" or (newlines and c == "\n"):
                 self.adv()
             elif c == "#":
-                start = self.s.rfind("\n", 0, self.i) + 1
-                end = self.s.find("\n", self.i)
-                end = len(self.s) if end < 0 else end
-                if self.s[start : self.i].strip() == "":
-                    self.comments[self.line] = self.s[self.i + 1 : end].strip()
-                self.adv(end - self.i)
+                self.comment()
             else:
                 break
 
@@ -95,26 +99,27 @@ class Toml:
             self.ws(False)
             parts.append(self.key_part())
 
-    def string(self):
-        line = self.line
-        q = self.peek()
-        if self.peek(3) in ('"""', "'''"):
-            q3 = self.peek(3)
-            self.adv(3)
-            if self.peek() == "\n":
-                self.adv()
-            out = []
-            while self.peek(3) != q3:
-                if self.i >= len(self.s):
-                    raise TomlError("unterminated string", line)
-                if q3 == '"""' and self.peek() == "\\":
-                    out.append(self.peek(2))
-                    self.adv(2)
-                    continue
-                out.append(self.peek())
-                self.adv()
-            self.adv(3)
-            return ("str", "".join(out), line)
+    def multiline_string(self, line):
+        """Reads a triple quoted string; the opening quotes are still unread."""
+        q3 = self.peek(3)
+        self.adv(3)
+        if self.peek() == "\n":
+            self.adv()
+        out = []
+        while self.peek(3) != q3:
+            if self.i >= len(self.s):
+                raise TomlError("unterminated string", line)
+            if q3 == '"""' and self.peek() == "\\":
+                out.append(self.peek(2))
+                self.adv(2)
+                continue
+            out.append(self.peek())
+            self.adv()
+        self.adv(3)
+        return ("str", "".join(out), line)
+
+    def single_line_string(self, q, line):
+        """Reads a string with one quote character; the opening quote is still unread."""
         self.adv()
         out = []
         while self.peek() != q:
@@ -131,6 +136,36 @@ class Toml:
         self.adv()
         return ("str", "".join(out), line)
 
+    def string(self):
+        line = self.line
+        if self.peek(3) in ('"""', "'''"):
+            return self.multiline_string(line)
+        return self.single_line_string(self.peek(), line)
+
+    def items_until(self, close, read, message):
+        """Reads comma separated items with the given reader up to the closing character, and consumes it."""
+        while True:
+            self.ws(True)
+            if self.peek() == close:
+                self.adv()
+                return
+            read()
+            self.ws(True)
+            if self.peek() == ",":
+                self.adv()
+            elif self.peek() != close:
+                raise TomlError(message, self.line)
+
+    def raw_value(self, line):
+        """Reads an unquoted value up to a delimiter."""
+        start = self.i
+        while self.i < len(self.s) and self.s[self.i] not in ",]}\n#":
+            self.adv()
+        raw = self.s[start : self.i].strip()
+        if not raw:
+            raise TomlError("missing value", line)
+        return ("raw", raw, line)
+
     def value(self):
         c = self.peek()
         line = self.line
@@ -139,38 +174,14 @@ class Toml:
         if c == "[":
             self.adv()
             items = []
-            while True:
-                self.ws(True)
-                if self.peek() == "]":
-                    self.adv()
-                    return ("arr", items, line)
-                items.append(self.value())
-                self.ws(True)
-                if self.peek() == ",":
-                    self.adv()
-                elif self.peek() != "]":
-                    raise TomlError("unreadable array", self.line)
+            self.items_until("]", lambda: items.append(self.value()), "unreadable array")
+            return ("arr", items, line)
         if c == "{":
             self.adv()
             table = {}
-            while True:
-                self.ws(True)
-                if self.peek() == "}":
-                    self.adv()
-                    return ("tab", table, line)
-                self.assign(table)
-                self.ws(True)
-                if self.peek() == ",":
-                    self.adv()
-                elif self.peek() != "}":
-                    raise TomlError("unreadable inline table", self.line)
-        start = self.i
-        while self.i < len(self.s) and self.s[self.i] not in ",]}\n#":
-            self.adv()
-        raw = self.s[start : self.i].strip()
-        if not raw:
-            raise TomlError("missing value", line)
-        return ("raw", raw, line)
+            self.items_until("}", lambda: self.assign(table), "unreadable inline table")
+            return ("tab", table, line)
+        return self.raw_value(line)
 
     def assign(self, table):
         line = self.line
@@ -194,6 +205,36 @@ class Toml:
             raise TomlError("the key %s is set twice, so a reason above one of them proves nothing; keep one" % ".".join(path), line)
         cur[path[-1]] = (line, node)
 
+    def table_header(self):
+        """Reads a [table] or [[array]] header and returns whether it is an array and its key path."""
+        array = self.peek(2) == "[["
+        width = 2 if array else 1
+        self.adv(width)
+        self.ws(False)
+        path = self.key_path()
+        self.ws(False)
+        if self.peek(width) != ("]]" if array else "]"):
+            raise TomlError("unreadable table header", self.line)
+        self.adv(width)
+        return array, path
+
+    def open_table(self, root, array, path):
+        """Walks or creates the tables on a header path and returns the table that holds the next keys."""
+        cur = root
+        for part in path:
+            nxt = cur.get(part)
+            if array and part == path[-1]:
+                nxt = None
+            if nxt is None:
+                nxt = (self.line, ("tab", {}, self.line))
+                cur[part] = nxt
+            if nxt[1][0] == "arr":
+                continue
+            if nxt[1][0] != "tab":
+                raise TomlError("table redefined", self.line)
+            cur = nxt[1][1]
+        return cur
+
     def parse(self):
         root = {}
         cur = root
@@ -202,27 +243,8 @@ class Toml:
             if self.i >= len(self.s):
                 return root
             if self.peek() == "[":
-                array = self.peek(2) == "[["
-                self.adv(2 if array else 1)
-                self.ws(False)
-                path = self.key_path()
-                self.ws(False)
-                if self.peek(2 if array else 1) != ("]]" if array else "]"):
-                    raise TomlError("unreadable table header", self.line)
-                self.adv(2 if array else 1)
-                cur = root
-                for part in path:
-                    nxt = cur.get(part)
-                    if array and part == path[-1]:
-                        nxt = None
-                    if nxt is None:
-                        nxt = (self.line, ("tab", {}, self.line))
-                        cur[part] = nxt
-                    if nxt[1][0] == "arr":
-                        continue
-                    if nxt[1][0] != "tab":
-                        raise TomlError("table redefined", self.line)
-                    cur = nxt[1][1]
+                array, path = self.table_header()
+                cur = self.open_table(root, array, path)
                 continue
             self.assign(cur)
             self.ws(False)
@@ -339,6 +361,67 @@ def load_toml_module():
     return None
 
 
+def read_reference(file, text):
+    """Returns (readable, reference): reference is None when no TOML module exists, readable is False after a syntax error is reported."""
+    tomllib = load_toml_module()
+    if tomllib is None:
+        return True, None
+    try:
+        return True, tomllib.loads(text)
+    except tomllib.TOMLDecodeError as err:
+        emit("X", file, 1, "toml has a syntax error: %s" % err)
+        return False, None
+
+
+def keep_entries(file, comments, label, key, kind, leaf, path, found):
+    """Reports one setting and records its entries for the cross-check when it can be read."""
+    entries = handle(file, comments, label, key, kind, leaf, leaf[0])
+    if entries is not None:
+        found.append((path, [e[0] for e in entries]))
+
+
+def scan_coverage(file, comments, tool_tab, found):
+    """Reports the coverage settings of the [tool.coverage] tables."""
+    for section in ("run", "report"):
+        for key, kind in COVERAGE_KEYS:
+            leaf = lookup(tool_tab, "coverage", section, key)
+            if leaf is not None:
+                keep_entries(file, comments, "coverage %s.%s" % (section, key), key, kind, leaf, ("coverage", section, key), found)
+        fail = lookup(tool_tab, "coverage", section, "fail_under")
+        if fail is not None:
+            threshold(file, fail, "fail_under")
+
+
+def scan_mutmut(file, comments, tool_tab, found):
+    """Reports the settings of the [tool.mutmut] table."""
+    for key, kind in MUTMUT_KEYS:
+        leaf = lookup(tool_tab, "mutmut", key)
+        if leaf is not None:
+            keep_entries(file, comments, "mutmut %s" % key, key, kind, leaf, ("mutmut", key), found)
+
+
+def check_reference(file, reference, found):
+    """Reports each setting the reference parser reads differently from the line-aware reader."""
+    for path, values in found:
+        cur = reference.get("tool", {})
+        for part in path:
+            cur = cur.get(part, {}) if isinstance(cur, dict) else {}
+        expect = [cur] if isinstance(cur, str) else cur
+        if expect != values:
+            emit("X", file, 1, "%s read differently by the reference toml parser; the list must be a plain literal" % ".".join(path))
+
+
+def emit_missing_reference(file):
+    """Reports that no reference TOML parser is available."""
+    emit(
+        "X",
+        file,
+        1,
+        "the cross-check of the TOML reader is missing: this Python is %d.%d and needs 3.11 or newer (tomllib), or the tomli package, to read coverage and mutation settings"
+        % (sys.version_info[0], sys.version_info[1]),
+    )
+
+
 def scan_toml(file, text):
     parser = Toml(text)
     try:
@@ -346,55 +429,97 @@ def scan_toml(file, text):
     except TomlError as err:
         emit("X", file, err.line, "toml cannot be read: %s" % err)
         return
-    tomllib = load_toml_module()
-    reference = None
-    if tomllib is not None:
-        try:
-            reference = tomllib.loads(text)
-        except tomllib.TOMLDecodeError as err:
-            emit("X", file, 1, "toml has a syntax error: %s" % err)
-            return
-    comments = parser.comments
+    readable, reference = read_reference(file, text)
     tool = lookup(root, "tool")
-    if tool is None:
+    if not readable or tool is None:
         return
     tool_tab = tool[1][1] if tool[1][0] == "tab" else {}
     found = []
-    for section in ("run", "report"):
-        for key, kind in COVERAGE_KEYS:
-            leaf = lookup(tool_tab, "coverage", section, key)
-            if leaf is None:
-                continue
-            entries = handle(file, comments, "coverage %s.%s" % (section, key), key, kind, leaf, leaf[0])
-            if entries is not None:
-                found.append((("coverage", section, key), [e[0] for e in entries]))
-        fail = lookup(tool_tab, "coverage", section, "fail_under")
-        if fail is not None:
-            threshold(file, fail, "fail_under")
-    for key, kind in MUTMUT_KEYS:
-        leaf = lookup(tool_tab, "mutmut", key)
-        if leaf is None:
-            continue
-        entries = handle(file, comments, "mutmut %s" % key, key, kind, leaf, leaf[0])
-        if entries is not None:
-            found.append((("mutmut", key), [e[0] for e in entries]))
-    if reference is None and (found or lookup(tool_tab, "coverage") is not None or lookup(tool_tab, "mutmut") is not None):
-        emit(
-            "X",
-            file,
-            1,
-            "the cross-check of the TOML reader is missing: this Python is %d.%d and needs 3.11 or newer (tomllib), or the tomli package, to read coverage and mutation settings"
-            % (sys.version_info[0], sys.version_info[1]),
-        )
-        return
+    scan_coverage(file, parser.comments, tool_tab, found)
+    scan_mutmut(file, parser.comments, tool_tab, found)
     if reference is not None:
-        for path, values in found:
-            cur = reference.get("tool", {})
-            for part in path:
-                cur = cur.get(part, {}) if isinstance(cur, dict) else {}
-            expect = [cur] if isinstance(cur, str) else cur
-            if expect != values:
-                emit("X", file, 1, "%s read differently by the reference toml parser; the list must be a plain literal" % ".".join(path))
+        check_reference(file, reference, found)
+    elif found or lookup(tool_tab, "coverage") is not None or lookup(tool_tab, "mutmut") is not None:
+        emit_missing_reference(file)
+
+
+class IniReader:
+    """Collects comments and the wanted keys, with their entry lines, from an INI file one line at a time."""
+
+    def __init__(self, file, sections):
+        self.file = file
+        self.sections = sections
+        self.comments = {}
+        self.wanted = {}
+        self.section = None
+        self.current = None
+
+    def option(self, n, line):
+        """Reads a key line and returns False when the line is not one."""
+        m = re.match(r"^([^=:\s][^=:]*?)\s*[=:]\s*(.*)$", line)
+        if not m:
+            return False
+        pair = (self.section, m.group(1).strip().lower())
+        self.current = None
+        if pair in self.sections:
+            if pair in self.wanted:
+                emit("X", self.file, n, "[%s] %s is set twice, so a reason above one of them proves nothing; keep one" % pair)
+            self.current = {"key_line": n, "entries": []}
+            self.wanted[pair] = self.current
+            if m.group(2).strip():
+                self.current["entries"].append((m.group(2).strip(), n))
+        return True
+
+    def feed(self, n, raw):
+        line = raw.rstrip("\r")
+        stripped = line.strip()
+        if stripped[:1] in ("#", ";"):
+            self.comments[n] = stripped[1:].strip()
+            return
+        if not stripped:
+            return
+        m = re.match(r"^\[([^\]]+)\]\s*$", line)
+        if m:
+            self.section, self.current = m.group(1), None
+            return
+        if not line[:1].isspace() and self.section is not None and self.option(n, line):
+            return
+        if self.current is not None and line[:1].isspace():
+            self.current["entries"].append((stripped, n))
+
+
+def emit_ini_keys(file, cp, reader):
+    """Reports each wanted key of an INI file, or that configparser reads it differently."""
+    for (sec, key), info in reader.wanted.items():
+        kind = reader.sections[(sec, key)]
+        entries = info["entries"]
+        expect = [v.strip() for v in cp.get(sec, key).split("\n") if v.strip()]
+        if expect != [e[0] for e in entries]:
+            emit("X", file, info["key_line"], "[%s] %s read differently by configparser; write one entry per line" % (sec, key))
+        elif kind == "include":
+            emit_include(file, reader.comments, info["key_line"], entries)
+        elif kind == "mutation-include":
+            emit_include(file, reader.comments, info["key_line"], entries, "mutation-include")
+        elif kind != "threshold":
+            emit_excludes(file, kind, reader.comments, info["key_line"], entries)
+
+
+def fail_under_line(text):
+    """Returns the last line that sets fail_under, or 1."""
+    at = 1
+    for n, raw in enumerate(text.split("\n"), 1):
+        if re.match(r"^\s*fail_under\s*[=:]", raw):
+            at = n
+    return at
+
+
+def emit_ini_thresholds(file, cp, text, sections):
+    """Reports a numeric fail_under in each coverage section."""
+    for sec in {s for s, _ in sections}:
+        if cp.has_section(sec) and cp.has_option(sec, "fail_under"):
+            val = cp.get(sec, "fail_under").strip()
+            if re.fullmatch(r"\d+(\.\d+)?", val):
+                emit("T", file, fail_under_line(text), "fail_under", val)
 
 
 def scan_ini(file, text, sections):
@@ -404,62 +529,11 @@ def scan_ini(file, text, sections):
     except configparser.Error as err:
         emit("X", file, 1, "ini cannot be read: %s" % str(err).splitlines()[0])
         return
-    comments = {}
-    wanted = {}
-    section = None
-    key = None
-    current = None
+    reader = IniReader(file, sections)
     for n, raw in enumerate(text.split("\n"), 1):
-        line = raw.rstrip("\r")
-        stripped = line.strip()
-        if stripped[:1] in ("#", ";"):
-            comments[n] = stripped[1:].strip()
-            continue
-        if not stripped:
-            continue
-        m = re.match(r"^\[([^\]]+)\]\s*$", line)
-        if m:
-            section, key, current = m.group(1), None, None
-            continue
-        if not line[:1].isspace() and section is not None:
-            m = re.match(r"^([^=:\s][^=:]*?)\s*[=:]\s*(.*)$", line)
-            if m:
-                key = m.group(1).strip().lower()
-                current = None
-                if (section, key) in sections:
-                    if (section, key) in wanted:
-                        emit("X", file, n, "[%s] %s is set twice, so a reason above one of them proves nothing; keep one" % (section, key))
-                    current = {"key_line": n, "entries": []}
-                    wanted[(section, key)] = current
-                    if m.group(2).strip():
-                        current["entries"].append((m.group(2).strip(), n))
-                continue
-        if current is not None and line[:1].isspace():
-            current["entries"].append((stripped, n))
-    for (sec, key), info in wanted.items():
-        kind = sections[(sec, key)]
-        entries = info["entries"]
-        expect = [v.strip() for v in cp.get(sec, key).split("\n") if v.strip()]
-        if expect != [e[0] for e in entries]:
-            emit("X", file, info["key_line"], "[%s] %s read differently by configparser; write one entry per line" % (sec, key))
-            continue
-        if kind == "include":
-            emit_include(file, comments, info["key_line"], entries)
-        elif kind == "mutation-include":
-            emit_include(file, comments, info["key_line"], entries, "mutation-include")
-        elif kind == "threshold":
-            pass
-        else:
-            emit_excludes(file, kind, comments, info["key_line"], entries)
-    for sec in {s for s, _ in sections}:
-        if cp.has_section(sec) and cp.has_option(sec, "fail_under"):
-            val = cp.get(sec, "fail_under").strip()
-            at = 1
-            for n, raw in enumerate(text.split("\n"), 1):
-                if re.match(r"^\s*fail_under\s*[=:]", raw):
-                    at = n
-            if re.fullmatch(r"\d+(\.\d+)?", val):
-                emit("T", file, at, "fail_under", val)
+        reader.feed(n, raw)
+    emit_ini_keys(file, cp, reader)
+    emit_ini_thresholds(file, cp, text, sections)
 
 
 def ini_sections(base):

@@ -1,0 +1,3 @@
+- Seeded Python helpers `py-env.py`, `check-comments.py`, `check-exclude-reasons.py` and `duplicate_tests_py.py` are split into small pure functions so every function stays at cognitive complexity 15 or lower (Sonar S3776); output and exit codes are unchanged, proven by a before-and-after corpus run.
+- The `check-duplicate-tests` parse-error message names the `python3` the gate resolves from the path, not a project `.venv` it never uses.
+- A planted-drift case in `scripts/exclusion-audit.test.sh` proves the byte comparison of `exclusion-audit/scan.py` against the seeded `check-exclude-reasons.py` catches a change.

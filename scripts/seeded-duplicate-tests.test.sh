@@ -346,7 +346,10 @@ OUT=$(bash "$CHECK" "$P" 2>&1)
 check 0 "$?" "planted .venv python: exit"
 if [ -f "$T/used-venv-python" ]; then used=yes; else used=no; fi
 check no "$used" "planted .venv/bin/python3 is never run"
-has "under Python 3" "$(bash "$CHECK" "$(project py-clean; printf 'def test_x(:\n' > "$P/test_broken.py"; echo "$P")" 2>&1)" "py parse error names the interpreter version"
+PARSE_MSG=$(bash "$CHECK" "$(project py-clean; printf 'def test_x(:\n' > "$P/test_broken.py"; echo "$P")" 2>&1)
+has "under Python 3" "$PARSE_MSG" "py parse error names the interpreter version"
+has "put a newer python3 first on the path" "$PARSE_MSG" "py parse error: the fix names the python3 the gate resolves from the path"
+lacks ".venv" "$PARSE_MSG" "py parse error: no project venv is named, the gate never uses one"
 
 # Odd file names, symlinks, unreadable files, NUL bytes.
 project ts-clean
