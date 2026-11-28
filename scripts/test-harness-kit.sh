@@ -455,14 +455,36 @@ done
 expect_bash 2 "$(nest shq 9 sh 'git status')"
 expect_bash 2 "$(nest shq 9 sh "echo $(printf 'x%.0s' $(seq 1 200))")"
 expect_bash 0 "echo $(printf 'x%.0s' $(seq 1 2000))"
-# CPU bound: a 13 KB nested wrapper is answered in under one CPU second (a wall clock would flake on a busy machine).
+# cpu_cs: sets cpu_now to the user plus system CPU time of every child this shell has waited for, in hundredths of a second.
+# Call it in the current shell, never inside $( ): a command substitution forks a subshell that reports 0 for children, so a before/after pair read 0 0 and no limit could fail.
 cpu_cs() {
-  times | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub("s", "", a[2]); t += a[1] * 60 + a[2] } printf "%d", t * 100 }'
+  times > "$T/cpu.times"
+  cpu_now=$(awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub("s", "", a[2]); t += a[1] * 60 + a[2] } printf "%d", t * 100 }' "$T/cpu.times")
 }
+# cpu_stub <iterations>: runs a stub hook that burns that many awk iterations and sets cpu_burn to its CPU cost.
+cpu_stub() {
+  printf '#!/usr/bin/env bash\nawk "BEGIN { for (i = 0; i < %s; i++) x += i * 2 }"\nexit 0\n' "$1" > "$T/stub-hook.sh"
+  cpu_cs
+  cpu_before=$cpu_now
+  bash "$T/stub-hook.sh"
+  cpu_cs
+  cpu_burn=$((cpu_now - cpu_before))
+}
+# Self-test of the meter: a known burn reads above 0, and a limit set under the slow stub's cost fails it while the fast stub passes (the same -le test the CPU bounds below use).
+cpu_stub 4000000
+cpu_slow=$cpu_burn
+check 1 "$(if [[ $cpu_slow -gt 0 ]]; then echo 1; else echo 0; fi)" "the CPU meter reads above 0 after a known burn (read ${cpu_slow} cs)"
+cpu_limit=$((cpu_slow / 2))
+check 0 "$(if [[ $cpu_slow -le $cpu_limit ]]; then echo 1; else echo 0; fi)" "a planted slow hook stub fails the CPU limit (${cpu_slow} cs over limit ${cpu_limit} cs)"
+cpu_stub 10
+check 1 "$(if [[ $cpu_burn -le $cpu_limit ]]; then echo 1; else echo 0; fi)" "a fast hook stub passes the same CPU limit (${cpu_burn} cs, limit ${cpu_limit} cs)"
+# CPU bound: a 13 KB nested wrapper is answered in under two CPU seconds (a wall clock would flake on a busy machine).
 big=$(nest shq 8 sh 'git commit -n')
-cpu_start=$(cpu_cs)
+cpu_cs
+cpu_start=$cpu_now
 expect_bash 2 "$big$(printf ' x%.0s' $(seq 1 3000))"
-cpu_took=$(($(cpu_cs) - cpu_start))
+cpu_cs
+cpu_took=$((cpu_now - cpu_start))
 if [[ $cpu_took -le 200 ]]; then cpu_ok=1; else cpu_ok=0; fi
 check 1 "$cpu_ok" "a 13 KB nested wrapper is answered by both hooks in at most 2 s of CPU (took ${cpu_took} cs)"
 
@@ -533,15 +555,19 @@ expect_bash 0 "cat > f <<'EOF'${NL}$(printf 'use eval and more words here. %.0s'
 expect_bash 2 "bash -c 'echo ${pad2k}${pad2k}'"
 # CPU bound: the worst wrapper under the 4000 byte bound (newline-heavy, judged three times) and a 16 KB command with no wrapper, each at most 2.5 s over both hooks.
 worst="sh -c 'echo$(printf '\na%.0s' $(seq 1 1900))'"
-cpu_start=$(cpu_cs)
+cpu_cs
+cpu_start=$cpu_now
 expect_bash 0 "$worst"
-cpu_took=$(($(cpu_cs) - cpu_start))
+cpu_cs
+cpu_took=$((cpu_now - cpu_start))
 if [[ $cpu_took -le 250 ]]; then cpu_ok=1; else cpu_ok=0; fi
 check 1 "$cpu_ok" "a ${#worst} byte newline-heavy wrapper is answered by both hooks in at most 2.5 s of CPU (took ${cpu_took} cs)"
 long16=$(printf 'git commit -m x; %.0s' $(seq 1 1000))
-cpu_start=$(cpu_cs)
+cpu_cs
+cpu_start=$cpu_now
 expect_bash 0 "$long16"
-cpu_took=$(($(cpu_cs) - cpu_start))
+cpu_cs
+cpu_took=$((cpu_now - cpu_start))
 if [[ $cpu_took -le 250 ]]; then cpu_ok=1; else cpu_ok=0; fi
 check 1 "$cpu_ok" "a ${#long16} byte command with no wrapper is answered by both hooks in at most 2.5 s of CPU (took ${cpu_took} cs)"
 
@@ -622,6 +648,14 @@ CASES
 expect_bash 2 $'git commit -m x \\\n--no-verify'
 expect_bash 2 $'git commit -m x \\\n  -n'
 expect_bash 0 $'git commit -m x \\\n  -m y'
+# Round 5 regressions: a shell or eval word with a glued or extra option, a doubled wrapper, a path-qualified shell and an env prefix all still reach the bypass.
+expect_bash 2 "git commit -m 'sh -c' --no-verify"
+expect_bash 2 'sh -c"git commit --no-verify"'
+expect_bash 2 'sh -cx "git push -f"' "$MAIN"
+expect_bash 2 'eval "git commit -n"'
+expect_bash 2 "bash -c \"bash -c 'git commit -n'\""
+expect_bash 2 "/bin/sh -c 'git commit -n'"
+expect_bash 2 "env X=1 bash -c 'git commit -n'"
 
 # The verdict must not depend on the machine: a missing JSON reader blocks, an unwritable TMPDIR does not open the gate, and a 70 KB command is judged whole.
 # The TMPDIR cases are regression guards, not a mutant check: on bash 3.2 a here-string ignores TMPDIR and falls back to /tmp, so no environment variable breaks it; the here-string lint is the mutant check.

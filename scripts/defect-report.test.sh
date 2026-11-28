@@ -36,8 +36,10 @@ truth() {
 
 # cpu_cs: user plus system CPU time of every child this shell has waited for so far, in hundredths of a second.
 # Time bounds below use CPU time, not wall time: a busy machine stretches wall time but not the work a run does.
+# Call it in the current shell, never inside $( ): a command substitution forks a subshell that reports 0 for children, so a before/after pair would read 0 0.
 cpu_cs() {
-  times | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub("s", "", a[2]); t += a[1] * 60 + a[2] } printf "%d", t * 100 }'
+  times > "$T/cpu.times"
+  cpu_now=$(awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub("s", "", a[2]); t += a[1] * 60 + a[2] } printf "%d", t * 100 }' "$T/cpu.times")
 }
 
 # run <dir> [args]: sets OUT and EC from running the report with the CI markers cleared.
@@ -432,9 +434,11 @@ mkdir -p "$T/perf/src"
   while [[ $i -lt 6000 ]]; do printf 'const value%d = { a: 1, b: "text %d", c: [1, 2, 3] }; // note\n' "$i" "$i"; i=$((i + 1)); done
   printf 'export async function connectDB() { cached.conn = await cached.promise; }\n'
 } > "$T/perf/src/mongoose-client.ts"
-start=$(cpu_cs)
+cpu_cs
+start=$cpu_now
 run "$T/perf"
-took=$(($(cpu_cs) - start))
+cpu_cs
+took=$((cpu_now - start))
 flagged "a 300 KB client is still flagged"
 check 1 "$(truth test "$took" -le 500)" "a 300 KB client takes at most 5 s of CPU (took ${took} cs)"
 
@@ -487,9 +491,11 @@ done
 mkdir -p "$T/many/src"
 i=0
 while [[ $i -lt 4000 ]]; do printf 'export const v%d = %d;\n' "$i" "$i" > "$T/many/src/f$i.ts"; i=$((i + 1)); done
-start=$(cpu_cs)
+cpu_cs
+start=$cpu_now
 run "$T/many"
-took=$(($(cpu_cs) - start))
+cpu_cs
+took=$((cpu_now - start))
 check 0 "$EC" "4000 small files: exit 0"
 check 1 "$(truth test "$took" -le 1500)" "4000 small .ts files take at most 15 s of CPU (took ${took} cs)"
 
@@ -501,9 +507,11 @@ mkdir -p "$T/mini/src"
   while [[ $i -lt 20000 ]]; do printf 'var a%d={b:"x%d",c:[1,2,3]};' "$i" "$i"; i=$((i + 1)); done
   printf 'async function connectDB(){cached.conn=await cached.promise}\n'
 } > "$T/mini/src/mongoose-client.ts"
-start=$(cpu_cs)
+cpu_cs
+start=$cpu_now
 run "$T/mini"
-took=$(($(cpu_cs) - start))
+cpu_cs
+took=$((cpu_now - start))
 check 2 "$EC" "a capped file as the only candidate exits 2, like a file over 1 MB"
 has "mongoose-client.ts" "$OUT" "minified file: named in the skip notice"
 has "every candidate file was skipped" "$OUT" "minified file: the run says nothing was scanned"
@@ -528,9 +536,11 @@ mkdir -p "$T/uq/src"
 i=0
 while [[ $i -lt 400 ]]; do printf 'export const c%d = mongoose.connect(URL);\n' "$i" > "$T/uq/src/client$i.ts"; i=$((i + 1)); done
 printf 'const s = new Schema({ email: { type: String, unique: true } });\n' > "$T/uq/src/model.ts"
-start=$(cpu_cs)
+cpu_cs
+start=$cpu_now
 run "$T/uq"
-took=$(($(cpu_cs) - start))
+cpu_cs
+took=$((cpu_now - start))
 check 0 "$EC" "400 candidates with a unique index: exit 0"
 has "mongoose-init-nextjs  check" "$OUT" "400 candidates with a unique index: still flagged"
 check 1 "$(truth test "$took" -le 2000)" "400 candidates with a unique index take at most 20 s of CPU (took ${took} cs)"
